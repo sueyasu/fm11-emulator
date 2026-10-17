@@ -468,7 +468,9 @@ void Main6809Board::Core::executeOne()
     if (board_.irqPending() && (regs.CC & kIrqMask) == 0) {
         SimIRQ();
         if (board_.cpuClockHz_ != 0)
-            board_.advanceCpuCycles(19); // Full MC6809 IRQ stacking/vector
+            board_.advanceCpuCycles(
+                variant_ == CpuType::HD6309 && (regs.MD & 0x01) != 0
+                    ? 21 : 19); // W adds two native-mode stack cycles
         return;
     }
     SimONE();
@@ -494,7 +496,9 @@ void Main6809Board::Core::nmi()
         return;
     SimNMI();
     if (board_.cpuClockHz_ != 0)
-        board_.advanceCpuCycles(19); // full MC6809 NMI entry
+        board_.advanceCpuCycles(
+            variant_ == CpuType::HD6309 && (regs.MD & 0x01) != 0
+                ? 21 : 19);
 }
 
 void Main6809Board::Core::firq()
@@ -504,7 +508,10 @@ void Main6809Board::Core::firq()
         return;
     SimFIRQ();
     if (board_.cpuClockHz_ != 0)
-        board_.advanceCpuCycles(10); // short MC6809 FIRQ frame
+        board_.advanceCpuCycles(
+            variant_ == CpuType::HD6309 && (regs.MD & 0x02) != 0
+                ? ((regs.MD & 0x01) != 0 ? 21 : 19)
+                : 10); // MD.F selects short or full register frame
 }
 
 CpuType Main6809Board::Core::type() const

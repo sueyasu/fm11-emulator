@@ -8,10 +8,15 @@ void	CSim09::SimFIRQ()
     if ( (REG_CC & CC_F) != 0 )
 		return;
     if ( (REG_ST & ST_W) == 0 ) {
-		REG_CC &= ~CC_E;
-		SetMemByte(--REG_S, REG_PCl);
-		SetMemByte(--REG_S, REG_PCh);
-		SetMemByte(--REG_S, REG_CC);
+        if (Is6309Enabled() && (REG_MD & MD_F) != 0) {
+            REG_CC |= CC_E;
+            PushAll();
+        } else {
+            REG_CC &= ~CC_E;
+            SetMemByte(--REG_S, REG_PCl);
+            SetMemByte(--REG_S, REG_PCh);
+            SetMemByte(--REG_S, REG_CC);
+        }
     } else
 		REG_ST &= ~ST_W;
     REG_CC |= (CC_F | CC_I);
