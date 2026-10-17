@@ -123,4 +123,8 @@ if(FM11_BUILD_TESTS)
     add_executable(cpu6309_control_timing tests/cpu6309_control_timing.cpp)
     target_link_libraries(cpu6309_control_timing PRIVATE fm11_core)
     add_test(NAME cpu6309_control_timing COMMAND cpu6309_control_timing)
+
+    add_executable(cpu6309_interrupt_timing tests/cpu6309_interrupt_timing.cpp)
+    target_link_libraries(cpu6309_interrupt_timing PRIVATE fm11_core)
+    add_test(NAME cpu6309_interrupt_timing COMMAND cpu6309_interrupt_timing)
 endif()

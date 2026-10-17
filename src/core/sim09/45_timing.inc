@@ -23,7 +23,8 @@ void CSim09::BeginInstructionTiming(WORD op)
         // CC.E in the saved stack frame controls full vs partial RTI.
         // The MC6809 short RTI is 6 cycles; full RTI is 15.
         const BYTE stackedCc = GetMemByte(REG_S);
-        lastInstructionCycles_ = (stackedCc & 0x80) != 0 ? 15 : 6;
+        lastInstructionCycles_ = (stackedCc & 0x80) != 0 ?
+            (enable6309_ && (REG_MD & MD_N) != 0 ? 17 : 15) : 6;
         break;
     }
     case 0x34: case 0x35: case 0x36: case 0x37:
