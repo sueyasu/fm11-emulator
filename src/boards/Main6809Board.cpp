@@ -488,12 +488,23 @@ void Main6809Board::Core::irq()
 
 void Main6809Board::Core::nmi()
 {
+    // ST_N blocks repeat NMIs in the existing CSim09 implementation.
+    constexpr WORD kNmiInService = 0x0002;
+    if ((regs.ST & kNmiInService) != 0)
+        return;
     SimNMI();
+    if (board_.cpuClockHz_ != 0)
+        board_.advanceCpuCycles(19); // full MC6809 NMI entry
 }
 
 void Main6809Board::Core::firq()
 {
+    constexpr BYTE kFirqMask = 0x40; // CC.F
+    if ((regs.CC & kFirqMask) != 0)
+        return;
     SimFIRQ();
+    if (board_.cpuClockHz_ != 0)
+        board_.advanceCpuCycles(10); // short MC6809 FIRQ frame
 }
 
 CpuType Main6809Board::Core::type() const

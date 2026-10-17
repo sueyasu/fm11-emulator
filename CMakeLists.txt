@@ -103,4 +103,8 @@ if(FM11_BUILD_TESTS)
     add_executable(main6809_interrupt_timing tests/main6809_interrupt_timing.cpp)
     target_link_libraries(main6809_interrupt_timing PRIVATE fm11_core)
     add_test(NAME main6809_interrupt_timing COMMAND main6809_interrupt_timing)
+
+    add_executable(main6809_firq_nmi_timing tests/main6809_firq_nmi_timing.cpp)
+    target_link_libraries(main6809_firq_nmi_timing PRIVATE fm11_core)
+    add_test(NAME main6809_firq_nmi_timing COMMAND main6809_firq_nmi_timing)
 endif()
