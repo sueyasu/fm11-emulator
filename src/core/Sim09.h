@@ -78,6 +78,8 @@ public:
 	WORD Dis09(char *tmp, WORD addr);
 
 private:
+	void BeginInstructionTiming(WORD opcode);
+	void FinishInstructionTiming(WORD opcode);
 	bool IsOpcodeAllowed(WORD opcode) const;
 	bool IsIndexedPostbyteAllowed(BYTE postbyte) const;
 	bool IsTransferPostbyteAllowed(BYTE postbyte) const;

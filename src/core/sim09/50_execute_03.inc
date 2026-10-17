@@ -66,55 +66,6 @@
   OPDEF(0xFE,	EXT S_WORD W_TST E_U);			/* LDU  (ext)*/
   OPDEF(0xFF,	EXT S_U W_TST E_WORD);			/* STU  (ext)*/
     }
-    // PSHS/PULS/PSHU/PULU: five cycles plus one per 8-bit register
-    // and two per 16-bit register selected in the mask.
-    if (op >= 0x34 && op <= 0x37) {
-        const BYTE mask = stackTimingMask_;
-        unsigned bytes = 0;
-        for (unsigned bit = 0; bit < 8; ++bit)
-            if (mask & (1u << bit)) bytes += bit >= 4 ? 2 : 1;
-        lastInstructionCycles_ += bytes;
-    }
-    // Long conditional branches are 5 cycles if not taken and 6 if
-    // taken. Test the same CC predicates used by O_Bxx, including the
-    // signed N xor V comparisons; a zero displacement is still taken.
-    if (op >= 0x1021 && op <= 0x102f) {
-        const BYTE cc = REG_CC;
-        const bool c = (cc & CC_C) != 0;
-        const bool z = (cc & CC_Z) != 0;
-        const bool n = (cc & CC_N) != 0;
-        const bool v = (cc & CC_V) != 0;
-        bool taken = false;
-        switch (op & 0xff) {
-        case 0x21: taken = false; break; // LBRN
-        case 0x22: taken = !c && !z; break;
-        case 0x23: taken = c || z; break;
-        case 0x24: taken = !c; break;
-        case 0x25: taken = c; break;
-        case 0x26: taken = !z; break;
-        case 0x27: taken = z; break;
-        case 0x28: taken = !v; break;
-        case 0x29: taken = v; break;
-        case 0x2a: taken = !n; break;
-        case 0x2b: taken = n; break;
-        case 0x2c: taken = n == v; break;
-        case 0x2d: taken = n != v; break;
-        case 0x2e: taken = !z && (n == v); break;
-        case 0x2f: taken = z || (n != v); break;
-        }
-        lastInstructionCycles_ = taken ? 6 : 5;
-    }
-    // Postbyte timing is valid only if the indexed operand was decoded.
-    const bool indexedByte = ((op >= 0xa0 && op <= 0xab) ||
-                              (op >= 0xe0 && op <= 0xeb)) &&
-                             (op & 0x0f) != 0x03 && (op & 0x0f) != 0x07;
-    const bool indexedWord = op == 0xa3 || op == 0xac || op == 0xae ||
-                             op == 0xaf || op == 0xe3 || op == 0xec ||
-                             op == 0xed || op == 0xee || op == 0xef;
-    if (indexedByte || indexedWord || op == 0xad) {
-        if (indexedCycleKnown_ && !illegalOperand_)
-            lastInstructionCycles_ += indexedCycleExtra_;
-        else
-            lastInstructionCycles_ = 0;
-    }
+    FinishInstructionTiming(op);
+
 }
