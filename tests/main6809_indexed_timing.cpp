@@ -27,7 +27,7 @@ int main()
         b.cpu().executeOne();
         if (b.cpu().pc()!=pc) return 1;
     }
-    // 5 + 4 + 5 + 8 + 7 = 29 ticks (LDX is not yet timed).
-    if (b.readCpu(0xfd3a)!=0 || b.readCpu(0xfd3b)!=71) return 2;
+    // 3 (LDX immediate) + 5 + 4 + 5 + 8 + 7 = 32 ticks.
+    if (b.readCpu(0xfd3a)!=0 || b.readCpu(0xfd3b)!=68) return 2;
     return 0;
 }

@@ -60,6 +60,21 @@ void	CSim09::SimONE()
     case 0xe8: case 0xe9: case 0xea: case 0xeb:
         lastInstructionCycles_ = 4;
         break;
+    // MC6809 16-bit ALU/load/store, excluding indexed addressing.
+    // 16-bit arithmetic and CMPX: immediate 4, direct 6, extended 7.
+    case 0x83: case 0x8c: case 0xc3:
+        lastInstructionCycles_ = 4; break;
+    case 0x93: case 0x9c: case 0xd3:
+        lastInstructionCycles_ = 6; break;
+    case 0xb3: case 0xbc: case 0xf3:
+        lastInstructionCycles_ = 7; break;
+    // 16-bit loads/stores: immediate 3, direct 5, extended 6.
+    case 0x8e: case 0xcc: case 0xce:
+        lastInstructionCycles_ = 3; break;
+    case 0x9e: case 0x9f: case 0xdc: case 0xdd: case 0xde: case 0xdf:
+        lastInstructionCycles_ = 5; break;
+    case 0xbe: case 0xbf: case 0xfc: case 0xfd: case 0xfe: case 0xff:
+        lastInstructionCycles_ = 6; break;
     default: break;
     }
     switch(op) {
