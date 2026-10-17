@@ -84,6 +84,8 @@ private:
 	bool ConsumeIllegalOperand();
 
 	std::uint32_t lastInstructionCycles_ = 0;
+	std::uint32_t indexedCycleExtra_ = 0;
+	bool indexedCycleKnown_ = false;
 	bool enable6309_ = true;
 	bool illegalOperand_ = false;
 };

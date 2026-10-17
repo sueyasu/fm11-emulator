@@ -79,4 +79,8 @@ if(FM11_BUILD_TESTS)
     add_executable(main6809_address_timing tests/main6809_address_timing.cpp)
     target_link_libraries(main6809_address_timing PRIVATE fm11_core)
     add_test(NAME main6809_address_timing COMMAND main6809_address_timing)
+
+    add_executable(main6809_indexed_timing tests/main6809_indexed_timing.cpp)
+    target_link_libraries(main6809_indexed_timing PRIVATE fm11_core)
+    add_test(NAME main6809_indexed_timing COMMAND main6809_indexed_timing)
 endif()

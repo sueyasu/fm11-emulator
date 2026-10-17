@@ -1,6 +1,8 @@
 void	CSim09::SimONE()
 {
     lastInstructionCycles_ = 0;
+    indexedCycleKnown_ = false;
+    indexedCycleExtra_ = 0;
     WORD op;
     register ACC accA;
     register ACC accB;
@@ -48,6 +50,15 @@ void	CSim09::SimONE()
     case 0xf4: case 0xf5: case 0xf6: case 0xf7:
     case 0xf8: case 0xf9: case 0xfa: case 0xfb:
         lastInstructionCycles_ = 5;
+        break;
+    // Indexed A/B 8-bit ALU operations have a four-cycle base.
+    case 0xa0: case 0xa1: case 0xa2:
+    case 0xa4: case 0xa5: case 0xa6: case 0xa7:
+    case 0xa8: case 0xa9: case 0xaa: case 0xab:
+    case 0xe0: case 0xe1: case 0xe2:
+    case 0xe4: case 0xe5: case 0xe6: case 0xe7:
+    case 0xe8: case 0xe9: case 0xea: case 0xeb:
+        lastInstructionCycles_ = 4;
         break;
     default: break;
     }

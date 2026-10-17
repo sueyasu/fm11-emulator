@@ -66,5 +66,13 @@
   OPDEF(0xFE,	EXT S_WORD W_TST E_U);			/* LDU  (ext)*/
   OPDEF(0xFF,	EXT S_U W_TST E_WORD);			/* STU  (ext)*/
     }
-
+    // Postbyte timing is valid only if the indexed operand was decoded.
+    if (lastInstructionCycles_ == 4 &&
+        ((op >= 0xa0 && op <= 0xab) || (op >= 0xe0 && op <= 0xeb)) &&
+        (op & 0x0f) != 0x03 && (op & 0x0f) != 0x07) {
+        if (indexedCycleKnown_ && !illegalOperand_)
+            lastInstructionCycles_ += indexedCycleExtra_;
+        else
+            lastInstructionCycles_ = 0;
+    }
 }

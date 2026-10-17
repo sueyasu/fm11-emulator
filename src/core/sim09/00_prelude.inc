@@ -132,6 +132,30 @@ WORD	CSim09::GetAddrInd()
     WORD *reg = NULL;
 
     illegalOperand_ = false;
+    indexedCycleKnown_ = false;
+    indexedCycleExtra_ = 0;
+    if ((op & 0x80) == 0) {
+        indexedCycleKnown_ = true;
+        indexedCycleExtra_ = 1; // 5-bit constant offset
+    } else {
+        switch (op & 0x0f) {
+        case 0x00: case 0x02: indexedCycleExtra_ = 2; indexedCycleKnown_ = true; break;
+        case 0x01: case 0x03: indexedCycleExtra_ = 3; indexedCycleKnown_ = true; break;
+        case 0x04: indexedCycleKnown_ = true; break;
+        case 0x05: case 0x06: case 0x08: case 0x0c:
+            indexedCycleExtra_ = 1; indexedCycleKnown_ = true; break;
+        case 0x09: case 0x0b: case 0x0d:
+            indexedCycleExtra_ = 4; indexedCycleKnown_ = true; break;
+        case 0x0f: indexedCycleExtra_ = 4; indexedCycleKnown_ = true; break;
+        default: break;
+        }
+        // These extra modes are specific to 6309 and require separate timing.
+        if (Is6309Enabled() && ((op & 0x0f) == 0x07 ||
+            (op & 0x0f) == 0x0a || (op & 0x0f) == 0x0e))
+            indexedCycleKnown_ = false;
+        if ((op & 0x10) != 0 && indexedCycleKnown_)
+            indexedCycleExtra_ += 3;
+    }
     if (!IsIndexedPostbyteAllowed(op)) {
         illegalOperand_ = true;
         return 0;
