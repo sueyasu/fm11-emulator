@@ -31,6 +31,8 @@ void Main6809Board::reset()
     mmrControl_.fill(0);
     onboardRam_.fill(0);
     ioRegisters_.fill(0);
+    ioOutputLatch_.fill(0);
+    ioStatusLatch_.fill(0);
 
     // The original board copies the reset vector from the last two bytes of
     // the boot ROM into the fixed on-board RAM at FFFE/FFFF before RESET.
@@ -44,7 +46,17 @@ void Main6809Board::loadBootRom(const BootRomImage& image)
     bootRom_ = image;
 }
 
-BYTE Main6809Board::readCpu(WORD address) const
+void Main6809Board::signalAttention()
+{
+    ioRegisters_[0x04] |= 0x01;
+}
+
+void Main6809Board::signalBreak()
+{
+    ioRegisters_[0x04] |= 0x02;
+}
+
+BYTE Main6809Board::readCpu(WORD address)
 {
     // 5000-5FFF is the 4 KiB boot ROM while FD93 bit 0 is clear.
     if (address >= 0x5000 && address <= 0x5fff && (mmrControl_[3] & 0x01) == 0)
@@ -130,14 +142,27 @@ void Main6809Board::writeMmrRegister(WORD address, BYTE value)
     mmrControl_[index] = (index <= 1) ? static_cast<BYTE>(value & 0x0f) : value;
 }
 
-BYTE Main6809Board::readIo(WORD address) const
+BYTE Main6809Board::readIo(WORD address)
 {
     if (isMmrRegister(address))
         return readMmrRegister(address);
 
-    // Device-specific side effects are introduced with each device. Until
-    // then, retain a side-effect-free register backing for the FDxx aperture.
-    return ioRegisters_[address & 0x00ff];
+    const BYTE reg = static_cast<BYTE>(address & 0x00ff);
+    switch (reg) {
+    case 0x04: {
+        // Reading the main event register acknowledges BREAK and ATENT.
+        const BYTE value = ioRegisters_[reg];
+        ioRegisters_[reg] &= static_cast<BYTE>(~0x03);
+        return value;
+    }
+    case 0x05:
+        // Main/sub CPU control status is CPU-visible through FD05.
+        return ioRegisters_[reg];
+    default:
+        // Device-specific side effects are introduced with each device. Until
+        // then, retain a side-effect-free register backing for the FDxx aperture.
+        return ioRegisters_[reg];
+    }
 }
 
 void Main6809Board::writeIo(WORD address, BYTE value)
@@ -147,7 +172,27 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         return;
     }
 
-    ioRegisters_[address & 0x00ff] = value;
+    const BYTE reg = static_cast<BYTE>(address & 0x00ff);
+    switch (reg) {
+    case 0x04:
+        // The original ATENT ACK write clears ATENT and records an 0x80
+        // control latch. BREAK is only acknowledged by reading FD04.
+        ioRegisters_[reg] &= static_cast<BYTE>(~0x01);
+        ioOutputLatch_[reg] = 0x80;
+        break;
+    case 0x05:
+        // FD05 writes go to the output/control latch. A HALT request sets the
+        // CPU-visible halt status and clears the corresponding input status.
+        ioOutputLatch_[reg] = value;
+        if ((value & 0x80) != 0) {
+            ioRegisters_[reg] |= 0x80;
+            ioStatusLatch_[reg] &= 0x7f;
+        }
+        break;
+    default:
+        ioRegisters_[reg] = value;
+        break;
+    }
 }
 
 std::uint32_t Main6809Board::translateCpuAddress(WORD address) const
