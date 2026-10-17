@@ -28,6 +28,11 @@ public:
     void signalAttention();
     void signalBreak();
 
+    // Device IRQ sources use the bit positions of FD03 and FD2C.
+    void setMainIrqSource(BYTE sourceBit, bool asserted);
+    void setExtendedIrqSource(BYTE sourceBit, bool asserted);
+    bool irqPending() const;
+
     BYTE readCpu(WORD address);
     void writeCpu(WORD address, BYTE value);
 
@@ -43,6 +48,8 @@ private:
     BYTE readMmrRegister(WORD address) const;
     void writeMmrRegister(WORD address, BYTE value);
     BYTE readIo(WORD address);
+    BYTE mainIrqStatus();
+    BYTE extendedIrqStatus();
     void writeIo(WORD address, BYTE value);
     std::uint32_t translateCpuAddress(WORD address) const;
     std::uint32_t windowPhysicalAddress(WORD address) const;
@@ -77,6 +84,10 @@ private:
     std::array<BYTE, 256> ioRegisters_{};
     std::array<BYTE, 256> ioOutputLatch_{};
     std::array<BYTE, 256> ioStatusLatch_{};
+    BYTE mainIrqSources_ = 0;
+    BYTE extendedIrqSources_ = 0;
+    BYTE mainIrqResult_ = 0;
+    BYTE extendedIrqResult_ = 0;
 
     std::array<std::array<BYTE, 16>, 16> mmr_{};
     std::array<BYTE, 4> mmrControl_{};
