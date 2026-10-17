@@ -17,7 +17,7 @@ int main()
     b.writeCpu(0xfd3a,0);b.writeCpu(0xfd3b,100);
     const WORD pcs[]={0x1004,0x1006,0x1008,0x100a,0x100f,0x100c,0x1011,0x1012};
     for(WORD pc:pcs){b.cpu().executeOne();if(b.cpu().pc()!=pc)return 1;}
-    // 2+9+9+7+5+3+2 = 37; LDS is not yet timed.
-    if(b.readCpu(0xfd3a)!=0||b.readCpu(0xfd3b)!=63)return 2;
+    // 2+9+9+7+5+3+2 = 37; LDS adds 6 cycles.
+    if(b.readCpu(0xfd3a)!=0||b.readCpu(0xfd3b)!=57)return 2;
     return 0;
 }
