@@ -470,6 +470,8 @@ void Main6809Board::Core::executeOne()
         return;
     }
     SimONE();
+    if (board_.cpuClockHz_ != 0 && LastInstructionCycles() != 0)
+        board_.advanceCpuCycles(LastInstructionCycles());
 }
 
 std::uint32_t Main6809Board::Core::pc() const

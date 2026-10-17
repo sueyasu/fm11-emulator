@@ -67,4 +67,8 @@ if(FM11_BUILD_TESTS)
     add_executable(main6809_ptm_clock tests/main6809_ptm_clock.cpp)
     target_link_libraries(main6809_ptm_clock PRIVATE fm11_core)
     add_test(NAME main6809_ptm_clock COMMAND main6809_ptm_clock)
+
+    add_executable(main6809_cpu_timing tests/main6809_cpu_timing.cpp)
+    target_link_libraries(main6809_cpu_timing PRIVATE fm11_core)
+    add_test(NAME main6809_cpu_timing COMMAND main6809_cpu_timing)
 endif()

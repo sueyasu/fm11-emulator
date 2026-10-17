@@ -69,6 +69,8 @@ public:
 	void SimIRQ();
 	void SimNMI();
 	void SimONE();
+	// Zero denotes an instruction without verified timing data.
+	std::uint32_t LastInstructionCycles() const { return lastInstructionCycles_; }
 
 	char *DisInd(WORD *ptr);
 	char *DisPhs(BYTE pt, BYTE op);
@@ -81,6 +83,7 @@ private:
 	bool IsTransferPostbyteAllowed(BYTE postbyte) const;
 	bool ConsumeIllegalOperand();
 
+	std::uint32_t lastInstructionCycles_ = 0;
 	bool enable6309_ = true;
 	bool illegalOperand_ = false;
 };

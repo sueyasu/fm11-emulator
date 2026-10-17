@@ -1,5 +1,6 @@
 void	CSim09::SimONE()
 {
+    lastInstructionCycles_ = 0;
     WORD op;
     register ACC accA;
     register ACC accB;
@@ -13,6 +14,14 @@ void	CSim09::SimONE()
 	}
 
     op = GetOpByte();
+    // Incremental verified MC6809 timing subset. Unknown opcode/addressing
+    // combinations remain zero until their cycle tables are implemented.
+    switch (op) {
+    case 0x12: lastInstructionCycles_ = 2; break; // NOP
+    case 0x20: lastInstructionCycles_ = 3; break; // BRA rel8
+    case 0x86: lastInstructionCycles_ = 2; break; // LDA #imm8
+    default: break;
+    }
     switch(op) {
   OPDEF(0x00,	DIR S_BYTE B_NEG E_BYTE);			/* NEG (dir) */
   OPDEF(0x01,	I_BYTE DIR S_BYTE B_OR E_BYTE);		/* OIM (dir) */
