@@ -5,6 +5,7 @@
 
 #include <array>
 #include <cstddef>
+#include <cstdint>
 
 class Main6809Board final : public CpuBoard
 {
@@ -16,14 +17,19 @@ public:
     const CpuCore& cpu() const override;
     void reset() override;
 
-    BYTE readPhysical(WORD address) const;
-    void writePhysical(WORD address, BYTE value);
+    BYTE readCpu(WORD address) const;
+    void writeCpu(WORD address, BYTE value);
+
+    BYTE readPhysical(std::uint32_t address) const;
+    void writePhysical(std::uint32_t address, BYTE value);
 
 private:
+    std::uint32_t translateCpuAddress(WORD address) const;
+
     class Core final : public CSim09, public CpuCore
     {
     public:
-        Core(std::array<BYTE, 65536>& memory, CpuType variant);
+        Core(Main6809Board& board, CpuType variant);
 
         BYTE GetMemByte(WORD address) override;
         void SetMemByte(WORD address, BYTE value) override;
@@ -37,7 +43,7 @@ private:
         CpuType type() const override;
 
     private:
-        std::array<BYTE, 65536>& memory_;
+        Main6809Board& board_;
         CpuType variant_;
     };
 
