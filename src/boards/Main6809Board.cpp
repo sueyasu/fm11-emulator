@@ -38,6 +38,7 @@ void Main6809Board::reset()
     ptm_.fill(PtmChannel{});
     ptmStatus_ = 0;
     ptmIrqAcknowledged_ = false;
+    ptmCycleFraction_ = 0;
 
     // The original board copies the reset vector from the last two bytes of
     // the boot ROM into the fixed on-board RAM at FFFE/FFFF before RESET.
@@ -126,6 +127,37 @@ BYTE Main6809Board::mainIrqStatus()
     mainIrqResult_ = value;
     ioRegisters_[0x03] = value;
     return value;
+}
+
+void Main6809Board::setCpuClockHz(std::uint64_t hz)
+{
+    if (hz == 0 || hz > 1000000000ULL)
+        throw std::invalid_argument("CPU clock must be between 1 and 1e9 Hz");
+    if (hz != cpuClockHz_) {
+        cpuClockHz_ = hz;
+        ptmCycleFraction_ = 0;
+    }
+}
+
+void Main6809Board::advanceCpuCycles(std::uint64_t cycles)
+{
+    if (cpuClockHz_ == 0)
+        throw std::logic_error("setCpuClockHz must be called before advanceCpuCycles");
+    // Divide before multiplying to avoid overflow on large cycle batches.
+    // The fractional numerator is preserved across calls, so splitting a
+    // scheduler interval into smaller pieces does not change timer behavior.
+    constexpr std::uint64_t kPtmInputHz = 19400 / 2;
+    const std::uint64_t wholeSeconds = cycles / cpuClockHz_;
+    const std::uint64_t remainderCycles = cycles % cpuClockHz_;
+    if (wholeSeconds > UINT64_MAX / kPtmInputHz)
+        throw std::overflow_error("PTM interval too large");
+    const std::uint64_t extra = remainderCycles * kPtmInputHz + ptmCycleFraction_;
+    const std::uint64_t fractionalTicks = extra / cpuClockHz_;
+    const std::uint64_t wholeTicks = wholeSeconds * kPtmInputHz;
+    if (wholeTicks > UINT64_MAX - fractionalTicks)
+        throw std::overflow_error("PTM interval too large");
+    ptmCycleFraction_ = extra % cpuClockHz_;
+    advancePtm(wholeTicks + fractionalTicks);
 }
 
 void Main6809Board::refreshPtmIrq()

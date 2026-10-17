@@ -37,6 +37,11 @@ public:
     // convert emulated CPU time to these PTM ticks.
     void advancePtm(std::uint64_t ticks);
 
+    // The first PTM timebase runs at PTMCLOCK/2 = 9700 Hz (16-bit mode,
+    // internal clock select 0). CPU cycles are supplied by the scheduler.
+    void setCpuClockHz(std::uint64_t hz);
+    void advanceCpuCycles(std::uint64_t cycles);
+
     BYTE readCpu(WORD address);
     void writeCpu(WORD address, BYTE value);
 
@@ -105,6 +110,8 @@ private:
     std::array<PtmChannel, 3> ptm_{};
     BYTE ptmStatus_ = 0;
     bool ptmIrqAcknowledged_ = false;
+    std::uint64_t cpuClockHz_ = 0;
+    std::uint64_t ptmCycleFraction_ = 0;
 
     std::array<std::array<BYTE, 16>, 16> mmr_{};
     std::array<BYTE, 4> mmrControl_{};
