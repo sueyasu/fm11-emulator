@@ -104,6 +104,7 @@ private:
     };
     std::array<PtmChannel, 3> ptm_{};
     BYTE ptmStatus_ = 0;
+    bool ptmIrqAcknowledged_ = false;
 
     std::array<std::array<BYTE, 16>, 16> mmr_{};
     std::array<BYTE, 4> mmrControl_{};
