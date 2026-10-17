@@ -131,4 +131,8 @@ if(FM11_BUILD_TESTS)
     add_executable(cpu6809_misc_timing tests/cpu6809_misc_timing.cpp)
     target_link_libraries(cpu6809_misc_timing PRIVATE fm11_core)
     add_test(NAME cpu6809_misc_timing COMMAND cpu6809_misc_timing)
+
+    add_executable(cpu6809_cycle_database tests/cpu6809_cycle_database.cpp)
+    target_link_libraries(cpu6809_cycle_database PRIVATE fm11_core)
+    add_test(NAME cpu6809_cycle_database COMMAND cpu6809_cycle_database)
 endif()

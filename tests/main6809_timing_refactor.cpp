@@ -9,7 +9,7 @@ int main()
     rom[0xffe] = 0x10;
     b.loadBootRom(rom);
     b.reset();
-    // CLRA (unmeasured); NOP (2); LDB #$01 (2); BRA +0 (3).
+    // CLRA (2); NOP (2); LDB #$01 (2); BRA +0 (3).
     const BYTE code[] = {0x4f, 0x12, 0xc6, 0x01, 0x20, 0x00};
     for (unsigned i=0; i<sizeof(code); ++i)
         b.writeCpu(static_cast<WORD>(0x1000+i), code[i]);
@@ -23,6 +23,6 @@ int main()
     b.cpu().executeOne();
     b.cpu().executeOne();
     if (b.cpu().pc()!=0x1006) return 1;
-    // CLRA unknown = 0, NOP + LDB immediate + BRA = 7.
-    return b.readCpu(0xfd3a)==0 && b.readCpu(0xfd3b)==93 ? 0 : 2;
+    // CLRA (2) + NOP (2) + LDB (2) + BRA (3) = 9.
+    return b.readCpu(0xfd3a)==0 && b.readCpu(0xfd3b)==91 ? 0 : 2;
 }

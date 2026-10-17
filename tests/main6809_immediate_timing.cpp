@@ -19,7 +19,7 @@ int main()
         board.writeCpu(addr++, op);
         board.writeCpu(addr++, 0x01);
     }
-    board.writeCpu(addr, 0x4f); // CLRA: timing still unimplemented
+    board.writeCpu(addr, 0x4f); // CLRA: two cycles from the opcode database
     // PTM tick input rate and CPU clock are equal, so one measured
     // CPU cycle maps to one PTM tick without a fractional conversion.
     board.setCpuClockHz(9700);
@@ -33,8 +33,8 @@ int main()
     }
     if (board.readCpu(0xfd3a) != 0 || board.readCpu(0xfd3b) != 60)
         return 2;
-    board.cpu().executeOne(); // CLRA is not yet timed
+    board.cpu().executeOne(); // CLRA is timed
     if (board.cpu().pc() != static_cast<WORD>(addr + 1)) return 3;
-    if (board.readCpu(0xfd3a) != 0 || board.readCpu(0xfd3b) != 60) return 4;
+    if (board.readCpu(0xfd3a) != 0 || board.readCpu(0xfd3b) != 58) return 4;
     return 0;
 }
