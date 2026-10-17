@@ -112,6 +112,20 @@ void CSim09::BeginInstructionTiming(WORD op)
         case 0xbe: case 0xbf: case 0xfc: case 0xfd: case 0xfe: case 0xff:
             --lastInstructionCycles_; // direct/extended word transfers
             break;
+        // HD6309 native flow-control timings from 6309 reference.
+        // Ordinary 8-bit conditional branches remain three cycles.
+        case 0x16: // LBRA: 5 -> 4
+        case 0x8d: // BSR: 7 -> 6
+        case 0x9d: // JSR direct: 7 -> 6
+        case 0xad: // JSR indexed: 7+ -> 6+
+        case 0xbd: // JSR extended: 8 -> 7
+        case 0x39: // RTS: 5 -> 4
+        case 0x34: case 0x35: case 0x36: case 0x37:
+            --lastInstructionCycles_; // PSH/PUL: 5+ -> 4+
+            break;
+        case 0x17: // LBSR: 9 -> 7
+            lastInstructionCycles_ -= 2;
+            break;
         case 0x12: // NOP: native 1, emulation/6809 2
             --lastInstructionCycles_;
             break;
