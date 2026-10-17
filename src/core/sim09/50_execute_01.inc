@@ -21,6 +21,12 @@ void	CSim09::SimONE()
     switch (op) {
     case 0x12: lastInstructionCycles_ = 2; break; // NOP
     case 0x20: lastInstructionCycles_ = 3; break; // BRA rel8
+    case 0x21: case 0x22: case 0x23: case 0x24:
+    case 0x25: case 0x26: case 0x27: case 0x28:
+    case 0x29: case 0x2a: case 0x2b: case 0x2c:
+    case 0x2d: case 0x2e: case 0x2f:
+        lastInstructionCycles_ = 3; break; // conditional rel8
+    case 0x16: lastInstructionCycles_ = 5; break; // LBRA rel16
     // Base 6809 8-bit immediate ALU operations: two cycles each.
     // Keep the explicit set: other opcodes in these ranges use 16-bit
     // operands or are reserved and must not inherit a guessed timing.
