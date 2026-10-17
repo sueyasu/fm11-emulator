@@ -4,12 +4,15 @@ project(fm11_emulator LANGUAGES CXX)
 option(FM11_BUILD_TESTS "Build portable-core smoke tests" ON)
 
 add_library(fm11_core STATIC
+    src/core/Machine.cpp
     src/core/Sim09.cpp
     src/core/SimZ80.cpp
+    src/boards/Main6809Board.cpp
 )
 
 target_include_directories(fm11_core PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src/core
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/boards
 )
 
 target_compile_features(fm11_core PUBLIC cxx_std_17)
@@ -20,7 +23,12 @@ target_compile_options(fm11_core PRIVATE
 
 if(FM11_BUILD_TESTS)
     enable_testing()
+
     add_executable(core_smoke tests/core_smoke.cpp)
     target_link_libraries(core_smoke PRIVATE fm11_core)
     add_test(NAME core_smoke COMMAND core_smoke)
+
+    add_executable(machine_smoke tests/machine_smoke.cpp)
+    target_link_libraries(machine_smoke PRIVATE fm11_core)
+    add_test(NAME machine_smoke COMMAND machine_smoke)
 endif()
