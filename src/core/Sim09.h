@@ -77,6 +77,11 @@ public:
 
 private:
 	bool IsOpcodeAllowed(WORD opcode) const;
+	bool IsIndexedPostbyteAllowed(BYTE postbyte) const;
+	bool IsTransferPostbyteAllowed(BYTE postbyte) const;
+	bool ConsumeIllegalOperand();
+
 	bool enable6309_ = true;
+	bool illegalOperand_ = false;
 };
 
