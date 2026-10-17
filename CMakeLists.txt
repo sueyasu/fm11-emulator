@@ -21,6 +21,11 @@ target_compile_options(fm11_core PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
 )
 
+if(UNIX)
+    add_executable(fm11-headless src/headless/main.cpp)
+    target_link_libraries(fm11-headless PRIVATE fm11_core)
+endif()
+
 if(FM11_BUILD_TESTS)
     enable_testing()
 
