@@ -3,7 +3,7 @@
 #include <stdexcept>
 
 Main6809Board::Main6809Board(CpuType variant)
-    : core_(memory_, variant)
+    : core_(*this, variant)
 {
     if (variant != CpuType::MC6809 && variant != CpuType::HD6309)
         throw std::invalid_argument("Main6809Board requires MC6809 or HD6309 CPU type");
@@ -29,30 +29,51 @@ void Main6809Board::reset()
     core_.reset();
 }
 
-BYTE Main6809Board::readPhysical(WORD address) const
+BYTE Main6809Board::readCpu(WORD address) const
 {
+    return readPhysical(translateCpuAddress(address));
+}
+
+void Main6809Board::writeCpu(WORD address, BYTE value)
+{
+    writePhysical(translateCpuAddress(address), value);
+}
+
+BYTE Main6809Board::readPhysical(std::uint32_t address) const
+{
+    if (address >= memory_.size())
+        throw std::out_of_range("Main6809Board physical read outside backing memory");
     return memory_[address];
 }
 
-void Main6809Board::writePhysical(WORD address, BYTE value)
+void Main6809Board::writePhysical(std::uint32_t address, BYTE value)
 {
+    if (address >= memory_.size())
+        throw std::out_of_range("Main6809Board physical write outside backing memory");
     memory_[address] = value;
 }
 
-Main6809Board::Core::Core(std::array<BYTE, 65536>& memory, CpuType variant)
-    : memory_(memory), variant_(variant)
+std::uint32_t Main6809Board::translateCpuAddress(WORD address) const
+{
+    // Phase 2 starts with an identity map. FM-11 MMR translation belongs here,
+    // at the board boundary, rather than in the 6809/6309 execution core.
+    return address;
+}
+
+Main6809Board::Core::Core(Main6809Board& board, CpuType variant)
+    : board_(board), variant_(variant)
 {
     Set6309Enabled(variant_ == CpuType::HD6309);
 }
 
 BYTE Main6809Board::Core::GetMemByte(WORD address)
 {
-    return memory_[address];
+    return board_.readCpu(address);
 }
 
 void Main6809Board::Core::SetMemByte(WORD address, BYTE value)
 {
-    memory_[address] = value;
+    board_.writeCpu(address, value);
 }
 
 void Main6809Board::Core::reset()
