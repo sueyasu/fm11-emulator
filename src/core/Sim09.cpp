@@ -4,6 +4,7 @@
 #include "sim09/20_word_ops.inc"
 #include "sim09/30_inherent_ops_01.inc"
 #include "sim09/30_inherent_ops_02.inc"
+#include "sim09/35_personality.inc"
 #include "sim09/40_interrupts.inc"
 #include "sim09/50_execute_01.inc"
 #include "sim09/50_execute_02.inc"
