@@ -3,14 +3,14 @@
 // decoded postbyte cycles; stack/branch/RTI have separate dynamic rules.
 // The HD6309 native-mode deltas are applied by BeginInstructionTiming.
 static constexpr unsigned char k6809BaseCycles[256] = {
-     6,  0,  0,  6,  6,  0,  6,  6,  6,  6,  6,  0,  6,  6,  0,  6, // 00
-     0,  0,  2,  0,  0,  0,  5,  9,  0,  0,  3,  0,  3,  0,  8,  6, // 10
+     6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  6,  3,  6, // 00
+     0,  0,  2,  4,  2,  0,  5,  9,  0,  3,  3,  0,  3,  2,  8,  6, // 10
      3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3, // 20
-     4,  4,  4,  4,  5,  5,  5,  5,  0,  5,  0,  6,  0,  0,  0,  0, // 30
+     4,  4,  4,  4,  5,  5,  5,  5,  0,  5,  3,  6, 20, 11,  0, 19, // 30
      2,  0,  0,  2,  2,  0,  2,  2,  2,  2,  2,  0,  2,  2,  0,  2, // 40
      2,  0,  0,  2,  2,  0,  2,  2,  2,  2,  2,  0,  2,  2,  0,  2, // 50
-     6,  0,  0,  6,  6,  0,  6,  6,  6,  6,  6,  0,  6,  6,  0,  6, // 60
-     7,  0,  0,  7,  7,  0,  7,  7,  7,  7,  7,  0,  7,  7,  0,  7, // 70
+     6,  7,  7,  6,  6,  7,  6,  6,  6,  6,  6,  7,  6,  6,  3,  6, // 60
+     7,  8,  8,  7,  7,  8,  7,  7,  7,  7,  7,  8,  7,  7,  3,  7, // 70
      2,  2,  2,  4,  2,  2,  2,  0,  2,  2,  2,  2,  4,  7,  3,  0, // 80
      4,  4,  4,  6,  4,  4,  4,  4,  4,  4,  4,  4,  6,  7,  5,  5, // 90
      4,  4,  4,  6,  4,  4,  4,  4,  4,  4,  4,  4,  6,  7,  5,  5, // a0
@@ -21,10 +21,50 @@ static constexpr unsigned char k6809BaseCycles[256] = {
      5,  5,  5,  7,  5,  5,  5,  5,  5,  5,  5,  5,  6,  6,  6,  6, // f0
 };
 
+static constexpr unsigned char k6809Page10Cycles[256] = {
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, // 00
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, // 10
+     0,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5,  5, // 20
+     5,  5,  5,  5,  5,  5,  5,  5,  7,  7,  7,  7,  0,  0,  0, 20, // 30
+     5,  0,  0,  5,  5,  0,  5,  5,  5,  5,  5,  0,  5,  5,  0,  5, // 40
+     0,  0,  0,  5,  5,  0,  5,  0,  0,  5,  5,  0,  5,  5,  0,  5, // 50
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, // 60
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, // 70
+     6,  6,  6,  6,  6,  6,  6,  0,  6,  6,  6,  6,  6,  0,  6,  0, // 80
+     7,  7,  7,  7,  7,  7,  7,  6,  7,  7,  7,  7,  7,  0,  7,  6, // 90
+     9,  9,  9,  9,  9,  9,  9,  8,  9,  9,  9,  9,  9,  0,  9,  8, // a0
+     8,  8,  8,  8,  8,  8,  8,  7,  8,  8,  8,  8,  8,  0,  8,  7, // b0
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  6,  0, // c0
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  6,  6,  7,  6, // d0
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  8,  8,  9,  8, // e0
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  7,  7,  8,  7, // f0
+};
+
+static constexpr unsigned char k6309Page11Cycles[256] = {
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, // 00
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, // 10
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, // 20
+     6,  6,  6,  6,  6,  6,  6,  6,  5,  5,  5,  5,  5,  5,  0, 20, // 30
+     0,  0,  0,  5,  0,  0,  0,  0,  0,  0,  5,  0,  5,  5,  0,  5, // 40
+     0,  0,  0,  5,  0,  0,  0,  0,  0,  0,  5,  0,  5,  5,  0,  5, // 50
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, // 60
+     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, // 70
+     5,  5,  0,  6,  0,  0,  5,  0,  0,  0,  0,  5,  6,  5,  6,  6, // 80
+     6,  6,  0,  7,  0,  0,  6,  6,  0,  0,  0,  6,  7,  6,  7,  7, // 90
+     8,  8,  0,  9,  0,  0,  8,  8,  0,  0,  0,  8,  9,  8,  9,  9, // a0
+     7,  7,  0,  8,  0,  0,  7,  7,  0,  0,  0,  7,  8,  7,  8,  8, // b0
+     5,  5,  0,  0,  0,  0,  5,  0,  0,  0,  0,  5,  0,  0,  0,  0, // c0
+     6,  6,  0,  0,  0,  0,  6,  6,  0,  0,  0,  6,  0,  0,  0,  0, // d0
+     8,  8,  0,  0,  0,  0,  8,  8,  0,  0,  0,  8,  0,  0,  0,  0, // e0
+     7,  7,  0,  0,  0,  0,  7,  7,  0,  0,  0,  7,  0,  0,  0,  0, // f0
+};
+
 // MC6809/HD6309 timing lookup and variable-cycle correction.
 void CSim09::BeginInstructionTiming(WORD op)
 {
-    lastInstructionCycles_ = op < 0x100 ? k6809BaseCycles[op] : 0;
+    lastInstructionCycles_ = op < 0x100 ? k6809BaseCycles[op] :
+        op < 0x1100 ? k6809Page10Cycles[op & 0xff] :
+        op < 0x1200 ? k6309Page11Cycles[op & 0xff] : 0;
     if (op == 0x3b) {
         const BYTE stackedCc = GetMemByte(REG_S);
         lastInstructionCycles_ = (stackedCc & CC_E) != 0 ?
@@ -85,6 +125,11 @@ void CSim09::BeginInstructionTiming(WORD op)
 
 void CSim09::FinishInstructionTiming(WORD op)
 {
+    // A prefixed opcode is fetched inside the instruction dispatcher.
+    // Its complete 16-bit key becomes available only after dispatch.
+    if (op >= 0x1000 && op < 0x1200)
+        lastInstructionCycles_ = op < 0x1100 ?
+            k6809Page10Cycles[op & 0xff] : k6309Page11Cycles[op & 0xff];
     // PSHS/PULS/PSHU/PULU: five cycles plus one per 8-bit register
     // and two per 16-bit register selected in the mask.
     if (op >= 0x34 && op <= 0x37) {
@@ -130,7 +175,9 @@ void CSim09::FinishInstructionTiming(WORD op)
     const bool indexedWord = op == 0xa3 || op == 0xac || op == 0xae ||
                              op == 0xaf || op == 0xe3 || op == 0xec ||
                              op == 0xed || op == 0xee || op == 0xef;
-    if (indexedByte || indexedWord || op == 0xad ||
+    const bool otherIndexed = op >= 0x1000 && op < 0x1200 &&
+        ((op & 0xf0) == 0xa0 || (op & 0xf0) == 0xe0);
+    if (indexedByte || indexedWord || otherIndexed || op == 0xad ||
         (op >= 0x30 && op <= 0x33)) {
         if (indexedCycleKnown_ && !illegalOperand_)
             lastInstructionCycles_ += indexedCycleExtra_;

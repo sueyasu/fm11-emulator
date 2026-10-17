@@ -18,7 +18,7 @@ int main()
     b.setCpuClockHz(9700);
     b.writeCpu(0xfd39, 1); b.writeCpu(0xfd38, 0x50);
     b.writeCpu(0xfd3a, 0); b.writeCpu(0xfd3b, 100);
-    b.cpu().executeOne(); // LDS is not yet cycle-timed
+    b.cpu().executeOne(); // LDS adds 6 cycles
     b.cpu().firq();
     if (b.cpu().pc() != 0x1200) return 1;
     b.cpu().firq(); // CC.F masks re-entry
@@ -32,6 +32,6 @@ int main()
     b.cpu().executeOne(); // full RTI, 15 cycles
     if (b.cpu().pc() != 0x1004) return 6;
     // 10 (FIRQ) + 6 (short RTI) + 19 (NMI) + 15 (full RTI) = 50.
-    if (b.readCpu(0xfd3a) != 0 || b.readCpu(0xfd3b) != 50) return 7;
+    if (b.readCpu(0xfd3a) != 0 || b.readCpu(0xfd3b) != 44) return 7;
     return 0;
 }

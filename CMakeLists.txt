@@ -135,4 +135,8 @@ if(FM11_BUILD_TESTS)
     add_executable(cpu6809_cycle_database tests/cpu6809_cycle_database.cpp)
     target_link_libraries(cpu6809_cycle_database PRIVATE fm11_core)
     add_test(NAME cpu6809_cycle_database COMMAND cpu6809_cycle_database)
+
+    add_executable(cpu6809_full_cycle_db tests/cpu6809_full_cycle_db.cpp)
+    target_link_libraries(cpu6809_full_cycle_db PRIVATE fm11_core)
+    add_test(NAME cpu6809_full_cycle_db COMMAND cpu6809_full_cycle_db)
 endif()

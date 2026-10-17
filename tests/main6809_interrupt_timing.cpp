@@ -16,7 +16,7 @@ int main()
     b.setCpuClockHz(9700);
     b.writeCpu(0xfd39,1);b.writeCpu(0xfd38,0x50);
     b.writeCpu(0xfd3a,0);b.writeCpu(0xfd3b,100);
-    b.cpu().executeOne(); // LDS not timed
+    b.cpu().executeOne(); // LDS (6)
     b.cpu().executeOne(); // LDX # (3)
     b.cpu().executeOne(); // JSR ,X (7)
     if(b.cpu().pc()!=0x1100)return 1;
@@ -32,6 +32,6 @@ int main()
     b.cpu().executeOne();
     if(b.cpu().pc()!=0x100a)return 5;
     // Total 3+7+5+2+19+15=51.
-    if(b.readCpu(0xfd3a)!=0||b.readCpu(0xfd3b)!=49)return 6;
+    if(b.readCpu(0xfd3a)!=0||b.readCpu(0xfd3b)!=43)return 6;
     return 0;
 }
