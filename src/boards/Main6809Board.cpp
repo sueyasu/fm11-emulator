@@ -325,6 +325,14 @@ void Main6809Board::Core::reset()
 
 void Main6809Board::Core::executeOne()
 {
+    // IRQ is level-sensitive. Check at instruction boundaries, and keep
+    // the source pending while CC.I masks it. SimIRQ performs the complete
+    // CPU state save and vectors through FFF8.
+    constexpr BYTE kIrqMask = 0x10; // MC6809 CC.I
+    if (board_.irqPending() && (regs.CC & kIrqMask) == 0) {
+        SimIRQ();
+        return;
+    }
     SimONE();
 }
 
