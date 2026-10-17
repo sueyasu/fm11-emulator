@@ -12,10 +12,10 @@ bool run(unsigned md, unsigned kind)
     board.writeCpu(0xfffc,0x11); board.writeCpu(0xfffd,0x00);
     board.writeCpu(0xfff8,0x11); board.writeCpu(0xfff9,0x00);
     board.writeCpu(0x1100,0x3b);
-    board.cpu().regs.r.w.S=0x3000;
-    board.cpu().regs.r.w.W=0x1234; // E/F
-    board.cpu().regs.r.w.D=0x5678; // A/B
-    board.cpu().regs.MD=static_cast<BYTE>(md);
+    dynamic_cast<CSim09&>(board.cpu()).regs.r.w.S=0x3000;
+    dynamic_cast<CSim09&>(board.cpu()).regs.r.w.W=0x1234; // E/F
+    dynamic_cast<CSim09&>(board.cpu()).regs.r.w.D=0x5678; // A/B
+    dynamic_cast<CSim09&>(board.cpu()).regs.MD=static_cast<BYTE>(md);
     board.setCpuClockHz(9700);
     board.writeCpu(0xfd39,1); board.writeCpu(0xfd38,0x50);
     board.writeCpu(0xfd3a,0); board.writeCpu(0xfd3b,100);
@@ -30,17 +30,17 @@ bool run(unsigned md, unsigned kind)
     if (board.cpu().pc()!=0x1100) return false;
     const bool full = kind!=0 || (md & 0x02)!=0;
     const unsigned frame = full ? ((md & 1)!=0 ? 14 : 12) : 3;
-    if (board.cpu().regs.r.w.S != 0x3000-frame) return false;
+    if (dynamic_cast<CSim09&>(board.cpu()).regs.r.w.S != 0x3000-frame) return false;
     if (full && (md & 1)!=0) {
         if (board.readCpu(0x3000-frame+3)!=0x12 ||
             board.readCpu(0x3000-frame+4)!=0x34) return false;
     }
     // Alter E/F to demonstrate native RTI restores their stacked values.
-    board.cpu().regs.r.w.W=0xabcd;
+    dynamic_cast<CSim09&>(board.cpu()).regs.r.w.W=0xabcd;
     board.cpu().executeOne(); // RTI
-    if (board.cpu().pc()!=0x1000 || board.cpu().regs.r.w.S!=0x3000)
+    if (board.cpu().pc()!=0x1000 || dynamic_cast<CSim09&>(board.cpu()).regs.r.w.S!=0x3000)
         return false;
-    if (full && (md & 1)!=0 && board.cpu().regs.r.w.W!=0x1234)
+    if (full && (md & 1)!=0 && dynamic_cast<CSim09&>(board.cpu()).regs.r.w.W!=0x1234)
         return false;
     const unsigned entry = full ? ((md & 1)!=0?21:19):10;
     const unsigned rti = full ? ((md & 1)!=0?17:15):6;
