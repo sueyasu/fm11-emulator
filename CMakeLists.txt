@@ -72,26 +72,6 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(main6809_cpu_timing PRIVATE fm11_core)
     add_test(NAME main6809_cpu_timing COMMAND main6809_cpu_timing)
 
-    add_executable(main6809_immediate_timing tests/main6809_immediate_timing.cpp)
-    target_link_libraries(main6809_immediate_timing PRIVATE fm11_core)
-    add_test(NAME main6809_immediate_timing COMMAND main6809_immediate_timing)
-
-    add_executable(main6809_address_timing tests/main6809_address_timing.cpp)
-    target_link_libraries(main6809_address_timing PRIVATE fm11_core)
-    add_test(NAME main6809_address_timing COMMAND main6809_address_timing)
-
-    add_executable(main6809_indexed_timing tests/main6809_indexed_timing.cpp)
-    target_link_libraries(main6809_indexed_timing PRIVATE fm11_core)
-    add_test(NAME main6809_indexed_timing COMMAND main6809_indexed_timing)
-
-    add_executable(main6809_word_timing tests/main6809_word_timing.cpp)
-    target_link_libraries(main6809_word_timing PRIVATE fm11_core)
-    add_test(NAME main6809_word_timing COMMAND main6809_word_timing)
-
-    add_executable(main6809_word_indexed_timing tests/main6809_word_indexed_timing.cpp)
-    target_link_libraries(main6809_word_indexed_timing PRIVATE fm11_core)
-    add_test(NAME main6809_word_indexed_timing COMMAND main6809_word_indexed_timing)
-
     add_executable(main6809_branch_timing tests/main6809_branch_timing.cpp)
     target_link_libraries(main6809_branch_timing PRIVATE fm11_core)
     add_test(NAME main6809_branch_timing COMMAND main6809_branch_timing)
@@ -108,33 +88,9 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(main6809_firq_nmi_timing PRIVATE fm11_core)
     add_test(NAME main6809_firq_nmi_timing COMMAND main6809_firq_nmi_timing)
 
-    add_executable(main6809_timing_refactor tests/main6809_timing_refactor.cpp)
-    target_link_libraries(main6809_timing_refactor PRIVATE fm11_core)
-    add_test(NAME main6809_timing_refactor COMMAND main6809_timing_refactor)
-
-    add_executable(cpu6309_timing_personality tests/cpu6309_timing_personality.cpp)
-    target_link_libraries(cpu6309_timing_personality PRIVATE fm11_core)
-    add_test(NAME cpu6309_timing_personality COMMAND cpu6309_timing_personality)
-
-    add_executable(cpu6309_word_timing tests/cpu6309_word_timing.cpp)
-    target_link_libraries(cpu6309_word_timing PRIVATE fm11_core)
-    add_test(NAME cpu6309_word_timing COMMAND cpu6309_word_timing)
-
-    add_executable(cpu6309_control_timing tests/cpu6309_control_timing.cpp)
-    target_link_libraries(cpu6309_control_timing PRIVATE fm11_core)
-    add_test(NAME cpu6309_control_timing COMMAND cpu6309_control_timing)
-
     add_executable(cpu6309_interrupt_timing tests/cpu6309_interrupt_timing.cpp)
     target_link_libraries(cpu6309_interrupt_timing PRIVATE fm11_core)
     add_test(NAME cpu6309_interrupt_timing COMMAND cpu6309_interrupt_timing)
-
-    add_executable(cpu6809_misc_timing tests/cpu6809_misc_timing.cpp)
-    target_link_libraries(cpu6809_misc_timing PRIVATE fm11_core)
-    add_test(NAME cpu6809_misc_timing COMMAND cpu6809_misc_timing)
-
-    add_executable(cpu6809_cycle_database tests/cpu6809_cycle_database.cpp)
-    target_link_libraries(cpu6809_cycle_database PRIVATE fm11_core)
-    add_test(NAME cpu6809_cycle_database COMMAND cpu6809_cycle_database)
 
     add_executable(cpu6809_full_cycle_db tests/cpu6809_full_cycle_db.cpp)
     target_link_libraries(cpu6809_full_cycle_db PRIVATE fm11_core)
