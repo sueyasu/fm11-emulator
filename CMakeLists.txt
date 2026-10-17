@@ -115,4 +115,8 @@ if(FM11_BUILD_TESTS)
     add_executable(cpu6309_timing_personality tests/cpu6309_timing_personality.cpp)
     target_link_libraries(cpu6309_timing_personality PRIVATE fm11_core)
     add_test(NAME cpu6309_timing_personality COMMAND cpu6309_timing_personality)
+
+    add_executable(cpu6309_word_timing tests/cpu6309_word_timing.cpp)
+    target_link_libraries(cpu6309_word_timing PRIVATE fm11_core)
+    add_test(NAME cpu6309_word_timing COMMAND cpu6309_word_timing)
 endif()
