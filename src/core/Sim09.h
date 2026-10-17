@@ -60,6 +60,9 @@ public:
 	virtual BYTE GetMemByte(WORD addr);
 	virtual void SetMemByte(WORD addr, BYTE data);
 
+	void Set6309Enabled(bool enabled);
+	bool Is6309Enabled() const;
+
 	WORD GetAddrInd();
 	void SimRESET();
 	void SimFIRQ();
@@ -71,5 +74,9 @@ public:
 	char *DisPhs(BYTE pt, BYTE op);
 	char *DisReg(BYTE pt);
 	WORD Dis09(char *tmp, WORD addr);
+
+private:
+	bool IsOpcodeAllowed(WORD opcode) const;
+	bool enable6309_ = true;
 };
 
