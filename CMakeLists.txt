@@ -43,4 +43,8 @@ if(FM11_BUILD_TESTS)
     add_executable(main6809_mmr tests/main6809_mmr.cpp)
     target_link_libraries(main6809_mmr PRIVATE fm11_core)
     add_test(NAME main6809_mmr COMMAND main6809_mmr)
+
+    add_executable(main6809_map tests/main6809_map.cpp)
+    target_link_libraries(main6809_map PRIVATE fm11_core)
+    add_test(NAME main6809_map COMMAND main6809_map)
 endif()
