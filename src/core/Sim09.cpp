@@ -1,0 +1,10 @@
+// Portable source split into logical implementation sections.
+#include "sim09/00_prelude.inc"
+#include "sim09/10_byte_ops.inc"
+#include "sim09/20_word_ops.inc"
+#include "sim09/30_inherent_ops_01.inc"
+#include "sim09/30_inherent_ops_02.inc"
+#include "sim09/40_interrupts.inc"
+#include "sim09/50_execute_01.inc"
+#include "sim09/50_execute_02.inc"
+#include "sim09/50_execute_03.inc"
