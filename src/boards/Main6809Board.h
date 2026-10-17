@@ -33,6 +33,10 @@ public:
     void setExtendedIrqSource(BYTE sourceBit, bool asserted);
     bool irqPending() const;
 
+    // Advance the PTM by input clock pulses. The scheduler will later
+    // convert emulated CPU time to these PTM ticks.
+    void advancePtm(std::uint64_t ticks);
+
     BYTE readCpu(WORD address);
     void writeCpu(WORD address, BYTE value);
 
@@ -48,6 +52,9 @@ private:
     BYTE readMmrRegister(WORD address) const;
     void writeMmrRegister(WORD address, BYTE value);
     BYTE readIo(WORD address);
+    BYTE readPtm(BYTE port);
+    void writePtm(BYTE port, BYTE value);
+    void refreshPtmIrq();
     BYTE mainIrqStatus();
     BYTE extendedIrqStatus();
     void writeIo(WORD address, BYTE value);
@@ -88,6 +95,15 @@ private:
     BYTE extendedIrqSources_ = 0;
     BYTE mainIrqResult_ = 0;
     BYTE extendedIrqResult_ = 0;
+
+    struct PtmChannel {
+        BYTE control = 0;
+        WORD latch = 0;
+        std::uint32_t counter = 0;
+        bool running = false;
+    };
+    std::array<PtmChannel, 3> ptm_{};
+    BYTE ptmStatus_ = 0;
 
     std::array<std::array<BYTE, 16>, 16> mmr_{};
     std::array<BYTE, 4> mmrControl_{};

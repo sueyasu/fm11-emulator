@@ -59,4 +59,8 @@ if(FM11_BUILD_TESTS)
     add_executable(main6809_irq_delivery tests/main6809_irq_delivery.cpp)
     target_link_libraries(main6809_irq_delivery PRIVATE fm11_core)
     add_test(NAME main6809_irq_delivery COMMAND main6809_irq_delivery)
+
+    add_executable(main6809_ptm tests/main6809_ptm.cpp)
+    target_link_libraries(main6809_ptm PRIVATE fm11_core)
+    add_test(NAME main6809_ptm COMMAND main6809_ptm)
 endif()
