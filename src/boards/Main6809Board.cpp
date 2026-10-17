@@ -35,6 +35,8 @@ void Main6809Board::reset()
     ioStatusLatch_.fill(0);
     mainIrqSources_ = extendedIrqSources_ = 0;
     mainIrqResult_ = extendedIrqResult_ = 0;
+    ptm_.fill(PtmChannel{});
+    ptmStatus_ = 0;
 
     // The original board copies the reset vector from the last two bytes of
     // the boot ROM into the fixed on-board RAM at FFFE/FFFF before RESET.
@@ -123,6 +125,96 @@ BYTE Main6809Board::mainIrqStatus()
     mainIrqResult_ = value;
     ioRegisters_[0x03] = value;
     return value;
+}
+
+void Main6809Board::refreshPtmIrq()
+{
+    bool active = false;
+    for (unsigned i = 0; i < ptm_.size(); ++i)
+        active |= (ptmStatus_ & (1u << i)) != 0 &&
+                  (ptm_[i].control & 0x40) != 0;
+    if (active)
+        ptmStatus_ |= 0x80;
+    else
+        ptmStatus_ &= 0x7f;
+    setMainIrqSource(0x01, active);
+}
+
+void Main6809Board::advancePtm(std::uint64_t ticks)
+{
+    for (unsigned i = 0; i < ptm_.size(); ++i) {
+        auto& ch = ptm_[i];
+        if (!ch.running || ticks == 0)
+            continue;
+        if (ticks < ch.counter) {
+            ch.counter -= static_cast<std::uint32_t>(ticks);
+            continue;
+        }
+        const auto remaining = ticks - ch.counter;
+        ptmStatus_ |= static_cast<BYTE>(1u << i);
+        const bool continuous = (ch.control & 0x28) == 0;
+        if (continuous) {
+            const std::uint64_t period = ch.latch == 0 ? 0x10000u : ch.latch;
+            const auto mod = remaining % period;
+            ch.counter = static_cast<std::uint32_t>(period - mod);
+        } else {
+            ch.counter = 0;
+            ch.running = false;
+        }
+    }
+    refreshPtmIrq();
+}
+
+BYTE Main6809Board::readPtm(BYTE port)
+{
+    if (port == 0x38)
+        return 0;
+    if (port == 0x39) {
+        const BYTE status = ptmStatus_;
+        ptmStatus_ = 0;
+        refreshPtmIrq();
+        return status;
+    }
+    const unsigned index = (port - 0x3a) / 2;
+    auto& ch = ptm_[index];
+    ptmStatus_ &= static_cast<BYTE>(~(1u << index));
+    refreshPtmIrq();
+    const WORD value = static_cast<WORD>(ch.counter);
+    if ((port & 1) == 0)
+        ioRegisters_[port + 1] = static_cast<BYTE>(value);
+    return (port & 1) != 0 ? ioRegisters_[port] : static_cast<BYTE>(value >> 8);
+}
+
+void Main6809Board::writePtm(BYTE port, BYTE value)
+{
+    if (port == 0x38 || port == 0x39) {
+        const unsigned index = port == 0x39 ? 1 :
+            ((ptm_[1].control & 0x01) != 0 ? 0 : 2);
+        ptm_[index].control = value;
+        if (index == 0 && (value & 0x01) != 0) {
+            ptm_.fill(PtmChannel{});
+            ptm_[0].control = 0x01;
+            ptmStatus_ = 0;
+        } else {
+            ptmStatus_ &= static_cast<BYTE>(~(1u << index));
+            const BYTE mode = value & 0x38;
+            if (mode == 0x10 || mode == 0x30) {
+                auto& ch = ptm_[index];
+                ch.counter = ch.latch == 0 ? 0x10000u : ch.latch;
+                ch.running = true;
+            }
+        }
+        refreshPtmIrq();
+        return;
+    }
+    ioRegisters_[port] = value;
+    const unsigned index = (port - 0x3a) / 2;
+    if ((port & 1) != 0) {
+        auto& ch = ptm_[index];
+        ch.latch = static_cast<WORD>((static_cast<WORD>(ioRegisters_[port - 1]) << 8) | value);
+        ch.counter = ch.latch == 0 ? 0x10000u : ch.latch;
+        ch.running = true;
+    }
 }
 
 BYTE Main6809Board::readCpu(WORD address)
@@ -218,6 +310,9 @@ BYTE Main6809Board::readIo(WORD address)
 
     const BYTE reg = static_cast<BYTE>(address & 0x00ff);
     switch (reg) {
+    case 0x38: case 0x39: case 0x3a: case 0x3b:
+    case 0x3c: case 0x3d: case 0x3e: case 0x3f:
+        return readPtm(reg);
     case 0x03:
         return mainIrqStatus();
     case 0x2c: {
@@ -250,6 +345,10 @@ void Main6809Board::writeIo(WORD address, BYTE value)
 
     const BYTE reg = static_cast<BYTE>(address & 0x00ff);
     switch (reg) {
+    case 0x38: case 0x39: case 0x3a: case 0x3b:
+    case 0x3c: case 0x3d: case 0x3e: case 0x3f:
+        writePtm(reg, value);
+        break;
     case 0x02:
         ioOutputLatch_[0x02] = value;
         mainIrqStatus();
