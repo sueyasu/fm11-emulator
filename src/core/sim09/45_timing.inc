@@ -1,100 +1,34 @@
-// MC6809 instruction timing, kept separate from opcode execution.
-// An unknown instruction remains unmeasured (zero cycles). HD6309
-// timing differences are intentionally not assigned speculatively.
+// Approximate MC6809 opcode-cycle database. Zero means unsupported or
+// not yet classified, NOT zero elapsed time. Indexed operands add their
+// decoded postbyte cycles; stack/branch/RTI have separate dynamic rules.
+// The HD6309 native-mode deltas are applied by BeginInstructionTiming.
+static constexpr unsigned char k6809BaseCycles[256] = {
+     6,  0,  0,  6,  6,  0,  6,  6,  6,  6,  6,  0,  6,  6,  0,  6, // 00
+     0,  0,  2,  0,  0,  0,  5,  9,  0,  0,  3,  0,  3,  0,  8,  6, // 10
+     3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3,  3, // 20
+     4,  4,  4,  4,  5,  5,  5,  5,  0,  5,  0,  6,  0,  0,  0,  0, // 30
+     2,  0,  0,  2,  2,  0,  2,  2,  2,  2,  2,  0,  2,  2,  0,  2, // 40
+     2,  0,  0,  2,  2,  0,  2,  2,  2,  2,  2,  0,  2,  2,  0,  2, // 50
+     6,  0,  0,  6,  6,  0,  6,  6,  6,  6,  6,  0,  6,  6,  0,  6, // 60
+     7,  0,  0,  7,  7,  0,  7,  7,  7,  7,  7,  0,  7,  7,  0,  7, // 70
+     2,  2,  2,  4,  2,  2,  2,  0,  2,  2,  2,  2,  4,  7,  3,  0, // 80
+     4,  4,  4,  6,  4,  4,  4,  4,  4,  4,  4,  4,  6,  7,  5,  5, // 90
+     4,  4,  4,  6,  4,  4,  4,  4,  4,  4,  4,  4,  6,  7,  5,  5, // a0
+     5,  5,  5,  7,  5,  5,  5,  5,  5,  5,  5,  5,  7,  8,  6,  6, // b0
+     2,  2,  2,  4,  2,  2,  2,  0,  2,  2,  2,  2,  3,  0,  3,  0, // c0
+     4,  4,  4,  6,  4,  4,  4,  4,  4,  4,  4,  4,  5,  5,  5,  5, // d0
+     4,  4,  4,  6,  4,  4,  4,  4,  4,  4,  4,  4,  5,  5,  5,  5, // e0
+     5,  5,  5,  7,  5,  5,  5,  5,  5,  5,  5,  5,  6,  6,  6,  6, // f0
+};
+
+// MC6809/HD6309 timing lookup and variable-cycle correction.
 void CSim09::BeginInstructionTiming(WORD op)
 {
-    // Verified MC6809 subset; unmeasured opcodes remain at zero.
-    switch (op) {
-    case 0x12: lastInstructionCycles_ = 2; break; // NOP
-    case 0x1a: case 0x1c: lastInstructionCycles_ = 3; break; // ORCC / ANDCC
-    case 0x1e: lastInstructionCycles_ = 8; break; // EXG
-    case 0x1f: lastInstructionCycles_ = 6; break; // TFR
-    case 0x30: case 0x31: case 0x32: case 0x33:
-        lastInstructionCycles_ = 4; break; // LEA indexed base
-    case 0x20: lastInstructionCycles_ = 3; break; // BRA rel8
-    case 0x21: case 0x22: case 0x23: case 0x24:
-    case 0x25: case 0x26: case 0x27: case 0x28:
-    case 0x29: case 0x2a: case 0x2b: case 0x2c:
-    case 0x2d: case 0x2e: case 0x2f:
-        lastInstructionCycles_ = 3; break; // conditional rel8
-    case 0x16: lastInstructionCycles_ = 5; break; // LBRA rel16
-    case 0x17: lastInstructionCycles_ = 9; break; // LBSR
-    case 0x8d: lastInstructionCycles_ = 7; break; // BSR
-    case 0x9d: lastInstructionCycles_ = 7; break; // JSR direct
-    case 0xbd: lastInstructionCycles_ = 8; break; // JSR extended
-    case 0x39: lastInstructionCycles_ = 5; break; // RTS
-    case 0xad: lastInstructionCycles_ = 7; break; // JSR indexed base
-    case 0x3b: {
-        // CC.E in the saved stack frame controls full vs partial RTI.
-        // The MC6809 short RTI is 6 cycles; full RTI is 15.
+    lastInstructionCycles_ = op < 0x100 ? k6809BaseCycles[op] : 0;
+    if (op == 0x3b) {
         const BYTE stackedCc = GetMemByte(REG_S);
-        lastInstructionCycles_ = (stackedCc & 0x80) != 0 ?
+        lastInstructionCycles_ = (stackedCc & CC_E) != 0 ?
             (enable6309_ && (REG_MD & MD_N) != 0 ? 17 : 15) : 6;
-        break;
-    }
-    case 0x34: case 0x35: case 0x36: case 0x37:
-        lastInstructionCycles_ = 5; break; // stack fixed overhead
-    // Base 6809 8-bit immediate ALU operations: two cycles each.
-    // Keep the explicit set: other opcodes in these ranges use 16-bit
-    // operands or are reserved and must not inherit a guessed timing.
-    case 0x80: case 0x81: case 0x82: // SUBA, CMPA, SBCA
-    case 0x84: case 0x85: case 0x86: // ANDA, BITA, LDA
-    case 0x88: case 0x89: case 0x8a: case 0x8b: // EORA, ADCA, ORA, ADDA
-    case 0xc0: case 0xc1: case 0xc2: // SUBB, CMPB, SBCB
-    case 0xc4: case 0xc5: case 0xc6: // ANDB, BITB, LDB
-    case 0xc8: case 0xc9: case 0xca: case 0xcb: // EORB, ADCB, ORB, ADDB
-        lastInstructionCycles_ = 2;
-        break;
-    // Native MC6809 direct/extended 8-bit accumulator ALU and stores.
-    // Direct takes 4 cycles; extended takes 5. Word, JSR and indexed
-    // operations have different timings and remain unmeasured here.
-    case 0x90: case 0x91: case 0x92:
-    case 0x94: case 0x95: case 0x96: case 0x97:
-    case 0x98: case 0x99: case 0x9a: case 0x9b:
-    case 0xd0: case 0xd1: case 0xd2:
-    case 0xd4: case 0xd5: case 0xd6: case 0xd7:
-    case 0xd8: case 0xd9: case 0xda: case 0xdb:
-        lastInstructionCycles_ = 4;
-        break;
-    case 0xb0: case 0xb1: case 0xb2:
-    case 0xb4: case 0xb5: case 0xb6: case 0xb7:
-    case 0xb8: case 0xb9: case 0xba: case 0xbb:
-    case 0xf0: case 0xf1: case 0xf2:
-    case 0xf4: case 0xf5: case 0xf6: case 0xf7:
-    case 0xf8: case 0xf9: case 0xfa: case 0xfb:
-        lastInstructionCycles_ = 5;
-        break;
-    // Indexed A/B 8-bit ALU operations have a four-cycle base.
-    case 0xa0: case 0xa1: case 0xa2:
-    case 0xa4: case 0xa5: case 0xa6: case 0xa7:
-    case 0xa8: case 0xa9: case 0xaa: case 0xab:
-    case 0xe0: case 0xe1: case 0xe2:
-    case 0xe4: case 0xe5: case 0xe6: case 0xe7:
-    case 0xe8: case 0xe9: case 0xea: case 0xeb:
-        lastInstructionCycles_ = 4;
-        break;
-    // MC6809 16-bit ALU/load/store, excluding indexed addressing.
-    // 16-bit arithmetic and CMPX: immediate 4, direct 6, extended 7.
-    case 0x83: case 0x8c: case 0xc3:
-        lastInstructionCycles_ = 4; break;
-    case 0x93: case 0x9c: case 0xd3:
-        lastInstructionCycles_ = 6; break;
-    case 0xb3: case 0xbc: case 0xf3:
-        lastInstructionCycles_ = 7; break;
-    // 16-bit loads/stores: immediate 3, direct 5, extended 6.
-    case 0x8e: case 0xcc: case 0xce:
-        lastInstructionCycles_ = 3; break;
-    case 0x9e: case 0x9f: case 0xdc: case 0xdd: case 0xde: case 0xdf:
-        lastInstructionCycles_ = 5; break;
-    case 0xbe: case 0xbf: case 0xfc: case 0xfd: case 0xfe: case 0xff:
-        lastInstructionCycles_ = 6; break;
-    // Native 6809 indexed word operations. Effective-address postbyte
-    // cycles are added only after GetAddrInd successfully decodes it.
-    case 0xa3: case 0xac: case 0xe3: // SUBD, CMPX, ADDD
-        lastInstructionCycles_ = 6; break;
-    case 0xae: case 0xaf: case 0xec: case 0xed: case 0xee: case 0xef:
-        lastInstructionCycles_ = 5; break; // LDX/STX/LDD/STD/LDU/STU
-    default: break;
     }
     // The HD6309 enters emulation mode on reset (MD.N=0). Only
     // established native-mode differences are applied here. Other
