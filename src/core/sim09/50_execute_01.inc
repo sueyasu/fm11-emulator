@@ -75,6 +75,12 @@ void	CSim09::SimONE()
         lastInstructionCycles_ = 5; break;
     case 0xbe: case 0xbf: case 0xfc: case 0xfd: case 0xfe: case 0xff:
         lastInstructionCycles_ = 6; break;
+    // Native 6809 indexed word operations. Effective-address postbyte
+    // cycles are added only after GetAddrInd successfully decodes it.
+    case 0xa3: case 0xac: case 0xe3: // SUBD, CMPX, ADDD
+        lastInstructionCycles_ = 6; break;
+    case 0xae: case 0xaf: case 0xec: case 0xed: case 0xee: case 0xef:
+        lastInstructionCycles_ = 5; break; // LDX/STX/LDD/STD/LDU/STU
     default: break;
     }
     switch(op) {

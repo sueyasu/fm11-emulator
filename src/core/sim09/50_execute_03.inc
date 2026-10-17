@@ -67,9 +67,13 @@
   OPDEF(0xFF,	EXT S_U W_TST E_WORD);			/* STU  (ext)*/
     }
     // Postbyte timing is valid only if the indexed operand was decoded.
-    if (lastInstructionCycles_ == 4 &&
-        ((op >= 0xa0 && op <= 0xab) || (op >= 0xe0 && op <= 0xeb)) &&
-        (op & 0x0f) != 0x03 && (op & 0x0f) != 0x07) {
+    const bool indexedByte = ((op >= 0xa0 && op <= 0xab) ||
+                              (op >= 0xe0 && op <= 0xeb)) &&
+                             (op & 0x0f) != 0x03 && (op & 0x0f) != 0x07;
+    const bool indexedWord = op == 0xa3 || op == 0xac || op == 0xae ||
+                             op == 0xaf || op == 0xe3 || op == 0xec ||
+                             op == 0xed || op == 0xee || op == 0xef;
+    if (indexedByte || indexedWord) {
         if (indexedCycleKnown_ && !illegalOperand_)
             lastInstructionCycles_ += indexedCycleExtra_;
         else
