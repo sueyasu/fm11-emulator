@@ -37,6 +37,7 @@ void Main6809Board::reset()
     mainIrqResult_ = extendedIrqResult_ = 0;
     ptm_.fill(PtmChannel{});
     ptmStatus_ = 0;
+    ptmIrqAcknowledged_ = false;
 
     // The original board copies the reset vector from the last two bytes of
     // the boot ROM into the fixed on-board RAM at FFFE/FFFF before RESET.
@@ -137,7 +138,7 @@ void Main6809Board::refreshPtmIrq()
         ptmStatus_ |= 0x80;
     else
         ptmStatus_ &= 0x7f;
-    setMainIrqSource(0x01, active);
+    setMainIrqSource(0x01, active && !ptmIrqAcknowledged_);
 }
 
 void Main6809Board::advancePtm(std::uint64_t ticks)
@@ -152,6 +153,7 @@ void Main6809Board::advancePtm(std::uint64_t ticks)
         }
         const auto remaining = ticks - ch.counter;
         ptmStatus_ |= static_cast<BYTE>(1u << i);
+        ptmIrqAcknowledged_ = false;
         const bool continuous = (ch.control & 0x28) == 0;
         if (continuous) {
             const std::uint64_t period = ch.latch == 0 ? 0x10000u : ch.latch;
@@ -171,7 +173,9 @@ BYTE Main6809Board::readPtm(BYTE port)
         return 0;
     if (port == 0x39) {
         const BYTE status = ptmStatus_;
-        ptmStatus_ = 0;
+        // FD39 acknowledges IRQ, but leaves the per-channel status bits
+        // available until the corresponding counter register is read.
+        ptmIrqAcknowledged_ = true;
         refreshPtmIrq();
         return status;
     }
@@ -195,6 +199,7 @@ void Main6809Board::writePtm(BYTE port, BYTE value)
             ptm_.fill(PtmChannel{});
             ptm_[0].control = 0x01;
             ptmStatus_ = 0;
+            ptmIrqAcknowledged_ = false;
         } else {
             ptmStatus_ &= static_cast<BYTE>(~(1u << index));
             const BYTE mode = value & 0x38;
