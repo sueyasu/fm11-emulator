@@ -63,13 +63,13 @@ bool keepsFc00ThroughFfffFixed()
     Main6809Board board(CpuType::MC6809);
     board.writeCpu(0xfd8f, 0x77); // logical page F -> physical page 77h
     board.writePhysical(0x77123, 0x77);
-    board.writePhysical(0x0fc10, 0xfc);
-    board.writePhysical(0x77c10, 0x7c);
+    board.writePhysical(0x0fc10, 0x7c);
+    board.writeCpu(0xfc10, 0xfc);
     board.writeCpu(0xfd93, 0x80);
 
     if (board.readCpu(0xf123) != 0x77)
         return false;
-    return board.readCpu(0xfc10) == 0xfc;
+    return board.readCpu(0xfc10) == 0xfc && board.readPhysical(0x0fc10) == 0x7c;
 }
 
 bool resetDisablesAndClearsMmr()
@@ -79,8 +79,10 @@ bool resetDisablesAndClearsMmr()
     board.writeCpu(0xfd82, 0x44);
     board.writeCpu(0xfd93, 0x80);
 
-    board.writePhysical(0xfffe, 0x12);
-    board.writePhysical(0xffff, 0x34);
+    Main6809Board::BootRomImage bootRom{};
+    bootRom[0x0ffe] = 0x12;
+    bootRom[0x0fff] = 0x34;
+    board.loadBootRom(bootRom);
     board.reset();
 
     if (board.cpu().pc() != 0x1234)

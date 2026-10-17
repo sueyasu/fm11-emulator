@@ -16,9 +16,11 @@ int main()
     if (board.readPhysical(0x2345) != 0xa5)
         return 2;
 
-    // Reset-vector fetch and instruction fetch both use the CPU address space.
-    board.writePhysical(0xfffe, 0x12);
-    board.writePhysical(0xffff, 0x34);
+    // The reset vector is copied from the boot ROM into fixed on-board RAM.
+    Main6809Board::BootRomImage bootRom{};
+    bootRom[0x0ffe] = 0x12;
+    bootRom[0x0fff] = 0x34;
+    board.loadBootRom(bootRom);
     board.reset();
     if (board.cpu().pc() != 0x1234)
         return 3;

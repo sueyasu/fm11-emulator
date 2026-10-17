@@ -9,8 +9,10 @@ int main()
     auto main6809 = std::make_unique<Main6809Board>(CpuType::MC6809);
     auto* board = main6809.get();
 
-    board->writePhysical(0xfffe, 0x12);
-    board->writePhysical(0xffff, 0x34);
+    Main6809Board::BootRomImage bootRom{};
+    bootRom[0x0ffe] = 0x12;
+    bootRom[0x0fff] = 0x34;
+    board->loadBootRom(bootRom);
     board->writePhysical(0x1234, 0x12); // NOP
 
     const auto index = machine.addBoard(std::move(main6809));
