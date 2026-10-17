@@ -35,4 +35,8 @@ if(FM11_BUILD_TESTS)
     add_executable(cpu6809_personality tests/6809_personality.cpp)
     target_link_libraries(cpu6809_personality PRIVATE fm11_core)
     add_test(NAME cpu6809_personality COMMAND cpu6809_personality)
+
+    add_executable(main6809_memory tests/main6809_memory.cpp)
+    target_link_libraries(main6809_memory PRIVATE fm11_core)
+    add_test(NAME main6809_memory COMMAND main6809_memory)
 endif()
