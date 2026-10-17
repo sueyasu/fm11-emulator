@@ -90,6 +90,26 @@ void CSim09::BeginInstructionTiming(WORD op)
         lastInstructionCycles_ = 5; break; // LDX/STX/LDD/STD/LDU/STU
     default: break;
     }
+    // The HD6309 enters emulation mode on reset (MD.N=0). Only
+    // established native-mode differences are applied here. Other
+    // instructions retain their existing MC6809 timing until verified.
+    if (enable6309_ && (REG_MD & MD_N) != 0 &&
+        lastInstructionCycles_ != 0) {
+        switch (op) {
+        case 0x12: // NOP: native 1, emulation/6809 2
+            --lastInstructionCycles_;
+            break;
+        default:
+            // Native-mode byte accumulator direct/extended ALU:
+            // one cycle faster. Exclude word, JSR and indexed forms.
+            if ((((op & 0xf0) == 0x90 || (op & 0xf0) == 0xd0) &&
+                 lastInstructionCycles_ == 4) ||
+                (((op & 0xf0) == 0xb0 || (op & 0xf0) == 0xf0) &&
+                 lastInstructionCycles_ == 5))
+                --lastInstructionCycles_;
+            break;
+        }
+    }
 }
 
 

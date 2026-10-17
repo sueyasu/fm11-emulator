@@ -111,4 +111,8 @@ if(FM11_BUILD_TESTS)
     add_executable(main6809_timing_refactor tests/main6809_timing_refactor.cpp)
     target_link_libraries(main6809_timing_refactor PRIVATE fm11_core)
     add_test(NAME main6809_timing_refactor COMMAND main6809_timing_refactor)
+
+    add_executable(cpu6309_timing_personality tests/cpu6309_timing_personality.cpp)
+    target_link_libraries(cpu6309_timing_personality PRIVATE fm11_core)
+    add_test(NAME cpu6309_timing_personality COMMAND cpu6309_timing_personality)
 endif()
