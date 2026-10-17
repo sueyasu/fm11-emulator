@@ -86,6 +86,7 @@ private:
 	std::uint32_t lastInstructionCycles_ = 0;
 	std::uint32_t indexedCycleExtra_ = 0;
 	bool indexedCycleKnown_ = false;
+	BYTE stackTimingMask_ = 0;
 	bool enable6309_ = true;
 	bool illegalOperand_ = false;
 };

@@ -66,6 +66,15 @@
   OPDEF(0xFE,	EXT S_WORD W_TST E_U);			/* LDU  (ext)*/
   OPDEF(0xFF,	EXT S_U W_TST E_WORD);			/* STU  (ext)*/
     }
+    // PSHS/PULS/PSHU/PULU: five cycles plus one per 8-bit register
+    // and two per 16-bit register selected in the mask.
+    if (op >= 0x34 && op <= 0x37) {
+        const BYTE mask = stackTimingMask_;
+        unsigned bytes = 0;
+        for (unsigned bit = 0; bit < 8; ++bit)
+            if (mask & (1u << bit)) bytes += bit >= 4 ? 2 : 1;
+        lastInstructionCycles_ += bytes;
+    }
     // Long conditional branches are 5 cycles if not taken and 6 if
     // taken. Test the same CC predicates used by O_Bxx, including the
     // signed N xor V comparisons; a zero displacement is still taken.

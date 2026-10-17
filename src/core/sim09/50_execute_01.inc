@@ -3,6 +3,7 @@ void	CSim09::SimONE()
     lastInstructionCycles_ = 0;
     indexedCycleKnown_ = false;
     indexedCycleExtra_ = 0;
+    stackTimingMask_ = 0;
     WORD op;
     register ACC accA;
     register ACC accB;
@@ -27,6 +28,13 @@ void	CSim09::SimONE()
     case 0x2d: case 0x2e: case 0x2f:
         lastInstructionCycles_ = 3; break; // conditional rel8
     case 0x16: lastInstructionCycles_ = 5; break; // LBRA rel16
+    case 0x17: lastInstructionCycles_ = 9; break; // LBSR
+    case 0x8d: lastInstructionCycles_ = 7; break; // BSR
+    case 0x9d: lastInstructionCycles_ = 7; break; // JSR direct
+    case 0xbd: lastInstructionCycles_ = 8; break; // JSR extended
+    case 0x39: lastInstructionCycles_ = 5; break; // RTS
+    case 0x34: case 0x35: case 0x36: case 0x37:
+        lastInstructionCycles_ = 5; break; // stack fixed overhead
     // Base 6809 8-bit immediate ALU operations: two cycles each.
     // Keep the explicit set: other opcodes in these ranges use 16-bit
     // operands or are reserved and must not inherit a guessed timing.
@@ -89,6 +97,8 @@ void	CSim09::SimONE()
         lastInstructionCycles_ = 5; break; // LDX/STX/LDD/STD/LDU/STU
     default: break;
     }
+    if (op >= 0x34 && op <= 0x37)
+        stackTimingMask_ = GetMemByte(REG_PC);
     switch(op) {
   OPDEF(0x00,	DIR S_BYTE B_NEG E_BYTE);			/* NEG (dir) */
   OPDEF(0x01,	I_BYTE DIR S_BYTE B_OR E_BYTE);		/* OIM (dir) */
