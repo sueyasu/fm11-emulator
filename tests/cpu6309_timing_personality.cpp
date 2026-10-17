@@ -16,11 +16,11 @@ int main()
         0x86, 0x01,       // LDA #$01: always 2
         0x96, 0x80,       // LDA <$80: 4 / 3
         0xb6, 0x02, 0x00,// LDA >$0200: 5 / 4
-        0x9c, 0x80,       // CMPX <$80: 6 in baseline; not yet adjusted
+        0x9c, 0x80,       // CMPX <$80: 6 in baseline, 4 native
         0xa6, 0x84       // LDA ,X: 4 in baseline; no native delta here
     };
     constexpr std::array<unsigned,6> baseline = {2,2,4,5,6,4};
-    constexpr std::array<unsigned,6> native   = {1,2,3,4,6,4};
+    constexpr std::array<unsigned,6> native   = {1,2,3,4,4,4};
     for (int mode = 0; mode < 3; ++mode) {
         RamCpu cpu;
         cpu.Set6309Enabled(mode != 0);
