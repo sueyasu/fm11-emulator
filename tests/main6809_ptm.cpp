@@ -55,9 +55,11 @@ bool independentChannels()
     b.writeCpu(0xfd3c, 0);
     b.writeCpu(0xfd3d, 6);
     b.advancePtm(3);
-    if (b.readCpu(0xfd3b) != 1 || b.readCpu(0xfd3d) != 3) return false;
+    if (b.readCpu(0xfd3a) != 0 || b.readCpu(0xfd3b) != 1 ||
+        b.readCpu(0xfd3c) != 0 || b.readCpu(0xfd3d) != 3) return false;
     b.advancePtm(1);
-    if (b.readCpu(0xfd3b) != 4 || b.readCpu(0xfd3d) != 2) return false;
+    if (b.readCpu(0xfd3a) != 0 || b.readCpu(0xfd3b) != 4 ||
+        b.readCpu(0xfd3c) != 0 || b.readCpu(0xfd3d) != 2) return false;
     b.reset();
     return b.readCpu(0xfd39) == 0 && !b.irqPending();
 }
