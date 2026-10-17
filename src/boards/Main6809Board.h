@@ -6,6 +6,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <vector>
 
 class Main6809Board final : public CpuBoard
@@ -27,6 +28,11 @@ public:
     // Device boards can use these without reaching into the CPU core.
     void signalAttention();
     void signalBreak();
+
+    // Headless main RS-232C port (FD06 data, FD07 command/status).
+    // The frontend owns terminal transport and may feed/drain bytes here.
+    void queueSerialInput(BYTE value);
+    bool takeSerialOutput(BYTE& value);
 
     // Device IRQ sources use the bit positions of FD03 and FD2C.
     void setMainIrqSource(BYTE sourceBit, bool asserted);
@@ -62,6 +68,8 @@ private:
     void refreshPtmIrq();
     BYTE mainIrqStatus();
     BYTE extendedIrqStatus();
+    BYTE serialStatus() const;
+    void refreshSerialIrq();
     void writeIo(WORD address, BYTE value);
     std::uint32_t translateCpuAddress(WORD address) const;
     std::uint32_t windowPhysicalAddress(WORD address) const;
@@ -96,6 +104,9 @@ private:
     std::array<BYTE, 256> ioRegisters_{};
     std::array<BYTE, 256> ioOutputLatch_{};
     std::array<BYTE, 256> ioStatusLatch_{};
+    BYTE serialCommand_ = 0;
+    std::deque<BYTE> serialInput_;
+    std::deque<BYTE> serialOutput_;
     BYTE mainIrqSources_ = 0;
     BYTE extendedIrqSources_ = 0;
     BYTE mainIrqResult_ = 0;

@@ -95,4 +95,8 @@ if(FM11_BUILD_TESTS)
     add_executable(cpu6809_full_cycle_db tests/cpu6809_full_cycle_db.cpp)
     target_link_libraries(cpu6809_full_cycle_db PRIVATE fm11_core)
     add_test(NAME cpu6809_full_cycle_db COMMAND cpu6809_full_cycle_db)
+
+    add_executable(main6809_serial_console tests/main6809_serial_console.cpp)
+    target_link_libraries(main6809_serial_console PRIVATE fm11_core)
+    add_test(NAME main6809_serial_console COMMAND main6809_serial_console)
 endif()

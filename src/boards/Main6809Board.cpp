@@ -35,6 +35,9 @@ void Main6809Board::reset()
     ioStatusLatch_.fill(0);
     mainIrqSources_ = extendedIrqSources_ = 0;
     mainIrqResult_ = extendedIrqResult_ = 0;
+    serialCommand_ = 0;
+    serialInput_.clear();
+    serialOutput_.clear();
     ptm_.fill(PtmChannel{});
     ptmStatus_ = 0;
     ptmIrqAcknowledged_ = false;
@@ -50,6 +53,45 @@ void Main6809Board::reset()
 void Main6809Board::loadBootRom(const BootRomImage& image)
 {
     bootRom_ = image;
+}
+
+void Main6809Board::queueSerialInput(BYTE value)
+{
+    serialInput_.push_back(value);
+    refreshSerialIrq();
+}
+
+bool Main6809Board::takeSerialOutput(BYTE& value)
+{
+    if (serialOutput_.empty())
+        return false;
+    value = serialOutput_.front();
+    serialOutput_.pop_front();
+    return true;
+}
+
+BYTE Main6809Board::serialStatus() const
+{
+    // 8251-compatible ready flags: TxRDY=$01, RxRDY=$02, DSR=$80.
+    // A headless terminal is always attached and transmit is immediate.
+    BYTE status = 0x81;
+    if (!serialInput_.empty())
+        status |= 0x02;
+    return status;
+}
+
+void Main6809Board::refreshSerialIrq()
+{
+    // FM-11 main serial interrupt appears as FD03 bit 7.
+    // FD02 bits 1/2 enable the board-side serial interrupt mask.
+    const bool tx = (serialCommand_ & 0x01) != 0;
+    const bool rx = (serialCommand_ & 0x04) != 0 &&
+                    !serialInput_.empty();
+    if (tx || rx)
+        mainIrqSources_ |= 0x80;
+    else
+        mainIrqSources_ &= static_cast<BYTE>(~0x80);
+    mainIrqStatus();
 }
 
 void Main6809Board::signalAttention()
@@ -352,6 +394,15 @@ BYTE Main6809Board::readIo(WORD address)
         return readPtm(reg);
     case 0x03:
         return mainIrqStatus();
+    case 0x06: {
+        const BYTE value = serialInput_.empty() ? 0 : serialInput_.front();
+        if (!serialInput_.empty())
+            serialInput_.pop_front();
+        refreshSerialIrq();
+        return value;
+    }
+    case 0x07:
+        return serialStatus();
     case 0x2c: {
         const BYTE value = extendedIrqStatus();
         ioRegisters_[0x2c] = 0; // FD2C read ACK (FY sources remain asserted)
@@ -393,6 +444,17 @@ void Main6809Board::writeIo(WORD address, BYTE value)
     case 0x2c:
         ioOutputLatch_[0x2c] = value;
         mainIrqStatus();
+        break;
+    case 0x06:
+        serialOutput_.push_back(value);
+        refreshSerialIrq();
+        break;
+    case 0x07:
+        // The original USART accepts an instruction byte at this port.
+        // For headless console I/O retain the Tx/Rx enable bits; baud/format
+        // selection is handled by the frontend, not by guest CPU timing.
+        serialCommand_ = value;
+        refreshSerialIrq();
         break;
     case 0x03:
         // FD03 is a read-only IRQ status register (write controls beep).
