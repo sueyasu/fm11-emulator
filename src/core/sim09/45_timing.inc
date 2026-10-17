@@ -6,6 +6,11 @@ void CSim09::BeginInstructionTiming(WORD op)
     // Verified MC6809 subset; unmeasured opcodes remain at zero.
     switch (op) {
     case 0x12: lastInstructionCycles_ = 2; break; // NOP
+    case 0x1a: case 0x1c: lastInstructionCycles_ = 3; break; // ORCC / ANDCC
+    case 0x1e: lastInstructionCycles_ = 8; break; // EXG
+    case 0x1f: lastInstructionCycles_ = 6; break; // TFR
+    case 0x30: case 0x31: case 0x32: case 0x33:
+        lastInstructionCycles_ = 4; break; // LEA indexed base
     case 0x20: lastInstructionCycles_ = 3; break; // BRA rel8
     case 0x21: case 0x22: case 0x23: case 0x24:
     case 0x25: case 0x26: case 0x27: case 0x28:
@@ -191,7 +196,8 @@ void CSim09::FinishInstructionTiming(WORD op)
     const bool indexedWord = op == 0xa3 || op == 0xac || op == 0xae ||
                              op == 0xaf || op == 0xe3 || op == 0xec ||
                              op == 0xed || op == 0xee || op == 0xef;
-    if (indexedByte || indexedWord || op == 0xad) {
+    if (indexedByte || indexedWord || op == 0xad ||
+        (op >= 0x30 && op <= 0x33)) {
         if (indexedCycleKnown_ && !illegalOperand_)
             lastInstructionCycles_ += indexedCycleExtra_;
         else
