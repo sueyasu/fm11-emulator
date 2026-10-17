@@ -95,7 +95,23 @@ void CSim09::BeginInstructionTiming(WORD op)
     // instructions retain their existing MC6809 timing until verified.
     if (enable6309_ && (REG_MD & MD_N) != 0 &&
         lastInstructionCycles_ != 0) {
+        // The documented native-mode word ALU improvements differ by
+        // addressing mode; loads/stores are unchanged for immediate/indexed.
         switch (op) {
+        case 0x83: case 0x8c: case 0xc3: // SUBD CMPX ADDD #imm
+            --lastInstructionCycles_;
+            break;
+        case 0x93: case 0x9c: case 0xd3: // direct word arithmetic
+        case 0xb3: case 0xbc: case 0xf3: // extended word arithmetic
+            lastInstructionCycles_ -= 2;
+            break;
+        case 0xa3: case 0xac: case 0xe3: // indexed word ALU
+            --lastInstructionCycles_;
+            break;
+        case 0x9e: case 0x9f: case 0xdc: case 0xdd: case 0xde: case 0xdf:
+        case 0xbe: case 0xbf: case 0xfc: case 0xfd: case 0xfe: case 0xff:
+            --lastInstructionCycles_; // direct/extended word transfers
+            break;
         case 0x12: // NOP: native 1, emulation/6809 2
             --lastInstructionCycles_;
             break;
