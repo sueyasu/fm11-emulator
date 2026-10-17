@@ -131,6 +131,12 @@ WORD	CSim09::GetAddrInd()
     WORD ofs = 0;
     WORD *reg = NULL;
 
+    illegalOperand_ = false;
+    if (!IsIndexedPostbyteAllowed(op)) {
+        illegalOperand_ = true;
+        return 0;
+    }
+
     switch(op & 0x60) {
 	case 0x00:	/* x00x xxxx X */
 		reg = &REG_X;
