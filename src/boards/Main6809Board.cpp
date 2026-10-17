@@ -467,6 +467,8 @@ void Main6809Board::Core::executeOne()
     constexpr BYTE kIrqMask = 0x10; // MC6809 CC.I
     if (board_.irqPending() && (regs.CC & kIrqMask) == 0) {
         SimIRQ();
+        if (board_.cpuClockHz_ != 0)
+            board_.advanceCpuCycles(19); // Full MC6809 IRQ stacking/vector
         return;
     }
     SimONE();

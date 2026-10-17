@@ -111,7 +111,7 @@
     const bool indexedWord = op == 0xa3 || op == 0xac || op == 0xae ||
                              op == 0xaf || op == 0xe3 || op == 0xec ||
                              op == 0xed || op == 0xee || op == 0xef;
-    if (indexedByte || indexedWord) {
+    if (indexedByte || indexedWord || op == 0xad) {
         if (indexedCycleKnown_ && !illegalOperand_)
             lastInstructionCycles_ += indexedCycleExtra_;
         else

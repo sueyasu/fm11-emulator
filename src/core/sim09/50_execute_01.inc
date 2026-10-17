@@ -33,6 +33,14 @@ void	CSim09::SimONE()
     case 0x9d: lastInstructionCycles_ = 7; break; // JSR direct
     case 0xbd: lastInstructionCycles_ = 8; break; // JSR extended
     case 0x39: lastInstructionCycles_ = 5; break; // RTS
+    case 0xad: lastInstructionCycles_ = 7; break; // JSR indexed base
+    case 0x3b: {
+        // CC.E in the saved stack frame controls full vs partial RTI.
+        // The MC6809 short RTI is 6 cycles; full RTI is 15.
+        const BYTE stackedCc = GetMemByte(REG_S);
+        lastInstructionCycles_ = (stackedCc & 0x80) != 0 ? 15 : 6;
+        break;
+    }
     case 0x34: case 0x35: case 0x36: case 0x37:
         lastInstructionCycles_ = 5; break; // stack fixed overhead
     // Base 6809 8-bit immediate ALU operations: two cycles each.
