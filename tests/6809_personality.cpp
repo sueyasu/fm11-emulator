@@ -4,11 +4,15 @@ namespace {
 
 void prepare(Main6809Board& board, WORD pc)
 {
-    board.writePhysical(0xfffe, static_cast<BYTE>(pc >> 8));
-    board.writePhysical(0xffff, static_cast<BYTE>(pc));
-    board.writePhysical(0xfff0, 0x40);
-    board.writePhysical(0xfff1, 0x00);
+    Main6809Board::BootRomImage bootRom{};
+    bootRom[0x0ffe] = static_cast<BYTE>(pc >> 8);
+    bootRom[0x0fff] = static_cast<BYTE>(pc);
+    board.loadBootRom(bootRom);
     board.reset();
+
+    // The illegal-opcode vector lives in fixed on-board RAM, not physical RAM.
+    board.writeCpu(0xfff0, 0x40);
+    board.writeCpu(0xfff1, 0x00);
 }
 
 bool rejectsBase6309Opcode()
