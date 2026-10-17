@@ -23,7 +23,12 @@ public:
 
     void loadBootRom(const BootRomImage& image);
 
-    BYTE readCpu(WORD address) const;
+    // Board-local event inputs used by the main-system control registers.
+    // Device boards can use these without reaching into the CPU core.
+    void signalAttention();
+    void signalBreak();
+
+    BYTE readCpu(WORD address);
     void writeCpu(WORD address, BYTE value);
 
     BYTE readPhysical(std::uint32_t address) const;
@@ -37,7 +42,7 @@ private:
     bool isMmrRegister(WORD address) const;
     BYTE readMmrRegister(WORD address) const;
     void writeMmrRegister(WORD address, BYTE value);
-    BYTE readIo(WORD address) const;
+    BYTE readIo(WORD address);
     void writeIo(WORD address, BYTE value);
     std::uint32_t translateCpuAddress(WORD address) const;
     std::uint32_t windowPhysicalAddress(WORD address) const;
@@ -66,7 +71,13 @@ private:
     std::vector<BYTE> memory_;
     BootRomImage bootRom_{};
     std::array<BYTE, kOnboardRamSize> onboardRam_{};
+
+    // FDxx is the CPU-visible I/O register bank. The original implementation
+    // also keeps separate FX/FY latches for output/control and device status.
     std::array<BYTE, 256> ioRegisters_{};
+    std::array<BYTE, 256> ioOutputLatch_{};
+    std::array<BYTE, 256> ioStatusLatch_{};
+
     std::array<std::array<BYTE, 16>, 16> mmr_{};
     std::array<BYTE, 4> mmrControl_{};
     Core core_;
