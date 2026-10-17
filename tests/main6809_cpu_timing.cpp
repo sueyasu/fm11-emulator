@@ -24,7 +24,7 @@ bool verifiedTimingDrivesPtm()
     Main6809Board b;
     prepare(b);
     b.cpu().executeOne(); // 2 cycles NOP
-    if (b.cpu().pc() != 0x1001 || b.readCpu(0xfd3b) != 2) return false;
+    if (b.cpu().pc() != 0x1001 || b.readCpu(0xfd3a) != 0 || b.readCpu(0xfd3b) != 2) return false;
     b.cpu().executeOne(); // another 2 cycles NOP
     if (b.cpu().pc() != 0x1002 || b.readCpu(0xfd39) != 0x81) return false;
     b.cpu().executeOne(); // 2 cycles LDA #
@@ -33,7 +33,7 @@ bool verifiedTimingDrivesPtm()
     if (b.cpu().pc() != 0x1006) return false;
     b.cpu().executeOne(); // 2 cycles NOP
     if (b.cpu().pc() != 0x1007 || b.readCpu(0xfd39) != 0x81) return false;
-    b.readCpu(0xfd3a); // clear channel status
+    b.readCpu(0xfd3a); // clear channel status and latch counter low byte
     b.cpu().executeOne(); // CLRA (unverified; do not guess cycles)
     if (b.cpu().pc() != 0x1008 || b.readCpu(0xfd3b) != 1) return false;
     return true;
