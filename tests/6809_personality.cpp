@@ -75,6 +75,86 @@ bool acceptsStandardPage11OpcodeOn6809()
     return board.cpu().pc() == 0x1004;
 }
 
+bool rejects6309AccumulatorIndexedOn6809()
+{
+    Main6809Board board(CpuType::MC6809);
+    prepare(board, 0x1000);
+    board.writePhysical(0x1000, 0xa6); // LDA indexed
+    board.writePhysical(0x1001, 0x87); // E,X -- HD6309 only
+    board.cpu().executeOne();
+    return board.cpu().pc() == 0x4000;
+}
+
+bool accepts6309AccumulatorIndexedOn6309()
+{
+    Main6809Board board(CpuType::HD6309);
+    prepare(board, 0x1000);
+    board.writePhysical(0x1000, 0xa6); // LDA indexed
+    board.writePhysical(0x1001, 0x87); // E,X
+    board.cpu().executeOne();
+    return board.cpu().pc() == 0x1002;
+}
+
+bool rejects6309WIndexedOn6809()
+{
+    Main6809Board board(CpuType::MC6809);
+    prepare(board, 0x1000);
+    board.writePhysical(0x1000, 0xa6); // LDA indexed
+    board.writePhysical(0x1001, 0x8f); // ,W -- HD6309 only
+    board.cpu().executeOne();
+    return board.cpu().pc() == 0x4000;
+}
+
+bool acceptsStandardIndexedOn6809()
+{
+    Main6809Board board(CpuType::MC6809);
+    prepare(board, 0x1000);
+    board.writePhysical(0x1000, 0xa6); // LDA indexed
+    board.writePhysical(0x1001, 0x84); // ,X -- MC6809
+    board.cpu().executeOne();
+    return board.cpu().pc() == 0x1002;
+}
+
+bool rejects6309TfrRegisterOn6809()
+{
+    Main6809Board board(CpuType::MC6809);
+    prepare(board, 0x1000);
+    board.writePhysical(0x1000, 0x1f); // TFR
+    board.writePhysical(0x1001, 0xe8); // E,A -- E is HD6309 only
+    board.cpu().executeOne();
+    return board.cpu().pc() == 0x4000;
+}
+
+bool accepts6309TfrRegisterOn6309()
+{
+    Main6809Board board(CpuType::HD6309);
+    prepare(board, 0x1000);
+    board.writePhysical(0x1000, 0x1f); // TFR
+    board.writePhysical(0x1001, 0xe8); // E,A
+    board.cpu().executeOne();
+    return board.cpu().pc() == 0x1002;
+}
+
+bool rejects6309ExgRegisterOn6809()
+{
+    Main6809Board board(CpuType::MC6809);
+    prepare(board, 0x1000);
+    board.writePhysical(0x1000, 0x1e); // EXG
+    board.writePhysical(0x1001, 0xef); // E,F -- HD6309 only
+    board.cpu().executeOne();
+    return board.cpu().pc() == 0x4000;
+}
+
+bool acceptsStandardTfrOn6809()
+{
+    Main6809Board board(CpuType::MC6809);
+    prepare(board, 0x1000);
+    board.writePhysical(0x1000, 0x1f); // TFR
+    board.writePhysical(0x1001, 0x89); // A,B -- MC6809
+    board.cpu().executeOne();
+    return board.cpu().pc() == 0x1002;
+}
+
 } // namespace
 
 int main()
@@ -91,5 +171,21 @@ int main()
         return 5;
     if (!acceptsStandardPage11OpcodeOn6809())
         return 6;
+    if (!rejects6309AccumulatorIndexedOn6809())
+        return 7;
+    if (!accepts6309AccumulatorIndexedOn6309())
+        return 8;
+    if (!rejects6309WIndexedOn6809())
+        return 9;
+    if (!acceptsStandardIndexedOn6809())
+        return 10;
+    if (!rejects6309TfrRegisterOn6809())
+        return 11;
+    if (!accepts6309TfrRegisterOn6309())
+        return 12;
+    if (!rejects6309ExgRegisterOn6809())
+        return 13;
+    if (!acceptsStandardTfrOn6809())
+        return 14;
     return 0;
 }
