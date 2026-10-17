@@ -39,4 +39,8 @@ if(FM11_BUILD_TESTS)
     add_executable(main6809_memory tests/main6809_memory.cpp)
     target_link_libraries(main6809_memory PRIVATE fm11_core)
     add_test(NAME main6809_memory COMMAND main6809_memory)
+
+    add_executable(main6809_mmr tests/main6809_mmr.cpp)
+    target_link_libraries(main6809_mmr PRIVATE fm11_core)
+    add_test(NAME main6809_mmr COMMAND main6809_mmr)
 endif()
