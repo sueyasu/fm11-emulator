@@ -30,6 +30,25 @@ void	CSim09::SimONE()
     case 0xc8: case 0xc9: case 0xca: case 0xcb: // EORB, ADCB, ORB, ADDB
         lastInstructionCycles_ = 2;
         break;
+    // Native MC6809 direct/extended 8-bit accumulator ALU and stores.
+    // Direct takes 4 cycles; extended takes 5. Word, JSR and indexed
+    // operations have different timings and remain unmeasured here.
+    case 0x90: case 0x91: case 0x92:
+    case 0x94: case 0x95: case 0x96: case 0x97:
+    case 0x98: case 0x99: case 0x9a: case 0x9b:
+    case 0xd0: case 0xd1: case 0xd2:
+    case 0xd4: case 0xd5: case 0xd6: case 0xd7:
+    case 0xd8: case 0xd9: case 0xda: case 0xdb:
+        lastInstructionCycles_ = 4;
+        break;
+    case 0xb0: case 0xb1: case 0xb2:
+    case 0xb4: case 0xb5: case 0xb6: case 0xb7:
+    case 0xb8: case 0xb9: case 0xba: case 0xbb:
+    case 0xf0: case 0xf1: case 0xf2:
+    case 0xf4: case 0xf5: case 0xf6: case 0xf7:
+    case 0xf8: case 0xf9: case 0xfa: case 0xfb:
+        lastInstructionCycles_ = 5;
+        break;
     default: break;
     }
     switch(op) {
