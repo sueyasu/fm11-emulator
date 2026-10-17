@@ -19,7 +19,17 @@ void	CSim09::SimONE()
     switch (op) {
     case 0x12: lastInstructionCycles_ = 2; break; // NOP
     case 0x20: lastInstructionCycles_ = 3; break; // BRA rel8
-    case 0x86: lastInstructionCycles_ = 2; break; // LDA #imm8
+    // Base 6809 8-bit immediate ALU operations: two cycles each.
+    // Keep the explicit set: other opcodes in these ranges use 16-bit
+    // operands or are reserved and must not inherit a guessed timing.
+    case 0x80: case 0x81: case 0x82: // SUBA, CMPA, SBCA
+    case 0x84: case 0x85: case 0x86: // ANDA, BITA, LDA
+    case 0x88: case 0x89: case 0x8a: case 0x8b: // EORA, ADCA, ORA, ADDA
+    case 0xc0: case 0xc1: case 0xc2: // SUBB, CMPB, SBCB
+    case 0xc4: case 0xc5: case 0xc6: // ANDB, BITB, LDB
+    case 0xc8: case 0xc9: case 0xca: case 0xcb: // EORB, ADCB, ORB, ADDB
+        lastInstructionCycles_ = 2;
+        break;
     default: break;
     }
     switch(op) {

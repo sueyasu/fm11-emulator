@@ -71,4 +71,8 @@ if(FM11_BUILD_TESTS)
     add_executable(main6809_cpu_timing tests/main6809_cpu_timing.cpp)
     target_link_libraries(main6809_cpu_timing PRIVATE fm11_core)
     add_test(NAME main6809_cpu_timing COMMAND main6809_cpu_timing)
+
+    add_executable(main6809_immediate_timing tests/main6809_immediate_timing.cpp)
+    target_link_libraries(main6809_immediate_timing PRIVATE fm11_core)
+    add_test(NAME main6809_immediate_timing COMMAND main6809_immediate_timing)
 endif()
