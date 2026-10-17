@@ -42,6 +42,7 @@ void Main6809Board::writePhysical(WORD address, BYTE value)
 Main6809Board::Core::Core(std::array<BYTE, 65536>& memory, CpuType variant)
     : memory_(memory), variant_(variant)
 {
+    Set6309Enabled(variant_ == CpuType::HD6309);
 }
 
 BYTE Main6809Board::Core::GetMemByte(WORD address)

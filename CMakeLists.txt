@@ -31,4 +31,8 @@ if(FM11_BUILD_TESTS)
     add_executable(machine_smoke tests/machine_smoke.cpp)
     target_link_libraries(machine_smoke PRIVATE fm11_core)
     add_test(NAME machine_smoke COMMAND machine_smoke)
+
+    add_executable(cpu6809_personality tests/6809_personality.cpp)
+    target_link_libraries(cpu6809_personality PRIVATE fm11_core)
+    add_test(NAME cpu6809_personality COMMAND cpu6809_personality)
 endif()
