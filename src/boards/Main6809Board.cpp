@@ -33,6 +33,8 @@ void Main6809Board::reset()
     ioRegisters_.fill(0);
     ioOutputLatch_.fill(0);
     ioStatusLatch_.fill(0);
+    mainIrqSources_ = extendedIrqSources_ = 0;
+    mainIrqResult_ = extendedIrqResult_ = 0;
 
     // The original board copies the reset vector from the last two bytes of
     // the boot ROM into the fixed on-board RAM at FFFE/FFFF before RESET.
@@ -54,6 +56,73 @@ void Main6809Board::signalAttention()
 void Main6809Board::signalBreak()
 {
     ioRegisters_[0x04] |= 0x02;
+}
+
+void Main6809Board::setMainIrqSource(BYTE sourceBit, bool asserted)
+{
+    // FD03: RS232C, KEYBOARD, DMA, MINI FDC, PRINTER and PTM.
+    if ((sourceBit & static_cast<BYTE>(~0xdb)) != 0)
+        throw std::invalid_argument("invalid main IRQ source bit");
+    if (asserted)
+        mainIrqSources_ |= sourceBit;
+    else
+        mainIrqSources_ &= static_cast<BYTE>(~sourceBit);
+    mainIrqStatus();
+}
+
+void Main6809Board::setExtendedIrqSource(BYTE sourceBit, bool asserted)
+{
+    // FD2C: RS232C, SFD, HDD, LPT2, LPT1.
+    if ((sourceBit & static_cast<BYTE>(~0xc7)) != 0)
+        throw std::invalid_argument("invalid extended IRQ source bit");
+    if (asserted)
+        extendedIrqSources_ |= sourceBit;
+    else
+        extendedIrqSources_ &= static_cast<BYTE>(~sourceBit);
+    mainIrqStatus();
+}
+
+bool Main6809Board::irqPending() const
+{
+    return mainIrqResult_ != 0;
+}
+
+BYTE Main6809Board::extendedIrqStatus()
+{
+    // The original Fm11EIRQ combines FY(2C) with FX(2C), except that
+    // the HDD interrupt is gated by FD C2 bit 7.
+    const BYTE mask = ioOutputLatch_[0x2c];
+    BYTE value = static_cast<BYTE>(extendedIrqSources_ & mask & 0xc3);
+    if ((extendedIrqSources_ & 0x04) != 0 && (ioRegisters_[0xc2] & 0x80) != 0)
+        value |= 0x04;
+    extendedIrqResult_ = value;
+    ioRegisters_[0x2c] = value;
+    return value;
+}
+
+BYTE Main6809Board::mainIrqStatus()
+{
+    const BYTE mask = ioOutputLatch_[0x02];
+    BYTE value = 0;
+    // Serial input in the original Fm11IRQ uses mask bits 1/2, rather
+    // than a direct one-to-one mask with the FD03 status bit.
+    if ((mainIrqSources_ & 0x80) != 0 && (mask & 0x06) != 0)
+        value |= 0x80;
+    if ((mainIrqSources_ & 0x40) != 0 && (mask & 0x80) != 0)
+        value |= 0x40;
+    if ((mainIrqSources_ & 0x10) != 0 && (ioRegisters_[0x55] & 0x0f) != 0)
+        value |= 0x10;
+    if ((mainIrqSources_ & 0x08) != 0 && (mask & 0x20) != 0)
+        value |= 0x08;
+    if ((mainIrqSources_ & 0x02) != 0 && (mask & 0x01) != 0)
+        value |= 0x02;
+    if ((mainIrqSources_ & 0x01) != 0 && (mask & 0x10) != 0)
+        value |= 0x01;
+    if (extendedIrqStatus() != 0)
+        value |= 0x20;
+    mainIrqResult_ = value;
+    ioRegisters_[0x03] = value;
+    return value;
 }
 
 BYTE Main6809Board::readCpu(WORD address)
@@ -149,6 +218,13 @@ BYTE Main6809Board::readIo(WORD address)
 
     const BYTE reg = static_cast<BYTE>(address & 0x00ff);
     switch (reg) {
+    case 0x03:
+        return mainIrqStatus();
+    case 0x2c: {
+        const BYTE value = extendedIrqStatus();
+        ioRegisters_[0x2c] = 0; // FD2C read ACK (FY sources remain asserted)
+        return value;
+    }
     case 0x04: {
         // Reading the main event register acknowledges BREAK and ATENT.
         const BYTE value = ioRegisters_[reg];
@@ -174,6 +250,17 @@ void Main6809Board::writeIo(WORD address, BYTE value)
 
     const BYTE reg = static_cast<BYTE>(address & 0x00ff);
     switch (reg) {
+    case 0x02:
+        ioOutputLatch_[0x02] = value;
+        mainIrqStatus();
+        break;
+    case 0x2c:
+        ioOutputLatch_[0x2c] = value;
+        mainIrqStatus();
+        break;
+    case 0x03:
+        // FD03 is a read-only IRQ status register (write controls beep).
+        break;
     case 0x04:
         // The original ATENT ACK write clears ATENT and records an 0x80
         // control latch. BREAK is only acknowledged by reading FD04.
@@ -191,6 +278,8 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         break;
     default:
         ioRegisters_[reg] = value;
+        if (reg == 0x55 || reg == 0xc2)
+            mainIrqStatus();
         break;
     }
 }
