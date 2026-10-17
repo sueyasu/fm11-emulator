@@ -6,6 +6,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 class Main6809Board final : public CpuBoard
 {
@@ -24,6 +25,12 @@ public:
     void writePhysical(std::uint32_t address, BYTE value);
 
 private:
+    static constexpr std::size_t kPhysicalMemorySize = 1u << 20;
+    static constexpr WORD kMmrPageSize = 0x1000;
+
+    bool isMmrRegister(WORD address) const;
+    BYTE readMmrRegister(WORD address) const;
+    void writeMmrRegister(WORD address, BYTE value);
     std::uint32_t translateCpuAddress(WORD address) const;
 
     class Core final : public CSim09, public CpuCore
@@ -47,6 +54,8 @@ private:
         CpuType variant_;
     };
 
-    std::array<BYTE, 65536> memory_{};
+    std::vector<BYTE> memory_;
+    std::array<std::array<BYTE, 16>, 16> mmr_{};
+    std::array<BYTE, 4> mmrControl_{};
     Core core_;
 };
