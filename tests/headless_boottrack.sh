@@ -12,13 +12,13 @@ for level in 1 2; do
     esac
     dd if=/dev/zero bs=1 count="$size" of="$tmp/track" 2>/dev/null
     dd if="$tmp/code" of="$tmp/track" conv=notrunc 2>/dev/null
-    output=$(printf "s\\ns\\nq\\n" | "$runner" --boottrack "$tmp/track" --level "$level" --cpu 6809 --instructions 2)
+    output=$(printf "s\ns\nq\n" | "$runner" --boottrack "$tmp/track" --level "$level" --cpu 6809 --instructions 2)
     echo "$output" | grep -q "PC=" || { echo "failed level $level serial boottrack entry" >&2; exit 1; }
     # Unpadded boottracks (e.g. the real Level 1 image is 4224 bytes)
     # must be accepted and loaded at the same entry point.
     truncate -s $((size - 128)) "$tmp/track"
-    output=$("$runner" --boottrack "$tmp/track" --level "$level" --cpu 6809 --instructions 2 </dev/null)
-    [ "$output" = X ] || { echo "failed level $level short boottrack" >&2; exit 1; }
+    output=$(printf "s\ns\nq\n" | "$runner" --boottrack "$tmp/track" --level "$level" --cpu 6809 --instructions 2)
+    echo "$output" | grep -q "PC=" || { echo "failed level $level short boottrack" >&2; exit 1; }
 done
 # Reject oversized images instead of silently truncating them.
 dd if=/dev/zero bs=1 count=4353 of="$tmp/track" 2>/dev/null
