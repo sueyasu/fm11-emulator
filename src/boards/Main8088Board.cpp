@@ -640,14 +640,14 @@ void Main8088Board::Core::executeOne()
         }
         case 0xfb: flags_|=0x0200;irqInhibit_=1;return; // EI: next instruction completes before IRQ
         case 0xf3: flags_&=WORD(~0x0200);return; // DI
-        case 0xc3: ip_=fetch16();return; // JMP
+        case 0xc3: case 0xcb: ip_=fetch16();return; // JMP and 8080 alias
         case 0xcd: { // CALL
             const WORD target=fetch16();
             push8080(ip_);
             ip_=target;
             return;
         }
-        case 0xc9: ip_=pop8080();return; // RET
+        case 0xc9: case 0xd9: ip_=pop8080();return; // RET and 8080 alias
         case 0xe9: ip_=regs_[3];return; // PCHL
         case 0xf9: regs_[5]=regs_[3];return; // SPHL
         case 0xc6: arithmetic(0,fetch8());return;
