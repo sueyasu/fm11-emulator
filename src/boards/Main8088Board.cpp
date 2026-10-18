@@ -334,6 +334,18 @@ void Main8088Board::Core::executeOne()
         if(regs_[1]==0)ip_=WORD(ip_+displacement);
         break;
     }
+    case 0xfe: {
+        const auto op=decodeModRm();
+        if(op.reg>1)throw std::runtime_error("invalid FE opcode");
+        const unsigned lhs=read8(op);
+        const bool dec=op.reg==1;
+        const unsigned value=dec?((lhs-1u)&255u):(lhs+1u);
+        const bool cf=(flags_&1)!=0;
+        setArithmeticFlags(lhs,1,value,8,dec);
+        if(cf)flags_|=1;else flags_&=WORD(~1);
+        write8(op,BYTE(value));
+        break;
+    }
     case 0x80: case 0x81: case 0x82: case 0x83: {
         const auto op=decodeModRm();
         const unsigned bits=(opcode==0x81 || opcode==0x83)?16u:8u;

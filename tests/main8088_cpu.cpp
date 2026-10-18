@@ -468,5 +468,31 @@ int main()
     if(hc.flags()&1)return 77;
     helpers.cpu().executeOne(); // HLT
     if(!hc.halted())return 78;
+    Main8088Board fe(CpuType::I8088);
+    fe.bus().loadBootRom(fRom);
+    const BYTE codeFE[]={
+        0xb0,0x7f,  // MOV AL,7Fh
+        0xf9,       // STC
+        0xfe,0xc0, // INC AL -> 80h, overflow
+        0xfe,0xc8, // DEC AL -> 7Fh, overflow
+        0xbb,0x00,0x02,
+        0xc6,0x07,0x00,
+        0xfe,0x0f, // DEC byte [BX] -> FFh
+        0xfe,0x07, // INC byte [BX] -> 00h
+        0xf4
+    };
+    for(unsigned i=0;i<sizeof(codeFE);++i)fe.bus().writeMemory(0x10000+i,codeFE[i]);
+    fe.reset();fe.cpu().executeOne();
+    auto& fc=static_cast<Main8088Board::Core&>(fe.cpu());
+    fe.cpu().executeOne();fe.cpu().executeOne();fe.cpu().executeOne();
+    if((fc.reg(0)&255)!=0x80 || (fc.flags()&0x801)!=0x801)return 79;
+    fe.cpu().executeOne();
+    if((fc.reg(0)&255)!=0x7f || (fc.flags()&0x801)!=0x801)return 80;
+    fe.cpu().executeOne();fe.cpu().executeOne();fe.cpu().executeOne();
+    if(fe.bus().readRam(0x200)!=255 || !(fc.flags()&1))return 81;
+    fe.cpu().executeOne();
+    if(fe.bus().readRam(0x200)!=0 || !(fc.flags()&1))return 82;
+    fe.cpu().executeOne();
+    if(!fc.halted())return 83;
     return 0;
 }
