@@ -51,6 +51,12 @@ typedef	union _09Acc {
 class CSim09
 {
 public:
+    enum class WaitState { Running, Sync, Cwai };
+    WaitState waitState() const {
+        return (regs.ST & 0x01) ? WaitState::Cwai :
+               (regs.ST & 0x04) ? WaitState::Sync : WaitState::Running;
+    }
+    void clearSyncWait() { regs.ST &= ~0x04; }
 	REGS				regs;
 
 public:

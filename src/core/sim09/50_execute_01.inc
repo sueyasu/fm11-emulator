@@ -10,7 +10,7 @@ void	CSim09::SimONE()
     WORD accP;
     LONG accL;
 
-    if ( (REG_ST & ST_W) != 0 ) {
+    if ( (REG_ST & (ST_W | 0004)) != 0 ) {
 		regs.HD |= 010;
 		GetMemByte(REG_PC);	/* Dummy */
 		return;

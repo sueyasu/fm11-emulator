@@ -40,6 +40,9 @@ public:
     void setMainIrqSource(BYTE sourceBit, bool asserted);
     void setExtendedIrqSource(BYTE sourceBit, bool asserted);
     bool irqPending() const;
+    CSim09::WaitState cpuWaitState() const;
+    void advanceWaitTime(std::uint64_t nanoseconds);
+    std::uint64_t nextPtmEventNanoseconds() const;
 
     // Advance the PTM by input clock pulses. The scheduler will later
     // convert emulated CPU time to these PTM ticks.
@@ -130,6 +133,7 @@ private:
     bool ptmIrqAcknowledged_ = false;
     std::uint64_t cpuClockHz_ = 0;
     std::uint64_t ptmCycleFraction_ = 0;
+    std::uint64_t waitNanosecondFraction_ = 0;
 
     std::array<std::array<BYTE, 16>, 16> mmr_{};
     std::array<BYTE, 4> mmrControl_{};
