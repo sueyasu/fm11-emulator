@@ -4,7 +4,7 @@ runner=$1
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT HUP INT TERM
 # Header occupies two bytes. LDA #'X'; STA $FD06; BRA -7.
-printf '\\000\\000\\206X\\267\\375\\006\\040\\371' > "$tmp/code"
+printf '\000\000\206X\267\375\006\040\371' > "$tmp/code"
 for level in 1 2; do
     case "$level" in
        1) size=4352;;
