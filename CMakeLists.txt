@@ -47,6 +47,10 @@ if(FM11_BUILD_TESTS)
                      ${CMAKE_CURRENT_SOURCE_DIR}/tests/main8088_opcode_inventory.py
                      ${CMAKE_CURRENT_SOURCE_DIR}/src/boards/Main8088Board.cpp)
 
+    add_executable(main8088_esc_popcs tests/main8088_esc_popcs.cpp)
+    target_link_libraries(main8088_esc_popcs PRIVATE fm11_core)
+    add_test(NAME main8088_esc_popcs COMMAND main8088_esc_popcs)
+
     add_executable(main8088_control_transfer tests/main8088_control_transfer.cpp)
     target_link_libraries(main8088_control_transfer PRIVATE fm11_core)
     add_test(NAME main8088_control_transfer COMMAND main8088_control_transfer)

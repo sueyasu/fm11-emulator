@@ -821,6 +821,19 @@ void Main8088Board::Core::executeOne()
     case 0xcb: ip_=pop16();segments_[1]=pop16();break; // RET far
     case 0xc2: { const WORD adjustment=fetch16(); ip_=pop16();regs_[4]=WORD(regs_[4]+adjustment);break; }
     case 0xca: { const WORD adjustment=fetch16(); ip_=pop16();segments_[1]=pop16();regs_[4]=WORD(regs_[4]+adjustment);break; }
+    case 0x0f: // POP CS exists on 8086/8088; NEC V20 uses 0F as extension escape
+        if(variant_!=CpuType::I8088)
+            throw std::runtime_error("NEC V20 extended opcode not implemented");
+        segments_[1]=pop16();
+        break;
+    case 0xd8: case 0xd9: case 0xda: case 0xdb:
+    case 0xdc: case 0xdd: case 0xde: case 0xdf: {
+        // ESC is an 8087 coprocessor opcode. Consume ModR/M and any
+        // displacement, but with no 8087 attached do not access operands.
+        // Decode only: the future 8087 adapter will need the full operation.
+        (void)decodeModRm();
+        break;
+    }
     case 0x06: push16(segments_[0]);break; // PUSH ES
     case 0x0e: push16(segments_[1]);break; // PUSH CS
     case 0x16: push16(segments_[2]);break; // PUSH SS

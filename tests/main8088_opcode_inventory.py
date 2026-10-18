@@ -33,9 +33,6 @@ def collect(source):
 # A byte being recognized says nothing about its ModR/M suboperations or flags.
 # 8086's 0F is POP CS; NEC V20 uses 0F as an extended opcode escape.
 MISSING_8088 = {
-    0x0f: "POP CS (8086/8088; V20 uses extension escape)",
-    0xd8: "ESC 0", 0xd9: "ESC 1", 0xda: "ESC 2", 0xdb: "ESC 3",
-    0xdc: "ESC 4", 0xdd: "ESC 5", 0xde: "ESC 6", 0xdf: "ESC 7",
 }
 # V20 implements some later x86 instructions, but this table does not claim
 # that every 80186 opcode is supported by the V20.
@@ -101,7 +98,7 @@ def main():
     assert not [op for op in range(256)
                 if op not in covered and classify_missing(op)=="unclassified"], (
         "unclassified opcode gap: extend the inventory categories")
-    assert {op for op in MISSING_8088 if op not in covered} == {0x0f, *range(0xd8,0xe0)}
+    assert not [op for op in (0x0f, *range(0xd8,0xe0)) if op not in direct]
     print("NOTE: grouped ModR/M operations, prefix combinations, 8088 quirks,")
     print("FLAGS accuracy, timings and V20-specific functions are not validated.")
 
