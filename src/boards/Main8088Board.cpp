@@ -242,6 +242,75 @@ void Main8088Board::Core::executeAluModRm(BYTE opcode)
         else writeOperand(op,bits,result);
     }
 }
+unsigned Main8088Board::Core::shiftRotate(unsigned operation,unsigned value,
+                                               unsigned bits,unsigned count)
+{
+    const unsigned mask=bits==8?0xffu:0xffffu;
+    const unsigned sign=bits==8?0x80u:0x8000u;
+    value&=mask;
+    if(count==0)return value; // An 8088 does not mask CL; zero leaves flags intact.
+    const unsigned original=value;
+    bool carry=(flags_&CF)!=0;
+    for(unsigned n=0;n<count;++n) {
+        switch(operation&7) {
+        case 0: // ROL
+            carry=(value&sign)!=0;
+            value=((value<<1)|unsigned(carry))&mask;
+            break;
+        case 1: // ROR
+            carry=(value&1)!=0;
+            value=(value>>1)|(carry?sign:0);
+            break;
+        case 2: { // RCL
+            const bool next=(value&sign)!=0;
+            value=((value<<1)|unsigned(carry))&mask;
+            carry=next;
+            break;
+        }
+        case 3: { // RCR
+            const bool next=(value&1)!=0;
+            value=(value>>1)|(carry?sign:0);
+            carry=next;
+            break;
+        }
+        case 4: case 6: // SHL/SAL
+            carry=(value&sign)!=0;
+            value=(value<<1)&mask;
+            break;
+        case 5: // SHR
+            carry=(value&1)!=0;
+            value>>=1;
+            break;
+        case 7: // SAR
+            carry=(value&1)!=0;
+            value=(value>>1)|(value&sign);
+            break;
+        }
+    }
+    flags_=WORD((flags_&~CF)|(carry?CF:0));
+    if(count==1) {
+        bool overflow=false;
+        switch(operation&7) {
+        case 0: case 2: case 4: case 6:
+            overflow=((value&sign)!=0)!=carry;
+            break;
+        case 1: case 3:
+            overflow=((value&sign)!=0)!=((value&(sign>>1))!=0);
+            break;
+        case 5: overflow=(original&sign)!=0;break;
+        case 7: overflow=false;break;
+        }
+        flags_=WORD((flags_&~OF)|(overflow?OF:0));
+    } // OF undefined for count > 1; preserve its prior value.
+    if((operation&7)>=4) {
+        // Shift result updates SF/ZF/PF. AF is undefined, left untouched.
+        flags_&=WORD(~(SF|ZF|PF));
+        if(value&sign)flags_|=SF;
+        if(value==0)flags_|=ZF;
+        if(parityEven(BYTE(value)))flags_|=PF;
+    }
+    return value;
+}
 bool Main8088Board::Core::jumpCondition(unsigned code) const
 {
     const bool cf=(flags_&CF)!=0,zf=(flags_&ZF)!=0;
@@ -364,6 +433,17 @@ void Main8088Board::Core::executeOne()
     case 0xe3: { // JCXZ, no decrement
         const auto displacement=static_cast<std::int8_t>(fetch8());
         if(regs_[1]==0)ip_=WORD(ip_+displacement);
+        break;
+    }
+    case 0xd0: case 0xd1: case 0xd2: case 0xd3: {
+        // Group 2: /0..7 ROL/ROR/RCL/RCR/SHL/SHR/SAL/SAR.
+        const auto op=decodeModRm();
+        const unsigned bits=(opcode&1)?16u:8u;
+        const unsigned count=(opcode&2)?getReg8(1):1u; // CL or implicit 1
+        if(count!=0) {
+            const unsigned value=shiftRotate(op.reg,readOperand(op,bits),bits,count);
+            writeOperand(op,bits,value);
+        }
         break;
     }
     case 0xfe: {

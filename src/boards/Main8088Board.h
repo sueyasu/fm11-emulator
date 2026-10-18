@@ -64,6 +64,7 @@ public:
         unsigned getReg(unsigned index,unsigned bits) const;
         void setReg(unsigned index,unsigned bits,unsigned value);
         void executeAluModRm(BYTE opcode);
+        unsigned shiftRotate(unsigned operation,unsigned value,unsigned bits,unsigned count);
         Main8088Bus& bus_;
         CpuType variant_;
         std::array<WORD,8> regs_{};

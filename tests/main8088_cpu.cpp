@@ -494,5 +494,36 @@ int main()
     if(fe.bus().readRam(0x200)!=0 || !(fc.flags()&1))return 82;
     fe.cpu().executeOne();
     if(!fc.halted())return 83;
+    // 8088 group-2 shifts and rotates, including CL=0 and CF/OF rules.
+    Main8088Board shifts(CpuType::I8088);
+    shifts.bus().loadBootRom(fRom);
+    const BYTE shiftCode[]={
+        0xb0,0x81,       // MOV AL,81
+        0xd0,0xe0,       // SHL AL,1 => 02, CF=1 OF=1
+        0xd0,0xc8,       // ROR AL,1 => 01, CF=0
+        0xb1,0x00,       // MOV CL,0
+        0xd2,0xe8,       // SHR AL,CL => no change or flags
+        0xb1,0x02,       // MOV CL,2
+        0xd2,0xe0,       // SHL AL,CL => 04
+        0xb8,0x01,0x80,  // MOV AX,8001
+        0xd1,0xf8,       // SAR AX,1 => C000 CF=1
+        0xf4
+    };
+    for(unsigned i=0;i<sizeof(shiftCode);++i)
+        shifts.bus().writeMemory(0x10000+i,shiftCode[i]);
+    shifts.reset();
+    auto& sc=static_cast<Main8088Board::Core&>(shifts.cpu());
+    shifts.cpu().executeOne();shifts.cpu().executeOne();shifts.cpu().executeOne();
+    if(sc.reg(0)!=2 || (sc.flags()&0x801)!=0x801)return 84;
+    shifts.cpu().executeOne();
+    if(sc.reg(0)!=1 || (sc.flags()&1)!=0)return 85;
+    shifts.cpu().executeOne();
+    const WORD zeroFlags=sc.flags();
+    shifts.cpu().executeOne();
+    if(sc.reg(0)!=1 || sc.flags()!=zeroFlags)return 86;
+    shifts.cpu().executeOne();shifts.cpu().executeOne();
+    if(sc.reg(0)!=4)return 87;
+    shifts.cpu().executeOne();shifts.cpu().executeOne();
+    if(sc.reg(0)!=0xc000 || (sc.flags()&1)==0)return 88;
     return 0;
 }
