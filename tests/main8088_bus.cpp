@@ -75,7 +75,7 @@ int main()
     if(bus.readIo(0x18)!=0)return 26;
     bus.writeIo(0x1d,0); // master clear
     if(bus.dmaChannel(2).address!=0 || bus.dmaChannel(2).bank!=0 ||
-       bus.dmaMask()!=0)return 27;
+       bus.dmaMask()!=0x0f)return 27;
     // DMA transfer, masking, terminal count, address wrap and direction.
     bus.reset();
     bus.writeIo(0x1c,0);

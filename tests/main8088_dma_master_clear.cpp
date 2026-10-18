@@ -21,7 +21,15 @@ int main()
     if(bus.dmaChannel(0).address!=0 || bus.dmaChannel(0).count!=0)return 4;
     bus.writeIo(0x19,0x04); // CH0 request while still masked
     if(bus.serviceDma() || transfers!=1)return 5;
+    // Master clear also resets address, count and mode. Program a new
+    // transfer before unmasking the channel again.
+    bus.writeIo(0x10,0x01);
+    bus.writeIo(0x10,0x20); // address 2001h
+    bus.writeIo(0x11,0x00);
+    bus.writeIo(0x11,0x00); // one byte
+    bus.writeIo(0x1b,0x04); // channel 0, device -> memory
     bus.writeIo(0x1e,0); // clear mask register (unmask all)
-    if(bus.dmaMask()!=0 || !bus.serviceDma() || transfers!=2)return 6;
+    if(bus.dmaMask()!=0 || !bus.serviceDma() || transfers!=2 ||
+       bus.readRam(0x2001)!=0xa5)return 6;
     return 0;
 }
