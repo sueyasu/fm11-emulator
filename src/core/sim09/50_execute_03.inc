@@ -11,7 +11,7 @@
   OPDEF(0xCA,	I_BYTE S_B B_OR E_B);			/* ORB  (imm)*/
   OPDEF(0xCB,	I_BYTE S_B B_ADD E_B);			/* ADDB (imm)*/
   OPDEF(0xCC,	I_WORD S_BX W_TST E_D);			/* LDD  (imm)*/
-  OPDEF(0xCD,	O_ERR);							/* no        */
+  OPDEF(0xCD,	I_LONG L_TST E_Q);							/* no        */
   OPDEF(0xCE,	I_WORD S_BX W_TST E_U);			/* LDU  (imm)*/
   OPDEF(0xCF,	O_ERR);							/* no        */
 

@@ -15,6 +15,26 @@ void prepare(Main6809Board& board, WORD pc)
     board.writeCpu(0xfff1, 0x00);
 }
 
+bool ldqImmediate6309()
+{
+    Main6809Board board(CpuType::HD6309);
+    prepare(board,0x1000);
+    const BYTE code[]={0xcd,0x01,0x00,0x1f,0x00};
+    for(unsigned i=0;i<sizeof(code);++i)board.writePhysical(0x1000+i,code[i]);
+    board.cpu().executeOne();
+    const auto& r=dynamic_cast<CSim09&>(board.cpu()).regs;
+    return board.cpu().pc()==0x1005 && r.r.q.Q==0x01001f00 && (r.MD&0x40)==0;
+}
+
+bool rejectsLdqOn6809()
+{
+    Main6809Board board(CpuType::MC6809);
+    prepare(board,0x1000);
+    board.writePhysical(0x1000,0xcd);
+    board.cpu().executeOne();
+    return board.cpu().pc()==0x4000;
+}
+
 bool rejectsBase6309Opcode()
 {
     Main6809Board board(CpuType::MC6809);
@@ -191,5 +211,7 @@ int main()
         return 13;
     if (!acceptsStandardTfrOn6809())
         return 14;
+    if (!ldqImmediate6309())return 15;
+    if (!rejectsLdqOn6809())return 16;
     return 0;
 }

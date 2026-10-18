@@ -1,6 +1,49 @@
 ////////////////////////////////////////////////////////////////
 // MC6809 / HD6309 execution personality
 
+static WORD Read6309TfrRegister(const REGS& r, BYTE code)
+{
+    switch(code & 15) {
+    case 0: return r.r.w.D;
+    case 1: return r.r.w.X;
+    case 2: return r.r.w.Y;
+    case 3: return r.r.w.U;
+    case 4: return r.r.w.S;
+    case 5: return r.r.w.PC;
+    case 6: return r.r.w.W;
+    case 7: return r.r.w.V;
+    case 8: return WORD((WORD(r.r.b.A)<<8)|r.r.b.A);
+    case 9: return WORD((WORD(r.r.b.B)<<8)|r.r.b.B);
+    case 10: return WORD((WORD(r.CC)<<8)|r.CC);
+    case 11: return WORD((WORD(r.DP)<<8)|r.DP);
+    case 12: case 13: return 0;
+    case 14: return WORD((WORD(r.r.b.E)<<8)|r.r.b.E);
+    case 15: return WORD((WORD(r.r.b.F)<<8)|r.r.b.F);
+    }
+    return 0;
+}
+static void Write6309TfrRegister(REGS& r, BYTE code, WORD v)
+{
+    switch(code & 15) {
+    case 0: r.r.w.D=v;break;
+    case 1: r.r.w.X=v;break;
+    case 2: r.r.w.Y=v;break;
+    case 3: r.r.w.U=v;break;
+    case 4: r.r.w.S=v;break;
+    case 5: r.r.w.PC=v;break;
+    case 6: r.r.w.W=v;break;
+    case 7: r.r.w.V=v;break;
+    case 8: r.r.b.A=BYTE(v>>8);break;
+    case 9: r.r.b.B=BYTE(v);break;
+    case 10: r.CC=BYTE(v);break;
+    case 11: r.DP=BYTE(v>>8);break;
+    case 12: case 13: break;
+    case 14: r.r.b.E=BYTE(v>>8);break;
+    case 15: r.r.b.F=BYTE(v);break;
+    }
+}
+
+
 void CSim09::Set6309Enabled(bool enabled)
 {
     enable6309_ = enabled;
@@ -22,6 +65,7 @@ bool CSim09::IsOpcodeAllowed(WORD opcode) const
         case 0x02: // AIM direct
         case 0x05: // EIM direct
         case 0x0b: // TIM direct
+        case 0xcd: // LDQ immediate
         case 0x14: // SEXW
         case 0x61: // OIM indexed
         case 0x62: // AIM indexed
@@ -136,42 +180,25 @@ bool CSim09::ConsumeIllegalOperand()
 // D/X/Y/U/S/PC and A/B/CC/DP in this encoding; W/V/E/F and the HD6309 zero
 // registers must not leak into the MC6809 personality.
 #undef O_EXG
-#define O_EXG                                                       \
-{                                                                   \
-    if (!IsTransferPostbyteAllowed(ACC_BL)) {                       \
-        O_ERR;                                                      \
-    } else {                                                        \
-        BYTE *bs = (BYTE *)RegOfs(ACC_BL >> 4);                     \
-        BYTE *bd = (BYTE *)RegOfs(ACC_BL & 0x0F);                   \
-        WORD *ws = (WORD *)bs;                                      \
-        WORD *wd = (WORD *)bd;                                      \
-        switch(ACC_BL & 0x88) {                                    \
-        case 0x00: ACC_AX = *ws; *ws = *wd; *wd = ACC_AX; break;   \
-        case 0x08: ACC_AX = *ws; *ws = (WORD)*bd; *bd = ACC_AL; break; \
-        case 0x80: ACC_AL = *bs; *bs = (BYTE)*wd; *wd = ACC_AX; break; \
-        case 0x88: ACC_AL = *bs; *bs = *bd; *bd = ACC_AL; break;   \
-        }                                                           \
-    }                                                               \
-}
+#define O_EXG \
+    { \
+        if (!IsTransferPostbyteAllowed(ACC_BL)) { O_ERR; } \
+        else { \
+            const BYTE src = ACC_BL >> 4, dst = ACC_BL & 15; \
+            const WORD sv = Read6309TfrRegister(regs,src); \
+            const WORD dv = Read6309TfrRegister(regs,dst); \
+            Write6309TfrRegister(regs,src,dv); \
+            Write6309TfrRegister(regs,dst,sv); \
+        } \
+    }
 
 #undef O_TFR
-#define O_TFR                                                       \
-{                                                                   \
-    if (!IsTransferPostbyteAllowed(ACC_BL)) {                       \
-        O_ERR;                                                      \
-    } else {                                                        \
-        BYTE *bs = (BYTE *)RegOfs(ACC_BL >> 4);                     \
-        BYTE *bd = (BYTE *)RegOfs(ACC_BL & 0x0F);                   \
-        WORD *ws = (WORD *)bs;                                      \
-        WORD *wd = (WORD *)bd;                                      \
-        switch(ACC_BL & 0x88) {                                    \
-        case 0x00: *wd = *ws; break;                               \
-        case 0x08: *wd = (WORD)*bs; break;                         \
-        case 0x80: *bd = (BYTE)*ws; break;                         \
-        case 0x88: *bd = *bs; break;                               \
-        }                                                           \
-    }                                                               \
-}
+#define O_TFR \
+    { \
+        if (!IsTransferPostbyteAllowed(ACC_BL)) { O_ERR; } \
+        else Write6309TfrRegister(regs,ACC_BL & 15, \
+                                   Read6309TfrRegister(regs,ACC_BL >> 4)); \
+    }
 
 // Keep the original instruction bodies intact.  The dispatch macro rejects
 // HD6309-only opcodes before their implementation is reached.
