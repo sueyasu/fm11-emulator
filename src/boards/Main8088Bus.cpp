@@ -174,7 +174,12 @@ void Main8088Bus::writeDma(WORD port,BYTE value)
         break;
     case 0x1b:dmaChannels_[value&3].mode=value;break;
     case 0x1c:dmaFlip_=0;break;
-    case 0x1d:resetDma();break;
+    case 0x1d:
+        resetDma();
+        // 8237 master clear masks all four channels. This differs from
+        // the card's power-on reset defaults.
+        dmaMask_=0x0f;
+        break;
     case 0x1e:dmaMask_=0;break;
     case 0x1f:dmaMask_=BYTE(value&0x0f);break;
     }
