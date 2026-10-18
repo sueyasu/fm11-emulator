@@ -542,7 +542,54 @@ void Main8088Board::Core::executeOne()
             }
             return;
         }
+        if((instruction&0xcf)==0x03 || (instruction&0xcf)==0x0b) {
+            const unsigned pair=(instruction>>4)&3u;
+            WORD& target=regs_[pair==3?5u:(pair==2?3u:pair==1?2u:1u)];
+            target=WORD(target+((instruction&8u)?-1:1)); // INX/DCX
+            return;
+        }
+        if((instruction&0xcf)==0x09) { // DAD rp: HL += rp; only CY changes
+            const unsigned pair=(instruction>>4)&3u;
+            const WORD rhs=regs_[pair==3?5u:(pair==2?3u:pair==1?2u:1u)];
+            const unsigned result=unsigned(regs_[3])+rhs;
+            regs_[3]=WORD(result);
+            flags_=WORD((flags_&~CF)|((result>0xffffu)?CF:0));
+            return;
+        }
         switch(instruction) {
+        case 0xeb: { // XCHG D,H
+            const WORD temp=regs_[2];
+            regs_[2]=regs_[3];
+            regs_[3]=temp;
+            return;
+        }
+        case 0xe3: { // XTHL: exchange HL with word at 8080 SP
+            const WORD offset=regs_[5];
+            const BYTE lo=bus_.readMemory(physical(segments_[3],offset));
+            const BYTE hi=bus_.readMemory(physical(segments_[3],WORD(offset+1)));
+            bus_.writeMemory(physical(segments_[3],offset),BYTE(regs_[3]));
+            bus_.writeMemory(physical(segments_[3],WORD(offset+1)),BYTE(regs_[3]>>8));
+            regs_[3]=WORD(lo|(WORD(hi)<<8));
+            return;
+        }
+        case 0x07: case 0x0f: case 0x17: case 0x1f: {
+            const BYTE value=getReg8(0);
+            const bool oldCarry=(flags_&CF)!=0;
+            bool carry=false;
+            BYTE result=0;
+            switch(instruction) {
+            case 0x07: carry=(value&0x80)!=0;result=BYTE((value<<1)|BYTE(carry));break; // RLC
+            case 0x0f: carry=(value&1)!=0;result=BYTE((value>>1)|(carry?0x80:0));break; // RRC
+            case 0x17: carry=(value&0x80)!=0;result=BYTE((value<<1)|BYTE(oldCarry));break; // RAL
+            default: carry=(value&1)!=0;result=BYTE((value>>1)|(oldCarry?0x80:0));break; // RAR
+            }
+            setReg8(0,result);
+            flags_=WORD((flags_&~CF)|(carry?CF:0));
+            return;
+        }
+        case 0x2f: setReg8(0,BYTE(~getReg8(0)));return; // CMA
+        case 0x37: flags_|=CF;return; // STC
+        case 0x3f: flags_^=CF;return; // CMC
         case 0xdb: { // IN port: 8080 immediate 8-bit port, result in A
             const BYTE port=fetch8();
             setReg8(0,bus_.readIo(port));
