@@ -328,7 +328,7 @@ int main()
         data.bus().writeMemory(0x10000+i,dataCode[i]);
     data.reset();data.cpu().executeOne();
     auto& dc=static_cast<Main8088Board::Core&>(data.cpu());
-    for(unsigned i=0;i<5;++i)data.cpu().executeOne();
+    for(unsigned i=0;i<6;++i)data.cpu().executeOne();
     if(dc.reg(0)!=0x1234 || data.bus().readRam(0x1ffff)!=0x34 ||
        data.bus().readRam(0x10000)!=0x12)return 57;
     for(unsigned i=0;i<3;++i)data.cpu().executeOne();
