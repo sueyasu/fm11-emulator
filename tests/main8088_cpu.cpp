@@ -109,5 +109,47 @@ int main()
     if(mc.reg(3)!=0x3434)return 19;
     mov.cpu().executeOne();
     if(!mc.halted())return 20;
+    // AL=7Fh; ADD AL,1 sets OF/SF, while preserving correct CF and PF.
+    Main8088Board arithmetic(CpuType::I8088);
+    arithmetic.bus().loadBootRom(fRom);
+    const BYTE arithmeticCode[]={
+        0xb0,0x7f,        // MOV AL,7Fh
+        0x04,0x01,        // ADD AL,1 -> 80h, OF=1
+        0x70,0x02,        // JO +2, skip HLT
+        0xf4,0x90,
+        0x3c,0x80,        // CMP AL,80h -> ZF
+        0x75,0x02,        // JNE +2 (not taken)
+        0x74,0x02,        // JE +2
+        0xf4,0x90,
+        0x2c,0x81,        // SUB AL,81h -> FFh, CF
+        0x72,0x02,        // JC +2
+        0xf4,0x90,
+        0x34,0xff,        // XOR AL,FFh -> 00h, ZF/PF
+        0x40,             // INC AX, CF preserved
+        0xf4
+    };
+    for(unsigned i=0;i<sizeof(arithmeticCode);++i)
+        arithmetic.bus().writeMemory(0x10000+i,arithmeticCode[i]);
+    arithmetic.reset();arithmetic.cpu().executeOne();
+    auto& ac=static_cast<Main8088Board::Core&>(arithmetic.cpu());
+    arithmetic.cpu().executeOne();arithmetic.cpu().executeOne();
+    if((ac.reg(0)&0xff)!=0x80 || (ac.flags()&0x0881)!=0x0880)return 21;
+    arithmetic.cpu().executeOne();
+    if(ac.ip()!=8)return 22;
+    arithmetic.cpu().executeOne(); // CMP
+    if((ac.flags()&0x0040)==0 || (ac.reg(0)&0xff)!=0x80)return 23;
+    arithmetic.cpu().executeOne(); // JNE not taken
+    arithmetic.cpu().executeOne(); // JE taken
+    if(ac.ip()!=16)return 24;
+    arithmetic.cpu().executeOne(); // SUB
+    if((ac.flags()&1)==0 || (ac.reg(0)&0xff)!=0xff)return 25;
+    arithmetic.cpu().executeOne(); // JC
+    if(ac.ip()!=22)return 26;
+    arithmetic.cpu().executeOne(); // XOR
+    if((ac.flags()&0x44)!=0x44 || (ac.reg(0)&0xff)!=0)return 27;
+    arithmetic.cpu().executeOne(); // INC
+    if((ac.flags()&1)!=0)return 28; // XOR cleared carry, INC kept it
+    arithmetic.cpu().executeOne(); // HLT
+    if(!ac.halted())return 29;
     return 0;
 }

@@ -128,12 +128,89 @@ void Main8088Board::Core::write16(const Operand& op,WORD value)
     bus_.writeMemory(op.address,BYTE(value));
     bus_.writeMemory(physical(segments_[op.segment],WORD(op.offset+1)),BYTE(value>>8));
 }
+namespace {
+constexpr WORD CF=0x0001, PF=0x0004, AF=0x0010, ZF=0x0040;
+constexpr WORD SF=0x0080, OF=0x0800;
+bool parityEven(BYTE value) {
+    value ^= BYTE(value>>4);
+    value ^= BYTE(value>>2);
+    value ^= BYTE(value>>1);
+    return (value&1)==0;
+}
+}
+void Main8088Board::Core::setArithmeticFlags(unsigned lhs,unsigned rhs,
+                                              unsigned result,unsigned bits,bool subtract)
+{
+    const unsigned mask=bits==8?0xffu:0xffffu;
+    const unsigned sign=bits==8?0x80u:0x8000u;
+    const unsigned out=result&mask;
+    flags_ &= WORD(~(CF|PF|AF|ZF|SF|OF));
+    if(subtract ? lhs<rhs : result>mask) flags_|=CF;
+    if(((lhs^rhs^out)&0x10u)!=0)flags_|=AF;
+    if(out==0)flags_|=ZF;
+    if((out&sign)!=0)flags_|=SF;
+    if(parityEven(BYTE(out)))flags_|=PF;
+    if(subtract ? (((lhs^rhs)&(lhs^out)&sign)!=0)
+                : (((~(lhs^rhs))&(lhs^out)&sign)!=0))flags_|=OF;
+}
+void Main8088Board::Core::setLogicFlags(unsigned result,unsigned bits)
+{
+    const unsigned sign=bits==8?0x80u:0x8000u;
+    const unsigned mask=bits==8?0xffu:0xffffu;
+    const unsigned out=result&mask;
+    flags_ &= WORD(~(CF|PF|AF|ZF|SF|OF));
+    if(out==0)flags_|=ZF;
+    if(out&sign)flags_|=SF;
+    if(parityEven(BYTE(out)))flags_|=PF;
+}
+bool Main8088Board::Core::jumpCondition(unsigned code) const
+{
+    const bool cf=(flags_&CF)!=0,zf=(flags_&ZF)!=0;
+    const bool sf=(flags_&SF)!=0,of=(flags_&OF)!=0,pf=(flags_&PF)!=0;
+    switch(code&15) {
+    case 0:return of;case 1:return !of;
+    case 2:return cf;case 3:return !cf;
+    case 4:return zf;case 5:return !zf;
+    case 6:return cf||zf;case 7:return !cf&&!zf;
+    case 8:return sf;case 9:return !sf;
+    case 10:return pf;case 11:return !pf;
+    case 12:return sf!=of;case 13:return sf==of;
+    case 14:return zf||(sf!=of);case 15:return !zf&&(sf==of);
+    }
+    return false;
+}
 void Main8088Board::Core::executeOne()
 {
     if(halted_)return;
     const WORD opAddress=ip_;
     const BYTE opcode=fetch8();
     switch(opcode) {
+    case 0x04: case 0x0c: case 0x24: case 0x2c: case 0x34: case 0x3c: {
+        const BYTE immediate=fetch8(), lhs=getReg8(0);
+        unsigned value=lhs;
+        switch(opcode) {
+        case 0x04: value=lhs+immediate;setArithmeticFlags(lhs,immediate,value,8,false);break;
+        case 0x2c: case 0x3c: value=(lhs-immediate)&0xff;setArithmeticFlags(lhs,immediate,value,8,true);break;
+        case 0x0c:value=lhs|immediate;setLogicFlags(value,8);break;
+        case 0x24:value=lhs&immediate;setLogicFlags(value,8);break;
+        case 0x34:value=lhs^immediate;setLogicFlags(value,8);break;
+        }
+        if(opcode!=0x3c)setReg8(0,BYTE(value));
+        break;
+    }
+    case 0x05: case 0x0d: case 0x25: case 0x2d: case 0x35: case 0x3d: {
+        const WORD immediate=fetch16(),lhs=regs_[0];
+        unsigned value=lhs;
+        switch(opcode) {
+        case 0x05:value=lhs+immediate;setArithmeticFlags(lhs,immediate,value,16,false);break;
+        case 0x2d: case 0x3d:value=(lhs-immediate)&0xffff;setArithmeticFlags(lhs,immediate,value,16,true);break;
+        case 0x0d:value=lhs|immediate;setLogicFlags(value,16);break;
+        case 0x25:value=lhs&immediate;setLogicFlags(value,16);break;
+        case 0x35:value=lhs^immediate;setLogicFlags(value,16);break;
+        }
+        if(opcode!=0x3d)regs_[0]=WORD(value);
+        break;
+    }
     case 0x88: {auto op=decodeModRm();write8(op,getReg8(op.reg));break;} // MOV r/m8,r8
     case 0x89: {auto op=decodeModRm();write16(op,regs_[op.reg]);break;} // MOV r/m16,r16
     case 0x8a: {auto op=decodeModRm();setReg8(op.reg,read8(op));break;} // MOV r8,r/m8
@@ -192,6 +269,22 @@ void Main8088Board::Core::executeOne()
     case 0x17: segments_[2]=pop16();break;
     case 0x1f: segments_[3]=pop16();break;
     default:
+        if(opcode>=0x70 && opcode<=0x7f) {
+            const auto displacement=static_cast<std::int8_t>(fetch8());
+            if(jumpCondition(opcode&15)) ip_=WORD(ip_+displacement);
+            break;
+        }
+        if(opcode>=0x40 && opcode<=0x4f) {
+            const unsigned index=opcode&7;
+            const unsigned lhs=regs_[index];
+            const bool decrement=(opcode&8)!=0;
+            const bool carry=(flags_&CF)!=0;
+            const unsigned result=decrement ? ((lhs-1)&0xffffu) : lhs+1;
+            setArithmeticFlags(lhs,1,result,16,decrement);
+            if(carry) flags_|=CF;else flags_&=WORD(~CF);
+            regs_[index]=WORD(result);
+            break;
+        }
         if(opcode>=0x50 && opcode<=0x57) {push16(regs_[opcode-0x50]);break;}
         if(opcode>=0x58 && opcode<=0x5f) {regs_[opcode-0x58]=pop16();break;}
         if(opcode>=0xb0 && opcode<=0xb7) {

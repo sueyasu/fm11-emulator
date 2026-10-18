@@ -54,6 +54,9 @@ public:
         WORD read16(const Operand& op) const;
         void write8(const Operand& op,BYTE value);
         void write16(const Operand& op,WORD value);
+        void setArithmeticFlags(unsigned lhs,unsigned rhs,unsigned result,unsigned bits,bool subtract);
+        void setLogicFlags(unsigned result,unsigned bits);
+        bool jumpCondition(unsigned code) const;
         Main8088Bus& bus_;
         CpuType variant_;
         std::array<WORD,8> regs_{};
