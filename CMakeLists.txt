@@ -67,6 +67,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(mainv20_bitfield PRIVATE fm11_core)
     add_test(NAME mainv20_bitfield COMMAND mainv20_bitfield)
 
+    add_executable(mainv20_bcd_boundaries tests/mainv20_bcd_boundaries.cpp)
+    target_link_libraries(mainv20_bcd_boundaries PRIVATE fm11_core)
+    add_test(NAME mainv20_bcd_boundaries COMMAND mainv20_bcd_boundaries)
+
     add_executable(mainv20_bcd_string tests/mainv20_bcd_string.cpp)
     target_link_libraries(mainv20_bcd_string PRIVATE fm11_core)
     add_test(NAME mainv20_bcd_string COMMAND mainv20_bcd_string)
