@@ -79,3 +79,18 @@ for CPU-logical memory, `mp HEXADDR [COUNT]` for physical memory,
 `reset` to reset and reload the supplied bootstrap, and `q` to quit.
 The monitor is available while the CPU runs. `--instructions` pauses the
 CPU at the limit instead of terminating the monitor.
+
+
+### CPU idle waiting (6809/6309)
+
+The headless runner executes instructions **without a real-time CPU throttle**
+while running. When a guest executes `SYNC` or `CWAI`, the CPU stops
+executing instructions and the host waits using `poll()` for PTY or monitor
+activity and the next PTM timer edge. During that wait, host elapsed time
+advances the 9700 Hz PTM timebase so a timer IRQ can wake NitrOS-9.
+
+`CWAI` keeps its pre-stacked interrupt frame; `SYNC` does not stack.
+A masked IRQ wakes `SYNC` without entering its vector, while `CWAI`
+requires an accepted interrupt. The guest's normal (non-waiting) execution
+still drives PTM from emulated CPU cycles; the host clock is used only while
+the CPU is asleep. This is **not** a cycle-exact real-time emulation mode.
