@@ -191,5 +191,65 @@ int main()
     if(gc.flags()&0x40)return 37;
     grouped.cpu().executeOne();
     if(!gc.halted())return 38;
+    // Verify immediate and DX port addressing, byte/word widths and
+    // the side effects of the FM-11 8088 board's I/O callbacks.
+    Main8088Board io(CpuType::I8088);
+    io.bus().loadBootRom(fRom);
+    std::array<BYTE, 0x10000> ports{};
+    unsigned reads=0, writes=0;
+    io.bus().setSystemIo(
+        [&](WORD port) -> BYTE { ++reads; return ports[port]; },
+        [&](WORD port,BYTE value) { ++writes; ports[port]=value; });
+    const BYTE ioCode[]={
+        0xb8,0x34,0x12,       // MOV AX,1234h
+        0xe7,0x18,            // OUT 18h,AX (not FDxx: unhandled by board)
+        0xba,0x18,0xfd,       // MOV DX,FD18h
+        0xef,                 // OUT DX,AX to FD18/FD19
+        0xb8,0x00,0x00,       // MOV AX,0
+        0xed,                 // IN AX,DX
+        0xb0,0x5a,           // MOV AL,5Ah
+        0xee,                 // OUT DX,AL
+        0xec,                 // IN AL,DX
+        0xe6,0x21,           // OUT 21h,AL (unmapped)
+        0xe4,0x21,           // IN AL,21h -> FFh (unmapped)
+        0xf4
+    };
+    for(unsigned i=0;i<sizeof(ioCode);++i)
+        io.bus().writeMemory(0x10000+i,ioCode[i]);
+    io.reset();
+    io.cpu().executeOne(); // reset far jump
+    io.cpu().executeOne(); // MOV AX
+    io.cpu().executeOne(); // OUT imm8,AX unmapped
+    if(writes!=0)return 39;
+    io.cpu().executeOne(); // MOV DX
+    io.cpu().executeOne(); // OUT DX,AX
+    if(writes!=2 || ports[0xfd18]!=0x34 || ports[0xfd19]!=0x12)return 40;
+    io.cpu().executeOne(); // MOV AX,0
+    io.cpu().executeOne(); // IN AX,DX
+    auto& ic=static_cast<Main8088Board::Core&>(io.cpu());
+    if(ic.reg(0)!=0x1234 || reads!=2)return 41;
+    io.cpu().executeOne(); // MOV AL,5A
+    io.cpu().executeOne(); // OUT DX,AL
+    io.cpu().executeOne(); // IN AL,DX
+    if(ports[0xfd18]!=0x5a || (ic.reg(0)&0xff)!=0x5a)return 42;
+    io.cpu().executeOne(); // OUT imm8,AL
+    io.cpu().executeOne(); // IN AL,imm8 from unmapped port
+    if((ic.reg(0)&0xff)!=0xff || writes!=3)return 43;
+    io.cpu().executeOne();
+    if(!ic.halted())return 44;
+
+    // Immediate I/O opcodes must consume their 8-bit port operand.
+    // Check the independent byte/word variants against unmapped ports.
+    Main8088Board immediate(CpuType::NECV20);
+    immediate.bus().loadBootRom(fRom);
+    const BYTE immCode[]={0xe4,0x11,0xe5,0x22,0xe6,0x33,0xe7,0x44,0xf4};
+    for(unsigned i=0;i<sizeof(immCode);++i)
+        immediate.bus().writeMemory(0x10000+i,immCode[i]);
+    immediate.reset();immediate.cpu().executeOne();
+    for(unsigned i=0;i<4;++i)immediate.cpu().executeOne();
+    auto& im=static_cast<Main8088Board::Core&>(immediate.cpu());
+    if(im.reg(0)!=0xffff || im.ip()!=8)return 45;
+    immediate.cpu().executeOne();
+    if(!im.halted())return 46;
     return 0;
 }

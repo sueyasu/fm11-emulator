@@ -263,6 +263,40 @@ void Main8088Board::Core::executeOne()
     case 0xc7: {auto op=decodeModRm();if(op.reg!=0)throw std::runtime_error("invalid MOV C7 group");write16(op,fetch16());break;}
     case 0x8c: {auto op=decodeModRm();if(op.reg>=4)throw std::runtime_error("invalid MOV segment");write16(op,segments_[op.reg]);break;}
     case 0x8e: {auto op=decodeModRm();if(op.reg>=4 || op.reg==1)throw std::runtime_error("invalid MOV segment");segments_[op.reg]=read16(op);break;}
+    // 8088 I/O instructions: immediate ports are zero-extended to 16 bits.
+    // Word accesses use two successive byte ports (including FFFF->0000).
+    case 0xe4: setReg8(0,bus_.readIo(fetch8()));break; // IN AL,imm8
+    case 0xe5: { // IN AX,imm8
+        const WORD port=fetch8();
+        regs_[0]=WORD(bus_.readIo(port) |
+                      (WORD(bus_.readIo(WORD(port+1)))<<8));
+        break;
+    }
+    case 0xec: setReg8(0,bus_.readIo(regs_[2]));break; // IN AL,DX
+    case 0xed: { // IN AX,DX
+        const WORD port=regs_[2];
+        regs_[0]=WORD(bus_.readIo(port) |
+                      (WORD(bus_.readIo(WORD(port+1)))<<8));
+        break;
+    }
+    case 0xe6: { // OUT imm8,AL
+        const WORD port=fetch8();
+        bus_.writeIo(port,getReg8(0));
+        break;
+    }
+    case 0xe7: { // OUT imm8,AX
+        const WORD port=fetch8();
+        bus_.writeIo(port,BYTE(regs_[0]));
+        bus_.writeIo(WORD(port+1),BYTE(regs_[0]>>8));
+        break;
+    }
+    case 0xee: bus_.writeIo(regs_[2],getReg8(0));break; // OUT DX,AL
+    case 0xef: { // OUT DX,AX
+        const WORD port=regs_[2];
+        bus_.writeIo(port,BYTE(regs_[0]));
+        bus_.writeIo(WORD(port+1),BYTE(regs_[0]>>8));
+        break;
+    }
     case 0x90: // NOP
         break;
     case 0xf4: // HLT
