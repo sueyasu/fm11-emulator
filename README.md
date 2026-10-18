@@ -30,7 +30,7 @@ It is intended for early serial driver bring-up, **not** NitrOS-9 booting:
 there is no IPL, disk controller, OS image loader or execution pacing yet.
 
 ```sh
-./build/fm11-headless --binary program.bin --load 0x1000 --pc 0x1000 --cpu 6809 --clock 2000000
+./build/fm11-headless --binary program.bin --load 0x1000 --pc 0x1000 --cpu 6809 --clock 10000000
 ```
 
 Use `--instructions 100000` for a bounded smoke run. Ctrl-C stops an
@@ -83,7 +83,7 @@ CPU at the limit instead of terminating the monitor.
 ### CPU utilization
 
 The headless runner now paces emulated CPU instruction cycles against the
-requested `--clock` frequency (default 2 MHz) using a monotonic clock and
+requested `--clock` frequency (default 10 MHz) using a monotonic clock and
 a short host-side poll wait when ahead. This avoids the previous unlimited
 busy loop at an idle OS prompt. The guest CPU still executes its own wait
 loops; this is real-time throttling rather than guest idle-loop detection.

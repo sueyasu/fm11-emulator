@@ -81,7 +81,7 @@ void loadBinary(Main6809Board& board, const std::string& file,
 void usage() {
     std::cerr << "usage: fm11-headless (--binary FILE --load ADDR --pc ADDR"
                  " | --boottrack FILE --level 1|2)"
-                 " [--floppy RAW-2D|D88] [--cpu 6809|6309] [--clock HZ] [--instructions COUNT]\n"
+                 " [--floppy RAW-2D|D88] [--cpu 6809|6309] [--clock HZ (default 10000000)] [--instructions COUNT]\n"
                  "  Boottrack starts AFTER the FM-11 floppy IPL has loaded it;\n"
                  "  there is no disk controller or subsequent disk I/O yet.\n"
                  "  Monitor on stdin; guest serial is on a separate /dev/pts/N.\n\n";
@@ -91,7 +91,7 @@ void usage() {
 int main(int argc, char** argv) {
     try {
         std::string file, boottrack, floppy, cpu = "6809";
-        unsigned long long load = 0, pc = 0, hz = 2000000, limit = 0;
+        unsigned long long load = 0, pc = 0, hz = 10000000, limit = 0;
         bool hasLoad = false, hasPc = false;
         int level = 0;
         for (int i=1;i<argc;++i) {
