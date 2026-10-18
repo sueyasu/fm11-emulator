@@ -692,18 +692,18 @@ int main()
     for(unsigned i=0;i<sizeof(decimalCode);++i)
         decimal.bus().writeMemory(0x10000+i,decimalCode[i]);
     decimal.reset();decimal.cpu().executeOne();
-    auto& dc=static_cast<Main8088Board::Core&>(decimal.cpu());
+    auto& decimalCore=static_cast<Main8088Board::Core&>(decimal.cpu());
     decimal.cpu().executeOne();decimal.cpu().executeOne();
-    if((dc.reg(0)&255)!=0x01 || (dc.flags()&0x11)!=0x11)return 113;
+    if((decimalCore.reg(0)&255)!=0x01 || (decimalCore.flags()&0x11)!=0x11)return 113;
     decimal.cpu().executeOne();decimal.cpu().executeOne();
-    if((dc.reg(0)&255)!=0x35 || (dc.flags()&0x11)!=0x11)return 114;
+    if((decimalCore.reg(0)&255)!=0x35 || (decimalCore.flags()&0x11)!=0x11)return 114;
     decimal.cpu().executeOne();decimal.cpu().executeOne();
-    if(dc.reg(0)!=0x0100 || (dc.flags()&0x11)!=0x11)return 115;
+    if(decimalCore.reg(0)!=0x0100 || (decimalCore.flags()&0x11)!=0x11)return 115;
     decimal.cpu().executeOne();decimal.cpu().executeOne();
-    if(dc.reg(0)!=0x0104 || (dc.flags()&0x11)!=0x11)return 116;
+    if(decimalCore.reg(0)!=0x0104 || (decimalCore.flags()&0x11)!=0x11)return 116;
     decimal.cpu().executeOne();decimal.cpu().executeOne();
-    if(dc.reg(0)!=0x0402)return 117;
+    if(decimalCore.reg(0)!=0x0402)return 117;
     decimal.cpu().executeOne();
-    if(dc.reg(0)!=42)return 118;
+    if(decimalCore.reg(0)!=42)return 118;
     return 0;
 }
