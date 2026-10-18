@@ -6,7 +6,7 @@
     if ( ACC_AQ == 0L ) REG_CC |= CC_Z;		\
     if ( ACC_AQ & 0x80000000L ) REG_CC |= CC_N;
 
-#define	O_SYNC
+#define	O_SYNC REG_ST |= 0004;
 
 #define	O_SEXW										\
 	REG_D = ((REG_W & 0x8000) != 0 ? 0xFFFF : 0x0000);	\

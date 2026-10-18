@@ -1,5 +1,6 @@
 #include "Main6809Board.h"
 
+#include <algorithm>
 #include <array>
 #include <cerrno>
 #include <chrono>
@@ -158,7 +159,7 @@ int main(int argc, char** argv) {
             cfmakeraw(&uart);
             tcsetattr(slaveFd,TCSANOW,&uart);
         }
-        close(slaveFd);
+        // Retain an open slave to prevent POLLHUP when no terminal is attached.
         std::signal(SIGINT,requestStop);
         std::signal(SIGTERM,requestStop);
         std::cout << "FM-11 headless monitor\nSerial: " << slavePath
@@ -251,9 +252,29 @@ int main(int argc, char** argv) {
         };
         prompt();
         while(!stopping && !quitting) {
-            pollfd fds[2]={{STDIN_FILENO,short(inputOpen?POLLIN:0),0},
+            pollfd fds[2]={{inputOpen?STDIN_FILENO:-1,POLLIN,0},
                            {master,POLLIN,0}};
-            const int ready=poll(fds,2,running?0:-1);
+            const bool sleeping = running &&
+                board.cpuWaitState() != CSim09::WaitState::Running &&
+                !(board.irqPending() &&
+                  (board.cpuWaitState() == CSim09::WaitState::Sync ||
+                   (dynamic_cast<CSim09&>(board.cpu()).regs.CC & 0x10) == 0));
+            // Poll until an external event or the next PTM edge. A
+            // short bound keeps signals and monitor operations responsive.
+            int timeout=running?0:-1;
+            if (sleeping) {
+                const auto next=board.nextPtmEventNanoseconds();
+                timeout=next==UINT64_MAX ? 10 :
+                    static_cast<int>(std::min<std::uint64_t>(10,
+                        std::max<std::uint64_t>(1,(next+999999)/1000000)));
+            }
+            const auto waitStart=std::chrono::steady_clock::now();
+            const int ready=poll(fds,2,timeout);
+            if (sleeping) {
+                const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now()-waitStart).count();
+                if (elapsed>0) board.advanceWaitTime(static_cast<std::uint64_t>(elapsed));
+            }
             if(ready<0 && errno!=EINTR)throw std::runtime_error("poll failed");
             if(ready>0 && (fds[0].revents&(POLLIN|POLLHUP))) {
                 char data[256];
@@ -282,10 +303,12 @@ int main(int argc, char** argv) {
                         prompt();break;
                     }
                     board.cpu().executeOne();++count;
+                    if (board.cpuWaitState() != CSim09::WaitState::Running) break;
                 }
             }
             drain();
         }
+        close(slaveFd);
         close(master);
         return 0;
     } catch (const std::exception& ex) {

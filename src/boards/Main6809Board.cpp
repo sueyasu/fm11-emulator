@@ -43,6 +43,7 @@ void Main6809Board::reset()
     ptmStatus_ = 0;
     ptmIrqAcknowledged_ = false;
     ptmCycleFraction_ = 0;
+    waitNanosecondFraction_ = 0;
 
     // The original board copies the reset vector from the last two bytes of
     // the boot ROM into the fixed on-board RAM at FFFE/FFFF before RESET.
@@ -231,6 +232,34 @@ void Main6809Board::setExtendedIrqSource(BYTE sourceBit, bool asserted)
     else
         extendedIrqSources_ &= static_cast<BYTE>(~sourceBit);
     mainIrqStatus();
+}
+
+CSim09::WaitState Main6809Board::cpuWaitState() const
+{
+    return core_.waitState();
+}
+
+void Main6809Board::advanceWaitTime(std::uint64_t nanoseconds)
+{
+    // Time passes while a real MC6809 is halted by SYNC or CWAI.
+    // Advance the PTM's independent 9700 Hz clock from elapsed host time.
+    constexpr std::uint64_t tickHz = 9700;
+    const auto seconds = nanoseconds / 1000000000ULL;
+    const auto remain = nanoseconds % 1000000000ULL;
+    const auto numerator = remain * tickHz + waitNanosecondFraction_;
+    const auto ticks = seconds * tickHz + numerator / 1000000000ULL;
+    waitNanosecondFraction_ = numerator % 1000000000ULL;
+    advancePtm(ticks);
+}
+
+std::uint64_t Main6809Board::nextPtmEventNanoseconds() const
+{
+    std::uint64_t soonest = UINT64_MAX;
+    for (const auto& ch : ptm_)
+        if (ch.running && ch.counter)
+            soonest = std::min(soonest, std::uint64_t(ch.counter));
+    if (soonest == UINT64_MAX) return soonest;
+    return (soonest * 1000000000ULL + 9699) / 9700;
 }
 
 bool Main6809Board::irqPending() const
@@ -642,6 +671,10 @@ void Main6809Board::Core::reset()
 
 void Main6809Board::Core::executeOne()
 {
+    // SYNC resumes on an asserted IRQ even if the CC.I mask prevents
+    // vectoring. CWAI remains asleep until an unmasked interrupt arrives.
+    if (waitState() == WaitState::Sync && board_.irqPending())
+        clearSyncWait();
     // IRQ is level-sensitive. Check at instruction boundaries, and keep
     // the source pending while CC.I masks it. SimIRQ performs the complete
     // CPU state save and vectors through FFF8.

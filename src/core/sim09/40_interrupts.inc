@@ -5,6 +5,7 @@ void	CSim09::SimRESET()
 }
 void	CSim09::SimFIRQ()
 {
+    REG_ST &= ~0004;
     if ( (REG_CC & CC_F) != 0 )
 		return;
     if ( (REG_ST & ST_W) == 0 ) {
@@ -24,6 +25,7 @@ void	CSim09::SimFIRQ()
 }
 void	CSim09::SimIRQ()
 {
+    REG_ST &= ~0004;
     if ( (REG_CC & CC_I) != 0 )
 		return;
     if ( (REG_ST & ST_W) == 0 ) {
@@ -36,6 +38,7 @@ void	CSim09::SimIRQ()
 }
 void	CSim09::SimNMI()
 {
+    REG_ST &= ~0004;
     if ( (REG_ST & ST_N) != 0 )
 		return;
     if ( (REG_ST & ST_W) == 0 ) {
