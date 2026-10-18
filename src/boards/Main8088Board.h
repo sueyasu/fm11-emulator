@@ -65,6 +65,7 @@ public:
         WORD ip_=0;
         WORD flags_=0x0002;
         bool halted_=false;
+        unsigned irqInhibit_=0;
     };
 private:
     Main8088Bus bus_;

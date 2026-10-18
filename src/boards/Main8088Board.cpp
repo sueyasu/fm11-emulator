@@ -20,6 +20,7 @@ void Main8088Board::Core::reset()
     ip_=0;
     flags_=0x0002;
     halted_=false;
+    irqInhibit_=0;
 }
 std::uint32_t Main8088Board::Core::physical(WORD seg,WORD off) const
 {
@@ -65,7 +66,12 @@ void Main8088Board::Core::interrupt(BYTE vector)
     segments_[1]=WORD(bus_.readMemory(address+2)|(WORD(bus_.readMemory(address+3))<<8));
     halted_=false;
 }
-void Main8088Board::Core::irq(){if(flags_&0x0200)interrupt(8);}
+void Main8088Board::Core::irq()
+{
+    // External IRQ requests enter the PIC. Delivery takes place at the
+    // next instruction boundary, using the PIC-programmed vector.
+    bus_.requestIrq(0);
+}
 void Main8088Board::Core::nmi(){interrupt(2);}
 Main8088Board::Core::Operand Main8088Board::Core::decodeModRm()
 {
@@ -213,6 +219,14 @@ bool Main8088Board::Core::jumpCondition(unsigned code) const
 }
 void Main8088Board::Core::executeOne()
 {
+    // 8088 recognizes maskable IRQs at instruction boundaries. STI and
+    // MOV SS defer recognition until the following instruction completes.
+    const bool inhibited=irqInhibit_!=0;
+    if(irqInhibit_!=0)--irqInhibit_;
+    if(!inhibited && (flags_&0x0200) && bus_.interruptPending()) {
+        interrupt(bus_.acknowledgeInterrupt());
+        return;
+    }
     if(halted_)return;
     const WORD opAddress=ip_;
     const BYTE opcode=fetch8();
@@ -262,7 +276,7 @@ void Main8088Board::Core::executeOne()
     case 0xc6: {auto op=decodeModRm();if(op.reg!=0)throw std::runtime_error("invalid MOV C6 group");write8(op,fetch8());break;}
     case 0xc7: {auto op=decodeModRm();if(op.reg!=0)throw std::runtime_error("invalid MOV C7 group");write16(op,fetch16());break;}
     case 0x8c: {auto op=decodeModRm();if(op.reg>=4)throw std::runtime_error("invalid MOV segment");write16(op,segments_[op.reg]);break;}
-    case 0x8e: {auto op=decodeModRm();if(op.reg>=4 || op.reg==1)throw std::runtime_error("invalid MOV segment");segments_[op.reg]=read16(op);break;}
+    case 0x8e: {auto op=decodeModRm();if(op.reg>=4 || op.reg==1)throw std::runtime_error("invalid MOV segment");segments_[op.reg]=read16(op);if(op.reg==2)irqInhibit_=1;break;}
     // 8088 I/O instructions: immediate ports are zero-extended to 16 bits.
     // Word accesses use two successive byte ports (including FFFF->0000).
     case 0xe4: setReg8(0,bus_.readIo(fetch8()));break; // IN AL,imm8
@@ -303,7 +317,7 @@ void Main8088Board::Core::executeOne()
         halted_=true;
         break;
     case 0xfa: flags_ &= WORD(~0x0200);break; // CLI
-    case 0xfb: flags_ |= 0x0200;break; // STI (interrupt shadow deferred)
+    case 0xfb: flags_ |= 0x0200;irqInhibit_=1;break; // STI
     case 0xfc: flags_ &= WORD(~0x0400);break; // CLD
     case 0xfd: flags_ |= 0x0400;break; // STD
     case 0xea: { // JMP far ptr16:16
@@ -344,7 +358,7 @@ void Main8088Board::Core::executeOne()
     case 0x16: push16(segments_[2]);break; // PUSH SS
     case 0x1e: push16(segments_[3]);break; // PUSH DS
     case 0x07: segments_[0]=pop16();break;
-    case 0x17: segments_[2]=pop16();break;
+    case 0x17: segments_[2]=pop16();irqInhibit_=1;break;
     case 0x1f: segments_[3]=pop16();break;
     default:
         if(opcode<=0x3b && (opcode&7)<=3 && (opcode&0x04)==0) {

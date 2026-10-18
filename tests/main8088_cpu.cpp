@@ -251,5 +251,56 @@ int main()
     if(im.reg(0)!=0xffff || im.ip()!=8)return 45;
     immediate.cpu().executeOne();
     if(!im.halted())return 46;
+    // Program PIC IRQ0 vector 28h, then verify STI shadow and HLT wakeup.
+    Main8088Board irqBoard(CpuType::I8088);
+    irqBoard.bus().loadBootRom(fRom);
+    const BYTE irqCode[]={
+        0xbc,0x00,0x80, // MOV SP,8000
+        0xfb,           // STI: shadow protects the next instruction
+        0x90,           // NOP
+        0xf4,           // HLT
+        0x90,           // resume after interrupt, then another HLT
+        0xf4
+    };
+    for(unsigned i=0;i<sizeof(irqCode);++i)
+        irqBoard.bus().writeMemory(0x10000+i,irqCode[i]);
+    // IRQ0 handler at 2000:0000: IRET.
+    irqBoard.bus().writeMemory(0x20000,0xcf);
+    irqBoard.bus().writeMemory(0x28*4,0x00);
+    irqBoard.bus().writeMemory(0x28*4+1,0x00);
+    irqBoard.bus().writeMemory(0x28*4+2,0x00);
+    irqBoard.bus().writeMemory(0x28*4+3,0x20);
+    irqBoard.reset();
+    irqBoard.bus().writeIo(0,0x13); // ICW1 single PIC/ICW4
+    irqBoard.bus().writeIo(1,0x28); // ICW2
+    irqBoard.bus().writeIo(1,0x01); // ICW4
+    irqBoard.bus().writeIo(1,0xfe); // IRQ0 only
+    auto& ir=static_cast<Main8088Board::Core&>(irqBoard.cpu());
+    irqBoard.cpu().executeOne(); // reset jump
+    irqBoard.cpu().executeOne(); // MOV SP
+    irqBoard.cpu().executeOne(); // STI
+    irqBoard.bus().requestIrq(0);
+    irqBoard.cpu().executeOne(); // NOP must run before IRQ
+    if(ir.ip()!=5 || ir.cs()!=0x1000 || !irqBoard.bus().interruptPending())return 47;
+    irqBoard.cpu().executeOne(); // enter IRQ0 handler, before HLT
+    if(ir.pc()!=0x20000 || ir.reg(4)!=0x7ffa || (ir.flags()&0x200))return 48;
+    if(irqBoard.bus().interruptPending())return 49;
+    if(irqBoard.bus().readMemory(0x7ffa)!=5)return 50; // saved IP
+    irqBoard.cpu().executeOne(); // IRET
+    if(ir.ip()!=5 || ir.cs()!=0x1000 || !(ir.flags()&0x200))return 51;
+    irqBoard.bus().writeIo(0,0x20); // EOI
+    irqBoard.cpu().executeOne(); // HLT
+    if(!ir.halted())return 52;
+    irqBoard.bus().writeIo(1,0xff); // mask IRQ0
+    irqBoard.bus().requestIrq(0);
+    irqBoard.cpu().executeOne(); // masked IRQ cannot wake HLT
+    if(!ir.halted() || ir.ip()!=6)return 53;
+    irqBoard.bus().writeIo(1,0xfe); // unmask
+    irqBoard.cpu().executeOne(); // wake and enter vector 28h
+    if(ir.halted() || ir.pc()!=0x20000)return 54;
+    irqBoard.cpu().executeOne(); // IRET to instruction after HLT
+    if(ir.ip()!=6 || ir.cs()!=0x1000)return 55;
+    irqBoard.cpu().executeOne(); // NOP after HLT
+    if(ir.ip()!=7)return 56;
     return 0;
 }
