@@ -543,6 +543,18 @@ void Main8088Board::Core::executeOne()
             return;
         }
         switch(instruction) {
+        case 0xdb: { // IN port: 8080 immediate 8-bit port, result in A
+            const BYTE port=fetch8();
+            setReg8(0,bus_.readIo(port));
+            return;
+        }
+        case 0xd3: { // OUT port: 8080 immediate 8-bit port, value from A
+            const BYTE port=fetch8();
+            bus_.writeIo(port,getReg8(0));
+            return;
+        }
+        case 0xfb: flags_|=0x0200;return; // EI (native IF)
+        case 0xf3: flags_&=WORD(~0x0200);return; // DI
         case 0xc3: ip_=fetch16();return; // JMP
         case 0xcd: { // CALL
             const WORD target=fetch16();

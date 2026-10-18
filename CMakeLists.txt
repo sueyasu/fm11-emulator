@@ -67,6 +67,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(mainv20_bitfield PRIVATE fm11_core)
     add_test(NAME mainv20_bitfield COMMAND mainv20_bitfield)
 
+    add_executable(mainv20_8080_io tests/mainv20_8080_io.cpp)
+    target_link_libraries(mainv20_8080_io PRIVATE fm11_core)
+    add_test(NAME mainv20_8080_io COMMAND mainv20_8080_io)
+
     add_executable(mainv20_8080_control tests/mainv20_8080_control.cpp)
     target_link_libraries(mainv20_8080_control PRIVATE fm11_core)
     add_test(NAME mainv20_8080_control COMMAND mainv20_8080_control)
