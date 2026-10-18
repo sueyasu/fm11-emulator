@@ -42,6 +42,11 @@ if(FM11_BUILD_TESTS)
     endif()
     enable_testing()
 
+    add_test(NAME main8088_opcode_inventory
+             COMMAND ${Python3_EXECUTABLE}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/main8088_opcode_inventory.py
+                     ${CMAKE_CURRENT_SOURCE_DIR}/src/boards/Main8088Board.cpp)
+
     add_executable(main8088_cpu tests/main8088_cpu.cpp)
     target_link_libraries(main8088_cpu PRIVATE fm11_core)
     add_test(NAME main8088_cpu COMMAND main8088_cpu)
