@@ -94,6 +94,49 @@ void Main6809Board::refreshSerialIrq()
     mainIrqStatus();
 }
 
+void Main6809Board::loadFloppy2d(const std::vector<BYTE>& raw)
+{
+    // 40 tracks, 2 sides, 16 sectors, 256 bytes/sector.
+    if(raw.size()!=40u*2*16*256)
+        throw std::invalid_argument("FM-11 2D raw image must be 327680 bytes");
+    floppy2d_=raw;
+    floppyOffset_=256;
+    floppyStatus_=0;
+}
+
+void Main6809Board::readFloppySector()
+{
+    const unsigned track=ioRegisters_[0x19];
+    const unsigned side=ioRegisters_[0x1c]&1;
+    const unsigned sector=ioRegisters_[0x1a];
+    const unsigned drive=ioRegisters_[0x1d]&3;
+    if(drive!=0 || track>=40 || sector==0 || sector>16 || floppy2d_.empty()) {
+        floppyStatus_=0x10; // record not found
+        floppyOffset_=256;
+        ioRegisters_[0x50] |= 0x40; // DMA error
+        return;
+    }
+    const std::size_t offset=((track*2+side)*16+(sector-1))*256;
+    for(unsigned i=0;i<256;++i)floppySector_[i]=floppy2d_[offset+i];
+    floppyOffset_=0;
+    floppyStatus_=0x02; // DRQ for programmed I/O
+    const bool dma=(ioRegisters_[0x50]&0x04)!=0;
+    if(dma) {
+        const std::uint32_t dest=((ioRegisters_[0x94]&0x0f)<<16)|
+            (ioRegisters_[0x40]<<8)|ioRegisters_[0x41];
+        const unsigned count=(ioRegisters_[0x42]<<8)|ioRegisters_[0x43];
+        if(count!=256 || dest>memory_.size()-256) {
+            floppyStatus_=0x10;
+            ioRegisters_[0x50]|=0x40;
+            return;
+        }
+        for(unsigned i=0;i<256;++i) writePhysical(dest+i,floppySector_[i]);
+        floppyOffset_=256;
+        floppyStatus_=0;
+        ioRegisters_[0x50]=static_cast<BYTE>((ioRegisters_[0x50]|0x80)&~0x40);
+    }
+}
+
 void Main6809Board::signalAttention()
 {
     ioRegisters_[0x04] |= 0x01;
@@ -394,6 +437,13 @@ BYTE Main6809Board::readIo(WORD address)
         return readPtm(reg);
     case 0x03:
         return mainIrqStatus();
+    case 0x18: return floppyStatus_;
+    case 0x1b: {
+        if(floppyOffset_==256)return 0;
+        const BYTE value=floppySector_[floppyOffset_++];
+        if(floppyOffset_==256)floppyStatus_=0;
+        return value;
+    }
     case 0x06: {
         const BYTE value = serialInput_.empty() ? 0 : serialInput_.front();
         if (!serialInput_.empty())
@@ -444,6 +494,13 @@ void Main6809Board::writeIo(WORD address, BYTE value)
     case 0x2c:
         ioOutputLatch_[0x2c] = value;
         mainIrqStatus();
+        break;
+    case 0x18:
+        if((value&0xf0)==0x80)readFloppySector();
+        else { floppyStatus_=0; floppyOffset_=256; }
+        break;
+    case 0x50:
+        ioRegisters_[reg]=static_cast<BYTE>(value&~0xc0);
         break;
     case 0x06:
         serialOutput_.push_back(value);

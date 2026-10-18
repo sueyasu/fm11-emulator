@@ -109,4 +109,8 @@ if(FM11_BUILD_TESTS)
     add_executable(main6809_serial_console tests/main6809_serial_console.cpp)
     target_link_libraries(main6809_serial_console PRIVATE fm11_core)
     add_test(NAME main6809_serial_console COMMAND main6809_serial_console)
+
+    add_executable(main6809_floppy_read tests/main6809_floppy_read.cpp)
+    target_link_libraries(main6809_floppy_read PRIVATE fm11_core)
+    add_test(NAME main6809_floppy_read COMMAND main6809_floppy_read)
 endif()

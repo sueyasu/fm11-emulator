@@ -73,7 +73,7 @@ void loadBinary(Main6809Board& board, const std::string& file,
 void usage() {
     std::cerr << "usage: fm11-headless (--binary FILE --load ADDR --pc ADDR"
                  " | --boottrack FILE --level 1|2)"
-                 " [--cpu 6809|6309] [--clock HZ] [--instructions COUNT]\n"
+                 " [--floppy RAW-2D] [--cpu 6809|6309] [--clock HZ] [--instructions COUNT]\n"
                  "  Boottrack starts AFTER the FM-11 floppy IPL has loaded it;\n"
                  "  there is no disk controller or subsequent disk I/O yet.\n"
                  "  Ctrl-C stops execution; terminal stdin/stdout connect to FD06.\n";
@@ -82,7 +82,7 @@ void usage() {
 
 int main(int argc, char** argv) {
     try {
-        std::string file, boottrack, cpu = "6809";
+        std::string file, boottrack, floppy, cpu = "6809";
         unsigned long long load = 0, pc = 0, hz = 2000000, limit = 0;
         bool hasLoad = false, hasPc = false;
         int level = 0;
@@ -93,6 +93,7 @@ int main(int argc, char** argv) {
             const std::string v=argv[++i];
             if (a=="--binary") file=v;
             else if (a=="--boottrack") boottrack=v;
+            else if (a=="--floppy") floppy=v;
             else if (a=="--level") {
                 const auto n=number(v);
                 if(n!=1 && n!=2) throw std::invalid_argument("level must be 1 or 2");
@@ -121,6 +122,17 @@ int main(int argc, char** argv) {
         board.loadBootRom(rom);
         board.reset();
         board.setCpuClockHz(hz);
+        if (!floppy.empty()) {
+            std::ifstream disk(floppy,std::ios::binary|std::ios::ate);
+            if(!disk)throw std::runtime_error("cannot open floppy: "+floppy);
+            const auto size=disk.tellg();
+            if(size!=327680)throw std::runtime_error("2D floppy image must be 327680 bytes");
+            disk.seekg(0);
+            std::vector<BYTE> data(327680);
+            if(!disk.read(reinterpret_cast<char*>(data.data()),data.size()))
+                throw std::runtime_error("cannot read floppy: "+floppy);
+            board.loadFloppy2d(data);
+        }
         loadBinary(board,bootMode ? boottrack : file,load,
                    bootMode ? bootSize : 0);
         Terminal terminal;

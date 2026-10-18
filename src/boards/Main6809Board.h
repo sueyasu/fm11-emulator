@@ -23,6 +23,7 @@ public:
     void reset() override;
 
     void loadBootRom(const BootRomImage& image);
+    void loadFloppy2d(const std::vector<BYTE>& raw);
 
     // Board-local event inputs used by the main-system control registers.
     // Device boards can use these without reaching into the CPU core.
@@ -68,6 +69,7 @@ private:
     void refreshPtmIrq();
     BYTE mainIrqStatus();
     BYTE extendedIrqStatus();
+    void readFloppySector();
     BYTE serialStatus() const;
     void refreshSerialIrq();
     void writeIo(WORD address, BYTE value);
@@ -104,6 +106,10 @@ private:
     std::array<BYTE, 256> ioRegisters_{};
     std::array<BYTE, 256> ioOutputLatch_{};
     std::array<BYTE, 256> ioStatusLatch_{};
+    std::vector<BYTE> floppy2d_;
+    std::array<BYTE,256> floppySector_{};
+    unsigned floppyOffset_ = 256;
+    BYTE floppyStatus_ = 0;
     BYTE serialCommand_ = 0;
     std::deque<BYTE> serialInput_;
     std::deque<BYTE> serialOutput_;
