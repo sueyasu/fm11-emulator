@@ -14,6 +14,7 @@
 #include <stdexcept>
 #include <string>
 #include <poll.h>
+#include <chrono>
 #include <iomanip>
 #include <sstream>
 #include <termios.h>
@@ -115,7 +116,7 @@ int main(int argc, char** argv) {
         const bool bootMode = !boottrack.empty();
         if ((bootMode && (!file.empty() || hasLoad || hasPc || level==0)) ||
             (!bootMode && (file.empty() || !hasLoad || !hasPc || level!=0)) ||
-            pc>0xffff || (cpu!="6809" && cpu!="6309")) {usage();return 2;}
+            pc>0xffff || hz==0 || (cpu!="6809" && cpu!="6309")) {usage();return 2;}
         // FM-11 floppy IPL copies 17 (L1) or 21 (L2) 256-byte sectors
         // directly to these addresses, then jumps two bytes past the header.
         const unsigned long long bootBase = level==1 ? 0xeb00 : 0xe100;
@@ -158,13 +159,21 @@ int main(int argc, char** argv) {
             cfmakeraw(&uart);
             tcsetattr(slaveFd,TCSANOW,&uart);
         }
-        close(slaveFd);
+        // Keep the slave descriptor open so an unattached terminal cannot
+        // cause POLLHUP to spin the emulator's poll loop.
         std::signal(SIGINT,requestStop);
         std::signal(SIGTERM,requestStop);
         std::cout << "FM-11 headless monitor\nSerial: " << slavePath
                   << "\nCPU halted. Type help for commands.\n" << std::flush;
         bool running=false, quitting=false, inputOpen=true;
         unsigned long long count=0;
+        // Emulated cycles advance the PTM inside executeOne(). Pace those
+        // cycles against a monotonic host clock, rather than spin at full
+        // speed while the guest waits for an interrupt or console input.
+        using Clock=std::chrono::steady_clock;
+        auto epoch=Clock::now();
+        std::uint64_t pacedCycles=0;
+        auto restartPacing=[&]() { epoch=Clock::now(); pacedCycles=0; };
         std::string line;
         std::vector<BYTE> pendingTx;
         auto hex=[](unsigned v,int width) {
@@ -203,6 +212,7 @@ int main(int argc, char** argv) {
             loadBinary(board,bootMode ? boottrack : file,load,bootMode ? bootSize : 0);
             pendingTx.clear();
             count=0;
+            restartPacing();
         };
         auto command=[&](const std::string& text) {
             std::istringstream input(text);
@@ -212,6 +222,7 @@ int main(int argc, char** argv) {
                 std::cout << "c/continue, stop, s/step, r/regs, m/mem ADDRESS [LEN], "
                              "mp ADDRESS [LEN], reset, q/quit, h/help\n";
             } else if(cmd=="c"||cmd=="continue") {
+                restartPacing();
                 running=true;
                 std::cout << "CPU running (type stop to pause).\n";
             } else if(cmd=="stop") {
@@ -251,9 +262,20 @@ int main(int argc, char** argv) {
         };
         prompt();
         while(!stopping && !quitting) {
-            pollfd fds[2]={{STDIN_FILENO,short(inputOpen?POLLIN:0),0},
+            pollfd fds[2]={{inputOpen?STDIN_FILENO:-1,POLLIN,0},
                            {master,POLLIN,0}};
-            const int ready=poll(fds,2,running?0:-1);
+            // Run only when emulated time has not advanced beyond wall time.
+            // A short positive poll timeout yields the host CPU when ahead,
+            // while keeping monitor commands and PTY input responsive.
+            int timeout=-1;
+            if(running) {
+                const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    Clock::now()-epoch).count();
+                const auto due=static_cast<std::uint64_t>(
+                    (static_cast<long double>(pacedCycles)*1000000000.0L)/hz);
+                timeout=due>static_cast<std::uint64_t>(elapsed)?1:0;
+            }
+            const int ready=poll(fds,2,timeout);
             if(ready<0 && errno!=EINTR)throw std::runtime_error("poll failed");
             if(ready>0 && (fds[0].revents&(POLLIN|POLLHUP))) {
                 char data[256];
@@ -277,15 +299,26 @@ int main(int argc, char** argv) {
             }
             if(running) {
                 for(unsigned i=0;i<256 && running && !stopping;++i) {
+                    const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        Clock::now()-epoch).count();
+                    const auto due=static_cast<std::uint64_t>(
+                        (static_cast<long double>(pacedCycles)*1000000000.0L)/hz);
+                    if(due>static_cast<std::uint64_t>(elapsed))break;
                     if(limit && count>=limit) {
                         running=false;std::cout << "Instruction limit reached.\n";
                         prompt();break;
                     }
                     board.cpu().executeOne();++count;
+                    // All currently supported main CPUs expose instruction
+                    // timing through Sim09. Unverified opcodes report zero;
+                    // use a small nonzero fallback to avoid unbounded bursts.
+                    const auto cycles=dynamic_cast<CSim09&>(board.cpu()).LastInstructionCycles();
+                    pacedCycles+=cycles?cycles:4;
                 }
             }
             drain();
         }
+        close(slaveFd);
         close(master);
         return 0;
     } catch (const std::exception& ex) {

@@ -50,3 +50,4 @@ with tempfile.TemporaryDirectory() as directory:
         if proc.poll() is None:
             proc.kill()
             proc.wait()
+
