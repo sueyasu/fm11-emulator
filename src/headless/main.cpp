@@ -217,7 +217,18 @@ int main(int argc, char** argv) {
                     throw std::runtime_error("PTY write failed");
             }
         };
+        auto flushFloppy=[&]() {
+            if(floppy.empty() || !board.floppyDirty())return;
+            const auto bytes=board.floppyImage();
+            std::ofstream out(floppy,std::ios::binary|std::ios::trunc);
+            if(!out || !out.write(reinterpret_cast<const char*>(bytes.data()),bytes.size()))
+                throw std::runtime_error("cannot save floppy image: "+floppy);
+            out.close();
+            if(!out)throw std::runtime_error("cannot close floppy image: "+floppy);
+            board.clearFloppyDirty();
+        };
         auto resetGuest=[&]() {
+            flushFloppy();
             board.reset();
             board.setCpuClockHz(hz);
             loadBinary(board,bootMode ? boottrack : file,load,bootMode ? bootSize : 0);
@@ -236,7 +247,7 @@ int main(int argc, char** argv) {
                 running=true;
                 std::cout << "CPU running (type stop to pause).\n";
             } else if(cmd=="stop") {
-                running=false;std::cout << "CPU halted.\n";
+                running=false;flushFloppy();std::cout << "CPU halted.\n";
             } else if(cmd=="q"||cmd=="quit") {
                 quitting=true;
             } else if(cmd=="r"||cmd=="regs")showRegs();
@@ -337,6 +348,7 @@ int main(int argc, char** argv) {
                 }
             }
             drain();
+            flushFloppy();
             if (idleLog.is_open()) {
                 const auto now=Clock::now();
                 if(now-statsLast>=std::chrono::seconds(1)) {

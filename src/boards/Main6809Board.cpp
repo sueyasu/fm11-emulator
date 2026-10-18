@@ -110,6 +110,10 @@ void Main6809Board::loadFloppy2d(const std::vector<BYTE>& raw)
     if(raw.size()!=40u*2*16*256)
         throw std::invalid_argument("FM-11 2D raw image must be 327680 bytes");
     floppy2d_=raw;
+    floppyD88_.clear();
+    floppyD88Offsets_.fill(0);
+    floppyDirty_=false;
+    floppyWritePio_=false;
     floppyOffset_=256;
     floppyStatus_=0;
 }
@@ -137,6 +141,7 @@ void Main6809Board::loadFloppyD88(const std::vector<BYTE>& d88)
         throw std::invalid_argument("D88 is not a 2D disk image");
     std::vector<BYTE> raw(rawSize);
     std::array<bool,40*2*16> seen{};
+    std::array<std::size_t,40*2*16> offsets{};
     for (unsigned trackIndex=0; trackIndex<80; ++trackIndex) {
         const auto start=le32(0x20+trackIndex*4);
         if (!start)
@@ -165,6 +170,7 @@ void Main6809Board::loadFloppyD88(const std::vector<BYTE>& d88)
             if (seen[idx])
                 throw std::invalid_argument("D88 has duplicate sector IDs");
             seen[idx]=true;
+            offsets[idx]=cursor;
             std::copy_n(d88.begin()+cursor,length,raw.begin()+idx*256);
             cursor+=length;
         }
@@ -173,21 +179,69 @@ void Main6809Board::loadFloppyD88(const std::vector<BYTE>& d88)
         if (!present)
             throw std::invalid_argument("D88 is missing an FM-11 2D sector");
     loadFloppy2d(raw);
+    floppyD88_=d88;
+    floppyD88Offsets_=offsets;
 }
 
-void Main6809Board::readFloppySector()
+std::vector<BYTE> Main6809Board::floppyImage() const
+{
+    return floppyD88_.empty() ? floppy2d_ : floppyD88_;
+}
+
+bool Main6809Board::floppySectorOffset(std::size_t& offset)
 {
     const unsigned track=ioRegisters_[0x19];
     const unsigned side=ioRegisters_[0x1c]&1;
     const unsigned sector=ioRegisters_[0x1a];
     const unsigned drive=ioRegisters_[0x1d]&3;
     if(drive!=0 || track>=40 || sector==0 || sector>16 || floppy2d_.empty()) {
-        floppyStatus_=0x10; // record not found
+        floppyStatus_=0x10;
         floppyOffset_=256;
-        ioRegisters_[0x50] |= 0x40; // DMA error
+        ioRegisters_[0x50]|=0x40;
+        return false;
+    }
+    offset=((track*2+side)*16+(sector-1))*256;
+    return true;
+}
+
+void Main6809Board::writeFloppySector()
+{
+    std::size_t offset=0;
+    floppyWritePio_=false;
+    floppyStatus_=0;
+    floppyOffset_=256;
+    if(!floppySectorOffset(offset))return;
+    const bool dma=(ioRegisters_[0x50]&0x04)!=0;
+    if (!dma) {
+        floppyWritePio_=true;
+        floppyWriteOffset_=offset;
+        floppyOffset_=0;
+        floppyStatus_=0x02;
         return;
     }
-    const std::size_t offset=((track*2+side)*16+(sector-1))*256;
+    const unsigned count=(ioRegisters_[0x42]<<8)|ioRegisters_[0x43];
+    const std::uint32_t src=((ioRegisters_[0x94]&0x0f)<<16)|
+        (ioRegisters_[0x40]<<8)|ioRegisters_[0x41];
+    if((ioRegisters_[0x50]&0x01)==0 || count!=256 || src>memory_.size()-256) {
+        floppyStatus_=0x10;
+        ioRegisters_[0x50]|=0x40;
+        return;
+    }
+    for(unsigned i=0;i<256;++i)floppy2d_[offset+i]=readPhysical(src+i);
+    if(!floppyD88_.empty()) {
+        const std::size_t idx=offset/256;
+        std::copy_n(floppy2d_.begin()+offset,256,
+                    floppyD88_.begin()+floppyD88Offsets_[idx]);
+    }
+    floppyDirty_=true;
+    ioRegisters_[0x50]=static_cast<BYTE>((ioRegisters_[0x50]|0x80)&~0x40);
+}
+
+
+void Main6809Board::readFloppySector()
+{
+    std::size_t offset=0;
+    if(!floppySectorOffset(offset))return;
     for(unsigned i=0;i<256;++i)floppySector_[i]=floppy2d_[offset+i];
     floppyOffset_=0;
     floppyStatus_=0x02; // DRQ for programmed I/O
@@ -598,7 +652,23 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         break;
     case 0x18:
         if((value&0xf0)==0x80)readFloppySector();
-        else { floppyStatus_=0; floppyOffset_=256; }
+        else if((value&0xf0)==0xa0)writeFloppySector();
+        else { floppyStatus_=0; floppyOffset_=256; floppyWritePio_=false; }
+        break;
+    case 0x1b:
+        if(floppyWritePio_ && floppyOffset_<256) {
+            floppy2d_[floppyWriteOffset_+floppyOffset_++]=value;
+            if(floppyOffset_==256) {
+                if(!floppyD88_.empty()) {
+                    const std::size_t idx=floppyWriteOffset_/256;
+                    std::copy_n(floppy2d_.begin()+floppyWriteOffset_,256,
+                                floppyD88_.begin()+floppyD88Offsets_[idx]);
+                }
+                floppyWritePio_=false;
+                floppyStatus_=0;
+                floppyDirty_=true;
+            }
+        }
         break;
     case 0x50:
         ioRegisters_[reg]=static_cast<BYTE>(value&~0xc0);

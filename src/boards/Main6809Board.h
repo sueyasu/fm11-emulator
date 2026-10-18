@@ -25,6 +25,9 @@ public:
     void loadBootRom(const BootRomImage& image);
     void loadFloppy2d(const std::vector<BYTE>& raw);
     void loadFloppyD88(const std::vector<BYTE>& d88);
+    bool floppyDirty() const { return floppyDirty_; }
+    std::vector<BYTE> floppyImage() const;
+    void clearFloppyDirty() { floppyDirty_ = false; }
 
     // Board-local event inputs used by the main-system control registers.
     // Device boards can use these without reaching into the CPU core.
@@ -77,6 +80,8 @@ private:
     BYTE mainIrqStatus();
     BYTE extendedIrqStatus();
     void readFloppySector();
+    void writeFloppySector();
+    bool floppySectorOffset(std::size_t& offset);
     BYTE serialStatus() const;
     void refreshSerialIrq();
     void writeIo(WORD address, BYTE value);
@@ -114,6 +119,11 @@ private:
     std::array<BYTE, 256> ioOutputLatch_{};
     std::array<BYTE, 256> ioStatusLatch_{};
     std::vector<BYTE> floppy2d_;
+    std::vector<BYTE> floppyD88_;
+    std::array<std::size_t,40*2*16> floppyD88Offsets_{};
+    bool floppyDirty_ = false;
+    bool floppyWritePio_ = false;
+    std::size_t floppyWriteOffset_ = 0;
     std::array<BYTE,256> floppySector_{};
     unsigned floppyOffset_ = 256;
     BYTE floppyStatus_ = 0;

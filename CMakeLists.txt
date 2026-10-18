@@ -118,6 +118,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(main6809_floppy_read PRIVATE fm11_core)
     add_test(NAME main6809_floppy_read COMMAND main6809_floppy_read)
 
+    add_executable(main6809_floppy_write tests/main6809_floppy_write.cpp)
+    target_link_libraries(main6809_floppy_write PRIVATE fm11_core)
+    add_test(NAME main6809_floppy_write COMMAND main6809_floppy_write)
+
     add_executable(main6809_floppy_d88 tests/main6809_floppy_d88.cpp)
     target_link_libraries(main6809_floppy_d88 PRIVATE fm11_core)
     add_test(NAME main6809_floppy_d88 COMMAND main6809_floppy_d88)
