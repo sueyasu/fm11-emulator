@@ -87,3 +87,9 @@ requested `--clock` frequency (default 2 MHz) using a monotonic clock and
 a short host-side poll wait when ahead. This avoids the previous unlimited
 busy loop at an idle OS prompt. The guest CPU still executes its own wait
 loops; this is real-time throttling rather than guest idle-loop detection.
+
+The pacing loop now checks host time per **instruction batch** rather than
+per instruction. `speed` (alias `stats`) in the monitor reports executed
+instructions, emulated cycles, elapsed wall time, and effective MHz since
+the last `continue` or `reset`. Short poll sleeps and a catch-up limit
+keep interactive responses available even when the host is overloaded.
