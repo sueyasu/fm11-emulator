@@ -1,6 +1,7 @@
 #include "Main6809Board.h"
 
 #include <array>
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <csignal>
@@ -173,6 +174,8 @@ int main(int argc, char** argv) {
         using Clock=std::chrono::steady_clock;
         auto epoch=Clock::now();
         std::uint64_t pacedCycles=0;
+        // Do not let host suspension create an unbounded catch-up burst.
+        constexpr auto maxLag=std::chrono::milliseconds(25);
         auto restartPacing=[&]() { epoch=Clock::now(); pacedCycles=0; };
         std::string line;
         std::vector<BYTE> pendingTx;
@@ -220,13 +223,20 @@ int main(int argc, char** argv) {
             input >> cmd;
             if(cmd=="help"||cmd=="h"||cmd=="?") {
                 std::cout << "c/continue, stop, s/step, r/regs, m/mem ADDRESS [LEN], "
-                             "mp ADDRESS [LEN], reset, q/quit, h/help\n";
+                             "mp ADDRESS [LEN], speed, reset, q/quit, h/help\n";
             } else if(cmd=="c"||cmd=="continue") {
                 restartPacing();
                 running=true;
                 std::cout << "CPU running (type stop to pause).\n";
             } else if(cmd=="stop") {
                 running=false;std::cout << "CPU halted.\n";
+            } else if(cmd=="speed"||cmd=="stats") {
+                const double elapsed=std::chrono::duration<double>(Clock::now()-epoch).count();
+                const double effective=elapsed>0?pacedCycles/elapsed/1000000.0:0;
+                std::cout << "Executed=" << count << " cycles=" << pacedCycles
+                          << " elapsed=" << std::fixed << std::setprecision(3)
+                          << elapsed << "s effective=" << effective << " MHz"
+                          << " target=" << hz/1000000.0 << " MHz\n";
             } else if(cmd=="q"||cmd=="quit") {
                 quitting=true;
             } else if(cmd=="r"||cmd=="regs")showRegs();
@@ -264,16 +274,18 @@ int main(int argc, char** argv) {
         while(!stopping && !quitting) {
             pollfd fds[2]={{inputOpen?STDIN_FILENO:-1,POLLIN,0},
                            {master,POLLIN,0}};
-            // Run only when emulated time has not advanced beyond wall time.
-            // A short positive poll timeout yields the host CPU when ahead,
-            // while keeping monitor commands and PTY input responsive.
+            // Check wall time once per batch, never once per opcode. Use
+            // integer nanoseconds to keep throttle overhead low.
             int timeout=-1;
             if(running) {
-                const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    Clock::now()-epoch).count();
-                const auto due=static_cast<std::uint64_t>(
-                    (static_cast<long double>(pacedCycles)*1000000000.0L)/hz);
-                timeout=due>static_cast<std::uint64_t>(elapsed)?1:0;
+                const auto now=Clock::now();
+                const auto due=epoch+std::chrono::nanoseconds(
+                    static_cast<std::int64_t>((static_cast<long double>(pacedCycles)*1000000000.0L)/hz));
+                if(due>now) {
+                    // poll() has millisecond resolution; cap to 1ms to
+                    // preserve PTY and monitor responsiveness.
+                    timeout=1;
+                } else timeout=0;
             }
             const int ready=poll(fds,2,timeout);
             if(ready<0 && errno!=EINTR)throw std::runtime_error("poll failed");
@@ -298,22 +310,35 @@ int main(int argc, char** argv) {
                 if(n>0)for(ssize_t i=0;i<n;++i)board.queueSerialInput(data[i]);
             }
             if(running) {
-                for(unsigned i=0;i<256 && running && !stopping;++i) {
-                    const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        Clock::now()-epoch).count();
-                    const auto due=static_cast<std::uint64_t>(
-                        (static_cast<long double>(pacedCycles)*1000000000.0L)/hz);
-                    if(due>static_cast<std::uint64_t>(elapsed))break;
-                    if(limit && count>=limit) {
-                        running=false;std::cout << "Instruction limit reached.\n";
-                        prompt();break;
+                auto now=Clock::now();
+                // When the host was suspended or overloaded, skip missed
+                // wall-clock time instead of racing to catch up indefinitely.
+                const auto due=epoch+std::chrono::nanoseconds(
+                    static_cast<std::int64_t>((static_cast<long double>(pacedCycles)*1000000000.0L)/hz));
+                if(now>due+maxLag) {
+                    epoch=now-std::chrono::nanoseconds(
+                        static_cast<std::int64_t>((static_cast<long double>(pacedCycles)*1000000000.0L)/hz));
+                }
+                const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(now-epoch).count();
+                const auto allowed=static_cast<std::uint64_t>(
+                    (static_cast<long double>(elapsed)*hz)/1000000000.0L);
+                if(pacedCycles<=allowed) {
+                    const std::uint64_t budget=std::min<std::uint64_t>(
+                        allowed-pacedCycles+16, std::max<std::uint64_t>(hz/1000, 128));
+                    const std::uint64_t startCycles=pacedCycles;
+                    for(unsigned i=0;i<512 && !stopping && running &&
+                            pacedCycles-startCycles<budget;++i) {
+                        if(limit && count>=limit) {
+                            running=false;
+                            std::cout << "Instruction limit reached.\n";
+                            prompt();
+                            break;
+                        }
+                        board.cpu().executeOne();
+                        ++count;
+                        const auto cycles=dynamic_cast<CSim09&>(board.cpu()).LastInstructionCycles();
+                        pacedCycles+=cycles?cycles:4;
                     }
-                    board.cpu().executeOne();++count;
-                    // All currently supported main CPUs expose instruction
-                    // timing through Sim09. Unverified opcodes report zero;
-                    // use a small nonzero fallback to avoid unbounded bursts.
-                    const auto cycles=dynamic_cast<CSim09&>(board.cpu()).LastInstructionCycles();
-                    pacedCycles+=cycles?cycles:4;
                 }
             }
             drain();
