@@ -47,6 +47,10 @@ if(FM11_BUILD_TESTS)
                      ${CMAKE_CURRENT_SOURCE_DIR}/tests/main8088_opcode_inventory.py
                      ${CMAKE_CURRENT_SOURCE_DIR}/src/boards/Main8088Board.cpp)
 
+    add_executable(main8088_pic_priority tests/main8088_pic_priority.cpp)
+    target_link_libraries(main8088_pic_priority PRIVATE fm11_core)
+    add_test(NAME main8088_pic_priority COMMAND main8088_pic_priority)
+
     add_executable(mainv20_carry_repeat tests/mainv20_carry_repeat.cpp)
     target_link_libraries(mainv20_carry_repeat PRIVATE fm11_core)
     add_test(NAME mainv20_carry_repeat COMMAND mainv20_carry_repeat)

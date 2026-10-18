@@ -92,11 +92,22 @@ void Main8088Bus::requestIrq(unsigned line)
 }
 bool Main8088Bus::interruptPending() const
 {
-    return (picRequest_&BYTE(~picMask_)&BYTE(~picInService_))!=0;
+    // Fixed priority: IRQ0 is highest. An IRQ already in service blocks
+    // its own priority and all lower-priority requests until EOI.
+    BYTE eligible=BYTE(picRequest_&BYTE(~picMask_));
+    for(unsigned line=0;line<8;++line)if(picInService_&(1u<<line)) {
+        eligible=BYTE(eligible&((1u<<line)-1u));
+        break;
+    }
+    return eligible!=0;
 }
 BYTE Main8088Bus::acknowledgeInterrupt()
 {
-    const BYTE eligible=BYTE(picRequest_&BYTE(~picMask_)&BYTE(~picInService_));
+    BYTE eligible=BYTE(picRequest_&BYTE(~picMask_));
+    for(unsigned line=0;line<8;++line)if(picInService_&(1u<<line)) {
+        eligible=BYTE(eligible&((1u<<line)-1u));
+        break;
+    }
     for(unsigned line=0;line<8;++line)if(eligible&(1u<<line)) {
         picRequest_=BYTE(picRequest_&~(1u<<line));
         picInService_=BYTE(picInService_|(1u<<line));
