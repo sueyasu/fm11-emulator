@@ -52,15 +52,15 @@ unsigned long long number(const std::string& value) {
 }
 
 void loadBinary(Main6809Board& board, const std::string& file,
-                unsigned long long origin, unsigned long long exactSize = 0) {
+                unsigned long long origin, unsigned long long maxBootSize = 0) {
     if (origin > 0xffff) throw std::invalid_argument("load address out of range");
     std::ifstream in(file, std::ios::binary | std::ios::ate);
     if (!in) throw std::runtime_error("cannot open: " + file);
     const auto count = in.tellg();
     if (count < 0 || static_cast<unsigned long long>(count) > 0x10000 - origin)
         throw std::runtime_error("binary exceeds 64 KiB CPU address space");
-    if (exactSize && static_cast<unsigned long long>(count) != exactSize)
-        throw std::runtime_error("boottrack size does not match selected OS level");
+    if (maxBootSize && (count == 0 || static_cast<unsigned long long>(count) > maxBootSize))
+        throw std::runtime_error("boottrack size exceeds selected OS level or is empty");
     in.seekg(0);
     std::vector<char> bytes(static_cast<std::size_t>(count));
     if (!in.read(bytes.data(), count))
@@ -68,6 +68,10 @@ void loadBinary(Main6809Board& board, const std::string& file,
     for (std::size_t i = 0; i < bytes.size(); ++i)
         board.writeCpu(static_cast<WORD>(origin + i),
                        static_cast<BYTE>(bytes[i]));
+    // The IPL reads entire sectors. The disk-image builder zero-pads the
+    // final sector when the generated boottrack is shorter than that span.
+    for (std::size_t i = bytes.size(); maxBootSize && i < maxBootSize; ++i)
+        board.writeCpu(static_cast<WORD>(origin + i), 0);
 }
 
 void usage() {
