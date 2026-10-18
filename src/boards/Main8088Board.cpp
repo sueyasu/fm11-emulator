@@ -346,7 +346,11 @@ void Main8088Board::Core::executeOne()
     if(halted_)return;
     if(emulation8080_) {
         const BYTE instruction=fetch8();
-        if(instruction==0x00) return; // 8080 NOP
+        // On the 8080 these unused opcodes behave as one-byte NOPs.
+        // They must not consume an immediate operand or alter flags.
+        if(instruction==0x00 || instruction==0x08 || instruction==0x10 ||
+           instruction==0x18 || instruction==0x20 || instruction==0x28 ||
+           instruction==0x30 || instruction==0x38)return;
         if(instruction==0xed) {
             const BYTE subopcode=fetch8();
             if(subopcode==0xed) { // CALLN imm8: invoke native interrupt routine
