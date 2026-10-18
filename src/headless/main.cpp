@@ -13,7 +13,9 @@
 #include <iostream>
 #include <stdexcept>
 #include <string>
-#include <sys/select.h>
+#include <poll.h>
+#include <iomanip>
+#include <sstream>
 #include <termios.h>
 #include <unistd.h>
 #include <vector>
@@ -80,7 +82,7 @@ void usage() {
                  " [--floppy RAW-2D|D88] [--cpu 6809|6309] [--clock HZ] [--instructions COUNT]\n"
                  "  Boottrack starts AFTER the FM-11 floppy IPL has loaded it;\n"
                  "  there is no disk controller or subsequent disk I/O yet.\n"
-                 "  Ctrl-C stops execution; terminal stdin/stdout connect to FD06.\n";
+                 "  Monitor on stdin; guest serial is on a separate /dev/pts/N.\n\n";
 }
 }
 
@@ -141,36 +143,150 @@ int main(int argc, char** argv) {
         }
         loadBinary(board,bootMode ? boottrack : file,load,
                    bootMode ? bootSize : 0);
-        Terminal terminal;
+        // The original terminal is the monitor. The guest UART owns a PTY.
+        const int master=posix_openpt(O_RDWR|O_NOCTTY|O_NONBLOCK);
+        if(master<0 || grantpt(master)!=0 || unlockpt(master)!=0)
+            throw std::runtime_error("cannot create serial PTY");
+        const char* slave=ptsname(master);
+        if(!slave)throw std::runtime_error("cannot resolve serial PTY");
+        const std::string slavePath=slave;
+        // Configure the slave to raw mode even before a terminal connects.
+        const int slaveFd=open(slavePath.c_str(),O_RDWR|O_NOCTTY);
+        if(slaveFd<0)throw std::runtime_error("cannot open serial slave");
+        termios uart{};
+        if(tcgetattr(slaveFd,&uart)==0) {
+            cfmakeraw(&uart);
+            tcsetattr(slaveFd,TCSANOW,&uart);
+        }
+        close(slaveFd);
         std::signal(SIGINT,requestStop);
         std::signal(SIGTERM,requestStop);
-        bool inputOpen=true;
+        std::cout << "FM-11 headless monitor\\nSerial: " << slavePath
+                  << "\\nCPU halted. Type help for commands.\\n" << std::flush;
+        bool running=false, quitting=false, inputOpen=true;
         unsigned long long count=0;
-        while (!stopping && (limit==0 || count<limit)) {
-            // Nonblocking terminal input; EOF disables further polling.
-            if (inputOpen) {
-                fd_set fds;
-                FD_ZERO(&fds); FD_SET(STDIN_FILENO,&fds);
-                timeval timeout{};
-                if (select(STDIN_FILENO+1,&fds,nullptr,nullptr,&timeout)>0 &&
-                    FD_ISSET(STDIN_FILENO,&fds)) {
-                    unsigned char buf[128];
-                    const ssize_t n=read(STDIN_FILENO,buf,sizeof(buf));
-                    if(n==0) inputOpen=false;
-                    else if(n>0)
-                        for(ssize_t j=0;j<n;++j) board.queueSerialInput(buf[j]);
-                    else if(errno!=EINTR && errno!=EAGAIN) inputOpen=false;
+        std::string line;
+        std::vector<BYTE> pendingTx;
+        auto hex=[](unsigned v,int width) {
+            std::ostringstream o;
+            o << std::uppercase << std::hex << std::setw(width)
+              << std::setfill('0') << v;
+            return o.str();
+        };
+        auto showRegs=[&]() {
+            const auto& r=dynamic_cast<CSim09&>(board.cpu()).regs;
+            std::cout << "PC=" << hex(r.r.w.PC,4)
+                      << " S=" << hex(r.r.w.S,4)
+                      << " U=" << hex(r.r.w.U,4)
+                      << " X=" << hex(r.r.w.X,4)
+                      << " Y=" << hex(r.r.w.Y,4)
+                      << " A=" << hex(r.r.b.A,2)
+                      << " B=" << hex(r.r.b.B,2)
+                      << " DP=" << hex(r.DP,2)
+                      << " CC=" << hex(r.CC,2)
+                      << " MD=" << hex(r.MD,2) << "\\n";
+        };
+        auto prompt=[&]() { std::cout << "fm11> " << std::flush; };
+        auto drain=[&]() {
+            BYTE c;
+            while(board.takeSerialOutput(c))pendingTx.push_back(c);
+            if(!pendingTx.empty()) {
+                const ssize_t n=write(master,pendingTx.data(),pendingTx.size());
+                if(n>0)pendingTx.erase(pendingTx.begin(),pendingTx.begin()+n);
+                else if(n<0 && errno!=EAGAIN && errno!=EWOULDBLOCK && errno!=EIO)
+                    throw std::runtime_error("PTY write failed");
+            }
+        };
+        auto resetGuest=[&]() {
+            board.reset();
+            board.setCpuClockHz(hz);
+            loadBinary(board,bootMode ? boottrack : file,load,bootMode ? bootSize : 0);
+            pendingTx.clear();
+            count=0;
+        };
+        auto command=[&](const std::string& text) {
+            std::istringstream input(text);
+            std::string cmd,arg,nstr;
+            input >> cmd;
+            if(cmd=="help"||cmd=="h"||cmd=="?") {
+                std::cout << "c/continue, stop, s/step, r/regs, m/mem ADDRESS [LEN], "
+                             "mp ADDRESS [LEN], reset, q/quit, h/help\\n";
+            } else if(cmd=="c"||cmd=="continue") {
+                running=true;
+                std::cout << "CPU running (type stop to pause).\\n";
+            } else if(cmd=="stop") {
+                running=false;std::cout << "CPU halted.\\n";
+            } else if(cmd=="q"||cmd=="quit") {
+                quitting=true;
+            } else if(cmd=="r"||cmd=="regs")showRegs();
+            else if(cmd=="s"||cmd=="step") {
+                if(running)std::cout << "Stop CPU first.\\n";
+                else {board.cpu().executeOne();++count;drain();showRegs();}
+            } else if(cmd=="reset") {
+                if(running)std::cout << "Stop CPU first.\\n";
+                else {resetGuest();std::cout << "CPU reset and image reloaded.\\n";showRegs();}
+            } else if(cmd=="m"||cmd=="mem"||cmd=="mp") {
+                input >> arg >> nstr;
+                try {
+                    if(arg.empty())throw std::invalid_argument("address required");
+                    // Monitor addresses are hexadecimal by default.
+                    const auto addr=std::stoull(arg,nullptr,16);
+                    const auto len=nstr.empty()?64:std::stoull(nstr,nullptr,0);
+                    const auto max=(cmd=="mp")?0x100000ULL:0x10000ULL;
+                    if(addr>=max || len>256 || len>max-addr)
+                        throw std::out_of_range("memory range");
+                    for(unsigned long long i=0;i<len;++i) {
+                        if(i%16==0)std::cout << hex(unsigned(addr+i),cmd=="mp"?5:4) << ":";
+                        const BYTE b=(cmd=="mp")
+                            ?board.readPhysical(std::uint32_t(addr+i))
+                            :board.readCpu(WORD(addr+i));
+                        std::cout << " " << hex(b,2);
+                        if(i%16==15 || i+1==len)std::cout << "\\n";
+                    }
+                }catch(const std::exception&) {
+                    std::cout << "usage: m/mp HEXADDR [LENGTH, up to 256]\\n";
+                }
+            } else if(!cmd.empty())std::cout << "Unknown command. Type help.\\n";
+            if(!running && !quitting)prompt();
+        };
+        prompt();
+        while(!stopping && !quitting) {
+            pollfd fds[2]={{STDIN_FILENO,short(inputOpen?POLLIN:0),0},
+                           {master,POLLIN,0}};
+            const int ready=poll(fds,2,running?0:-1);
+            if(ready<0 && errno!=EINTR)throw std::runtime_error("poll failed");
+            if(ready>0 && (fds[0].revents&(POLLIN|POLLHUP))) {
+                char data[256];
+                const ssize_t n=read(STDIN_FILENO,data,sizeof(data));
+                if(n<=0) {
+                    inputOpen=false;
+                    if(!running)quitting=true;
+                } else for(ssize_t i=0;i<n;++i) {
+                    if(data[i]=='\\n'||data[i]=='\\r') {
+                        const std::string one=line;line.clear();
+                        command(one);
+                    } else if(data[i]==0x7f || data[i]=='\\b') {
+                        if(!line.empty())line.pop_back();
+                    } else if(line.size()<1024)line+=data[i];
                 }
             }
-            for(unsigned j=0;j<256 && !stopping &&
-                (limit==0 || count<limit);++j,++count) {
-                board.cpu().executeOne();
-                BYTE v;
-                while(board.takeSerialOutput(v))
-                    if (write(STDOUT_FILENO,&v,1)<0)
-                        throw std::runtime_error("terminal output failed");
+            if(ready>0 && (fds[1].revents&POLLIN)) {
+                BYTE data[256];
+                const ssize_t n=read(master,data,sizeof(data));
+                if(n>0)for(ssize_t i=0;i<n;++i)board.queueSerialInput(data[i]);
             }
+            if(running) {
+                for(unsigned i=0;i<256 && running && !stopping;++i) {
+                    if(limit && count>=limit) {
+                        running=false;std::cout << "Instruction limit reached.\\n";
+                        prompt();break;
+                    }
+                    board.cpu().executeOne();++count;
+                }
+            }
+            drain();
         }
+        close(master);
         return 0;
     } catch (const std::exception& ex) {
         std::cerr << "fm11-headless: " << ex.what() << '\n';

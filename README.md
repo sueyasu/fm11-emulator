@@ -63,3 +63,19 @@ not by assuming they appear in sector-number order. The initial
 read-only MiniFDC implementation requires a complete 40-track, two-sided,
 16-sector/side disk with 256-byte sectors and rejects malformed,
 missing, duplicated or non-2D sector records.
+
+## Host monitor and serial PTY
+
+The headless emulator starts **halted**. Its original terminal is a
+line-oriented monitor, not the guest console. Startup prints a serial
+PTY path, e.g. `/dev/pts/5`; connect from another terminal with
+`screen /dev/pts/5` (or `picocom`). The PTY slave is configured for
+raw 8-bit communication. Guest Ctrl-C passes through the serial PTY
+without terminating the emulator.
+
+At the `fm11>` prompt, use `c` to run, `stop` to pause,
+`s` to step one instruction, `r` for registers, `m HEXADDR [COUNT]`
+for CPU-logical memory, `mp HEXADDR [COUNT]` for physical memory,
+`reset` to reset and reload the supplied bootstrap, and `q` to quit.
+The monitor is available while the CPU runs. `--instructions` pauses the
+CPU at the limit instead of terminating the monitor.
