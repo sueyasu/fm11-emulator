@@ -54,3 +54,12 @@ starting at `$E102`. This bypasses ROM IPL/FDC sector loading only;
 it does **not** emulate any subsequent boot-time disk reads. Normal
 NitrOS-9 startup therefore requires further disk-controller support.
 Use `--instructions N` for bounded diagnostic runs.
+
+## D88 floppy images
+
+The headless runner accepts either a 327680-byte raw 2D image or a D88
+2D image via `--floppy`. D88 sectors are selected by their C/H/R IDs,
+not by assuming they appear in sector-number order. The initial
+read-only MiniFDC implementation requires a complete 40-track, two-sided,
+16-sector/side disk with 256-byte sectors and rejects malformed,
+missing, duplicated or non-2D sector records.

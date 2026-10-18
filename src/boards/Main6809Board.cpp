@@ -1,6 +1,7 @@
 #include "Main6809Board.h"
 
 #include <stdexcept>
+#include <algorithm>
 
 Main6809Board::Main6809Board(CpuType variant)
     : memory_(kPhysicalMemorySize, 0), core_(*this, variant)
@@ -102,6 +103,67 @@ void Main6809Board::loadFloppy2d(const std::vector<BYTE>& raw)
     floppy2d_=raw;
     floppyOffset_=256;
     floppyStatus_=0;
+}
+
+void Main6809Board::loadFloppyD88(const std::vector<BYTE>& d88)
+{
+    // D88: 0x2B0-byte disk header; 164 little-endian track offsets.
+    // Sector headers are 16 bytes and carry their own C/H/R/N ID.
+    constexpr std::size_t headerSize = 0x2b0;
+    constexpr std::size_t rawSize = 40u * 2 * 16 * 256;
+    if (d88.size() < headerSize)
+        throw std::invalid_argument("D88 header is truncated");
+    auto le16 = [&](std::size_t offset) -> unsigned {
+        return unsigned(d88[offset]) | (unsigned(d88[offset+1]) << 8);
+    };
+    auto le32 = [&](std::size_t offset) -> std::uint32_t {
+        return std::uint32_t(d88[offset]) |
+               (std::uint32_t(d88[offset+1]) << 8) |
+               (std::uint32_t(d88[offset+2]) << 16) |
+               (std::uint32_t(d88[offset+3]) << 24);
+    };
+    if (le32(0x1c) != d88.size())
+        throw std::invalid_argument("D88 disk size field does not match file");
+    if (d88[0x1b] != 0x00)
+        throw std::invalid_argument("D88 is not a 2D disk image");
+    std::vector<BYTE> raw(rawSize);
+    std::array<bool,40*2*16> seen{};
+    for (unsigned trackIndex=0; trackIndex<80; ++trackIndex) {
+        const auto start=le32(0x20+trackIndex*4);
+        if (!start)
+            continue;
+        if (start < headerSize || start > d88.size()-16)
+            throw std::invalid_argument("D88 track offset out of range");
+        std::size_t cursor=start;
+        const auto sectors=le16(cursor+4);
+        if (sectors==0 || sectors>256)
+            throw std::invalid_argument("D88 sector count is invalid");
+        for (unsigned i=0;i<sectors;++i) {
+            if (cursor > d88.size()-16)
+                throw std::invalid_argument("D88 sector header is truncated");
+            const unsigned c=d88[cursor], side=d88[cursor+1];
+            const unsigned sector=d88[cursor+2], n=d88[cursor+3];
+            const unsigned count=le16(cursor+4);
+            const unsigned length=le16(cursor+14);
+            if (count!=sectors || c!=trackIndex/2 ||
+                side!=trackIndex%2 || sector<1 || sector>16 ||
+                n!=1 || length!=256 || d88[cursor+8]!=0)
+                throw std::invalid_argument("D88 sector layout is not FM-11 2D");
+            cursor+=16;
+            if (length>d88.size()-cursor)
+                throw std::invalid_argument("D88 sector data is truncated");
+            const auto idx=(c*2+side)*16+(sector-1);
+            if (seen[idx])
+                throw std::invalid_argument("D88 has duplicate sector IDs");
+            seen[idx]=true;
+            std::copy_n(d88.begin()+cursor,length,raw.begin()+idx*256);
+            cursor+=length;
+        }
+    }
+    for (bool present:seen)
+        if (!present)
+            throw std::invalid_argument("D88 is missing an FM-11 2D sector");
+    loadFloppy2d(raw);
 }
 
 void Main6809Board::readFloppySector()

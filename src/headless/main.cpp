@@ -73,7 +73,7 @@ void loadBinary(Main6809Board& board, const std::string& file,
 void usage() {
     std::cerr << "usage: fm11-headless (--binary FILE --load ADDR --pc ADDR"
                  " | --boottrack FILE --level 1|2)"
-                 " [--floppy RAW-2D] [--cpu 6809|6309] [--clock HZ] [--instructions COUNT]\n"
+                 " [--floppy RAW-2D|D88] [--cpu 6809|6309] [--clock HZ] [--instructions COUNT]\n"
                  "  Boottrack starts AFTER the FM-11 floppy IPL has loaded it;\n"
                  "  there is no disk controller or subsequent disk I/O yet.\n"
                  "  Ctrl-C stops execution; terminal stdin/stdout connect to FD06.\n";
@@ -126,12 +126,14 @@ int main(int argc, char** argv) {
             std::ifstream disk(floppy,std::ios::binary|std::ios::ate);
             if(!disk)throw std::runtime_error("cannot open floppy: "+floppy);
             const auto size=disk.tellg();
-            if(size!=327680)throw std::runtime_error("2D floppy image must be 327680 bytes");
+            if(size<0 || size>4*1024*1024)
+                throw std::runtime_error("unsupported floppy image size");
             disk.seekg(0);
-            std::vector<BYTE> data(327680);
+            std::vector<BYTE> data(static_cast<std::size_t>(size));
             if(!disk.read(reinterpret_cast<char*>(data.data()),data.size()))
                 throw std::runtime_error("cannot read floppy: "+floppy);
-            board.loadFloppy2d(data);
+            if(data.size()==327680)board.loadFloppy2d(data);
+            else board.loadFloppyD88(data);
         }
         loadBinary(board,bootMode ? boottrack : file,load,
                    bootMode ? bootSize : 0);

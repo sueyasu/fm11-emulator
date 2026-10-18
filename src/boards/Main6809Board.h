@@ -24,6 +24,7 @@ public:
 
     void loadBootRom(const BootRomImage& image);
     void loadFloppy2d(const std::vector<BYTE>& raw);
+    void loadFloppyD88(const std::vector<BYTE>& d88);
 
     // Board-local event inputs used by the main-system control registers.
     // Device boards can use these without reaching into the CPU core.
