@@ -67,6 +67,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(mainv20_bitfield PRIVATE fm11_core)
     add_test(NAME mainv20_bitfield COMMAND mainv20_bitfield)
 
+    add_executable(mainv20_8080_retem_flags tests/mainv20_8080_retem_flags.cpp)
+    target_link_libraries(mainv20_8080_retem_flags PRIVATE fm11_core)
+    add_test(NAME mainv20_8080_retem_flags COMMAND mainv20_8080_retem_flags)
+
     add_executable(mainv20_8080_auxcarry tests/mainv20_8080_auxcarry.cpp)
     target_link_libraries(mainv20_8080_auxcarry PRIVATE fm11_core)
     add_test(NAME mainv20_8080_auxcarry COMMAND mainv20_8080_auxcarry)

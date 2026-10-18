@@ -357,7 +357,7 @@ void Main8088Board::Core::executeOne()
             if(subopcode==0xfd) { // RETEM: restore the native frame
                 ip_=pop16();
                 segments_[1]=pop16();
-                flags_=pop16();
+                flags_=WORD(pop16()|0x0002);
                 emulation8080_=false;
                 if(!interruptModeStack_.empty())interruptModeStack_.pop_back();
                 return;
