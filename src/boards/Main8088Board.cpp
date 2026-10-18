@@ -269,6 +269,58 @@ void Main8088Board::Core::executeOne()
         }
         break;
     }
+    case 0xa0: { // MOV AL,moffs8 (DS)
+        const WORD off=fetch16();
+        setReg8(0,bus_.readMemory(physical(segments_[3],off)));
+        break;
+    }
+    case 0xa1: { // MOV AX,moffs16
+        const WORD off=fetch16();
+        const BYTE lo=bus_.readMemory(physical(segments_[3],off));
+        const BYTE hi=bus_.readMemory(physical(segments_[3],WORD(off+1)));
+        regs_[0]=WORD(lo|(WORD(hi)<<8));
+        break;
+    }
+    case 0xa2: { // MOV moffs8,AL
+        const WORD off=fetch16();
+        bus_.writeMemory(physical(segments_[3],off),getReg8(0));
+        break;
+    }
+    case 0xa3: { // MOV moffs16,AX
+        const WORD off=fetch16();
+        bus_.writeMemory(physical(segments_[3],off),BYTE(regs_[0]));
+        bus_.writeMemory(physical(segments_[3],WORD(off+1)),BYTE(regs_[0]>>8));
+        break;
+    }
+    case 0x8d: { // LEA r16,m - register operand is invalid
+        const auto op=decodeModRm();
+        if(op.registerOperand)throw std::runtime_error("invalid LEA register operand");
+        regs_[op.reg]=op.offset;
+        break;
+    }
+    case 0x84: case 0x85: { // TEST r/m,reg - flags only
+        const auto op=decodeModRm();
+        const unsigned result=opcode==0x84
+            ? (read8(op)&getReg8(op.reg))
+            : (read16(op)&regs_[op.reg]);
+        setLogicFlags(result,opcode==0x84?8:16);
+        break;
+    }
+    case 0xa8: setLogicFlags(getReg8(0)&fetch8(),8);break; // TEST AL,imm8
+    case 0xa9: setLogicFlags(regs_[0]&fetch16(),16);break; // TEST AX,imm16
+    case 0x86: case 0x87: { // XCHG r/m,reg
+        const auto op=decodeModRm();
+        if(opcode==0x86) {
+            const BYTE old=read8(op);
+            write8(op,getReg8(op.reg));
+            setReg8(op.reg,old);
+        } else {
+            const WORD old=read16(op);
+            write16(op,regs_[op.reg]);
+            regs_[op.reg]=old;
+        }
+        break;
+    }
     case 0x88: {auto op=decodeModRm();write8(op,getReg8(op.reg));break;} // MOV r/m8,r8
     case 0x89: {auto op=decodeModRm();write16(op,regs_[op.reg]);break;} // MOV r/m16,r16
     case 0x8a: {auto op=decodeModRm();setReg8(op.reg,read8(op));break;} // MOV r8,r/m8
@@ -396,6 +448,13 @@ void Main8088Board::Core::executeOne()
             setArithmeticFlags(lhs,1,result,16,decrement);
             if(carry) flags_|=CF;else flags_&=WORD(~CF);
             regs_[index]=WORD(result);
+            break;
+        }
+        if(opcode>=0x91 && opcode<=0x97) {
+            const unsigned index=opcode-0x90;
+            const WORD previous=regs_[0];
+            regs_[0]=regs_[index];
+            regs_[index]=previous;
             break;
         }
         if(opcode>=0x50 && opcode<=0x57) {push16(regs_[opcode-0x50]);break;}

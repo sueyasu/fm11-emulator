@@ -302,5 +302,49 @@ int main()
     if(ir.ip()!=6 || ir.cs()!=0x1000)return 55;
     irqBoard.cpu().executeOne(); // NOP after HLT
     if(ir.ip()!=7)return 56;
+    // Moffs, LEA, TEST and XCHG, including a 16-bit moffs wrap at FFFFh.
+    Main8088Board data(CpuType::I8088);
+    data.bus().loadBootRom(fRom);
+    const BYTE dataCode[]={
+        0xba,0x00,0x10,           // MOV DX,1000
+        0x8e,0xda,                // MOV DS,DX
+        0xb8,0x34,0x12,           // MOV AX,1234
+        0xa3,0xff,0xff,           // MOV [DS:FFFF],AX
+        0xb8,0x00,0x00,           // MOV AX,0
+        0xa1,0xff,0xff,           // MOV AX,[DS:FFFF]
+        0xbb,0x10,0x00,           // MOV BX,0010
+        0xbe,0x02,0x00,           // MOV SI,0002
+        0x8d,0x40,0xfe,           // LEA AX,[BX+SI-2] = 0010
+        0xb8,0x0f,0xf0,           // MOV AX,F00F
+        0xa9,0x0f,0x00,           // TEST AX,000F -> nonzero
+        0x84,0xc0,                // TEST AL,AL -> nonzero
+        0x87,0xd8,                // XCHG AX,BX
+        0x93,                     // XCHG AX,BX again
+        0xa2,0x20,0x00,           // MOV [DS:0020],AL
+        0xa0,0x20,0x00,           // MOV AL,[DS:0020]
+        0xf4
+    };
+    for(unsigned i=0;i<sizeof(dataCode);++i)
+        data.bus().writeMemory(0x10000+i,dataCode[i]);
+    data.reset();data.cpu().executeOne();
+    auto& dc=static_cast<Main8088Board::Core&>(data.cpu());
+    for(unsigned i=0;i<5;++i)data.cpu().executeOne();
+    if(dc.reg(0)!=0x1234 || data.bus().readRam(0x1ffff)!=0x34 ||
+       data.bus().readRam(0x10000)!=0x12)return 57;
+    for(unsigned i=0;i<3;++i)data.cpu().executeOne();
+    if(dc.reg(0)!=0x0010)return 58;
+    data.cpu().executeOne(); // MOV AX,F00F
+    data.cpu().executeOne(); // TEST AX,000F
+    if((dc.flags()&0x40)!=0 || dc.reg(0)!=0xf00f)return 59;
+    data.cpu().executeOne(); // TEST AL,AL
+    if(dc.flags()&0x40)return 60;
+    data.cpu().executeOne(); // XCHG AX,BX
+    if(dc.reg(0)!=0x0010 || dc.reg(3)!=0xf00f)return 61;
+    data.cpu().executeOne(); // XCHG AX,BX
+    if(dc.reg(0)!=0xf00f || dc.reg(3)!=0x0010)return 62;
+    data.cpu().executeOne();data.cpu().executeOne(); // MOV moffs8 and back
+    if((dc.reg(0)&0xff)!=0x0f || data.bus().readRam(0x10020)!=0x0f)return 63;
+    data.cpu().executeOne();
+    if(!dc.halted())return 64;
     return 0;
 }
