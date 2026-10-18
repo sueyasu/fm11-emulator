@@ -962,6 +962,33 @@ void Main8088Board::Core::executeOne()
         (void)decodeModRm();
         break;
     }
+    case 0x60: { // NEC V20: PUSHA (80186-compatible)
+        if(variant_!=CpuType::NECV20)
+            throw std::runtime_error("opcode requires NEC V20");
+        const WORD originalSp=regs_[4];
+        for(unsigned index=0;index<8;++index)
+            push16(index==4?originalSp:regs_[index]);
+        break;
+    }
+    case 0x61: { // NEC V20: POPA; discard saved SP
+        if(variant_!=CpuType::NECV20)
+            throw std::runtime_error("opcode requires NEC V20");
+        for(int index=7;index>=0;--index) {
+            const WORD value=pop16();
+            if(index!=4)regs_[unsigned(index)]=value;
+        }
+        break;
+    }
+    case 0x68: // NEC V20: PUSH imm16
+        if(variant_!=CpuType::NECV20)
+            throw std::runtime_error("opcode requires NEC V20");
+        push16(fetch16());
+        break;
+    case 0x6a: // NEC V20: PUSH sign-extended imm8
+        if(variant_!=CpuType::NECV20)
+            throw std::runtime_error("opcode requires NEC V20");
+        push16(WORD(static_cast<std::int8_t>(fetch8())));
+        break;
     case 0x06: push16(segments_[0]);break; // PUSH ES
     case 0x0e: push16(segments_[1]);break; // PUSH CS
     case 0x16: push16(segments_[2]);break; // PUSH SS
