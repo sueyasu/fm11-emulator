@@ -27,12 +27,25 @@ public:
     void writeIo(WORD port, BYTE value);
     void setSystemIo(IoReader reader, IoWriter writer);
     BYTE readRam(std::uint32_t address) const;
+    // 8259A PIC on the 8088 card: ports 00h/01h.
+    void requestIrq(unsigned line);
+    bool interruptPending() const;
+    BYTE acknowledgeInterrupt();
+    BYTE interruptMask() const { return picMask_; }
 
 private:
     std::vector<BYTE> memory_;
     Rom bootRom_{};
     // The original FM-11 Sim86 uses the CPU-card SRAM for FCxx port accesses.
     std::array<BYTE,0x100> cardIoRam_{};
+    BYTE picMask_=0;
+    BYTE picRequest_=0;
+    BYTE picInService_=0;
+    BYTE picVectorBase_=0x08;
+    BYTE picReadIsr_=0;
+    BYTE picInitStep_=0;
+    bool picNeedsIcw4_=false;
+    bool picSingle_=false;
     IoReader systemReader_;
     IoWriter systemWriter_;
 };
