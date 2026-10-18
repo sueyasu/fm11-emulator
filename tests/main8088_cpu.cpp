@@ -202,7 +202,7 @@ int main()
         [&](WORD port,BYTE value) { ++writes; ports[port]=value; });
     const BYTE ioCode[]={
         0xb8,0x34,0x12,       // MOV AX,1234h
-        0xe7,0x18,            // OUT 18h,AX (not FDxx: unhandled by board)
+        0xe7,0x30,            // OUT 30h,AX (unmapped)
         0xba,0x18,0xfd,       // MOV DX,FD18h
         0xef,                 // OUT DX,AX to FD18/FD19
         0xb8,0x00,0x00,       // MOV AX,0
@@ -210,8 +210,8 @@ int main()
         0xb0,0x5a,           // MOV AL,5Ah
         0xee,                 // OUT DX,AL
         0xec,                 // IN AL,DX
-        0xe6,0x21,           // OUT 21h,AL (unmapped)
-        0xe4,0x21,           // IN AL,21h -> FFh (unmapped)
+        0xe6,0x31,           // OUT 31h,AL (unmapped)
+        0xe4,0x31,           // IN AL,31h -> FFh (unmapped)
         0xf4
     };
     for(unsigned i=0;i<sizeof(ioCode);++i)
@@ -242,7 +242,7 @@ int main()
     // Check the independent byte/word variants against unmapped ports.
     Main8088Board immediate(CpuType::NECV20);
     immediate.bus().loadBootRom(fRom);
-    const BYTE immCode[]={0xe4,0x11,0xe5,0x22,0xe6,0x33,0xe7,0x44,0xf4};
+    const BYTE immCode[]={0xe4,0x30,0xe5,0x32,0xe6,0x33,0xe7,0x44,0xf4};
     for(unsigned i=0;i<sizeof(immCode);++i)
         immediate.bus().writeMemory(0x10000+i,immCode[i]);
     immediate.reset();immediate.cpu().executeOne();
