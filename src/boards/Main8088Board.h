@@ -4,6 +4,7 @@
 #include <array>
 #include <cstdint>
 #include <stdexcept>
+#include <vector>
 
 // First-stage execution adapter for the original Sim86-style register layout.
 // Only ROM bring-up instructions are implemented here; unimplemented opcodes
@@ -74,6 +75,7 @@ public:
         WORD flags_=0x0002;
         bool halted_=false;
         bool emulation8080_=false;
+        std::vector<bool> interruptModeStack_{};
         unsigned irqInhibit_=0;
         int segmentOverride_=-1; // -1: default, otherwise ES/CS/SS/DS
     };

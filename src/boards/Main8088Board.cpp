@@ -21,6 +21,7 @@ void Main8088Board::Core::reset()
     flags_=0x0002;
     halted_=false;
     emulation8080_=false;
+    interruptModeStack_.clear();
     irqInhibit_=0;
     segmentOverride_=-1;
 }
@@ -59,6 +60,8 @@ WORD Main8088Board::Core::pop16()
 }
 void Main8088Board::Core::interrupt(BYTE vector)
 {
+    interruptModeStack_.push_back(emulation8080_);
+    emulation8080_=false; // NEC interrupt handlers execute native V20 code.
     push16(flags_);
     push16(segments_[1]);
     push16(ip_);
@@ -351,6 +354,7 @@ void Main8088Board::Core::executeOne()
                 segments_[1]=pop16();
                 flags_=pop16();
                 emulation8080_=false;
+                if(!interruptModeStack_.empty())interruptModeStack_.pop_back();
                 return;
             }
             throw std::runtime_error("NEC V20 8080 mode instruction not implemented");
@@ -619,7 +623,7 @@ void Main8088Board::Core::executeOne()
             bus_.writeIo(port,getReg8(0));
             return;
         }
-        case 0xfb: flags_|=0x0200;return; // EI (native IF)
+        case 0xfb: flags_|=0x0200;irqInhibit_=1;return; // EI: next instruction completes before IRQ
         case 0xf3: flags_&=WORD(~0x0200);return; // DI
         case 0xc3: ip_=fetch16();return; // JMP
         case 0xcd: { // CALL
@@ -1184,6 +1188,10 @@ void Main8088Board::Core::executeOne()
         ip_=pop16();
         segments_[1]=pop16();
         flags_=WORD(pop16()|0x0002);
+        if(!interruptModeStack_.empty()) {
+            emulation8080_=interruptModeStack_.back();
+            interruptModeStack_.pop_back();
+        }
         break;
     case 0x9c: push16(flags_);break; // PUSHF
     case 0x9d: flags_=WORD(pop16()|0x0002);break; // POPF
