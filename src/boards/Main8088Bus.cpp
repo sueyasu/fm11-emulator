@@ -123,6 +123,7 @@ void Main8088Bus::resetDma()
     dmaChannels_.fill(DmaChannel{});
     dmaCommand_=dmaMask_=dmaStatus_=dmaFlip_=dmaRequest_=0;
     dmaPriorityBase_=0;
+    dmaExternalRequest_=dmaBlockActive_=0;
 }
 BYTE Main8088Bus::readDma(WORD port) const
 {
@@ -166,13 +167,16 @@ void Main8088Bus::writeDma(WORD port,BYTE value)
     case 0x19:
         if(value&4)dmaRequest_|=BYTE(1u<<(value&3));
         else dmaRequest_&=BYTE(~(1u<<(value&3)));
-        dmaStatus_=BYTE((dmaStatus_&0x0f)|(dmaRequest_<<4));
+        dmaStatus_=BYTE((dmaStatus_&0x0f)|((dmaRequest_|dmaExternalRequest_)<<4));
         break;
     case 0x1a:
         if(value&4)dmaMask_|=BYTE(1u<<(value&3));
         else dmaMask_&=BYTE(~(1u<<(value&3)));
         break;
-    case 0x1b:dmaChannels_[value&3].mode=value;break;
+    case 0x1b:
+        dmaChannels_[value&3].mode=value;
+        dmaBlockActive_=BYTE(dmaBlockActive_&~(1u<<(value&3)));
+        break;
     case 0x1c:dmaFlip_=0;break;
     case 0x1d:
         resetDma();
@@ -191,6 +195,15 @@ void Main8088Bus::setDmaDevice(unsigned channel,DmaRead reader,DmaWrite writer)
     dmaReaders_[channel]=std::move(reader);
     dmaWriters_[channel]=std::move(writer);
 }
+void Main8088Bus::setDmaRequest(unsigned channel,bool asserted)
+{
+    if(channel>=dmaChannels_.size())throw std::out_of_range("DMA channel");
+    const BYTE bit=BYTE(1u<<channel);
+    if(asserted)dmaExternalRequest_=BYTE(dmaExternalRequest_|bit);
+    else dmaExternalRequest_=BYTE(dmaExternalRequest_&~bit);
+    dmaStatus_=BYTE((dmaStatus_&0x0f)|((dmaRequest_|dmaExternalRequest_)<<4));
+}
+
 bool Main8088Bus::serviceDma()
 {
     // 8237 transfer modes: 01=I/O to memory, 10=memory to I/O.
@@ -199,8 +212,14 @@ bool Main8088Bus::serviceDma()
     for(unsigned rank=0;rank<4;++rank) {
         const unsigned channel=(rank+((dmaCommand_&0x10)?dmaPriorityBase_:0u))&3u;
         const BYTE bit=BYTE(1u<<channel);
-        if(!(dmaRequest_&bit) || (dmaMask_&bit))continue;
+        if(dmaMask_&bit)continue;
         auto& ch=dmaChannels_[channel];
+        const unsigned transferMode=(ch.mode>>6)&3u;
+        const bool requested=((dmaRequest_|dmaExternalRequest_)&bit)!=0;
+        // In Block mode a DREQ pulse starts a transfer which runs to TC;
+        // Demand and Single modes require an asserted request per service.
+        if(!requested && !(transferMode==2 && (dmaBlockActive_&bit)))
+            continue;
         // Cascade mode delegates bus ownership to a secondary DMA
         // controller; it must not perform an ordinary byte transfer.
         if((ch.mode&0xc0u)==0xc0u)continue;
@@ -208,6 +227,7 @@ bool Main8088Bus::serviceDma()
         if((type==1 && !dmaReaders_[channel]) ||
            (type==2 && !dmaWriters_[channel]) ||
            type==3)continue;
+        if(transferMode==2)dmaBlockActive_=BYTE(dmaBlockActive_|bit);
         // The DMA bank byte supplies address bits 16-19 on a 20-bit bus.
         const std::uint32_t address=
             ((std::uint32_t(ch.bank&0x0f)<<16)|ch.address)&0xfffff;
@@ -221,7 +241,8 @@ bool Main8088Bus::serviceDma()
         if(terminal) {
             dmaStatus_=BYTE(dmaStatus_|bit);
             dmaRequest_=BYTE(dmaRequest_&~bit);
-            dmaStatus_=BYTE((dmaStatus_&0x0f)|(dmaRequest_<<4));
+            dmaBlockActive_=BYTE(dmaBlockActive_&~bit);
+            dmaStatus_=BYTE((dmaStatus_&0x0f)|((dmaRequest_|dmaExternalRequest_)<<4));
             if(ch.mode&0x10) {
                 // Auto-initialize restores the base address as well as count.
                 ch.address=ch.baseAddress;
