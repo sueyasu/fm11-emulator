@@ -25,6 +25,7 @@ public:
     void loadBootRom(const BootRomImage& image);
     void loadFloppy2d(const std::vector<BYTE>& raw);
     void loadFloppyD88(const std::vector<BYTE>& d88);
+    std::array<BYTE,256> floppyBootSector(unsigned sector) const;
     bool floppyDirty() const { return floppyDirty_; }
     std::vector<BYTE> floppyImage() const;
     void clearFloppyDirty() { floppyDirty_ = false; }

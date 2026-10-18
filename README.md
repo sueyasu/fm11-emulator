@@ -111,3 +111,19 @@ second. The samples contain executed instructions, SYNC/CWAI entries, measured
 host wait duration for each state (milliseconds), IRQ entries accepted by the
 CPU, PTM IRQ assertions, and current PC/CC/wait state. Counts are interval
 deltas, not cumulative. Compare samples at the NitrOS-9 shell prompt.
+
+## Boot from a 2D floppy image
+
+With an FM-11 NitrOS-9 bootable raw 2D or D88 floppy image, no separate
+boottrack file or OS level is needed:
+
+```sh
+./build/fm11-headless --floppy disk.d88 --cpu 6809
+```
+
+The FM-11 ROM's initial floppy load is simulated: track 0, side 0,
+sectors 1 and 2 are copied to `$0400` and execution starts at `$0400`.
+The IPL contained in those sectors then loads the boottrack using the
+emulated MiniFDC. This is a disk IPL handoff, not execution of the
+original FM-11 system ROM. `--boottrack FILE --level 1|2` remains available.
+The monitor's `reset` command reloads the disk IPL from the mounted image.

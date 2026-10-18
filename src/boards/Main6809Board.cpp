@@ -183,6 +183,15 @@ void Main6809Board::loadFloppyD88(const std::vector<BYTE>& d88)
     floppyD88Offsets_=offsets;
 }
 
+std::array<BYTE,256> Main6809Board::floppyBootSector(unsigned sector) const
+{
+    if(floppy2d_.empty() || sector<1 || sector>16)
+        throw std::invalid_argument("invalid IPL floppy sector");
+    std::array<BYTE,256> bytes{};
+    std::copy_n(floppy2d_.begin()+(sector-1)*256,256,bytes.begin());
+    return bytes;
+}
+
 std::vector<BYTE> Main6809Board::floppyImage() const
 {
     return floppyD88_.empty() ? floppy2d_ : floppyD88_;

@@ -6,6 +6,9 @@ int main() {
  const std::size_t off=((1*2+0)*16+0)*256;
  for(int i=0;i<256;++i)image[off+i]=static_cast<BYTE>(i^0x5a);
  b.loadFloppy2d(image);
+ { const auto ipl=b.floppyBootSector(1);
+   for(unsigned i=0;i<256;++i)if(ipl[i]!=image[i])return 7; }
+
  b.writeCpu(0xfd19,1); b.writeCpu(0xfd1c,0);
  b.writeCpu(0xfd1a,1); b.writeCpu(0xfd1d,0);
  b.writeCpu(0xfd50,0x00);

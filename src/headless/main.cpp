@@ -21,7 +21,7 @@
 #include <unistd.h>
 #include <vector>
 
-// This is a headless CPU/serial runner, not yet a complete FM-11 IPL.
+// Headless CPU/serial runner; floppy-only boot begins at the on-disk IPL.
 namespace {
 volatile std::sig_atomic_t stopping = 0;
 void requestStop(int) { stopping = 1; }
@@ -77,12 +77,23 @@ void loadBinary(Main6809Board& board, const std::string& file,
         board.writeCpu(static_cast<WORD>(origin + i), 0);
 }
 
+void loadFloppyIpl(Main6809Board& board) {
+    // The FM-11 boot ROM loads T0/H0/S1-S2 into $0400 and branches there.
+    // Execute the disk's own IPL, which reads the boottrack using MiniFDC.
+    for(unsigned sector=1;sector<=2;++sector) {
+        const auto bytes=board.floppyBootSector(sector);
+        const WORD base=static_cast<WORD>(0x0400+(sector-1)*256);
+        for(unsigned i=0;i<256;++i)
+            board.writeCpu(static_cast<WORD>(base+i),bytes[i]);
+    }
+}
+
 void usage() {
     std::cerr << "usage: fm11-headless (--binary FILE --load ADDR --pc ADDR"
-                 " | --boottrack FILE --level 1|2)"
+                 " | --boottrack FILE --level 1|2 | --floppy RAW-2D|D88)"
                  " [--floppy RAW-2D|D88] [--cpu 6809|6309] [--clock HZ] [--no-tx-irq] [--idle-log FILE] [--instructions COUNT]\n"
-                 "  Boottrack starts AFTER the FM-11 floppy IPL has loaded it;\n"
-                 "  there is no disk controller or subsequent disk I/O yet.\n"
+                 "  --floppy alone boots its on-disk IPL (T0/H0/S1-S2 at $0400).\n"
+                 "  --boottrack bypasses the IPL and requires --level.\n"
                  "  Monitor on stdin; guest serial is on a separate /dev/pts/N.\n\n";
 }
 }
@@ -116,14 +127,17 @@ int main(int argc, char** argv) {
             else {usage(); return 2;}
         }
         const bool bootMode = !boottrack.empty();
+        const bool floppyBootMode = !bootMode && file.empty() && !floppy.empty();
         if ((bootMode && (!file.empty() || hasLoad || hasPc || level==0)) ||
-            (!bootMode && (file.empty() || !hasLoad || !hasPc || level!=0)) ||
+            (floppyBootMode && (hasLoad || hasPc || level!=0)) ||
+            (!bootMode && !floppyBootMode && (file.empty() || !hasLoad || !hasPc || level!=0)) ||
             pc>0xffff || (cpu!="6809" && cpu!="6309")) {usage();return 2;}
         // FM-11 floppy IPL copies 17 (L1) or 21 (L2) 256-byte sectors
         // directly to these addresses, then jumps two bytes past the header.
         const unsigned long long bootBase = level==1 ? 0xeb00 : 0xe100;
         const unsigned long long bootSize = level==1 ? 17*256 : 21*256;
         if (bootMode) {load=bootBase; pc=bootBase+2;}
+        if (floppyBootMode) {pc=0x0400;}
         Main6809Board board(cpu=="6809" ? CpuType::MC6809 : CpuType::HD6309);
         Main6809Board::BootRomImage rom{};
         rom[0xffe]=static_cast<BYTE>(pc>>8);
@@ -145,8 +159,9 @@ int main(int argc, char** argv) {
             if(data.size()==327680)board.loadFloppy2d(data);
             else board.loadFloppyD88(data);
         }
-        loadBinary(board,bootMode ? boottrack : file,load,
-                   bootMode ? bootSize : 0);
+        if(floppyBootMode)loadFloppyIpl(board);
+        else loadBinary(board,bootMode ? boottrack : file,load,
+                        bootMode ? bootSize : 0);
         // The original terminal is the monitor. The guest UART owns a PTY.
         const int master=posix_openpt(O_RDWR|O_NOCTTY|O_NONBLOCK);
         if(master<0 || grantpt(master)!=0 || unlockpt(master)!=0)
@@ -231,7 +246,8 @@ int main(int argc, char** argv) {
             flushFloppy();
             board.reset();
             board.setCpuClockHz(hz);
-            loadBinary(board,bootMode ? boottrack : file,load,bootMode ? bootSize : 0);
+            if(floppyBootMode)loadFloppyIpl(board);
+            else loadBinary(board,bootMode ? boottrack : file,load,bootMode ? bootSize : 0);
             pendingTx.clear();
             count=0;
             previousWait=CSim09::WaitState::Running;
