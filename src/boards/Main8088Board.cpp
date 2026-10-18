@@ -827,6 +827,25 @@ void Main8088Board::Core::executeOne()
             break;
         }
         const BYTE ext=fetch8();
+        if(ext==0x28 || ext==0x2a) { // NEC ROL4 / ROR4, r/m8
+            const auto operand=decodeModRm();
+            if(operand.reg!=0)
+                throw std::runtime_error("invalid NEC nibble-rotate ModR/M");
+            const BYTE oldValue=read8(operand);
+            const BYTE al=getReg8(0);
+            const BYTE low=BYTE(al&0x0f);
+            const BYTE newValue=ext==0x28
+                ? BYTE((unsigned(oldValue)<<4)|low)
+                : BYTE((unsigned(low)<<4)|(oldValue>>4));
+            const BYTE newLow=ext==0x28 ? BYTE(oldValue>>4)
+                                          : BYTE(oldValue&0x0f);
+            // Save AL's low nibble first, since the r/m8 target may be AL.
+            // NEC leaves AL's high nibble undefined; keep it unchanged.
+            write8(operand,newValue);
+            setReg8(0,BYTE((al&0xf0)|newLow));
+            // Neither operation modifies FLAGS.
+            break;
+        }
         if(ext<0x10 || ext>0x1f)
             throw std::runtime_error("NEC V20 extended opcode not implemented");
         const unsigned operation=(ext>>1)&3; // TEST1, CLR1, SET1, NOT1

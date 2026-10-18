@@ -47,6 +47,10 @@ if(FM11_BUILD_TESTS)
                      ${CMAKE_CURRENT_SOURCE_DIR}/tests/main8088_opcode_inventory.py
                      ${CMAKE_CURRENT_SOURCE_DIR}/src/boards/Main8088Board.cpp)
 
+    add_executable(mainv20_nibble_rotate tests/mainv20_nibble_rotate.cpp)
+    target_link_libraries(mainv20_nibble_rotate PRIVATE fm11_core)
+    add_test(NAME mainv20_nibble_rotate COMMAND mainv20_nibble_rotate)
+
     add_executable(mainv20_bitops tests/mainv20_bitops.cpp)
     target_link_libraries(mainv20_bitops PRIVATE fm11_core)
     add_test(NAME mainv20_bitops COMMAND mainv20_bitops)
