@@ -39,7 +39,7 @@ public:
     using DmaWrite = std::function<void(BYTE)>;
     void setDmaDevice(unsigned channel,DmaRead reader,DmaWrite writer);
     // External level-sensitive DREQ input, independent of software requests.
-    void setDmaRequest(unsigned channel,bool asserted);
+    void setDmaRequest(unsigned channel,bool levelHigh);
     // Execute one requested DMA byte; returns false if no transfer can run.
     bool serviceDma();
 
@@ -59,7 +59,8 @@ private:
     bool picSingle_=false;
     std::array<DmaChannel,4> dmaChannels_{};
     BYTE dmaPriorityBase_=0;
-    BYTE dmaExternalRequest_=0, dmaBlockActive_=0;
+    BYTE dmaExternalRequest_=0, dmaExternalDriven_=0, dmaBlockActive_=0;
+    BYTE activeDmaRequests() const;
     BYTE dmaCommand_=0, dmaMask_=0, dmaStatus_=0, dmaFlip_=0, dmaRequest_=0;
     std::array<DmaRead,4> dmaReaders_{};
     std::array<DmaWrite,4> dmaWriters_{};
