@@ -76,7 +76,7 @@ def main():
         assert op in direct, f"missing explicit opcode {op:02X}"
     # V20-only instructions share the decoder's switch with 8088.
     # Their presence here does not imply acceptance by the 8088 core.
-    for op in (0x60, 0x61, 0x68, 0x69, 0x6a, 0x6b, 0xc8, 0xc9):
+    for op in (0x60, 0x61, 0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f, 0xc8, 0xc9):
         assert op in direct, f"missing V20 stack opcode {op:02X}"
     covered = direct | ranged | prefixes
     print("8088/V20 primary opcode dispatch inventory")

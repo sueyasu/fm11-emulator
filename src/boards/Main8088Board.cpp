@@ -360,10 +360,45 @@ void Main8088Board::Core::executeOne()
     // The emulated bus executes one instruction at a time; LOCK imposes
     // no additional atomicity until concurrent bus masters are modeled.
     (void)lockPrefix;
-    const bool stringOp=(opcode>=0xa4 && opcode<=0xa7) || (opcode>=0xaa && opcode<=0xaf);
+    const bool ioString=variant_==CpuType::NECV20 && opcode>=0x6c && opcode<=0x6f;
+    const bool stringOp=ioString || (opcode>=0xa4 && opcode<=0xa7) || (opcode>=0xaa && opcode<=0xaf);
     if(repeat && !stringOp)
         throw std::runtime_error("unsupported REP opcode");
     switch(opcode) {
+    case 0x6c: case 0x6d: case 0x6e: case 0x6f: {
+        if(variant_!=CpuType::NECV20)
+            throw std::runtime_error("opcode requires NEC V20");
+        const bool word=(opcode&1)!=0;
+        const bool input=(opcode&2)==0;
+        const WORD delta=WORD((flags_&0x0400) ? (word?-2:-1) : (word?2:1));
+        if(repeat && regs_[1]==0)break;
+        const WORD port=regs_[2];
+        if(input) {
+            const WORD value=word
+                ? WORD(bus_.readIo(port)|(WORD(bus_.readIo(WORD(port+1)))<<8))
+                : bus_.readIo(port);
+            const WORD offset=regs_[7];
+            bus_.writeMemory(physical(segments_[0],offset),BYTE(value));
+            if(word)bus_.writeMemory(physical(segments_[0],WORD(offset+1)),BYTE(value>>8));
+            regs_[7]=WORD(offset+delta);
+        } else {
+            const WORD offset=regs_[6];
+            const WORD segment=segments_[segmentOverride_>=0
+                ? unsigned(segmentOverride_):3u];
+            const WORD value=word
+                ? WORD(bus_.readMemory(physical(segment,offset)) |
+                    (WORD(bus_.readMemory(physical(segment,WORD(offset+1))))<<8))
+                : bus_.readMemory(physical(segment,offset));
+            bus_.writeIo(port,BYTE(value));
+            if(word)bus_.writeIo(WORD(port+1),BYTE(value>>8));
+            regs_[6]=WORD(offset+delta);
+        }
+        if(repeat) {
+            regs_[1]=WORD(regs_[1]-1);
+            if(regs_[1]!=0)ip_=opAddress;
+        }
+        break;
+    }
     case 0xa4: case 0xa5: case 0xa6: case 0xa7:
     case 0xaa: case 0xab: case 0xac: case 0xad:
     case 0xae: case 0xaf: {

@@ -47,6 +47,10 @@ if(FM11_BUILD_TESTS)
                      ${CMAKE_CURRENT_SOURCE_DIR}/tests/main8088_opcode_inventory.py
                      ${CMAKE_CURRENT_SOURCE_DIR}/src/boards/Main8088Board.cpp)
 
+    add_executable(mainv20_io_strings tests/mainv20_io_strings.cpp)
+    target_link_libraries(mainv20_io_strings PRIVATE fm11_core)
+    add_test(NAME mainv20_io_strings COMMAND mainv20_io_strings)
+
     add_executable(mainv20_imul_frame tests/mainv20_imul_frame.cpp)
     target_link_libraries(mainv20_imul_frame PRIVATE fm11_core)
     add_test(NAME mainv20_imul_frame COMMAND mainv20_imul_frame)
