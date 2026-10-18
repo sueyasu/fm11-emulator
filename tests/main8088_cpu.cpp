@@ -525,5 +525,48 @@ int main()
     if(shiftCore.reg(0)!=4)return 87;
     shifts.cpu().executeOne();shifts.cpu().executeOne();
     if(shiftCore.reg(0)!=0xc000 || (shiftCore.flags()&1)==0)return 88;
+    // F6/F7 group: unary, multiply, divide, and INT 0 on divide error.
+    Main8088Board group3(CpuType::I8088);
+    group3.bus().loadBootRom(fRom);
+    const BYTE group3Code[]={
+        0xb0,0x12,0xf6,0xd0,     // MOV AL,12 ; NOT AL => ED
+        0xf6,0xd8,               // NEG AL => 13
+        0xb0,0x10,0xb3,0x10,     // MOV AL,10 ; MOV BL,10
+        0xf6,0xe3,               // MUL BL => AX=0100, CF=OF=1
+        0xb3,0x03,0xf6,0xf3,     // MOV BL,3 ; DIV BL => AL=55 AH=1
+        0xb8,0x00,0x80,0xbb,0x02,0x00,
+        0xf7,0xeb,               // IMUL BX => DX:AX=FFFF:0000, overflow
+        0xb8,0x0c,0x00,0xba,0x00,0x00,
+        0xf7,0xf3,               // DIV BX => AX=6, DX=0
+        0xf4
+    };
+    for(unsigned i=0;i<sizeof(group3Code);++i)
+        group3.bus().writeMemory(0x10000+i,group3Code[i]);
+    group3.reset();group3.cpu().executeOne();
+    auto& g3=static_cast<Main8088Board::Core&>(group3.cpu());
+    group3.cpu().executeOne();group3.cpu().executeOne();
+    if((g3.reg(0)&255)!=0xed)return 89;
+    group3.cpu().executeOne();
+    if((g3.reg(0)&255)!=0x13 || !(g3.flags()&1))return 90;
+    group3.cpu().executeOne();group3.cpu().executeOne();group3.cpu().executeOne();
+    if(g3.reg(0)!=0x0100 || (g3.flags()&0x801)!=0x801)return 91;
+    group3.cpu().executeOne();group3.cpu().executeOne();
+    if(g3.reg(0)!=0x0155)return 92;
+    group3.cpu().executeOne();group3.cpu().executeOne();group3.cpu().executeOne();
+    if(g3.reg(0)!=0 || g3.reg(2)!=0xffff || (g3.flags()&0x801)!=0x801)return 93;
+    group3.cpu().executeOne();group3.cpu().executeOne();group3.cpu().executeOne();
+    if(g3.reg(0)!=6 || g3.reg(2)!=0)return 94;
+    Main8088Board divzero(CpuType::I8088);
+    divzero.bus().loadBootRom(fRom);
+    // Divide error vector 0 => 2000:0100
+    divzero.bus().writeMemory(0,0);divzero.bus().writeMemory(1,1);
+    divzero.bus().writeMemory(2,0);divzero.bus().writeMemory(3,0x20);
+    const BYTE divzeroCode[]={0xbc,0x00,0x80,0xb3,0,0xf6,0xf3};
+    for(unsigned i=0;i<sizeof(divzeroCode);++i)
+        divzero.bus().writeMemory(0x10000+i,divzeroCode[i]);
+    divzero.reset();divzero.cpu().executeOne();
+    divzero.cpu().executeOne();divzero.cpu().executeOne();
+    divzero.cpu().executeOne();
+    if(divzero.cpu().pc()!=0x20100)return 95;
     return 0;
 }

@@ -446,6 +446,95 @@ void Main8088Board::Core::executeOne()
         }
         break;
     }
+    case 0xf6: case 0xf7: {
+        // Group 3, width selected by opcode bit 0.
+        const auto op=decodeModRm();
+        const unsigned bits=(opcode&1)?16u:8u;
+        const unsigned mask=bits==8?0xffu:0xffffu;
+        const unsigned operand=readOperand(op,bits);
+        switch(op.reg) {
+        case 0: case 1: { // TEST (8086 also aliases /1)
+            const unsigned immediate=bits==8?fetch8():fetch16();
+            setLogicFlags(operand&immediate,bits);
+            break;
+        }
+        case 2: writeOperand(op,bits,(~operand)&mask);break; // NOT
+        case 3: { // NEG: zero minus operand
+            const unsigned result=(-operand)&mask;
+            setArithmeticFlags(0,operand,result,bits,true);
+            writeOperand(op,bits,result);
+            break;
+        }
+        case 4: { // MUL: unsigned
+            if(bits==8) {
+                const unsigned product=getReg8(0)*operand;
+                regs_[0]=WORD(product);
+                flags_=WORD((flags_&~(CF|OF))|((product>0xff)?(CF|OF):0));
+            } else {
+                const std::uint32_t product=std::uint32_t(regs_[0])*operand;
+                regs_[0]=WORD(product);
+                regs_[2]=WORD(product>>16);
+                flags_=WORD((flags_&~(CF|OF))|((regs_[2]!=0)?(CF|OF):0));
+            }
+            break;
+        }
+        case 5: { // IMUL: signed
+            if(bits==8) {
+                const int product=int(static_cast<std::int8_t>(getReg8(0)))*
+                                  int(static_cast<std::int8_t>(BYTE(operand)));
+                regs_[0]=WORD(product);
+                const bool overflow=product < -128 || product > 127;
+                flags_=WORD((flags_&~(CF|OF))|(overflow?(CF|OF):0));
+            } else {
+                const std::int32_t product=
+                    std::int32_t(static_cast<std::int16_t>(regs_[0]))*
+                    std::int32_t(static_cast<std::int16_t>(WORD(operand)));
+                regs_[0]=WORD(product);
+                regs_[2]=WORD(std::uint32_t(product)>>16);
+                const bool overflow=product < -32768 || product > 32767;
+                flags_=WORD((flags_&~(CF|OF))|(overflow?(CF|OF):0));
+            }
+            break;
+        }
+        case 6: { // DIV
+            if(operand==0){interrupt(0);break;}
+            if(bits==8) {
+                const unsigned quotient=regs_[0]/operand;
+                if(quotient>0xff){interrupt(0);break;}
+                const unsigned remainder=regs_[0]%operand;
+                regs_[0]=WORD((remainder<<8)|quotient);
+            } else {
+                const std::uint32_t dividend=(std::uint32_t(regs_[2])<<16)|regs_[0];
+                const std::uint32_t quotient=dividend/operand;
+                if(quotient>0xffff){interrupt(0);break;}
+                regs_[0]=WORD(quotient);
+                regs_[2]=WORD(dividend%operand);
+            }
+            break;
+        }
+        case 7: { // IDIV; INT 0 on zero divisor or quotient overflow
+            if(operand==0){interrupt(0);break;}
+            if(bits==8) {
+                const int dividend=static_cast<std::int16_t>(regs_[0]);
+                const int divisor=static_cast<std::int8_t>(BYTE(operand));
+                const int quotient=dividend/divisor;
+                if(quotient < -128 || quotient > 127){interrupt(0);break;}
+                const int remainder=dividend%divisor;
+                regs_[0]=WORD((unsigned(BYTE(remainder))<<8)|BYTE(quotient));
+            } else {
+                const std::uint32_t raw=(std::uint32_t(regs_[2])<<16)|regs_[0];
+                const std::int64_t dividend=static_cast<std::int32_t>(raw);
+                const std::int64_t divisor=static_cast<std::int16_t>(WORD(operand));
+                const std::int64_t quotient=dividend/divisor;
+                if(quotient < -32768 || quotient > 32767){interrupt(0);break;}
+                regs_[0]=WORD(quotient);
+                regs_[2]=WORD(dividend%divisor);
+            }
+            break;
+        }
+        }
+        break;
+    }
     case 0xfe: {
         const auto op=decodeModRm();
         if(op.reg>1)throw std::runtime_error("invalid FE opcode");
