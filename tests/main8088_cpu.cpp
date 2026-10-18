@@ -568,5 +568,40 @@ int main()
     divzero.cpu().executeOne();divzero.cpu().executeOne();
     divzero.cpu().executeOne();
     if(divzero.cpu().pc()!=0x20100)return 95;
+    // FF /0,/1,/2,/5,/6: INC, DEC, CALL near, JMP far, PUSH.
+    Main8088Board ff(CpuType::I8088);
+    ff.bus().loadBootRom(fRom);
+    const BYTE ffCode[]={
+        0xbc,0x00,0x80,       // MOV SP,8000
+        0xb8,0x30,0x00,       // MOV AX,0030
+        0xf9,                 // STC
+        0xff,0xc0,            // INC AX
+        0xff,0xc8,            // DEC AX
+        0xff,0xf0,            // PUSH AX
+        0x5b,                 // POP BX
+        0xff,0xd0,            // CALL AX
+        0xff,0x2e,0x00,0x02,  // JMP FAR [0200]
+        0xf4
+    };
+    for(unsigned i=0;i<sizeof(ffCode);++i)ff.bus().writeMemory(0x10000+i,ffCode[i]);
+    ff.bus().writeMemory(0x10030,0xc3); // near RET
+    ff.bus().writeMemory(0x200,0);ff.bus().writeMemory(0x201,1);
+    ff.bus().writeMemory(0x202,0);ff.bus().writeMemory(0x203,0x20);
+    ff.bus().writeMemory(0x20100,0xf4);
+    ff.reset();ff.cpu().executeOne();
+    auto& ffc=static_cast<Main8088Board::Core&>(ff.cpu());
+    ff.cpu().executeOne();ff.cpu().executeOne();ff.cpu().executeOne();
+    ff.cpu().executeOne();
+    if(ffc.reg(0)!=0x30 || (ffc.flags()&1)==0)return 96;
+    ff.cpu().executeOne();ff.cpu().executeOne();
+    if(ffc.reg(3)!=0x30 || ffc.reg(4)!=0x8000)return 97;
+    ff.cpu().executeOne();
+    if(ffc.ip()!=0x30 || ffc.reg(4)!=0x7ffe)return 98;
+    ff.cpu().executeOne();
+    if(ffc.ip()!=0x0010 || ffc.reg(4)!=0x8000)return 99;
+    ff.cpu().executeOne();
+    if(ff.cpu().pc()!=0x20100)return 100;
+    ff.cpu().executeOne();
+    if(!ffc.halted())return 101;
     return 0;
 }

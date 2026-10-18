@@ -535,6 +535,38 @@ void Main8088Board::Core::executeOne()
         }
         break;
     }
+    case 0xff: {
+        // Group 5: /0 INC /1 DEC /2 near CALL /3 far CALL,
+        //          /4 near JMP /5 far JMP /6 PUSH.
+        const auto op=decodeModRm();
+        if(op.reg==7)throw std::runtime_error("invalid FF group opcode");
+        if(op.reg==0 || op.reg==1) {
+            writeOperand(op,16,incDec(readOperand(op,16),16,op.reg==1));
+        } else if(op.reg==3 || op.reg==5) {
+            if(op.registerOperand)throw std::runtime_error("far indirect pointer requires memory");
+            const WORD offset=read16(op);
+            const WORD segment=WORD(bus_.readMemory(physical(segments_[op.segment],WORD(op.offset+2))) |
+                (WORD(bus_.readMemory(physical(segments_[op.segment],WORD(op.offset+3))))<<8));
+            if(op.reg==3) {
+                const WORD returnCs=segments_[1],returnIp=ip_;
+                push16(returnCs);
+                push16(returnIp);
+            }
+            segments_[1]=segment;
+            ip_=offset;
+        } else {
+            const WORD target=read16(op);
+            if(op.reg==2) {
+                push16(ip_);
+                ip_=target;
+            } else if(op.reg==4) {
+                ip_=target;
+            } else { // /6 PUSH r/m16
+                push16(target);
+            }
+        }
+        break;
+    }
     case 0xfe: {
         const auto op=decodeModRm();
         if(op.reg>1)throw std::runtime_error("invalid FE opcode");
