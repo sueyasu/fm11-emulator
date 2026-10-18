@@ -40,10 +40,11 @@ with tempfile.TemporaryDirectory() as directory:
         proc.stdin.write(b"c\n")
         data = read_until(slave, b"X", time.monotonic()+5)
         assert b"X" in data
-        proc.stdin.write(b"stop\nregs\nq\n")
+        proc.stdin.write(b"stop\nregs\nspeed\nq\n")
         out, err = proc.communicate(timeout=5)
         assert proc.returncode == 0, err
         assert b"PC=" in out, out
+        assert b"effective=" in out and b"target=" in out, out
     finally:
         if slave is not None:
             os.close(slave)
