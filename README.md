@@ -79,3 +79,11 @@ for CPU-logical memory, `mp HEXADDR [COUNT]` for physical memory,
 `reset` to reset and reload the supplied bootstrap, and `q` to quit.
 The monitor is available while the CPU runs. `--instructions` pauses the
 CPU at the limit instead of terminating the monitor.
+
+### CPU utilization
+
+The headless runner now paces emulated CPU instruction cycles against the
+requested `--clock` frequency (default 2 MHz) using a monotonic clock and
+a short host-side poll wait when ahead. This avoids the previous unlimited
+busy loop at an idle OS prompt. The guest CPU still executes its own wait
+loops; this is real-time throttling rather than guest idle-loop detection.
