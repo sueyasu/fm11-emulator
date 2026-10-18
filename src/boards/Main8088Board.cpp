@@ -343,11 +343,13 @@ void Main8088Board::Core::executeOne()
     const WORD opAddress=ip_;
     segmentOverride_=-1;
     BYTE repeat=0;
+    bool lockPrefix=false;
     BYTE opcode=0;
     unsigned prefixCount=0;
     while(true) {
         opcode=fetch8();
         if(opcode==0xf2 || opcode==0xf3)repeat=opcode;
+        else if(opcode==0xf0)lockPrefix=true;
         else if(opcode==0x26)segmentOverride_=0;
         else if(opcode==0x2e)segmentOverride_=1;
         else if(opcode==0x36)segmentOverride_=2;
@@ -355,6 +357,9 @@ void Main8088Board::Core::executeOne()
         else break;
         if(++prefixCount>=15)throw std::runtime_error("too many 8088 prefixes");
     }
+    // The emulated bus executes one instruction at a time; LOCK imposes
+    // no additional atomicity until concurrent bus masters are modeled.
+    (void)lockPrefix;
     const bool stringOp=(opcode>=0xa4 && opcode<=0xa7) || (opcode>=0xaa && opcode<=0xaf);
     if(repeat && !stringOp)
         throw std::runtime_error("unsupported REP opcode");
@@ -465,6 +470,27 @@ void Main8088Board::Core::executeOne()
         if(parityEven(BYTE(result)))flags_|=PF;
         break;
     }
+    case 0x8f: { // POP r/m16 (group /0)
+        const auto op=decodeModRm();
+        if(op.reg!=0)throw std::runtime_error("invalid 8F opcode");
+        // Decode effective address before popping. SP then advances before
+        // writing; POP [SP] is not an 8086 addressing form.
+        write16(op,pop16());
+        break;
+    }
+    case 0x9a: { // CALL ptr16:16, immediate offset followed by segment
+        const WORD offset=fetch16();
+        const WORD segment=fetch16();
+        const WORD returnCs=segments_[1],returnIp=ip_;
+        push16(returnCs);
+        push16(returnIp);
+        segments_[1]=segment;
+        ip_=offset;
+        break;
+    }
+    case 0x9b: break; // WAIT: no 8087 or TEST pin in this CPU-card model
+    case 0xcc: interrupt(3);break; // INT3
+    case 0xce: if(flags_&OF)interrupt(4);break; // INTO
     case 0x98: // CBW: sign-extend AL into AX (FLAGS unchanged)
         regs_[0]=WORD(static_cast<std::int16_t>(static_cast<std::int8_t>(BYTE(regs_[0]))));
         break;
