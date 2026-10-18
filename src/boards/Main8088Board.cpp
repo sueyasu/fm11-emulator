@@ -471,18 +471,18 @@ void Main8088Board::Core::executeOne()
         }
         // 8080 stack lives at DS:BP; the native-mode interrupt frame
         // remains on SS:SP so RETEM can restore it independently.
-        const push8080=[&](WORD value) {
+        const auto push8080=[&](WORD value) {
             regs_[5]=WORD(regs_[5]-2);
             bus_.writeMemory(physical(segments_[3],regs_[5]),BYTE(value));
             bus_.writeMemory(physical(segments_[3],WORD(regs_[5]+1)),BYTE(value>>8));
         };
-        const pop8080=[&]()->WORD {
+        const auto pop8080=[&]()->WORD {
             const WORD lo=bus_.readMemory(physical(segments_[3],regs_[5]));
             const WORD hi=bus_.readMemory(physical(segments_[3],WORD(regs_[5]+1)));
             regs_[5]=WORD(regs_[5]+2);
             return WORD(lo|(hi<<8));
         };
-        const condition8080=[&](unsigned cc)->bool {
+        const auto condition8080=[&](unsigned cc)->bool {
             switch(cc&7u) {
             case 0:return (flags_&ZF)==0; // NZ
             case 1:return (flags_&ZF)!=0; // Z
