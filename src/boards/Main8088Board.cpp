@@ -67,12 +67,81 @@ void Main8088Board::Core::interrupt(BYTE vector)
 }
 void Main8088Board::Core::irq(){if(flags_&0x0200)interrupt(8);}
 void Main8088Board::Core::nmi(){interrupt(2);}
+Main8088Board::Core::Operand Main8088Board::Core::decodeModRm()
+{
+    const BYTE modrm=fetch8();
+    const unsigned mod=modrm>>6, rm=modrm&7;
+    Operand op{};
+    op.reg=BYTE((modrm>>3)&7);
+    if(mod==3) {op.registerOperand=true;op.index=BYTE(rm);return op;}
+    WORD base=0;
+    bool stack=false;
+    switch(rm) {
+    case 0:base=WORD(regs_[3]+regs_[6]);break; // BX+SI
+    case 1:base=WORD(regs_[3]+regs_[7]);break; // BX+DI
+    case 2:base=WORD(regs_[5]+regs_[6]);stack=true;break; // BP+SI
+    case 3:base=WORD(regs_[5]+regs_[7]);stack=true;break; // BP+DI
+    case 4:base=regs_[6];break; // SI
+    case 5:base=regs_[7];break; // DI
+    case 6:
+        if(mod==0) base=fetch16();
+        else {base=regs_[5];stack=true;}
+        break; // disp16 or BP
+    case 7:base=regs_[3];break; // BX
+    }
+    if(mod==1) base=WORD(base+static_cast<std::int8_t>(fetch8()));
+    if(mod==2) base=WORD(base+fetch16());
+    op.address=physical(segments_[stack?2:3],base);
+    op.offset=base;
+    op.segment=BYTE(stack?2:3);
+    return op;
+}
+BYTE Main8088Board::Core::getReg8(unsigned index) const
+{
+    const WORD value=regs_[index&3];
+    return index<4 ? BYTE(value) : BYTE(value>>8);
+}
+void Main8088Board::Core::setReg8(unsigned index,BYTE value)
+{
+    WORD& r=regs_[index&3];
+    r=index<4 ? WORD((r&0xff00)|value) : WORD((r&0x00ff)|(WORD(value)<<8));
+}
+BYTE Main8088Board::Core::read8(const Operand& op) const
+{
+    return op.registerOperand ? getReg8(op.index) : bus_.readMemory(op.address);
+}
+WORD Main8088Board::Core::read16(const Operand& op) const
+{
+    if(op.registerOperand)return regs_[op.index];
+    const BYTE lo=bus_.readMemory(op.address);
+    const BYTE hi=bus_.readMemory(physical(segments_[op.segment],WORD(op.offset+1)));
+    return WORD(lo|(WORD(hi)<<8));
+}
+void Main8088Board::Core::write8(const Operand& op,BYTE value)
+{
+    if(op.registerOperand)setReg8(op.index,value);
+    else bus_.writeMemory(op.address,value);
+}
+void Main8088Board::Core::write16(const Operand& op,WORD value)
+{
+    if(op.registerOperand){regs_[op.index]=value;return;}
+    bus_.writeMemory(op.address,BYTE(value));
+    bus_.writeMemory(physical(segments_[op.segment],WORD(op.offset+1)),BYTE(value>>8));
+}
 void Main8088Board::Core::executeOne()
 {
     if(halted_)return;
     const WORD opAddress=ip_;
     const BYTE opcode=fetch8();
     switch(opcode) {
+    case 0x88: {auto op=decodeModRm();write8(op,getReg8(op.reg));break;} // MOV r/m8,r8
+    case 0x89: {auto op=decodeModRm();write16(op,regs_[op.reg]);break;} // MOV r/m16,r16
+    case 0x8a: {auto op=decodeModRm();setReg8(op.reg,read8(op));break;} // MOV r8,r/m8
+    case 0x8b: {auto op=decodeModRm();regs_[op.reg]=read16(op);break;} // MOV r16,r/m16
+    case 0xc6: {auto op=decodeModRm();if(op.reg!=0)throw std::runtime_error("invalid MOV C6 group");write8(op,fetch8());break;}
+    case 0xc7: {auto op=decodeModRm();if(op.reg!=0)throw std::runtime_error("invalid MOV C7 group");write16(op,fetch16());break;}
+    case 0x8c: {auto op=decodeModRm();if(op.reg>=4)throw std::runtime_error("invalid MOV segment");write16(op,segments_[op.reg]);break;}
+    case 0x8e: {auto op=decodeModRm();if(op.reg>=4 || op.reg==1)throw std::runtime_error("invalid MOV segment");segments_[op.reg]=read16(op);break;}
     case 0x90: // NOP
         break;
     case 0xf4: // HLT

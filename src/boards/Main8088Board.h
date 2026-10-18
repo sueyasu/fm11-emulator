@@ -39,6 +39,21 @@ public:
         void interrupt(BYTE vector);
         void push16(WORD value);
         WORD pop16();
+        struct Operand {
+            BYTE reg=0;
+            BYTE index=0;
+            BYTE segment=0;
+            WORD offset=0;
+            std::uint32_t address=0;
+            bool registerOperand=false;
+        };
+        Operand decodeModRm();
+        BYTE getReg8(unsigned index) const;
+        void setReg8(unsigned index,BYTE value);
+        BYTE read8(const Operand& op) const;
+        WORD read16(const Operand& op) const;
+        void write8(const Operand& op,BYTE value);
+        void write16(const Operand& op,WORD value);
         Main8088Bus& bus_;
         CpuType variant_;
         std::array<WORD,8> regs_{};
