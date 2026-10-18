@@ -201,6 +201,24 @@ unsigned Main8088Board::Core::alu(unsigned operation,unsigned lhs,unsigned rhs,u
     }
     return result&mask;
 }
+unsigned Main8088Board::Core::readOperand(const Operand& op,unsigned bits) const
+{
+    return bits==8?read8(op):read16(op);
+}
+void Main8088Board::Core::writeOperand(const Operand& op,unsigned bits,unsigned value)
+{
+    if(bits==8)write8(op,BYTE(value));
+    else write16(op,WORD(value));
+}
+unsigned Main8088Board::Core::incDec(unsigned lhs,unsigned bits,bool decrement)
+{
+    const unsigned mask=bits==8?0xffu:0xffffu;
+    const unsigned result=decrement?((lhs-1u)&mask):(lhs+1u);
+    const bool carry=(flags_&CF)!=0;
+    setArithmeticFlags(lhs,1,result,bits,decrement);
+    if(carry)flags_|=CF;else flags_&=WORD(~CF);
+    return result&mask;
+}
 bool Main8088Board::Core::jumpCondition(unsigned code) const
 {
     const bool cf=(flags_&CF)!=0,zf=(flags_&ZF)!=0;
@@ -278,30 +296,21 @@ void Main8088Board::Core::executeOne()
         }
         break;
     }
-    case 0x04: case 0x0c: case 0x24: case 0x2c: case 0x34: case 0x3c: {
-        const BYTE immediate=fetch8(), lhs=getReg8(0);
-        unsigned value=lhs;
-        switch(opcode) {
-        case 0x04: value=lhs+immediate;setArithmeticFlags(lhs,immediate,value,8,false);break;
-        case 0x2c: case 0x3c: value=(lhs-immediate)&0xff;setArithmeticFlags(lhs,immediate,value,8,true);break;
-        case 0x0c:value=lhs|immediate;setLogicFlags(value,8);break;
-        case 0x24:value=lhs&immediate;setLogicFlags(value,8);break;
-        case 0x34:value=lhs^immediate;setLogicFlags(value,8);break;
+    // Arithmetic/logic immediate-to-accumulator encodings have the pattern
+    // 00xxx10w: AL/AX selected by w, operation selected by bits 5..3.
+    case 0x04: case 0x05: case 0x0c: case 0x0d:
+    case 0x14: case 0x15: case 0x1c: case 0x1d:
+    case 0x24: case 0x25: case 0x2c: case 0x2d:
+    case 0x34: case 0x35: case 0x3c: case 0x3d: {
+        const bool word=(opcode&1)!=0;
+        const unsigned immediate=word?fetch16():fetch8();
+        const unsigned lhs=word?regs_[0]:getReg8(0);
+        const unsigned operation=(opcode>>3)&7;
+        const unsigned value=alu(operation,lhs,immediate,word?16:8);
+        if(operation!=7) {
+            if(word)regs_[0]=WORD(value);
+            else setReg8(0,BYTE(value));
         }
-        if(opcode!=0x3c)setReg8(0,BYTE(value));
-        break;
-    }
-    case 0x05: case 0x0d: case 0x25: case 0x2d: case 0x35: case 0x3d: {
-        const WORD immediate=fetch16(),lhs=regs_[0];
-        unsigned value=lhs;
-        switch(opcode) {
-        case 0x05:value=lhs+immediate;setArithmeticFlags(lhs,immediate,value,16,false);break;
-        case 0x2d: case 0x3d:value=(lhs-immediate)&0xffff;setArithmeticFlags(lhs,immediate,value,16,true);break;
-        case 0x0d:value=lhs|immediate;setLogicFlags(value,16);break;
-        case 0x25:value=lhs&immediate;setLogicFlags(value,16);break;
-        case 0x35:value=lhs^immediate;setLogicFlags(value,16);break;
-        }
-        if(opcode!=0x3d)regs_[0]=WORD(value);
         break;
     }
     case 0x98: // CBW: sign-extend AL into AX (FLAGS unchanged)
@@ -337,13 +346,7 @@ void Main8088Board::Core::executeOne()
     case 0xfe: {
         const auto op=decodeModRm();
         if(op.reg>1)throw std::runtime_error("invalid FE opcode");
-        const unsigned lhs=read8(op);
-        const bool dec=op.reg==1;
-        const unsigned value=dec?((lhs-1u)&255u):(lhs+1u);
-        const bool cf=(flags_&1)!=0;
-        setArithmeticFlags(lhs,1,value,8,dec);
-        if(cf)flags_|=1;else flags_&=WORD(~1);
-        write8(op,BYTE(value));
+        writeOperand(op,8,incDec(readOperand(op,8),8,op.reg==1));
         break;
     }
     case 0x80: case 0x81: case 0x82: case 0x83: {
@@ -351,11 +354,8 @@ void Main8088Board::Core::executeOne()
         const unsigned bits=(opcode==0x81 || opcode==0x83)?16u:8u;
         const unsigned immediate=opcode==0x81 ? fetch16() :
             opcode==0x83 ? WORD(static_cast<std::int8_t>(fetch8())) : fetch8();
-        const unsigned lhs=bits==8?read8(op):read16(op);
-        const unsigned result=alu(op.reg,lhs,immediate,bits);
-        if(op.reg!=7) {
-            if(bits==8)write8(op,BYTE(result));else write16(op,WORD(result));
-        }
+        const unsigned result=alu(op.reg,readOperand(op,bits),immediate,bits);
+        if(op.reg!=7)writeOperand(op,bits,result);
         break;
     }
     case 0xa0: { // MOV AL,moffs8 (DS)
@@ -530,13 +530,7 @@ void Main8088Board::Core::executeOne()
         }
         if(opcode>=0x40 && opcode<=0x4f) {
             const unsigned index=opcode&7;
-            const unsigned lhs=regs_[index];
-            const bool decrement=(opcode&8)!=0;
-            const bool carry=(flags_&CF)!=0;
-            const unsigned result=decrement ? ((lhs-1)&0xffffu) : lhs+1;
-            setArithmeticFlags(lhs,1,result,16,decrement);
-            if(carry) flags_|=CF;else flags_&=WORD(~CF);
-            regs_[index]=WORD(result);
+            regs_[index]=WORD(incDec(regs_[index],16,(opcode&8)!=0));
             break;
         }
         if(opcode>=0x91 && opcode<=0x97) {

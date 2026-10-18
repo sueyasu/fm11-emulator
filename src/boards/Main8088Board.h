@@ -58,6 +58,9 @@ public:
         void setLogicFlags(unsigned result,unsigned bits);
         bool jumpCondition(unsigned code) const;
         unsigned alu(unsigned operation,unsigned lhs,unsigned rhs,unsigned bits);
+        unsigned readOperand(const Operand& op,unsigned bits) const;
+        void writeOperand(const Operand& op,unsigned bits,unsigned value);
+        unsigned incDec(unsigned lhs,unsigned bits,bool decrement);
         Main8088Bus& bus_;
         CpuType variant_;
         std::array<WORD,8> regs_{};
