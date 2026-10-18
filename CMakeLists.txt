@@ -67,6 +67,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(mainv20_bitfield PRIVATE fm11_core)
     add_test(NAME mainv20_bitfield COMMAND mainv20_bitfield)
 
+    add_executable(mainv20_8080_nested_calln tests/mainv20_8080_nested_calln.cpp)
+    target_link_libraries(mainv20_8080_nested_calln PRIVATE fm11_core)
+    add_test(NAME mainv20_8080_nested_calln COMMAND mainv20_8080_nested_calln)
+
     add_executable(mainv20_8080_nop_aliases tests/mainv20_8080_nop_aliases.cpp)
     target_link_libraries(mainv20_8080_nop_aliases PRIVATE fm11_core)
     add_test(NAME mainv20_8080_nop_aliases COMMAND mainv20_8080_nop_aliases)

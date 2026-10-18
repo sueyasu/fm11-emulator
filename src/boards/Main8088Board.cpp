@@ -60,7 +60,8 @@ WORD Main8088Board::Core::pop16()
 }
 void Main8088Board::Core::interrupt(BYTE vector)
 {
-    interruptModeStack_.push_back(emulation8080_);
+    interruptModeStack_.push_back(emulation8080_ ? ModeFrame::EmulationInterrupt
+                                                 : ModeFrame::NativeInterrupt);
     emulation8080_=false; // NEC interrupt handlers execute native V20 code.
     push16(flags_);
     push16(segments_[1]);
@@ -359,11 +360,14 @@ void Main8088Board::Core::executeOne()
                 return;
             }
             if(subopcode==0xfd) { // RETEM: restore the native frame
+                if(interruptModeStack_.empty() ||
+                   interruptModeStack_.back()!=ModeFrame::Brkem)
+                    throw std::runtime_error("RETEM without matching BRKEM");
                 ip_=pop16();
                 segments_[1]=pop16();
                 flags_=WORD(pop16()|0x0002);
                 emulation8080_=false;
-                if(!interruptModeStack_.empty())interruptModeStack_.pop_back();
+                interruptModeStack_.pop_back();
                 return;
             }
             throw std::runtime_error("NEC V20 8080 mode instruction not implemented");
@@ -1200,7 +1204,9 @@ void Main8088Board::Core::executeOne()
         segments_[1]=pop16();
         flags_=WORD(pop16()|0x0002);
         if(!interruptModeStack_.empty()) {
-            emulation8080_=interruptModeStack_.back();
+            if(interruptModeStack_.back()==ModeFrame::Brkem)
+                throw std::runtime_error("IRET cannot unwind BRKEM frame");
+            emulation8080_=interruptModeStack_.back()==ModeFrame::EmulationInterrupt;
             interruptModeStack_.pop_back();
         }
         break;
@@ -1225,6 +1231,7 @@ void Main8088Board::Core::executeOne()
         if(ext==0xff) { // BRKEM imm8: INT-style transfer into 8080 mode
             const BYTE vector=fetch8();
             interrupt(vector);
+            interruptModeStack_.back()=ModeFrame::Brkem;
             emulation8080_=true;
             break;
         }
