@@ -27,6 +27,11 @@ if(UNIX)
 endif()
 
 if(FM11_BUILD_TESTS)
+    if(UNIX)
+        add_test(NAME headless_boottrack
+                 COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/headless_boottrack.sh
+                         $<TARGET_FILE:fm11-headless>)
+    endif()
     enable_testing()
 
     add_executable(core_smoke tests/core_smoke.cpp)
