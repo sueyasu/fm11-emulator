@@ -415,6 +415,56 @@ void Main8088Board::Core::executeOne()
         }
         break;
     }
+    case 0x27: case 0x2f: { // DAA/DAS: decimal adjust AL
+        const unsigned original=getReg8(0);
+        const bool oldAf=(flags_&AF)!=0, oldCf=(flags_&CF)!=0;
+        const bool subtract=opcode==0x2f;
+        const bool adjustLow=(original&15)>9 || oldAf;
+        unsigned result=original;
+        if(adjustLow)result=subtract?(result-6u)&255u:(result+6u)&255u;
+        // Intel's 8086 DAA/DAS high-digit adjustment is based on
+        // the original AL, not the value after the low-digit correction.
+        const bool adjustHigh=original>0x99 || oldCf;
+        if(adjustHigh)result=subtract?(result-0x60u)&255u:(result+0x60u)&255u;
+        flags_=WORD(flags_&~(CF|AF|SF|ZF|PF));
+        if(adjustLow)flags_|=AF;
+        if(adjustHigh)flags_|=CF;
+        if(result&0x80)flags_|=SF;
+        if(result==0)flags_|=ZF;
+        if(parityEven(BYTE(result)))flags_|=PF;
+        setReg8(0,BYTE(result));
+        break;
+    }
+    case 0x37: case 0x3f: { // AAA/AAS: unpacked decimal correction
+        const bool adjust=(getReg8(0)&15)>9 || (flags_&AF);
+        if(adjust) {
+            regs_[0]=WORD(regs_[0]+(opcode==0x37?0x0106u:0xfefau));
+            flags_|=WORD(AF|CF);
+        } else flags_&=WORD(~(AF|CF));
+        setReg8(0,BYTE(getReg8(0)&15));
+        break;
+    }
+    case 0xd4: { // AAM imm8 (normally 0Ah); divisor zero faults
+        const unsigned base=fetch8();
+        if(base==0){interrupt(0);break;}
+        const unsigned original=getReg8(0);
+        regs_[0]=WORD(((original/base)<<8)|(original%base));
+        flags_=WORD(flags_&~(SF|ZF|PF));
+        if(getReg8(0)&0x80)flags_|=SF;
+        if(getReg8(0)==0)flags_|=ZF;
+        if(parityEven(getReg8(0)))flags_|=PF;
+        break;
+    }
+    case 0xd5: { // AAD imm8 (normally 0Ah)
+        const unsigned base=fetch8();
+        const unsigned result=(getReg8(4)*base+getReg8(0))&255u;
+        regs_[0]=WORD(result); // AH = 0
+        flags_=WORD(flags_&~(SF|ZF|PF));
+        if(result&0x80)flags_|=SF;
+        if(result==0)flags_|=ZF;
+        if(parityEven(BYTE(result)))flags_|=PF;
+        break;
+    }
     case 0x98: // CBW: sign-extend AL into AX (FLAGS unchanged)
         regs_[0]=WORD(static_cast<std::int16_t>(static_cast<std::int8_t>(BYTE(regs_[0]))));
         break;

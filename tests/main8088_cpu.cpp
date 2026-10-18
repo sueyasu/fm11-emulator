@@ -677,5 +677,33 @@ int main()
     if((fl.reg(0)&255)!=0x5a)return 111;
     farload.cpu().executeOne();farload.cpu().executeOne();
     if((fl.reg(0)&255)!=0xa5)return 112;
+    // Decimal/ASCII adjustments: DAA/DAS, AAA/AAS, AAM/AAD.
+    Main8088Board decimal(CpuType::I8088);
+    decimal.bus().loadBootRom(fRom);
+    const BYTE decimalCode[]={
+        0xb0,0x9b,0x27,           // DAA => AL=01 CF=AF=1
+        0xb0,0x9b,0x2f,           // DAS => AL=35 CF=AF=1
+        0xb8,0x0a,0x00,0x37,      // AAA => AX=0100 CF=AF=1
+        0xb8,0x0a,0x02,0x3f,      // AAS => AX=0104 CF=AF=1
+        0xb0,0x2a,0xd4,0x0a,      // AAM 10 => AH=4 AL=2
+        0xd5,0x0a,               // AAD 10 => AL=42 AH=0
+        0xf4
+    };
+    for(unsigned i=0;i<sizeof(decimalCode);++i)
+        decimal.bus().writeMemory(0x10000+i,decimalCode[i]);
+    decimal.reset();decimal.cpu().executeOne();
+    auto& dc=static_cast<Main8088Board::Core&>(decimal.cpu());
+    decimal.cpu().executeOne();decimal.cpu().executeOne();
+    if((dc.reg(0)&255)!=0x01 || (dc.flags()&0x11)!=0x11)return 113;
+    decimal.cpu().executeOne();decimal.cpu().executeOne();
+    if((dc.reg(0)&255)!=0x35 || (dc.flags()&0x11)!=0x11)return 114;
+    decimal.cpu().executeOne();decimal.cpu().executeOne();
+    if(dc.reg(0)!=0x0100 || (dc.flags()&0x11)!=0x11)return 115;
+    decimal.cpu().executeOne();decimal.cpu().executeOne();
+    if(dc.reg(0)!=0x0104 || (dc.flags()&0x11)!=0x11)return 116;
+    decimal.cpu().executeOne();decimal.cpu().executeOne();
+    if(dc.reg(0)!=0x0402)return 117;
+    decimal.cpu().executeOne();
+    if(dc.reg(0)!=42)return 118;
     return 0;
 }
