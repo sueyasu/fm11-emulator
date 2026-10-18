@@ -349,6 +349,8 @@ void Main8088Board::Core::executeOne()
     while(true) {
         opcode=fetch8();
         if(opcode==0xf2 || opcode==0xf3)repeat=opcode;
+        else if((opcode==0x64 || opcode==0x65) && variant_==CpuType::NECV20)
+            repeat=opcode;
         else if(opcode==0xf0)lockPrefix=true;
         else if(opcode==0x26)segmentOverride_=0;
         else if(opcode==0x2e)segmentOverride_=1;
@@ -364,6 +366,9 @@ void Main8088Board::Core::executeOne()
     const bool stringOp=ioString || (opcode>=0xa4 && opcode<=0xa7) || (opcode>=0xaa && opcode<=0xaf);
     if(repeat && !stringOp)
         throw std::runtime_error("unsupported REP opcode");
+    if((repeat==0x64 || repeat==0x65) &&
+       !(opcode==0xa6 || opcode==0xa7 || opcode==0xae || opcode==0xaf))
+        throw std::runtime_error("REPC/REPNC requires a comparison string opcode");
     switch(opcode) {
     case 0x6c: case 0x6d: case 0x6e: case 0x6f: {
         if(variant_!=CpuType::NECV20)
@@ -433,8 +438,12 @@ void Main8088Board::Core::executeOne()
         if(mov || cmp || stos || scas)regs_[7]=WORD(regs_[7]+delta);
         if(repeat) {
             regs_[1]=WORD(regs_[1]-1);
-            if(regs_[1]!=0 && ((!cmp && !scas) ||
-                 (((flags_&0x0040)!=0)==(repeat==0xf3))))ip_=opAddress;
+            const bool carryRepeat=repeat==0x64 || repeat==0x65;
+            const bool continueRepeat=carryRepeat
+                ? (((flags_&CF)!=0)==(repeat==0x65))
+                : ((!cmp && !scas) ||
+                   (((flags_&ZF)!=0)==(repeat==0xf3)));
+            if(regs_[1]!=0 && continueRepeat)ip_=opAddress;
         }
         break;
     }
