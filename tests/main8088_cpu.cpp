@@ -591,8 +591,10 @@ int main()
     ff.reset();ff.cpu().executeOne();
     auto& ffc=static_cast<Main8088Board::Core&>(ff.cpu());
     ff.cpu().executeOne();ff.cpu().executeOne();ff.cpu().executeOne();
-    ff.cpu().executeOne();
-    if(ffc.reg(0)!=0x30 || (ffc.flags()&1)==0)return 96;
+    ff.cpu().executeOne(); // INC AX => 0031
+    if(ffc.reg(0)!=0x31 || (ffc.flags()&1)==0)return 96;
+    ff.cpu().executeOne(); // DEC AX => 0030
+    if(ffc.reg(0)!=0x30 || (ffc.flags()&1)==0)return 102;
     ff.cpu().executeOne();ff.cpu().executeOne();
     if(ffc.reg(3)!=0x30 || ffc.reg(4)!=0x8000)return 97;
     ff.cpu().executeOne();

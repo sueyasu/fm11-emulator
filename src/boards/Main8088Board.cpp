@@ -383,8 +383,8 @@ void Main8088Board::Core::executeOne()
         if(mov || cmp || stos || scas)regs_[7]=WORD(regs_[7]+delta);
         if(repeat) {
             regs_[1]=WORD(regs_[1]-1);
-            if(regs_[1]!=0 && (!cmp && !scas ||
-                 ((flags_&0x0040)!=0)==(repeat==0xf3)))ip_=opAddress;
+            if(regs_[1]!=0 && ((!cmp && !scas) ||
+                 (((flags_&0x0040)!=0)==(repeat==0xf3))))ip_=opAddress;
         }
         break;
     }
