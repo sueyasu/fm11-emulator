@@ -20,7 +20,9 @@ int main()
         0x3e,0x99, // MVI A,99
         0xc6,0x01, // ADI 01 => 9A
         0x27,      // DAA => 00, carry
-        0x3e,0x00, // MVI A,00 (CF retained)
+        0x3e,0x00, // MVI A,00
+        0xee,0x00, // XRI 00: clear AC and CY
+        0x37,      // STC: CY=1, AC=0
         0x27,      // DAA => 60 (carry retained)
         0xed,0xfd // RETEM
     };
@@ -32,6 +34,7 @@ int main()
     if((cpu.reg(0)&255)!=0x10 || (cpu.flags()&1))return 1;
     board.cpu().executeOne();board.cpu().executeOne();board.cpu().executeOne();
     if((cpu.reg(0)&255)!=0 || (cpu.flags()&0x41)!=0x41)return 2;
+    board.cpu().executeOne();board.cpu().executeOne();
     board.cpu().executeOne();board.cpu().executeOne();
     if((cpu.reg(0)&255)!=0x60 || !(cpu.flags()&1))return 3;
     board.cpu().executeOne();
