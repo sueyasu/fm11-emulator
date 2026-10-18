@@ -349,6 +349,11 @@ void Main8088Board::Core::executeOne()
         if(instruction==0x00) return; // 8080 NOP
         if(instruction==0xed) {
             const BYTE subopcode=fetch8();
+            if(subopcode==0xed) { // CALLN imm8: invoke native interrupt routine
+                const BYTE vector=fetch8();
+                interrupt(vector);
+                return;
+            }
             if(subopcode==0xfd) { // RETEM: restore the native frame
                 ip_=pop16();
                 segments_[1]=pop16();
