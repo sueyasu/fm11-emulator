@@ -6,7 +6,11 @@ int main()
     rom[0xff3]=0;rom[0xff4]=0x10;
     Main8088Board board(CpuType::NECV20);
     board.bus().loadBootRom(rom);
-    const BYTE native[]={0xbc,0x00,0x80,0x0f,0xff,0x40,0xf4};
+    const BYTE native[]={
+        0xbc,0x00,0x80,           // MOV SP,8000h
+        0xb8,0x00,0x20,0x8e,0xd8, // MOV AX,2000h; MOV DS,AX
+        0x0f,0xff,0x40,0xf4      // BRKEM 40h; HLT
+    };
     for(unsigned i=0;i<sizeof(native);++i)board.bus().writeMemory(0x10000+i,native[i]);
     board.bus().writeMemory(0x100,0);
     board.bus().writeMemory(0x101,1);
@@ -37,7 +41,7 @@ int main()
     for(unsigned i=0;i<sizeof(code);++i)board.bus().writeMemory(0x3100+i,code[i]);
     board.reset();
     auto& cpu=static_cast<Main8088Board::Core&>(board.cpu());
-    for(int i=0;i<3;++i)board.cpu().executeOne(); // JMP/MOV/BRKEM
+    for(int i=0;i<5;++i)board.cpu().executeOne(); // JMP/MOV SP/MOV AX/MOV DS/BRKEM
     for(int i=0;i<3;++i)board.cpu().executeOne(); // LXI H, LXI B, DAD
     if(cpu.reg(3)!=0 || !(cpu.flags()&1))return 1;
     for(int i=0;i<9;++i)board.cpu().executeOne(); // INX DCX LXI D XCHG LXI SP PUSH LXI H XTHL POP
