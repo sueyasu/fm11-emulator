@@ -587,6 +587,25 @@ void Main8088Board::Core::executeOne()
             flags_=WORD((flags_&~CF)|(carry?CF:0));
             return;
         }
+        case 0x27: { // 8080 DAA: decimal-adjust AL after BCD addition
+            const unsigned original=getReg8(0);
+            const bool oldCarry=(flags_&CF)!=0;
+            const bool oldAux=(flags_&AF)!=0;
+            unsigned correction=0;
+            if((original&0x0f)>9 || oldAux)correction|=0x06;
+            const bool highAdjust=original>0x99 || oldCarry;
+            if(highAdjust)correction|=0x60;
+            const unsigned sum=original+correction;
+            const BYTE adjusted=BYTE(sum);
+            flags_=WORD(flags_&~(CF|AF|ZF|SF|PF));
+            if(highAdjust)flags_|=CF;
+            if(((original^sum^correction)&0x10u)!=0)flags_|=AF;
+            if(adjusted==0)flags_|=ZF;
+            if(adjusted&0x80)flags_|=SF;
+            if(parityEven(adjusted))flags_|=PF;
+            setReg8(0,adjusted);
+            return;
+        }
         case 0x2f: setReg8(0,BYTE(~getReg8(0)));return; // CMA
         case 0x37: flags_|=CF;return; // STC
         case 0x3f: flags_^=CF;return; // CMC
