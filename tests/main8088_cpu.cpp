@@ -644,5 +644,38 @@ int main()
     if(segCore.reg(0)!=0x2222)return 107;
     for(unsigned i=0;i<4;++i)segp.cpu().executeOne();
     if(segp.bus().readMemory(0x20200)!=0x33 || segCore.reg(1)!=0)return 108;
+    // LDS/LES far-pointer loads and XLAT default/overridden segments.
+    Main8088Board farload(CpuType::I8088);
+    farload.bus().loadBootRom(fRom);
+    const BYTE farloadCode[]={
+        0xb8,0x00,0x10,      // MOV AX,1000
+        0x8e,0xd8,           // MOV DS,AX
+        0xc4,0x1e,0x00,0x02, // LES BX,[0200] => BX=0300 ES=2000
+        0xc5,0x36,0x04,0x02, // LDS SI,[0204] => SI=0400 DS=3000
+        0xb0,0x02,           // MOV AL,2
+        0xbb,0x00,0x01,      // MOV BX,0100
+        0xd7,                // XLAT DS:[BX+AL] => 5A
+        0xb0,0x02,
+        0x26,0xd7,           // XLAT ES:[BX+AL] => A5
+        0xf4
+    };
+    for(unsigned i=0;i<sizeof(farloadCode);++i)
+        farload.bus().writeMemory(0x10000+i,farloadCode[i]);
+    const BYTE pointerBytes[]={0x00,0x03,0x00,0x20,0x00,0x04,0x00,0x30};
+    for(unsigned i=0;i<sizeof(pointerBytes);++i)
+        farload.bus().writeMemory(0x10200+i,pointerBytes[i]);
+    farload.bus().writeMemory(0x30102,0x5a);
+    farload.bus().writeMemory(0x20102,0xa5);
+    farload.reset();farload.cpu().executeOne();
+    auto& fl=static_cast<Main8088Board::Core&>(farload.cpu());
+    farload.cpu().executeOne();farload.cpu().executeOne();
+    farload.cpu().executeOne();
+    if(fl.reg(3)!=0x0300)return 109;
+    farload.cpu().executeOne();
+    if(fl.reg(6)!=0x0400)return 110;
+    farload.cpu().executeOne();farload.cpu().executeOne();farload.cpu().executeOne();
+    if((fl.reg(0)&255)!=0x5a)return 111;
+    farload.cpu().executeOne();farload.cpu().executeOne();
+    if((fl.reg(0)&255)!=0xa5)return 112;
     return 0;
 }

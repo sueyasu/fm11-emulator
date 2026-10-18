@@ -615,6 +615,23 @@ void Main8088Board::Core::executeOne()
         bus_.writeMemory(physical(segments_[segmentOverride_>=0?unsigned(segmentOverride_):3u],WORD(off+1)),BYTE(regs_[0]>>8));
         break;
     }
+    case 0xc4: case 0xc5: { // LES/LDS r16,m16:16
+        const auto op=decodeModRm();
+        if(op.registerOperand)throw std::runtime_error("LDS/LES requires memory pointer");
+        const WORD off=read16(op);
+        const WORD segOff=WORD(op.offset+2);
+        const WORD segment=WORD(bus_.readMemory(physical(segments_[op.segment],segOff)) |
+            (WORD(bus_.readMemory(physical(segments_[op.segment],WORD(segOff+1))))<<8));
+        regs_[op.reg]=off;
+        segments_[opcode==0xc4?0:3]=segment;
+        break;
+    }
+    case 0xd7: { // XLAT: AL = byte at DS:[BX+AL], source segment overridable
+        const WORD off=WORD(regs_[3]+getReg8(0));
+        const unsigned seg=segmentOverride_>=0?unsigned(segmentOverride_):3u;
+        setReg8(0,bus_.readMemory(physical(segments_[seg],off)));
+        break;
+    }
     case 0x8d: { // LEA r16,m - register operand is invalid
         const auto op=decodeModRm();
         if(op.registerOperand)throw std::runtime_error("invalid LEA register operand");
