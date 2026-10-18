@@ -159,7 +159,7 @@ int main(int argc, char** argv) {
             cfmakeraw(&uart);
             tcsetattr(slaveFd,TCSANOW,&uart);
         }
-        close(slaveFd);
+        // Retain an open slave to prevent POLLHUP when no terminal is attached.
         std::signal(SIGINT,requestStop);
         std::signal(SIGTERM,requestStop);
         std::cout << "FM-11 headless monitor\nSerial: " << slavePath
@@ -252,7 +252,7 @@ int main(int argc, char** argv) {
         };
         prompt();
         while(!stopping && !quitting) {
-            pollfd fds[2]={{STDIN_FILENO,short(inputOpen?POLLIN:0),0},
+            pollfd fds[2]={{inputOpen?STDIN_FILENO:-1,POLLIN,0},
                            {master,POLLIN,0}};
             const bool sleeping = running &&
                 board.cpuWaitState() != CSim09::WaitState::Running &&
@@ -308,6 +308,7 @@ int main(int argc, char** argv) {
             }
             drain();
         }
+        close(slaveFd);
         close(master);
         return 0;
     } catch (const std::exception& ex) {
