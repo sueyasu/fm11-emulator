@@ -556,8 +556,10 @@ void Main8088Board::Core::executeOne()
             else if(pair==2)regs_[3]=value;
             else {
                 setReg8(0,BYTE(value>>8));
+                // PSW supplies only 8080 S/Z/AC/P/C; keep native
+                // control flags and force the reserved x86 FLAGS bit.
                 flags_=WORD((flags_&~(SF|ZF|AF|PF|CF))|
-                            (value&(SF|ZF|AF|PF|CF)));
+                            (value&(SF|ZF|AF|PF|CF))|0x0002);
             }
             return;
         }
