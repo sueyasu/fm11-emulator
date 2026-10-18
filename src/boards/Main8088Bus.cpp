@@ -9,6 +9,7 @@ void Main8088Bus::reset()
     picMask_=0;picRequest_=0;picInService_=0;
     picVectorBase_=8;picReadIsr_=0;picInitStep_=0;
     picNeedsIcw4_=false;picSingle_=false;
+    resetDma();
 }
 
 void Main8088Bus::loadBootRom(const Rom& rom)
@@ -40,6 +41,7 @@ void Main8088Bus::setSystemIo(IoReader reader,IoWriter writer)
 
 BYTE Main8088Bus::readIo(WORD port) const
 {
+    if(port>=0x10 && port<=0x23)return readDma(port);
     if(port==0x00)return picReadIsr_?picInService_:picRequest_;
     if(port==0x01)return picMask_;
     if(port>=0xfc00 && port<=0xfcff) return cardIoRam_[port&0xff];
@@ -50,6 +52,7 @@ BYTE Main8088Bus::readIo(WORD port) const
 
 void Main8088Bus::writeIo(WORD port,BYTE value)
 {
+    if(port>=0x10 && port<=0x23){writeDma(port,value);return;}
     if(port==0x00) {
         if(value&0x10) {
             picInitStep_=1;
@@ -99,4 +102,64 @@ BYTE Main8088Bus::acknowledgeInterrupt()
         return BYTE(picVectorBase_+line);
     }
     return BYTE(picVectorBase_+7); // Spurious IRQ7 when none is pending
+}
+
+void Main8088Bus::resetDma()
+{
+    dmaChannels_.fill(DmaChannel{});
+    dmaCommand_=dmaMask_=dmaStatus_=dmaFlip_=dmaRequest_=0;
+}
+BYTE Main8088Bus::readDma(WORD port) const
+{
+    // The 8237 first/last byte latch is shared by all channels.
+    // The read path is logically mutable; update only the flip-flop.
+    auto* self=const_cast<Main8088Bus*>(this);
+    if(port>=0x10 && port<=0x17) {
+        const unsigned channel=(port-0x10)/2;
+        const WORD word=(port&1)?dmaChannels_[channel].count:dmaChannels_[channel].address;
+        const BYTE value=self->dmaFlip_?BYTE(word>>8):BYTE(word);
+        self->dmaFlip_^=1;
+        return value;
+    }
+    if(port==0x18) {
+        const BYTE status=dmaStatus_;
+        self->dmaStatus_&=0xf0;
+        return status;
+    }
+    if(port==0x1d)return 0; // temporary register (not yet modelled)
+    if(port>=0x20 && port<=0x23)return dmaChannels_[port-0x20].bank;
+    return 0xff;
+}
+void Main8088Bus::writeDma(WORD port,BYTE value)
+{
+    if(port>=0x10 && port<=0x17) {
+        DmaChannel& ch=dmaChannels_[(port-0x10)/2];
+        WORD& field=(port&1)?ch.count:ch.address;
+        if(dmaFlip_==0)field=WORD((field&0xff00)|value);
+        else field=WORD((field&0x00ff)|(WORD(value)<<8));
+        if(port&1)ch.baseCount=ch.count;
+        dmaFlip_^=1;
+        return;
+    }
+    if(port>=0x20 && port<=0x23) {
+        dmaChannels_[port-0x20].bank=value;
+        return;
+    }
+    switch(port) {
+    case 0x18:dmaCommand_=value;break;
+    case 0x19:
+        if(value&4)dmaRequest_|=BYTE(1u<<(value&3));
+        else dmaRequest_&=BYTE(~(1u<<(value&3)));
+        dmaStatus_=BYTE((dmaStatus_&0x0f)|(dmaRequest_<<4));
+        break;
+    case 0x1a:
+        if(value&4)dmaMask_|=BYTE(1u<<(value&3));
+        else dmaMask_&=BYTE(~(1u<<(value&3)));
+        break;
+    case 0x1b:dmaChannels_[value&3].mode=value;break;
+    case 0x1c:dmaFlip_=0;break;
+    case 0x1d:resetDma();break;
+    case 0x1e:dmaMask_=0;break;
+    case 0x1f:dmaMask_=BYTE(value&0x0f);break;
+    }
 }

@@ -32,6 +32,9 @@ public:
     bool interruptPending() const;
     BYTE acknowledgeInterrupt();
     BYTE interruptMask() const { return picMask_; }
+    struct DmaChannel { WORD address=0, count=0, baseCount=0; BYTE mode=0, bank=0; };
+    const DmaChannel& dmaChannel(unsigned ch) const { return dmaChannels_.at(ch); }
+    BYTE dmaMask() const { return dmaMask_; }
 
 private:
     std::vector<BYTE> memory_;
@@ -46,6 +49,11 @@ private:
     BYTE picInitStep_=0;
     bool picNeedsIcw4_=false;
     bool picSingle_=false;
+    std::array<DmaChannel,4> dmaChannels_{};
+    BYTE dmaCommand_=0, dmaMask_=0, dmaStatus_=0, dmaFlip_=0, dmaRequest_=0;
+    void resetDma();
+    BYTE readDma(WORD port) const;
+    void writeDma(WORD port,BYTE value);
     IoReader systemReader_;
     IoWriter systemWriter_;
 };
