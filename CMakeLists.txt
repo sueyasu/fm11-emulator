@@ -47,6 +47,10 @@ if(FM11_BUILD_TESTS)
                      ${CMAKE_CURRENT_SOURCE_DIR}/tests/main8088_opcode_inventory.py
                      ${CMAKE_CURRENT_SOURCE_DIR}/src/boards/Main8088Board.cpp)
 
+    add_executable(main8088_dma_cascade tests/main8088_dma_cascade.cpp)
+    target_link_libraries(main8088_dma_cascade PRIVATE fm11_core)
+    add_test(NAME main8088_dma_cascade COMMAND main8088_dma_cascade)
+
     add_executable(main8088_dma_master_clear tests/main8088_dma_master_clear.cpp)
     target_link_libraries(main8088_dma_master_clear PRIVATE fm11_core)
     add_test(NAME main8088_dma_master_clear COMMAND main8088_dma_master_clear)

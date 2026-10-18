@@ -201,6 +201,9 @@ bool Main8088Bus::serviceDma()
         const BYTE bit=BYTE(1u<<channel);
         if(!(dmaRequest_&bit) || (dmaMask_&bit))continue;
         auto& ch=dmaChannels_[channel];
+        // Cascade mode delegates bus ownership to a secondary DMA
+        // controller; it must not perform an ordinary byte transfer.
+        if((ch.mode&0xc0u)==0xc0u)continue;
         const unsigned type=(ch.mode>>2)&3;
         if((type==1 && !dmaReaders_[channel]) ||
            (type==2 && !dmaWriters_[channel]) ||
