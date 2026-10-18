@@ -989,6 +989,49 @@ void Main8088Board::Core::executeOne()
             throw std::runtime_error("opcode requires NEC V20");
         push16(WORD(static_cast<std::int8_t>(fetch8())));
         break;
+    case 0x69: case 0x6b: { // NEC V20: signed IMUL r16,r/m16,imm
+        if(variant_!=CpuType::NECV20)
+            throw std::runtime_error("opcode requires NEC V20");
+        const auto operand=decodeModRm();
+        const std::int32_t source=static_cast<std::int16_t>(read16(operand));
+        const std::int32_t immediate=opcode==0x69
+            ? static_cast<std::int16_t>(fetch16())
+            : static_cast<std::int8_t>(fetch8());
+        const std::int32_t result=source*immediate;
+        regs_[operand.reg]=WORD(result);
+        const bool overflow=result<-32768 || result>32767;
+        flags_=WORD(flags_&~(CF|OF));
+        if(overflow)flags_|=WORD(CF|OF);
+        break;
+    }
+    case 0xc8: { // NEC V20: ENTER frame_size, nesting_level
+        if(variant_!=CpuType::NECV20)
+            throw std::runtime_error("opcode requires NEC V20");
+        const WORD allocation=fetch16();
+        const unsigned nesting=fetch8()&31u;
+        push16(regs_[5]);
+        const WORD frame=regs_[4];
+        if(nesting>0) {
+            WORD previous=regs_[5];
+            for(unsigned i=1;i<nesting;++i) {
+                previous=WORD(previous-2);
+                const auto a=physical(segments_[2],previous);
+                const WORD value=WORD(bus_.readMemory(a)|
+                    (WORD(bus_.readMemory(physical(segments_[2],WORD(previous+1))))<<8));
+                push16(value);
+            }
+            push16(frame);
+        }
+        regs_[5]=frame;
+        regs_[4]=WORD(regs_[4]-allocation);
+        break;
+    }
+    case 0xc9: // NEC V20: LEAVE
+        if(variant_!=CpuType::NECV20)
+            throw std::runtime_error("opcode requires NEC V20");
+        regs_[4]=regs_[5];
+        regs_[5]=pop16();
+        break;
     case 0x06: push16(segments_[0]);break; // PUSH ES
     case 0x0e: push16(segments_[1]);break; // PUSH CS
     case 0x16: push16(segments_[2]);break; // PUSH SS
