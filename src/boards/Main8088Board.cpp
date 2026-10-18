@@ -437,7 +437,7 @@ void Main8088Board::Core::executeOne()
             case 4: // ANA
                 out=lhs&rhs;
                 flags_=WORD(flags_&~(CF|PF|AF|ZF|SF));
-                flags_|=AF; // 8080 ANA sets auxiliary carry
+                if((lhs|rhs)&0x08u)flags_|=AF; // 8080 ANA: OR of operand bit 3
                 if(out==0)flags_|=ZF;
                 if(out&0x80)flags_|=SF;
                 if(parityEven(BYTE(out)))flags_|=PF;
