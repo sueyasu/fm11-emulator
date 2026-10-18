@@ -127,3 +127,20 @@ The IPL contained in those sectors then loads the boottrack using the
 emulated MiniFDC. This is a disk IPL handoff, not execution of the
 original FM-11 system ROM. `--boottrack FILE --level 1|2` remains available.
 The monitor's `reset` command reloads the disk IPL from the mounted image.
+
+## 8088/V20 boot-ROM trace (experimental)
+
+The separate diagnostic runner executes an external raw **4096-byte** FM-11
+8088 boot-ROM image, beginning at the x86 reset vector FFFF:0000. No ROM
+binary is included in this repository. This is a CPU-card diagnostic, not
+full FM-11 boot: the remaining hardware and CPU instructions are incomplete.
+
+```sh
+./build/fm11-8088-romtrace --rom bootrom86.bin --cpu 8088 --instructions 10000 --trace
+./build/fm11-8088-romtrace --rom bootrom86.bin --cpu v20 --instructions 10000
+```
+
+The runner prints the first unimplemented opcode with its physical PC and
+instruction number; `--trace` logs per-instruction register values. For now
+8088 and V20 share the same implemented instruction subset. This tool does
+not modify the 6809/6309 headless boot path.
