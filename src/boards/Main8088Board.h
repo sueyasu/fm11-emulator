@@ -38,6 +38,7 @@ public:
         WORD fetch16();
         void interrupt(BYTE vector);
         void push16(WORD value);
+        WORD pop16();
         Main8088Bus& bus_;
         CpuType variant_;
         std::array<WORD,8> regs_{};

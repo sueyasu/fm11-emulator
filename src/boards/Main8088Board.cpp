@@ -47,6 +47,13 @@ void Main8088Board::Core::push16(WORD value)
     bus_.writeMemory(addr,BYTE(value));
     bus_.writeMemory((addr+1)&0xfffff,BYTE(value>>8));
 }
+WORD Main8088Board::Core::pop16()
+{
+    const auto addr=physical(segments_[2],regs_[4]);
+    const WORD value=WORD(bus_.readMemory(addr)|(WORD(bus_.readMemory((addr+1)&0xfffff))<<8));
+    regs_[4]=WORD(regs_[4]+2);
+    return value;
+}
 void Main8088Board::Core::interrupt(BYTE vector)
 {
     push16(flags_);
@@ -91,7 +98,40 @@ void Main8088Board::Core::executeOne()
         break;
     }
     case 0xcd: interrupt(fetch8());break; // INT imm8
+    case 0xcf: // IRET
+        ip_=pop16();
+        segments_[1]=pop16();
+        flags_=WORD(pop16()|0x0002);
+        break;
+    case 0x9c: push16(flags_);break; // PUSHF
+    case 0x9d: flags_=WORD(pop16()|0x0002);break; // POPF
+    case 0xe8: { // CALL rel16
+        const WORD offset=fetch16();
+        push16(ip_);
+        ip_=WORD(ip_+offset);
+        break;
+    }
+    case 0xc3: ip_=pop16();break; // RET near
+    case 0xcb: ip_=pop16();segments_[1]=pop16();break; // RET far
+    case 0xc2: { const WORD adjustment=fetch16(); ip_=pop16();regs_[4]=WORD(regs_[4]+adjustment);break; }
+    case 0xca: { const WORD adjustment=fetch16(); ip_=pop16();segments_[1]=pop16();regs_[4]=WORD(regs_[4]+adjustment);break; }
+    case 0x06: push16(segments_[0]);break; // PUSH ES
+    case 0x0e: push16(segments_[1]);break; // PUSH CS
+    case 0x16: push16(segments_[2]);break; // PUSH SS
+    case 0x1e: push16(segments_[3]);break; // PUSH DS
+    case 0x07: segments_[0]=pop16();break;
+    case 0x17: segments_[2]=pop16();break;
+    case 0x1f: segments_[3]=pop16();break;
     default:
+        if(opcode>=0x50 && opcode<=0x57) {push16(regs_[opcode-0x50]);break;}
+        if(opcode>=0x58 && opcode<=0x5f) {regs_[opcode-0x58]=pop16();break;}
+        if(opcode>=0xb0 && opcode<=0xb7) {
+            const BYTE v=fetch8();
+            const unsigned i=opcode-0xb0;
+            WORD& reg=regs_[i&3];
+            reg=i<4 ? WORD((reg&0xff00)|v) : WORD((reg&0x00ff)|(WORD(v)<<8));
+            break;
+        }
         if(opcode>=0xb8 && opcode<=0xbf) {
             regs_[opcode-0xb8]=fetch16(); // MOV r16,imm16
             break;
