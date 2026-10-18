@@ -151,5 +151,45 @@ int main()
     if((ac.flags()&1)!=0)return 28; // XOR cleared carry, INC kept it
     arithmetic.cpu().executeOne(); // HLT
     if(!ac.halted())return 29;
+    // Group 80/81/83 and ModR/M arithmetic, including CMP (no writeback).
+    Main8088Board grouped(CpuType::I8088);
+    grouped.bus().loadBootRom(fRom);
+    const BYTE groupCode[]={
+        0xbb,0x00,0x02,            // MOV BX,0200
+        0xc7,0x07,0xff,0x00,       // MOV word [BX],00FF
+        0x83,0x07,0x01,            // ADD word [BX],+1 -> 0100
+        0x83,0x3f,0x01,            // CMP word [BX],+1 -> CF=0, ZF=0
+        0x81,0x2f,0x01,0x01,       // SUB word [BX],0101 -> FFFF
+        0x81,0x3f,0xff,0xff,       // CMP word [BX],FFFF -> ZF
+        0x80,0x27,0x0f,            // AND byte [BX],0F -> 0F
+        0xb0,0x01,                 // MOV AL,1
+        0x00,0x07,                 // ADD byte [BX],AL -> 10
+        0x02,0x07,                 // ADD AL,[BX] -> 11
+        0x3a,0x07,                 // CMP AL,[BX] -> ZF=0
+        0xf4
+    };
+    for(unsigned i=0;i<sizeof(groupCode);++i)
+        grouped.bus().writeMemory(0x10000+i,groupCode[i]);
+    grouped.reset();grouped.cpu().executeOne();
+    auto& gc=static_cast<Main8088Board::Core&>(grouped.cpu());
+    for(unsigned i=0;i<3;++i)grouped.cpu().executeOne();
+    if(grouped.bus().readMemory(0x200)!=0 || grouped.bus().readMemory(0x201)!=1)return 30;
+    grouped.cpu().executeOne();
+    if(grouped.bus().readMemory(0x200)!=0 || grouped.bus().readMemory(0x201)!=1)return 31;
+    grouped.cpu().executeOne();
+    if(grouped.bus().readMemory(0x200)!=0xff || grouped.bus().readMemory(0x201)!=0xff)return 32;
+    grouped.cpu().executeOne();
+    if(!(gc.flags()&0x40))return 33;
+    grouped.cpu().executeOne();
+    if(grouped.bus().readMemory(0x200)!=0x0f || grouped.bus().readMemory(0x201)!=0xff)return 34;
+    grouped.cpu().executeOne();
+    grouped.cpu().executeOne();
+    if(grouped.bus().readMemory(0x200)!=0x10)return 35;
+    grouped.cpu().executeOne();
+    if((gc.reg(0)&0xff)!=0x11)return 36;
+    grouped.cpu().executeOne();
+    if(gc.flags()&0x40)return 37;
+    grouped.cpu().executeOne();
+    if(!gc.halted())return 38;
     return 0;
 }

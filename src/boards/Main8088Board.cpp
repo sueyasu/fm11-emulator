@@ -163,6 +163,38 @@ void Main8088Board::Core::setLogicFlags(unsigned result,unsigned bits)
     if(out&sign)flags_|=SF;
     if(parityEven(BYTE(out)))flags_|=PF;
 }
+unsigned Main8088Board::Core::alu(unsigned operation,unsigned lhs,unsigned rhs,unsigned bits)
+{
+    const unsigned mask=bits==8?0xffu:0xffffu;
+    lhs&=mask;rhs&=mask;
+    unsigned result=lhs;
+    switch(operation&7) {
+    case 0: // ADD
+        result=lhs+rhs;
+        setArithmeticFlags(lhs,rhs,result,bits,false);
+        break;
+    case 1: // OR
+        result=lhs|rhs;setLogicFlags(result,bits);break;
+    case 2: { // ADC
+        const unsigned carry=(flags_&CF)?1u:0u;
+        result=lhs+rhs+carry;
+        setArithmeticFlags(lhs,rhs+carry,result,bits,false);
+        // AF must use the original operand and the incoming carry.
+        break;
+    }
+    case 3: { // SBB
+        const unsigned carry=(flags_&CF)?1u:0u;
+        result=(lhs-rhs-carry)&mask;
+        setArithmeticFlags(lhs,rhs+carry,result,bits,true);
+        break;
+    }
+    case 4:result=lhs&rhs;setLogicFlags(result,bits);break;
+    case 5:result=(lhs-rhs)&mask;setArithmeticFlags(lhs,rhs,result,bits,true);break;
+    case 6:result=lhs^rhs;setLogicFlags(result,bits);break;
+    case 7:result=(lhs-rhs)&mask;setArithmeticFlags(lhs,rhs,result,bits,true);break;
+    }
+    return result&mask;
+}
 bool Main8088Board::Core::jumpCondition(unsigned code) const
 {
     const bool cf=(flags_&CF)!=0,zf=(flags_&ZF)!=0;
@@ -209,6 +241,18 @@ void Main8088Board::Core::executeOne()
         case 0x35:value=lhs^immediate;setLogicFlags(value,16);break;
         }
         if(opcode!=0x3d)regs_[0]=WORD(value);
+        break;
+    }
+    case 0x80: case 0x81: case 0x82: case 0x83: {
+        const auto op=decodeModRm();
+        const unsigned bits=(opcode==0x81 || opcode==0x83)?16u:8u;
+        const unsigned immediate=opcode==0x81 ? fetch16() :
+            opcode==0x83 ? WORD(static_cast<std::int8_t>(fetch8())) : fetch8();
+        const unsigned lhs=bits==8?read8(op):read16(op);
+        const unsigned result=alu(op.reg,lhs,immediate,bits);
+        if(op.reg!=7) {
+            if(bits==8)write8(op,BYTE(result));else write16(op,WORD(result));
+        }
         break;
     }
     case 0x88: {auto op=decodeModRm();write8(op,getReg8(op.reg));break;} // MOV r/m8,r8
@@ -269,6 +313,27 @@ void Main8088Board::Core::executeOne()
     case 0x17: segments_[2]=pop16();break;
     case 0x1f: segments_[3]=pop16();break;
     default:
+        if(opcode<=0x3b && (opcode&7)<=3 && (opcode&0x04)==0) {
+            const auto op=decodeModRm();
+            const unsigned bits=(opcode&1)?16u:8u;
+            const bool destinationReg=(opcode&2)!=0;
+            const unsigned lhs=destinationReg ?
+                (bits==8?getReg8(op.reg):regs_[op.reg]) :
+                (bits==8?read8(op):read16(op));
+            const unsigned rhs=destinationReg ?
+                (bits==8?read8(op):read16(op)) :
+                (bits==8?getReg8(op.reg):regs_[op.reg]);
+            const unsigned operation=(opcode>>3)&7;
+            const unsigned result=alu(operation,lhs,rhs,bits);
+            if(operation!=7) {
+                if(destinationReg) {
+                    if(bits==8)setReg8(op.reg,BYTE(result));else regs_[op.reg]=WORD(result);
+                } else {
+                    if(bits==8)write8(op,BYTE(result));else write16(op,WORD(result));
+                }
+            }
+            break;
+        }
         if(opcode>=0x70 && opcode<=0x7f) {
             const auto displacement=static_cast<std::int8_t>(fetch8());
             if(jumpCondition(opcode&15)) ip_=WORD(ip_+displacement);

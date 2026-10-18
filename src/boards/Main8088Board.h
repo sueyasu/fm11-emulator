@@ -57,6 +57,7 @@ public:
         void setArithmeticFlags(unsigned lhs,unsigned rhs,unsigned result,unsigned bits,bool subtract);
         void setLogicFlags(unsigned result,unsigned bits);
         bool jumpCondition(unsigned code) const;
+        unsigned alu(unsigned operation,unsigned lhs,unsigned rhs,unsigned bits);
         Main8088Bus& bus_;
         CpuType variant_;
         std::array<WORD,8> regs_{};
