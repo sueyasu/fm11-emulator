@@ -122,7 +122,7 @@ void Main8088Bus::resetDma()
 {
     dmaChannels_.fill(DmaChannel{});
     dmaCommand_=dmaMask_=dmaStatus_=dmaFlip_=dmaRequest_=0;
-    dmaPriorityBase_=0;
+    dmaPriorityBase_=dmaTemporary_=0;
     dmaExternalRequest_=dmaExternalDriven_=dmaBlockActive_=0;
 }
 BYTE Main8088Bus::readDma(WORD port) const
@@ -142,7 +142,7 @@ BYTE Main8088Bus::readDma(WORD port) const
         self->dmaStatus_&=0xf0;
         return status;
     }
-    if(port==0x1d)return 0; // temporary register (not yet modelled)
+    if(port==0x1d)return dmaTemporary_; // last memory-to-memory byte
     if(port>=0x20 && port<=0x23)return dmaChannels_[port-0x20].bank;
     return 0xff;
 }
@@ -220,6 +220,33 @@ bool Main8088Bus::serviceDma()
     // 8237 transfer modes: 01=I/O to memory, 10=memory to I/O.
     // Requests are explicitly serviced by the device scheduler.
     if(dmaCommand_&0x04)return false; // controller disabled
+    if(dmaCommand_&0x01) { // 8237 memory-to-memory: CH0 source, CH1 destination
+        if((dmaMask_&0x03)!=0 ||
+           (activeDmaRequests()&0x01)==0)return false;
+        auto& source=dmaChannels_[0];
+        auto& dest=dmaChannels_[1];
+        const std::uint32_t sourceAddress=
+            (std::uint32_t(source.bank&0x0f)<<16)|source.address;
+        const std::uint32_t destAddress=
+            (std::uint32_t(dest.bank&0x0f)<<16)|dest.address;
+        dmaTemporary_=readMemory(sourceAddress);
+        writeMemory(destAddress,dmaTemporary_);
+        if(!(dmaCommand_&0x02))
+            source.address=WORD(source.address+((source.mode&0x20)?-1:1));
+        dest.address=WORD(dest.address+((dest.mode&0x20)?-1:1));
+        const bool terminal=dest.count==0;
+        dest.count=WORD(dest.count-1);
+        if(terminal) {
+            dmaStatus_=BYTE(dmaStatus_|0x02); // CH1 terminal count
+            dmaRequest_=BYTE(dmaRequest_&~0x01);
+            dmaStatus_=BYTE((dmaStatus_&0x0f)|(activeDmaRequests()<<4));
+            if(dest.mode&0x10) {
+                dest.address=dest.baseAddress;
+                dest.count=dest.baseCount;
+            } else dmaMask_=BYTE(dmaMask_|0x03);
+        }
+        return true;
+    }
     for(unsigned rank=0;rank<4;++rank) {
         const unsigned channel=(rank+((dmaCommand_&0x10)?dmaPriorityBase_:0u))&3u;
         const BYTE bit=BYTE(1u<<channel);

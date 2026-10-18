@@ -58,7 +58,7 @@ private:
     bool picNeedsIcw4_=false;
     bool picSingle_=false;
     std::array<DmaChannel,4> dmaChannels_{};
-    BYTE dmaPriorityBase_=0;
+    BYTE dmaPriorityBase_=0, dmaTemporary_=0;
     BYTE dmaExternalRequest_=0, dmaExternalDriven_=0, dmaBlockActive_=0;
     BYTE activeDmaRequests() const;
     BYTE dmaCommand_=0, dmaMask_=0, dmaStatus_=0, dmaFlip_=0, dmaRequest_=0;
