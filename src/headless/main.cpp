@@ -80,7 +80,7 @@ void loadBinary(Main6809Board& board, const std::string& file,
 void usage() {
     std::cerr << "usage: fm11-headless (--binary FILE --load ADDR --pc ADDR"
                  " | --boottrack FILE --level 1|2)"
-                 " [--floppy RAW-2D|D88] [--cpu 6809|6309] [--clock HZ] [--instructions COUNT]\n"
+                 " [--floppy RAW-2D|D88] [--cpu 6809|6309] [--clock HZ] [--no-tx-irq] [--instructions COUNT]\n"
                  "  Boottrack starts AFTER the FM-11 floppy IPL has loaded it;\n"
                  "  there is no disk controller or subsequent disk I/O yet.\n"
                  "  Monitor on stdin; guest serial is on a separate /dev/pts/N.\n\n";
@@ -91,11 +91,12 @@ int main(int argc, char** argv) {
     try {
         std::string file, boottrack, floppy, cpu = "6809";
         unsigned long long load = 0, pc = 0, hz = 2000000, limit = 0;
-        bool hasLoad = false, hasPc = false;
+        bool hasLoad = false, hasPc = false, disableTxIrq = false;
         int level = 0;
         for (int i=1;i<argc;++i) {
             const std::string a=argv[i];
             if (a=="--help") { usage(); return 0; }
+            if (a=="--no-tx-irq") { disableTxIrq=true; continue; }
             if (i+1>=argc) { usage(); return 2; }
             const std::string v=argv[++i];
             if (a=="--binary") file=v;
@@ -129,6 +130,7 @@ int main(int argc, char** argv) {
         board.loadBootRom(rom);
         board.reset();
         board.setCpuClockHz(hz);
+        board.setTxIrqEnabled(!disableTxIrq);
         if (!floppy.empty()) {
             std::ifstream disk(floppy,std::ios::binary|std::ios::ate);
             if(!disk)throw std::runtime_error("cannot open floppy: "+floppy);

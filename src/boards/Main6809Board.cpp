@@ -57,6 +57,12 @@ void Main6809Board::loadBootRom(const BootRomImage& image)
     bootRom_ = image;
 }
 
+void Main6809Board::setTxIrqEnabled(bool enabled)
+{
+    txIrqEnabled_ = enabled;
+    refreshSerialIrq();
+}
+
 void Main6809Board::queueSerialInput(BYTE value)
 {
     serialInput_.push_back(value);
@@ -86,7 +92,7 @@ void Main6809Board::refreshSerialIrq()
 {
     // FM-11 main serial interrupt appears as FD03 bit 7.
     // FD02 bits 1/2 enable the board-side serial interrupt mask.
-    const bool tx = (serialCommand_ & 0x01) != 0;
+    const bool tx = txIrqEnabled_ && (serialCommand_ & 0x01) != 0;
     const bool rx = (serialCommand_ & 0x04) != 0 &&
                     !serialInput_.empty();
     if (tx || rx)

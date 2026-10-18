@@ -33,6 +33,7 @@ public:
 
     // Headless main RS-232C port (FD06 data, FD07 command/status).
     // The frontend owns terminal transport and may feed/drain bytes here.
+    void setTxIrqEnabled(bool enabled);
     void queueSerialInput(BYTE value);
     bool takeSerialOutput(BYTE& value);
 
@@ -115,6 +116,7 @@ private:
     unsigned floppyOffset_ = 256;
     BYTE floppyStatus_ = 0;
     BYTE serialCommand_ = 0;
+    bool txIrqEnabled_ = true;
     std::deque<BYTE> serialInput_;
     std::deque<BYTE> serialOutput_;
     BYTE mainIrqSources_ = 0;

@@ -94,3 +94,12 @@ A masked IRQ wakes `SYNC` without entering its vector, while `CWAI`
 requires an accepted interrupt. The guest's normal (non-waiting) execution
 still drives PTM from emulated CPU cycles; the host clock is used only while
 the CPU is asleep. This is **not** a cycle-exact real-time emulation mode.
+
+### Testing without USART Tx interrupts
+
+To diagnose persistent CPU load while NitrOS-9 is waiting for input, launch
+`fm11-headless` with `--no-tx-irq`. This temporarily suppresses only the
+8251-compatible **transmit** interrupt request; serial transmission, reception
+and receive interrupts remain operational. The default behavior is unchanged.
+Compare host CPU usage at the Shell prompt with and without the switch.
+This is a diagnostic option, not a verified FM-11 hardware correction.
