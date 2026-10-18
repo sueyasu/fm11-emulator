@@ -20,10 +20,10 @@ int main()
     board.cpu().executeOne();
     if(board.cpu().pc()!=0x10000)return 2;
     board.cpu().executeOne();
-    if(board.core().reg(0)!=0x1234 || board.cpu().pc()!=0x10003)return 3;
+    if(static_cast<Main8088Board::Core&>(board.cpu()).reg(0)!=0x1234 || board.cpu().pc()!=0x10003)return 3;
     board.cpu().executeOne();
     board.cpu().executeOne();
-    if(!board.core().halted() || board.cpu().pc()!=0x10005)return 4;
+    if(!static_cast<Main8088Board::Core&>(board.cpu()).halted() || board.cpu().pc()!=0x10005)return 4;
     board.cpu().executeOne();
     if(board.cpu().pc()!=0x10005)return 5;
     Main8088Board v20(CpuType::NECV20);
