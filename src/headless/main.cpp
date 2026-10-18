@@ -262,10 +262,10 @@ int main(int argc, char** argv) {
                     inputOpen=false;
                     if(!running)quitting=true;
                 } else for(ssize_t i=0;i<n;++i) {
-                    if(data[i]=='\\n'||data[i]=='\\r') {
+                    if(data[i]=='\n'||data[i]=='\r') {
                         const std::string one=line;line.clear();
                         command(one);
-                    } else if(data[i]==0x7f || data[i]=='\\b') {
+                    } else if(data[i]==0x7f || data[i]=='\b') {
                         if(!line.empty())line.pop_back();
                     } else if(line.size()<1024)line+=data[i];
                 }
