@@ -469,7 +469,90 @@ void Main8088Board::Core::executeOne()
             }
             return;
         }
+        // 8080 stack lives at DS:BP; the native-mode interrupt frame
+        // remains on SS:SP so RETEM can restore it independently.
+        const push8080=[&](WORD value) {
+            regs_[5]=WORD(regs_[5]-2);
+            bus_.writeMemory(physical(segments_[3],regs_[5]),BYTE(value));
+            bus_.writeMemory(physical(segments_[3],WORD(regs_[5]+1)),BYTE(value>>8));
+        };
+        const pop8080=[&]()->WORD {
+            const WORD lo=bus_.readMemory(physical(segments_[3],regs_[5]));
+            const WORD hi=bus_.readMemory(physical(segments_[3],WORD(regs_[5]+1)));
+            regs_[5]=WORD(regs_[5]+2);
+            return WORD(lo|(hi<<8));
+        };
+        const condition8080=[&](unsigned cc)->bool {
+            switch(cc&7u) {
+            case 0:return (flags_&ZF)==0; // NZ
+            case 1:return (flags_&ZF)!=0; // Z
+            case 2:return (flags_&CF)==0; // NC
+            case 3:return (flags_&CF)!=0; // C
+            case 4:return (flags_&PF)==0; // PO
+            case 5:return (flags_&PF)!=0; // PE
+            case 6:return (flags_&SF)==0; // P
+            default:return (flags_&SF)!=0; // M
+            }
+        };
+        if((instruction&0xc7)==0xc2) { // Jcc addr
+            const WORD target=fetch16();
+            if(condition8080(instruction>>3))ip_=target;
+            return;
+        }
+        if((instruction&0xc7)==0xc4) { // Ccc addr
+            const WORD target=fetch16();
+            if(condition8080(instruction>>3)) {
+                push8080(ip_);
+                ip_=target;
+            }
+            return;
+        }
+        if((instruction&0xc7)==0xc0) { // Rcc
+            if(condition8080(instruction>>3))ip_=pop8080();
+            return;
+        }
+        if((instruction&0xc7)==0xc7) { // RST n
+            push8080(ip_);
+            ip_=WORD(instruction&0x38);
+            return;
+        }
+        if((instruction&0xcf)==0xc5) { // PUSH B/D/H/PSW
+            const unsigned pair=(instruction>>4)&3u;
+            WORD value=0;
+            if(pair==0)value=regs_[1];
+            else if(pair==1)value=regs_[2];
+            else if(pair==2)value=regs_[3];
+            else {
+                const BYTE f=BYTE((flags_&(SF|ZF|AF|PF|CF))|0x02);
+                value=WORD((WORD(getReg8(0))<<8)|f);
+            }
+            push8080(value);
+            return;
+        }
+        if((instruction&0xcf)==0xc1) { // POP B/D/H/PSW
+            const unsigned pair=(instruction>>4)&3u;
+            const WORD value=pop8080();
+            if(pair==0)regs_[1]=value;
+            else if(pair==1)regs_[2]=value;
+            else if(pair==2)regs_[3]=value;
+            else {
+                setReg8(0,BYTE(value>>8));
+                flags_=WORD((flags_&~(SF|ZF|AF|PF|CF))|
+                            (value&(SF|ZF|AF|PF|CF)));
+            }
+            return;
+        }
         switch(instruction) {
+        case 0xc3: ip_=fetch16();return; // JMP
+        case 0xcd: { // CALL
+            const WORD target=fetch16();
+            push8080(ip_);
+            ip_=target;
+            return;
+        }
+        case 0xc9: ip_=pop8080();return; // RET
+        case 0xe9: ip_=regs_[3];return; // PCHL
+        case 0xf9: regs_[5]=regs_[3];return; // SPHL
         case 0xc6: arithmetic(0,fetch8());return;
         case 0xce: arithmetic(1,fetch8());return;
         case 0xd6: arithmetic(2,fetch8());return;
