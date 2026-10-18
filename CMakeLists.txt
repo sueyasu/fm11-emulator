@@ -28,6 +28,10 @@ endif()
 
 if(FM11_BUILD_TESTS)
     if(UNIX)
+        find_package(Python3 COMPONENTS Interpreter REQUIRED)
+        add_test(NAME headless_pty_monitor
+                 COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/headless_pty_monitor.py
+                         $<TARGET_FILE:fm11-headless>)
         add_test(NAME headless_boottrack
                  COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/tests/headless_boottrack.sh
                          $<TARGET_FILE:fm11-headless>)
