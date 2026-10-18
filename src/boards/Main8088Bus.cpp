@@ -122,6 +122,7 @@ void Main8088Bus::resetDma()
 {
     dmaChannels_.fill(DmaChannel{});
     dmaCommand_=dmaMask_=dmaStatus_=dmaFlip_=dmaRequest_=0;
+    dmaPriorityBase_=0;
 }
 BYTE Main8088Bus::readDma(WORD port) const
 {
@@ -190,7 +191,8 @@ bool Main8088Bus::serviceDma()
     // 8237 transfer modes: 01=I/O to memory, 10=memory to I/O.
     // Requests are explicitly serviced by the device scheduler.
     if(dmaCommand_&0x04)return false; // controller disabled
-    for(unsigned channel=0;channel<4;++channel) {
+    for(unsigned rank=0;rank<4;++rank) {
+        const unsigned channel=(rank+((dmaCommand_&0x10)?dmaPriorityBase_:0u))&3u;
         const BYTE bit=BYTE(1u<<channel);
         if(!(dmaRequest_&bit) || (dmaMask_&bit))continue;
         auto& ch=dmaChannels_[channel];
@@ -207,6 +209,7 @@ bool Main8088Bus::serviceDma()
         ch.address=WORD(ch.address+((ch.mode&0x20)?-1:1));
         const bool terminal=(ch.count==0);
         ch.count=WORD(ch.count-1);
+        if(dmaCommand_&0x10)dmaPriorityBase_=BYTE((channel+1u)&3u);
         if(terminal) {
             dmaStatus_=BYTE(dmaStatus_|bit);
             dmaRequest_=BYTE(dmaRequest_&~bit);

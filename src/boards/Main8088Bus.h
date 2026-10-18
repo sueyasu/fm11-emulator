@@ -56,6 +56,7 @@ private:
     bool picNeedsIcw4_=false;
     bool picSingle_=false;
     std::array<DmaChannel,4> dmaChannels_{};
+    BYTE dmaPriorityBase_=0;
     BYTE dmaCommand_=0, dmaMask_=0, dmaStatus_=0, dmaFlip_=0, dmaRequest_=0;
     std::array<DmaRead,4> dmaReaders_{};
     std::array<DmaWrite,4> dmaWriters_{};
