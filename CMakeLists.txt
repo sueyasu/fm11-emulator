@@ -8,6 +8,7 @@ add_library(fm11_core STATIC
     src/core/Sim09.cpp
     src/core/SimZ80.cpp
     src/boards/Main6809Board.cpp
+    src/boards/Main8088Bus.cpp
 )
 
 target_include_directories(fm11_core PUBLIC
@@ -37,6 +38,10 @@ if(FM11_BUILD_TESTS)
                          $<TARGET_FILE:fm11-headless>)
     endif()
     enable_testing()
+
+    add_executable(main8088_bus tests/main8088_bus.cpp)
+    target_link_libraries(main8088_bus PRIVATE fm11_core)
+    add_test(NAME main8088_bus COMMAND main8088_bus)
 
     add_executable(core_smoke tests/core_smoke.cpp)
     target_link_libraries(core_smoke PRIVATE fm11_core)

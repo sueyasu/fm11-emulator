@@ -1,0 +1,38 @@
+#pragma once
+#include "portable_types.h"
+#include <array>
+#include <cstddef>
+#include <cstdint>
+#include <functional>
+#include <vector>
+
+// Hardware-facing bus for the optional FM-11 8088 CPU card.
+// The execution core is deliberately separate.  The original Sim86 maps
+// a 20-bit memory space, a top 4-KiB boot ROM and a 16-bit I/O space.
+class Main8088Bus {
+public:
+    static constexpr std::size_t kMemorySize = 0x100000;
+    static constexpr std::uint32_t kRomBase = 0xff000;
+    static constexpr std::size_t kRomSize = 0x1000;
+    using Rom = std::array<BYTE,kRomSize>;
+    using IoReader = std::function<BYTE(WORD)>;
+    using IoWriter = std::function<void(WORD,BYTE)>;
+
+    Main8088Bus();
+    void reset();
+    void loadBootRom(const Rom& rom);
+    BYTE readMemory(std::uint32_t address) const;
+    void writeMemory(std::uint32_t address, BYTE value);
+    BYTE readIo(WORD port) const;
+    void writeIo(WORD port, BYTE value);
+    void setSystemIo(IoReader reader, IoWriter writer);
+    BYTE readRam(std::uint32_t address) const;
+
+private:
+    std::vector<BYTE> memory_;
+    Rom bootRom_{};
+    // The original FM-11 Sim86 uses the CPU-card SRAM for FCxx port accesses.
+    std::array<BYTE,0x100> cardIoRam_{};
+    IoReader systemReader_;
+    IoWriter systemWriter_;
+};
