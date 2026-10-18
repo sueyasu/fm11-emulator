@@ -512,18 +512,18 @@ int main()
     for(unsigned i=0;i<sizeof(shiftCode);++i)
         shifts.bus().writeMemory(0x10000+i,shiftCode[i]);
     shifts.reset();
-    auto& sc=static_cast<Main8088Board::Core&>(shifts.cpu());
+    auto& shiftCore=static_cast<Main8088Board::Core&>(shifts.cpu());
     shifts.cpu().executeOne();shifts.cpu().executeOne();shifts.cpu().executeOne();
-    if(sc.reg(0)!=2 || (sc.flags()&0x801)!=0x801)return 84;
+    if(shiftCore.reg(0)!=2 || (shiftCore.flags()&0x801)!=0x801)return 84;
     shifts.cpu().executeOne();
-    if(sc.reg(0)!=1 || (sc.flags()&1)!=0)return 85;
+    if(shiftCore.reg(0)!=1 || (shiftCore.flags()&1)!=0)return 85;
     shifts.cpu().executeOne();
-    const WORD zeroFlags=sc.flags();
+    const WORD zeroFlags=shiftCore.flags();
     shifts.cpu().executeOne();
-    if(sc.reg(0)!=1 || sc.flags()!=zeroFlags)return 86;
+    if(shiftCore.reg(0)!=1 || shiftCore.flags()!=zeroFlags)return 86;
     shifts.cpu().executeOne();shifts.cpu().executeOne();
-    if(sc.reg(0)!=4)return 87;
+    if(shiftCore.reg(0)!=4)return 87;
     shifts.cpu().executeOne();shifts.cpu().executeOne();
-    if(sc.reg(0)!=0xc000 || (sc.flags()&1)==0)return 88;
+    if(shiftCore.reg(0)!=0xc000 || (shiftCore.flags()&1)==0)return 88;
     return 0;
 }
