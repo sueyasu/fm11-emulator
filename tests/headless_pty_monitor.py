@@ -63,8 +63,11 @@ with tempfile.TemporaryDirectory() as directory:
                              "--clock", "1000", "--instructions", "100"],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, bufsize=0)
+    slave = None
     try:
-        read_until(proc.stdout.fileno(), b"fm11> ", time.monotonic()+5)
+        banner = read_until(proc.stdout.fileno(), b"fm11> ", time.monotonic()+5)
+        slave_path = re.search(rb"Serial: (/dev/pts/[0-9]+)", banner).group(1).decode()
+        slave = os.open(slave_path, os.O_RDWR | os.O_NOCTTY)
         start = time.monotonic()
         proc.stdin.write(b"c\\n")
         read_until(proc.stdout.fileno(), b"Instruction limit reached.",
@@ -75,6 +78,8 @@ with tempfile.TemporaryDirectory() as directory:
         proc.communicate(timeout=5)
         assert proc.returncode == 0
     finally:
+        if slave is not None:
+            os.close(slave)
         if proc.poll() is None:
             proc.kill()
             proc.wait()
