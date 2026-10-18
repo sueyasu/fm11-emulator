@@ -382,6 +382,74 @@ void Main8088Board::Core::executeOne()
             default:setReg8(0,value);break;
             }
         };
+        // 8080 arithmetic flags map S/Z/AC/P/C to SF/ZF/AF/PF/CF.
+        // The 8080 does not define the x86 overflow flag.
+        const update8080=[&](unsigned lhs,unsigned rhs,unsigned result,
+                              bool subtract,bool carryIn) {
+            const BYTE out=BYTE(result);
+            flags_=WORD(flags_&~(CF|PF|AF|ZF|SF));
+            if(subtract ? lhs<(rhs+unsigned(carryIn))
+                        : result>255u)flags_|=CF;
+            if(((lhs^rhs^out)&0x10u)!=0 ||
+               (carryIn && ((lhs^rhs^out)&0x10u)==0 &&
+                ((lhs&15u)+(subtract ? 0u : (rhs&15u))+unsigned(carryIn)>15u)))
+                flags_|=AF;
+            if(out==0)flags_|=ZF;
+            if(out&0x80)flags_|=SF;
+            if(parityEven(out))flags_|=PF;
+        };
+        const arithmetic=[&](unsigned op,BYTE rhs) {
+            const unsigned lhs=getReg8(0);
+            const unsigned incoming=(flags_&CF)?1u:0u;
+            unsigned out=lhs;
+            switch(op) {
+            case 0:case 1: { // ADD / ADC
+                const unsigned carry=op==1?incoming:0u;
+                out=lhs+rhs+carry;
+                update8080(lhs,rhs,out,false,carry!=0);
+                break;
+            }
+            case 2:case 3:case 7: { // SUB / SBB / CMP
+                const unsigned borrow=op==3?incoming:0u;
+                out=(lhs-rhs-borrow)&255u;
+                update8080(lhs,rhs,out,true,borrow!=0);
+                break;
+            }
+            case 4: // ANA
+                out=lhs&rhs;
+                flags_=WORD(flags_&~(CF|PF|AF|ZF|SF));
+                flags_|=AF; // 8080 ANA sets auxiliary carry
+                if(out==0)flags_|=ZF;
+                if(out&0x80)flags_|=SF;
+                if(parityEven(BYTE(out)))flags_|=PF;
+                break;
+            case 5:case 6: // XRA / ORA
+                out=op==5?(lhs^rhs):(lhs|rhs);
+                flags_=WORD(flags_&~(CF|PF|AF|ZF|SF));
+                if(out==0)flags_|=ZF;
+                if(out&0x80)flags_|=SF;
+                if(parityEven(BYTE(out)))flags_|=PF;
+                break;
+            }
+            if(op!=7)setReg8(0,BYTE(out));
+        };
+        if((instruction&0xc0)==0x80) {
+            arithmetic((instruction>>3)&7u,readReg(instruction&7u));
+            return;
+        }
+        if((instruction&0xc7)==0x04 || (instruction&0xc7)==0x05) {
+            const unsigned index=(instruction>>3)&7u;
+            const BYTE lhs=readReg(index);
+            const bool decrement=(instruction&1u)!=0;
+            const unsigned result=decrement ? unsigned(BYTE(lhs-1u))
+                                            : unsigned(BYTE(lhs+1u));
+            const bool oldCarry=(flags_&CF)!=0;
+            update8080(lhs,1u,result,decrement,false);
+            if(oldCarry)flags_|=CF;
+            else flags_&=WORD(~CF);
+            writeReg(index,BYTE(result));
+            return;
+        }
         if((instruction&0xc0)==0x40) { // MOV r,r / MOV r,M / MOV M,r
             writeReg((instruction>>3)&7u,readReg(instruction&7u));
             return;
@@ -402,6 +470,14 @@ void Main8088Board::Core::executeOne()
             return;
         }
         switch(instruction) {
+        case 0xc6: arithmetic(0,fetch8());return;
+        case 0xce: arithmetic(1,fetch8());return;
+        case 0xd6: arithmetic(2,fetch8());return;
+        case 0xde: arithmetic(3,fetch8());return;
+        case 0xe6: arithmetic(4,fetch8());return;
+        case 0xee: arithmetic(5,fetch8());return;
+        case 0xf6: arithmetic(6,fetch8());return;
+        case 0xfe: arithmetic(7,fetch8());return;
         case 0x02: case 0x12: { // STAX B / STAX D
             const WORD off=regs_[instruction==0x02?1u:2u];
             bus_.writeMemory(physical(segments_[3],off),getReg8(0));
