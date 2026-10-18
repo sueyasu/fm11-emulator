@@ -384,7 +384,7 @@ void Main8088Board::Core::executeOne()
         };
         // 8080 arithmetic flags map S/Z/AC/P/C to SF/ZF/AF/PF/CF.
         // The 8080 does not define the x86 overflow flag.
-        const update8080=[&](unsigned lhs,unsigned rhs,unsigned result,
+        const auto update8080=[&](unsigned lhs,unsigned rhs,unsigned result,
                               bool subtract,bool carryIn) {
             const BYTE out=BYTE(result);
             flags_=WORD(flags_&~(CF|PF|AF|ZF|SF));
@@ -398,7 +398,7 @@ void Main8088Board::Core::executeOne()
             if(out&0x80)flags_|=SF;
             if(parityEven(out))flags_|=PF;
         };
-        const arithmetic=[&](unsigned op,BYTE rhs) {
+        const auto arithmetic=[&](unsigned op,BYTE rhs) {
             const unsigned lhs=getReg8(0);
             const unsigned incoming=(flags_&CF)?1u:0u;
             unsigned out=lhs;
