@@ -387,5 +387,46 @@ int main()
        strings.bus().readRam(0x2003f)!=0x12)return 66;
     strings.cpu().executeOne();
     if(!sc.halted())return 67;
+    // REPE CMPSB exits on first mismatch; REPNE SCASB stops at match.
+    Main8088Board compare(CpuType::I8088);
+    compare.bus().loadBootRom(fRom);
+    const BYTE compareCode[]={
+        0xb8,0x00,0x20,0x8e,0xc0, // ES=2000
+        0xb8,0x00,0x10,0x8e,0xd8, // DS=1000
+        0xbe,0x00,0x02,           // SI=0200
+        0xbf,0x00,0x03,           // DI=0300
+        0xb9,0x04,0x00,           // CX=4
+        0xfc,                     // CLD
+        0xf3,0xa6,                // REPE CMPSB
+        0xb0,0x44,                // AL=44
+        0xbf,0x10,0x03,           // DI=0310
+        0xb9,0x04,0x00,           // CX=4
+        0xf2,0xae,                // REPNE SCASB
+        0xf4
+    };
+    for(unsigned i=0;i<sizeof(compareCode);++i)
+        compare.bus().writeMemory(0x10000+i,compareCode[i]);
+    compare.bus().writeMemory(0x10200,0x11);
+    compare.bus().writeMemory(0x10201,0x22);
+    compare.bus().writeMemory(0x10202,0x33);
+    compare.bus().writeMemory(0x20300,0x11);
+    compare.bus().writeMemory(0x20301,0x99);
+    compare.bus().writeMemory(0x20302,0x33);
+    compare.bus().writeMemory(0x20310,0x01);
+    compare.bus().writeMemory(0x20311,0x02);
+    compare.bus().writeMemory(0x20312,0x44);
+    compare.reset();compare.cpu().executeOne();
+    for(unsigned i=0;i<8;++i)compare.cpu().executeOne(); // through CLD
+    auto& cc=static_cast<Main8088Board::Core&>(compare.cpu());
+    compare.cpu().executeOne(); // first equal
+    if(cc.reg(1)!=3 || !(cc.flags()&0x40))return 68;
+    compare.cpu().executeOne(); // mismatch terminates REPE
+    if(cc.reg(1)!=2 || cc.reg(6)!=0x202 || cc.reg(7)!=0x302 ||
+       (cc.flags()&0x40))return 69;
+    for(unsigned i=0;i<3;++i)compare.cpu().executeOne(); // AL,DI,CX
+    for(unsigned i=0;i<3;++i)compare.cpu().executeOne(); // REPNE SCASB
+    if(cc.reg(1)!=1 || cc.reg(7)!=0x313 || !(cc.flags()&0x40))return 70;
+    compare.cpu().executeOne();
+    if(!cc.halted())return 71;
     return 0;
 }

@@ -230,41 +230,51 @@ void Main8088Board::Core::executeOne()
     if(halted_)return;
     const WORD opAddress=ip_;
     BYTE opcode=fetch8();
-    bool repeat=false;
+    BYTE repeat=0;
     for(unsigned i=0;i<15 && (opcode==0xf2 || opcode==0xf3);++i) {
-        repeat=true;
+        repeat=opcode;
         opcode=fetch8();
     }
-    if(repeat && opcode!=0xa4 && opcode!=0xa5 &&
-       opcode!=0xaa && opcode!=0xab && opcode!=0xac && opcode!=0xad)
+    const bool stringOp=(opcode>=0xa4 && opcode<=0xa7) || (opcode>=0xaa && opcode<=0xaf);
+    if(repeat && !stringOp)
         throw std::runtime_error("unsupported REP opcode");
     switch(opcode) {
-    case 0xa4: case 0xa5: case 0xaa: case 0xab:
-    case 0xac: case 0xad: { // MOVS, STOS, LODS
+    case 0xa4: case 0xa5: case 0xa6: case 0xa7:
+    case 0xaa: case 0xab: case 0xac: case 0xad:
+    case 0xae: case 0xaf: {
         const bool word=(opcode&1)!=0;
         const WORD delta=WORD((flags_&0x0400)?(word?-2:-1):(word?2:1));
-        const bool move=(opcode==0xa4 || opcode==0xa5);
-        const bool store=(opcode==0xaa || opcode==0xab);
         if(repeat && regs_[1]==0)break;
-        BYTE lo=0,hi=0;
-        if(!store) {
-            lo=bus_.readMemory(physical(segments_[3],regs_[6]));
-            if(word)hi=bus_.readMemory(physical(segments_[3],WORD(regs_[6]+1)));
+        const bool mov=opcode==0xa4 || opcode==0xa5;
+        const bool cmp=opcode==0xa6 || opcode==0xa7;
+        const bool stos=opcode==0xaa || opcode==0xab;
+        const bool lods=opcode==0xac || opcode==0xad;
+        const bool scas=opcode==0xae || opcode==0xaf;
+        const auto readString=[&](WORD segment,WORD offset)->WORD {
+            const BYTE lo=bus_.readMemory(physical(segment,offset));
+            if(!word)return lo;
+            return WORD(lo|(WORD(bus_.readMemory(physical(segment,WORD(offset+1))))<<8));
+        };
+        const auto writeString=[&](WORD segment,WORD offset,WORD value) {
+            bus_.writeMemory(physical(segment,offset),BYTE(value));
+            if(word)bus_.writeMemory(physical(segment,WORD(offset+1)),BYTE(value>>8));
+        };
+        WORD source=0,destination=0;
+        if(mov || cmp || lods) {
+            source=readString(segments_[3],regs_[6]);
             regs_[6]=WORD(regs_[6]+delta);
-        } else {
-            lo=BYTE(regs_[0]);hi=BYTE(regs_[0]>>8);
         }
-        if(move || store) {
-            bus_.writeMemory(physical(segments_[0],regs_[7]),lo);
-            if(word)bus_.writeMemory(physical(segments_[0],WORD(regs_[7]+1)),hi);
-            regs_[7]=WORD(regs_[7]+delta);
-        } else {
-            regs_[0]=word?WORD(lo|(WORD(hi)<<8)):
-                         WORD((regs_[0]&0xff00)|lo);
-        }
+        if(cmp || scas)destination=readString(segments_[0],regs_[7]);
+        if(mov)writeString(segments_[0],regs_[7],source);
+        if(stos)writeString(segments_[0],regs_[7],regs_[0]);
+        if(lods)regs_[0]=word?source:WORD((regs_[0]&0xff00)|BYTE(source));
+        if(cmp)alu(7,source,destination,word?16:8);
+        if(scas)alu(7,word?regs_[0]:BYTE(regs_[0]),destination,word?16:8);
+        if(mov || cmp || stos || scas)regs_[7]=WORD(regs_[7]+delta);
         if(repeat) {
             regs_[1]=WORD(regs_[1]-1);
-            if(regs_[1]!=0)ip_=opAddress;
+            if(regs_[1]!=0 && (!cmp && !scas ||
+                 ((flags_&0x0040)!=0)==(repeat==0xf3)))ip_=opAddress;
         }
         break;
     }
