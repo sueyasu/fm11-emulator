@@ -827,6 +827,46 @@ void Main8088Board::Core::executeOne()
             break;
         }
         const BYTE ext=fetch8();
+        if(ext==0x31 || ext==0x33 || ext==0x39 || ext==0x3b) {
+            // NEC V20 INS/EXT. The ModR/M byte encodes 8-bit registers,
+            // not a memory effective address: r/m selects the start bit
+            // register, reg selects the bit length register (/0 for imm4).
+            const BYTE spec=fetch8();
+            if((spec&0xc0)!=0xc0)
+                throw std::runtime_error("NEC INS/EXT requires register operands");
+            const unsigned startReg=spec&7u;
+            const unsigned lengthReg=(spec>>3)&7u;
+            const bool immediate=(ext&8u)!=0;
+            if(immediate && lengthReg!=0)
+                throw std::runtime_error("invalid NEC INS/EXT immediate encoding");
+            const unsigned count=((immediate?fetch8():getReg8(lengthReg))&15u)+1u;
+            const unsigned start=getReg8(startReg)&15u;
+            const bool insert=(ext==0x31 || ext==0x39);
+            const WORD seg=segments_[insert ? 0u :
+                (segmentOverride_>=0 ? unsigned(segmentOverride_) : 3u)];
+            const WORD origin=regs_[insert ? 7u : 6u];
+            unsigned value=insert ? regs_[0] : 0u;
+            for(unsigned bit=0;bit<count;++bit) {
+                const unsigned position=start+bit;
+                const WORD offset=WORD(origin+position/8u);
+                const auto address=physical(seg,offset);
+                const unsigned mask=1u<<(position&7u);
+                const BYTE current=bus_.readMemory(address);
+                if(insert) {
+                    const BYTE changed=(value&(1u<<bit))
+                        ? BYTE(current|mask) : BYTE(current&~mask);
+                    bus_.writeMemory(address,changed);
+                } else if(current&mask) {
+                    value|=1u<<bit;
+                }
+            }
+            if(!insert)regs_[0]=WORD(value);
+            const unsigned end=start+count;
+            regs_[insert ? 7u : 6u]=WORD(origin+end/8u);
+            setReg8(startReg,BYTE(end&7u));
+            // FLAGS are unaffected by INS/EXT.
+            break;
+        }
         if(ext==0x20 || ext==0x22 || ext==0x26) {
             // NEC V20 packed-BCD string operations: ADD4S, SUB4S, CMP4S.
             // CL counts digits, not bytes. SI, DI and CL do not change.

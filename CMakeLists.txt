@@ -47,6 +47,10 @@ if(FM11_BUILD_TESTS)
                      ${CMAKE_CURRENT_SOURCE_DIR}/tests/main8088_opcode_inventory.py
                      ${CMAKE_CURRENT_SOURCE_DIR}/src/boards/Main8088Board.cpp)
 
+    add_executable(mainv20_bitfield tests/mainv20_bitfield.cpp)
+    target_link_libraries(mainv20_bitfield PRIVATE fm11_core)
+    add_test(NAME mainv20_bitfield COMMAND mainv20_bitfield)
+
     add_executable(mainv20_bcd_string tests/mainv20_bcd_string.cpp)
     target_link_libraries(mainv20_bcd_string PRIVATE fm11_core)
     add_test(NAME mainv20_bcd_string COMMAND mainv20_bcd_string)
