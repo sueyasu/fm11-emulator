@@ -159,7 +159,8 @@ int main(int argc, char** argv) {
             cfmakeraw(&uart);
             tcsetattr(slaveFd,TCSANOW,&uart);
         }
-        close(slaveFd);
+        // Keep the slave descriptor open so an unattached terminal cannot
+        // cause POLLHUP to spin the emulator's poll loop.
         std::signal(SIGINT,requestStop);
         std::signal(SIGTERM,requestStop);
         std::cout << "FM-11 headless monitor\nSerial: " << slavePath
@@ -261,7 +262,7 @@ int main(int argc, char** argv) {
         };
         prompt();
         while(!stopping && !quitting) {
-            pollfd fds[2]={{STDIN_FILENO,short(inputOpen?POLLIN:0),0},
+            pollfd fds[2]={{inputOpen?STDIN_FILENO:-1,POLLIN,0},
                            {master,POLLIN,0}};
             // Run only when emulated time has not advanced beyond wall time.
             // A short positive poll timeout yields the host CPU when ahead,
@@ -317,6 +318,7 @@ int main(int argc, char** argv) {
             }
             drain();
         }
+        close(slaveFd);
         close(master);
         return 0;
     } catch (const std::exception& ex) {
