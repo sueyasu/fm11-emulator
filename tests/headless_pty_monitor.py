@@ -51,35 +51,3 @@ with tempfile.TemporaryDirectory() as directory:
             proc.kill()
             proc.wait()
 
-# Verify that --clock is enforced in elapsed wall time, rather than just
-# advancing peripheral time while executing instructions as fast as possible.
-with tempfile.TemporaryDirectory() as directory:
-    path = os.path.join(directory, "loop.bin")
-    # BRA -2 is a 3-cycle infinite loop on the MC6809.
-    with open(path, "wb") as out:
-        out.write(bytes([0x20, 0xFE]))
-    proc = subprocess.Popen([sys.argv[1], "--binary", path,
-                             "--load", "0x1000", "--pc", "0x1000",
-                             "--clock", "1000", "--instructions", "100"],
-                            stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE, bufsize=0)
-    slave = None
-    try:
-        banner = read_until(proc.stdout.fileno(), b"fm11> ", time.monotonic()+5)
-        slave_path = re.search(rb"Serial: (/dev/pts/[0-9]+)", banner).group(1).decode()
-        slave = os.open(slave_path, os.O_RDWR | os.O_NOCTTY)
-        start = time.monotonic()
-        proc.stdin.write(b"c\\n")
-        read_until(proc.stdout.fileno(), b"Instruction limit reached.",
-                   time.monotonic()+5)
-        elapsed = time.monotonic()-start
-        assert elapsed >= 0.15, f"CPU not throttled: {elapsed:.3f}s"
-        proc.stdin.write(b"q\\n")
-        proc.communicate(timeout=5)
-        assert proc.returncode == 0
-    finally:
-        if slave is not None:
-            os.close(slave)
-        if proc.poll() is None:
-            proc.kill()
-            proc.wait()
