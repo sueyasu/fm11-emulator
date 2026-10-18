@@ -32,6 +32,7 @@ public:
         WORD flags() const {return flags_;}
         WORD reg(unsigned i) const {return regs_.at(i);}
         bool halted() const {return halted_;}
+        bool emulation8080() const {return emulation8080_;}
     private:
         std::uint32_t physical(WORD seg,WORD off) const;
         BYTE fetch8();
@@ -72,6 +73,7 @@ public:
         WORD ip_=0;
         WORD flags_=0x0002;
         bool halted_=false;
+        bool emulation8080_=false;
         unsigned irqInhibit_=0;
         int segmentOverride_=-1; // -1: default, otherwise ES/CS/SS/DS
     };

@@ -20,6 +20,7 @@ void Main8088Board::Core::reset()
     ip_=0;
     flags_=0x0002;
     halted_=false;
+    emulation8080_=false;
     irqInhibit_=0;
     segmentOverride_=-1;
 }
@@ -340,6 +341,23 @@ void Main8088Board::Core::executeOne()
         return;
     }
     if(halted_)return;
+    if(emulation8080_) {
+        const BYTE instruction=fetch8();
+        if(instruction==0x00) return; // 8080 NOP
+        if(instruction==0xed) {
+            const BYTE subopcode=fetch8();
+            if(subopcode==0xfd) { // RETEM: restore the native frame
+                ip_=pop16();
+                segments_[1]=pop16();
+                flags_=pop16();
+                emulation8080_=false;
+                return;
+            }
+            throw std::runtime_error("NEC V20 8080 mode instruction not implemented");
+        }
+        if(instruction==0x76) {halted_=true;return;} // 8080 HLT
+        throw std::runtime_error("NEC V20 8080 mode instruction not implemented");
+    }
     const WORD opAddress=ip_;
     segmentOverride_=-1;
     BYTE repeat=0;
@@ -871,6 +889,12 @@ void Main8088Board::Core::executeOne()
             break;
         }
         const BYTE ext=fetch8();
+        if(ext==0xff) { // BRKEM imm8: INT-style transfer into 8080 mode
+            const BYTE vector=fetch8();
+            interrupt(vector);
+            emulation8080_=true;
+            break;
+        }
         if(ext==0x31 || ext==0x33 || ext==0x39 || ext==0x3b) {
             // NEC V20 INS/EXT. The ModR/M byte encodes 8-bit registers,
             // not a memory effective address: r/m selects the start bit
