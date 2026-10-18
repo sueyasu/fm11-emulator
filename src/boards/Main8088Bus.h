@@ -52,6 +52,7 @@ private:
     BYTE picVectorBase_=0x08;
     BYTE picReadIsr_=0;
     BYTE picInitStep_=0;
+    bool picAutoEoi_=false;
     bool picNeedsIcw4_=false;
     bool picSingle_=false;
     std::array<DmaChannel,4> dmaChannels_{};

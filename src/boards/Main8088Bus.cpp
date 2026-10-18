@@ -9,7 +9,7 @@ void Main8088Bus::reset()
     cardIoRam_.fill(0);
     picMask_=0;picRequest_=0;picInService_=0;
     picVectorBase_=8;picReadIsr_=0;picInitStep_=0;
-    picNeedsIcw4_=false;picSingle_=false;
+    picNeedsIcw4_=false;picSingle_=false;picAutoEoi_=false;
     resetDma();
 }
 
@@ -58,6 +58,7 @@ void Main8088Bus::writeIo(WORD port,BYTE value)
         if(value&0x10) {
             picInitStep_=1;
             picNeedsIcw4_=(value&1)!=0;
+            picAutoEoi_=false;
             picSingle_=(value&2)!=0;
             picMask_=0;picRequest_=0;picInService_=0;picReadIsr_=0;
         } else if((value&0x18)==0x08) {
@@ -78,6 +79,7 @@ void Main8088Bus::writeIo(WORD port,BYTE value)
         } else if(picInitStep_==2) {
             picInitStep_=picNeedsIcw4_?3:0;
         } else if(picInitStep_==3) {
+            picAutoEoi_=(value&0x02)!=0; // ICW4 automatic EOI
             picInitStep_=0;
         } else picMask_=value;
         return;
@@ -110,7 +112,7 @@ BYTE Main8088Bus::acknowledgeInterrupt()
     }
     for(unsigned line=0;line<8;++line)if(eligible&(1u<<line)) {
         picRequest_=BYTE(picRequest_&~(1u<<line));
-        picInService_=BYTE(picInService_|(1u<<line));
+        if(!picAutoEoi_)picInService_=BYTE(picInService_|(1u<<line));
         return BYTE(picVectorBase_+line);
     }
     return BYTE(picVectorBase_+7); // Spurious IRQ7 when none is pending
