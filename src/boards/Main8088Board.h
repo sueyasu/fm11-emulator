@@ -73,6 +73,7 @@ public:
         WORD flags_=0x0002;
         bool halted_=false;
         unsigned irqInhibit_=0;
+        int segmentOverride_=-1; // -1: default, otherwise ES/CS/SS/DS
     };
 private:
     Main8088Bus bus_;

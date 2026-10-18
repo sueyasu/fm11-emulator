@@ -21,6 +21,7 @@ void Main8088Board::Core::reset()
     flags_=0x0002;
     halted_=false;
     irqInhibit_=0;
+    segmentOverride_=-1;
 }
 std::uint32_t Main8088Board::Core::physical(WORD seg,WORD off) const
 {
@@ -97,9 +98,10 @@ Main8088Board::Core::Operand Main8088Board::Core::decodeModRm()
     }
     if(mod==1) base=WORD(base+static_cast<std::int8_t>(fetch8()));
     if(mod==2) base=WORD(base+fetch16());
-    op.address=physical(segments_[stack?2:3],base);
+    const unsigned segment=segmentOverride_>=0 ? unsigned(segmentOverride_) : (stack?2u:3u);
+    op.address=physical(segments_[segment],base);
     op.offset=base;
-    op.segment=BYTE(stack?2:3);
+    op.segment=BYTE(segment);
     return op;
 }
 BYTE Main8088Board::Core::getReg8(unsigned index) const
@@ -339,11 +341,19 @@ void Main8088Board::Core::executeOne()
     }
     if(halted_)return;
     const WORD opAddress=ip_;
-    BYTE opcode=fetch8();
+    segmentOverride_=-1;
     BYTE repeat=0;
-    for(unsigned i=0;i<15 && (opcode==0xf2 || opcode==0xf3);++i) {
-        repeat=opcode;
+    BYTE opcode=0;
+    unsigned prefixCount=0;
+    while(true) {
         opcode=fetch8();
+        if(opcode==0xf2 || opcode==0xf3)repeat=opcode;
+        else if(opcode==0x26)segmentOverride_=0;
+        else if(opcode==0x2e)segmentOverride_=1;
+        else if(opcode==0x36)segmentOverride_=2;
+        else if(opcode==0x3e)segmentOverride_=3;
+        else break;
+        if(++prefixCount>=15)throw std::runtime_error("too many 8088 prefixes");
     }
     const bool stringOp=(opcode>=0xa4 && opcode<=0xa7) || (opcode>=0xaa && opcode<=0xaf);
     if(repeat && !stringOp)
@@ -371,7 +381,7 @@ void Main8088Board::Core::executeOne()
         };
         WORD source=0,destination=0;
         if(mov || cmp || lods) {
-            source=readString(segments_[3],regs_[6]);
+            source=readString(segments_[segmentOverride_>=0?unsigned(segmentOverride_):3u],regs_[6]);
             regs_[6]=WORD(regs_[6]+delta);
         }
         if(cmp || scas)destination=readString(segments_[0],regs_[7]);
@@ -584,25 +594,25 @@ void Main8088Board::Core::executeOne()
     }
     case 0xa0: { // MOV AL,moffs8 (DS)
         const WORD off=fetch16();
-        setReg8(0,bus_.readMemory(physical(segments_[3],off)));
+        setReg8(0,bus_.readMemory(physical(segments_[segmentOverride_>=0?unsigned(segmentOverride_):3u],off)));
         break;
     }
     case 0xa1: { // MOV AX,moffs16
         const WORD off=fetch16();
-        const BYTE lo=bus_.readMemory(physical(segments_[3],off));
-        const BYTE hi=bus_.readMemory(physical(segments_[3],WORD(off+1)));
+        const BYTE lo=bus_.readMemory(physical(segments_[segmentOverride_>=0?unsigned(segmentOverride_):3u],off));
+        const BYTE hi=bus_.readMemory(physical(segments_[segmentOverride_>=0?unsigned(segmentOverride_):3u],WORD(off+1)));
         regs_[0]=WORD(lo|(WORD(hi)<<8));
         break;
     }
     case 0xa2: { // MOV moffs8,AL
         const WORD off=fetch16();
-        bus_.writeMemory(physical(segments_[3],off),getReg8(0));
+        bus_.writeMemory(physical(segments_[segmentOverride_>=0?unsigned(segmentOverride_):3u],off),getReg8(0));
         break;
     }
     case 0xa3: { // MOV moffs16,AX
         const WORD off=fetch16();
-        bus_.writeMemory(physical(segments_[3],off),BYTE(regs_[0]));
-        bus_.writeMemory(physical(segments_[3],WORD(off+1)),BYTE(regs_[0]>>8));
+        bus_.writeMemory(physical(segments_[segmentOverride_>=0?unsigned(segmentOverride_):3u],off),BYTE(regs_[0]));
+        bus_.writeMemory(physical(segments_[segmentOverride_>=0?unsigned(segmentOverride_):3u],WORD(off+1)),BYTE(regs_[0]>>8));
         break;
     }
     case 0x8d: { // LEA r16,m - register operand is invalid

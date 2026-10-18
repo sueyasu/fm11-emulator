@@ -605,5 +605,43 @@ int main()
     if(ff.cpu().pc()!=0x20100)return 100;
     ff.cpu().executeOne();
     if(!ffc.halted())return 101;
+    // Segment prefixes: default DS, override ES/SS, BP default SS,
+    // moffs override, REP MOVSB source override, and no prefix leakage.
+    Main8088Board segp(CpuType::I8088);
+    segp.bus().loadBootRom(fRom);
+    const BYTE segCode[]={
+        0xb8,0x00,0x10,0x8e,0xd8, // DS=1000
+        0xb8,0x00,0x20,0x8e,0xc0, // ES=2000
+        0xb8,0x00,0x30,0x8e,0xd0, // SS=3000
+        0xbb,0x00,0x01,           // BX=0100
+        0x8a,0x07,                // MOV AL,[BX] (DS)
+        0x26,0x8a,0x27,           // MOV AH,ES:[BX]
+        0x36,0x8a,0x07,           // MOV AL,SS:[BX]
+        0xa0,0x00,0x01,           // MOV AL,DS:[0100] (no leak)
+        0x26,0xa0,0x00,0x01,      // MOV AL,ES:[0100]
+        0xbe,0x00,0x01,           // SI=0100
+        0xbf,0x00,0x02,           // DI=0200
+        0xb9,0x01,0x00,           // CX=1
+        0xf3,0x36,0xa4,           // REP SS:MOVSB => ES:[0200]
+        0xf4
+    };
+    for(unsigned i=0;i<sizeof(segCode);++i)segp.bus().writeMemory(0x10000+i,segCode[i]);
+    segp.bus().writeMemory(0x10100,0x11);
+    segp.bus().writeMemory(0x20100,0x22);
+    segp.bus().writeMemory(0x30100,0x33);
+    segp.reset();segp.cpu().executeOne();
+    auto& segCore=static_cast<Main8088Board::Core&>(segp.cpu());
+    for(unsigned i=0;i<7;++i)segp.cpu().executeOne();
+    if((segCore.reg(0)&0xff)!=0x11)return 103;
+    segp.cpu().executeOne();
+    if(segCore.reg(0)!=0x2211)return 104;
+    segp.cpu().executeOne();
+    if(segCore.reg(0)!=0x2233)return 105;
+    segp.cpu().executeOne();
+    if(segCore.reg(0)!=0x2211)return 106;
+    segp.cpu().executeOne();
+    if(segCore.reg(0)!=0x2222)return 107;
+    for(unsigned i=0;i<4;++i)segp.cpu().executeOne();
+    if(segp.bus().readMemory(0x20200)!=0x33 || segCore.reg(1)!=0)return 108;
     return 0;
 }
