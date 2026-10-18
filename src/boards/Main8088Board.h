@@ -61,6 +61,9 @@ public:
         unsigned readOperand(const Operand& op,unsigned bits) const;
         void writeOperand(const Operand& op,unsigned bits,unsigned value);
         unsigned incDec(unsigned lhs,unsigned bits,bool decrement);
+        unsigned getReg(unsigned index,unsigned bits) const;
+        void setReg(unsigned index,unsigned bits,unsigned value);
+        void executeAluModRm(BYTE opcode);
         Main8088Bus& bus_;
         CpuType variant_;
         std::array<WORD,8> regs_{};

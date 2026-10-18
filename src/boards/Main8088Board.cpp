@@ -219,6 +219,29 @@ unsigned Main8088Board::Core::incDec(unsigned lhs,unsigned bits,bool decrement)
     if(carry)flags_|=CF;else flags_&=WORD(~CF);
     return result&mask;
 }
+unsigned Main8088Board::Core::getReg(unsigned index,unsigned bits) const
+{
+    return bits==8?getReg8(index):regs_[index];
+}
+void Main8088Board::Core::setReg(unsigned index,unsigned bits,unsigned value)
+{
+    if(bits==8)setReg8(index,BYTE(value));
+    else regs_[index]=WORD(value);
+}
+void Main8088Board::Core::executeAluModRm(BYTE opcode)
+{
+    const auto op=decodeModRm();
+    const unsigned bits=(opcode&1)?16u:8u;
+    const bool destinationReg=(opcode&2)!=0;
+    const unsigned lhs=destinationReg?getReg(op.reg,bits):readOperand(op,bits);
+    const unsigned rhs=destinationReg?readOperand(op,bits):getReg(op.reg,bits);
+    const unsigned operation=(opcode>>3)&7;
+    const unsigned result=alu(operation,lhs,rhs,bits);
+    if(operation!=7) {
+        if(destinationReg)setReg(op.reg,bits,result);
+        else writeOperand(op,bits,result);
+    }
+}
 bool Main8088Board::Core::jumpCondition(unsigned code) const
 {
     const bool cf=(flags_&CF)!=0,zf=(flags_&ZF)!=0;
@@ -502,25 +525,8 @@ void Main8088Board::Core::executeOne()
     case 0x17: segments_[2]=pop16();irqInhibit_=1;break;
     case 0x1f: segments_[3]=pop16();break;
     default:
-        if(opcode<=0x3b && (opcode&7)<=3 && (opcode&0x04)==0) {
-            const auto op=decodeModRm();
-            const unsigned bits=(opcode&1)?16u:8u;
-            const bool destinationReg=(opcode&2)!=0;
-            const unsigned lhs=destinationReg ?
-                (bits==8?getReg8(op.reg):regs_[op.reg]) :
-                (bits==8?read8(op):read16(op));
-            const unsigned rhs=destinationReg ?
-                (bits==8?read8(op):read16(op)) :
-                (bits==8?getReg8(op.reg):regs_[op.reg]);
-            const unsigned operation=(opcode>>3)&7;
-            const unsigned result=alu(operation,lhs,rhs,bits);
-            if(operation!=7) {
-                if(destinationReg) {
-                    if(bits==8)setReg8(op.reg,BYTE(result));else regs_[op.reg]=WORD(result);
-                } else {
-                    if(bits==8)write8(op,BYTE(result));else write16(op,WORD(result));
-                }
-            }
+        if(opcode<=0x3b && (opcode&7)<=3 && (opcode&4)==0) {
+            executeAluModRm(opcode);
             break;
         }
         if(opcode>=0x70 && opcode<=0x7f) {
