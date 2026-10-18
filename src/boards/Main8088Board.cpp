@@ -821,11 +821,33 @@ void Main8088Board::Core::executeOne()
     case 0xcb: ip_=pop16();segments_[1]=pop16();break; // RET far
     case 0xc2: { const WORD adjustment=fetch16(); ip_=pop16();regs_[4]=WORD(regs_[4]+adjustment);break; }
     case 0xca: { const WORD adjustment=fetch16(); ip_=pop16();segments_[1]=pop16();regs_[4]=WORD(regs_[4]+adjustment);break; }
-    case 0x0f: // POP CS exists on 8086/8088; NEC V20 uses 0F as extension escape
-        if(variant_!=CpuType::I8088)
+    case 0x0f: { // POP CS on 8088; V20 bit manipulation escape
+        if(variant_==CpuType::I8088) {
+            segments_[1]=pop16();
+            break;
+        }
+        const BYTE ext=fetch8();
+        if(ext<0x10 || ext>0x1f)
             throw std::runtime_error("NEC V20 extended opcode not implemented");
-        segments_[1]=pop16();
+        const unsigned operation=(ext>>1)&3; // TEST1, CLR1, SET1, NOT1
+        const unsigned bits=(ext&1)?16u:8u;
+        const auto operand=decodeModRm();
+        if(operand.reg!=0)
+            throw std::runtime_error("invalid NEC bit ModR/M extension");
+        const unsigned bitIndex=((ext&8)?fetch8():getReg8(1))&(bits-1);
+        const unsigned bitMask=1u<<bitIndex;
+        const unsigned value=readOperand(operand,bits);
+        if(operation==0) {
+            // TEST1 affects ZF only, unlike the 8088 TEST instruction.
+            if(value&bitMask)flags_&=WORD(~ZF);
+            else flags_|=ZF;
+        } else {
+            const unsigned updated=operation==1 ? (value&~bitMask)
+                : operation==2 ? (value|bitMask) : (value^bitMask);
+            writeOperand(operand,bits,updated);
+        }
         break;
+    }
     case 0xd8: case 0xd9: case 0xda: case 0xdb:
     case 0xdc: case 0xdd: case 0xde: case 0xdf: {
         // ESC is an 8087 coprocessor opcode. Consume ModR/M and any
