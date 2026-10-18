@@ -229,8 +229,45 @@ void Main8088Board::Core::executeOne()
     }
     if(halted_)return;
     const WORD opAddress=ip_;
-    const BYTE opcode=fetch8();
+    BYTE opcode=fetch8();
+    bool repeat=false;
+    for(unsigned i=0;i<15 && (opcode==0xf2 || opcode==0xf3);++i) {
+        repeat=true;
+        opcode=fetch8();
+    }
+    if(repeat && opcode!=0xa4 && opcode!=0xa5 &&
+       opcode!=0xaa && opcode!=0xab && opcode!=0xac && opcode!=0xad)
+        throw std::runtime_error("unsupported REP opcode");
     switch(opcode) {
+    case 0xa4: case 0xa5: case 0xaa: case 0xab:
+    case 0xac: case 0xad: { // MOVS, STOS, LODS
+        const bool word=(opcode&1)!=0;
+        const WORD delta=WORD((flags_&0x0400)?(word?-2:-1):(word?2:1));
+        const bool move=(opcode==0xa4 || opcode==0xa5);
+        const bool store=(opcode==0xaa || opcode==0xab);
+        if(repeat && regs_[1]==0)break;
+        BYTE lo=0,hi=0;
+        if(!store) {
+            lo=bus_.readMemory(physical(segments_[3],regs_[6]));
+            if(word)hi=bus_.readMemory(physical(segments_[3],WORD(regs_[6]+1)));
+            regs_[6]=WORD(regs_[6]+delta);
+        } else {
+            lo=BYTE(regs_[0]);hi=BYTE(regs_[0]>>8);
+        }
+        if(move || store) {
+            bus_.writeMemory(physical(segments_[0],regs_[7]),lo);
+            if(word)bus_.writeMemory(physical(segments_[0],WORD(regs_[7]+1)),hi);
+            regs_[7]=WORD(regs_[7]+delta);
+        } else {
+            regs_[0]=word?WORD(lo|(WORD(hi)<<8)):
+                         WORD((regs_[0]&0xff00)|lo);
+        }
+        if(repeat) {
+            regs_[1]=WORD(regs_[1]-1);
+            if(regs_[1]!=0)ip_=opAddress;
+        }
+        break;
+    }
     case 0x04: case 0x0c: case 0x24: case 0x2c: case 0x34: case 0x3c: {
         const BYTE immediate=fetch8(), lhs=getReg8(0);
         unsigned value=lhs;

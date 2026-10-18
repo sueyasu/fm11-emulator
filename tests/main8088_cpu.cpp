@@ -346,5 +346,46 @@ int main()
     if((dc.reg(0)&0xff)!=0x0f || data.bus().readRam(0x10020)!=0x0f)return 63;
     data.cpu().executeOne();
     if(!dc.halted())return 64;
+    // REP MOVSB and DF=1 REP STOSW, with independent source/destination segments.
+    Main8088Board strings(CpuType::I8088);
+    strings.bus().loadBootRom(fRom);
+    const BYTE stringCode[]={
+       0xb8,0x00,0x20, 0x8e,0xc0, // MOV AX,2000; MOV ES,AX
+       0xb8,0x00,0x10, 0x8e,0xd8, // MOV AX,1000; MOV DS,AX
+       0xbe,0x10,0x00,           // MOV SI,0010
+       0xbf,0x20,0x00,           // MOV DI,0020
+       0xb9,0x03,0x00,           // MOV CX,3
+       0xfc,                     // CLD
+       0xf3,0xa4,                // REP MOVSB
+       0xb8,0x34,0x12,           // MOV AX,1234
+       0xbf,0x40,0x00,           // MOV DI,0040
+       0xb9,0x02,0x00,           // MOV CX,2
+       0xfd,                     // STD
+       0xf3,0xab,                // REP STOSW
+       0xf4
+    };
+    for(unsigned i=0;i<sizeof(stringCode);++i)
+        strings.bus().writeMemory(0x10000+i,stringCode[i]);
+    strings.bus().writeMemory(0x10010,0x81);
+    strings.bus().writeMemory(0x10011,0x82);
+    strings.bus().writeMemory(0x10012,0x83);
+    strings.reset();
+    strings.cpu().executeOne(); // far JMP
+    for(unsigned i=0;i<8;++i)strings.cpu().executeOne(); // through CLD
+    auto& sc=static_cast<Main8088Board::Core&>(strings.cpu());
+    for(unsigned i=0;i<3;++i)strings.cpu().executeOne(); // REP MOVSB
+    if(sc.reg(1)!=0 || sc.reg(6)!=0x13 || sc.reg(7)!=0x23 ||
+       strings.bus().readRam(0x20020)!=0x81 ||
+       strings.bus().readRam(0x20021)!=0x82 ||
+       strings.bus().readRam(0x20022)!=0x83)return 65;
+    for(unsigned i=0;i<4;++i)strings.cpu().executeOne(); // MOV AX,DI,CX,STD
+    for(unsigned i=0;i<2;++i)strings.cpu().executeOne(); // REP STOSW
+    if(sc.reg(1)!=0 || sc.reg(7)!=0x3c ||
+       strings.bus().readRam(0x20040)!=0x34 ||
+       strings.bus().readRam(0x20041)!=0x12 ||
+       strings.bus().readRam(0x2003e)!=0x34 ||
+       strings.bus().readRam(0x2003f)!=0x12)return 66;
+    strings.cpu().executeOne();
+    if(!sc.halted())return 67;
     return 0;
 }
