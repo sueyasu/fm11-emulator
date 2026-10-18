@@ -340,17 +340,19 @@
     PushAll();					\
     REG_PC = GetMemWord(0xFFF2);
 
-#define	RegCal(bca, wca)			\
-{   BYTE *bs = (BYTE *)RegOfs(ACC_BL >> 4);	\
-    BYTE *bd = (BYTE *)RegOfs(ACC_BL & 0x0F);	\
-    WORD *ws = (WORD *)bs;			\
-    WORD *wd = (WORD *)bd;			\
-    switch(ACC_BL & 0x88) {			\
-    case 0x00: ACC_BX = *ws; ACC_AX = *wd; wca; *wd = ACC_AX; break; \
-    case 0x08: ACC_BX = *ws; ACC_AL = *bd; bca; *bd = ACC_AL; break; \
-    case 0x80: ACC_BX = *bs; ACC_AX = *wd; wca; *wd = ACC_AX; break; \
-    case 0x88: ACC_BL = *bs; ACC_AL = *bd; bca; *bd = ACC_AL; break; \
-    } }
+#define	RegCal(bca, wca)	\
+{ BYTE p=ACC_BL, src=p>>4, dst=p&15; \
+  if(Is6309Inter16(p)) { \
+    ACC_BX=Read6309Inter16(regs,src); \
+    ACC_AX=Read6309Inter16(regs,dst); \
+    wca; \
+    Write6309Inter16(regs,dst,ACC_AX); \
+  } else { \
+    ACC_BL=Read6309Inter8(regs,src); \
+    ACC_AL=Read6309Inter8(regs,dst); \
+    bca; \
+    Write6309Inter8(regs,dst,ACC_AL); \
+  } }
 
 #define	O_ADDR		RegCal(B_ADD, W_ADD)
 #define	O_ADCR		RegCal(B_ADC, W_ADC)
@@ -360,15 +362,15 @@
 #define	O_ORR		RegCal(B_OR, W_OR)
 #define	O_EORR		RegCal(B_EOR, W_EOR)
 
-#define	O_CMPR					\
-{   BYTE *bs = (BYTE *)RegOfs(ACC_BL >> 4);	\
-    BYTE *bd = (BYTE *)RegOfs(ACC_BL & 0x0F);	\
-    WORD *ws = (WORD *)bs;			\
-    WORD *wd = (WORD *)bd;			\
-    switch(ACC_BL & 0x88) {			\
-    case 0x00: ACC_BX = *ws; ACC_AX = *wd; W_SUB; break; \
-    case 0x08: ACC_BX = *ws; ACC_AL = *bd; B_SUB; break; \
-    case 0x80: ACC_BX = *bs; ACC_AX = *wd; W_SUB; break; \
-    case 0x88: ACC_BL = *bs; ACC_AL = *bd; B_SUB; break; \
-    } }
+#define	O_CMPR	\
+{ BYTE p=ACC_BL, src=p>>4, dst=p&15; \
+  if(Is6309Inter16(p)) { \
+    ACC_BX=Read6309Inter16(regs,src); \
+    ACC_AX=Read6309Inter16(regs,dst); \
+    W_SUB; \
+  } else { \
+    ACC_BL=Read6309Inter8(regs,src); \
+    ACC_AL=Read6309Inter8(regs,dst); \
+    B_SUB; \
+  } }
 

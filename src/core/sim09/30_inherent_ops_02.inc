@@ -125,7 +125,7 @@
 
 #define	I_BYTE	ACC_BL = GetOpByte();
 #define	I_WORD	ACC_BH = GetOpByte(); ACC_BL = GetOpByte();
-#define	I_LONG	ACC_AH = GetOpByte(); ACC_AL = GetOpByte(); ACC_BH = GetOpByte(); ACC_BL = GetOpByte();
+#define	I_LONG	ACC_AQ = GetMemLong(REG_PC); REG_PC += 4;
 #define	D_BYTE	ACC_BL = GetMemByte(ACC_PT);
 #define	D_WORD	ACC_BX = GetMemWord(ACC_PT);
 #define	D_LONG	ACC_AQ = GetMemLong(ACC_PT);

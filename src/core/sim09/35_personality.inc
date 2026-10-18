@@ -1,6 +1,44 @@
 ////////////////////////////////////////////////////////////////
 // MC6809 / HD6309 execution personality
 
+static BYTE Read6309Inter8(const REGS& r, BYTE c) {
+    switch(c&15) {
+    case 8:return r.r.b.A; case 9:return r.r.b.B;
+    case 10:return r.CC; case 11:return r.DP;
+    case 14:return r.r.b.E; case 15:return r.r.b.F;
+    default:return 0;
+    }
+}
+static void Write6309Inter8(REGS& r, BYTE c, BYTE v) {
+    switch(c&15) {
+    case 8:r.r.b.A=v;break;case 9:r.r.b.B=v;break;
+    case 10:r.CC=v;break;case 11:r.DP=v;break;
+    case 14:r.r.b.E=v;break;case 15:r.r.b.F=v;break;
+    }
+}
+static WORD Read6309Inter16(const REGS& r, BYTE c) {
+    switch(c&15) {
+    case 0: case 8: case 9:return r.r.w.D;
+    case 1:return r.r.w.X;case 2:return r.r.w.Y;
+    case 3:return r.r.w.U;case 4:return r.r.w.S;
+    case 5:return r.r.w.PC;case 6:case 14:case 15:return r.r.w.W;
+    case 7:return r.r.w.V;default:return 0;
+    }
+}
+static void Write6309Inter16(REGS& r, BYTE c, WORD v) {
+    switch(c&15) {
+    case 0:case 8:case 9:r.r.w.D=v;break;
+    case 1:r.r.w.X=v;break;case 2:r.r.w.Y=v;break;
+    case 3:r.r.w.U=v;break;case 4:r.r.w.S=v;break;
+    case 5:r.r.w.PC=v;break;case 6:case 14:case 15:r.r.w.W=v;break;
+    case 7:r.r.w.V=v;break;
+    }
+}
+static bool Is6309Inter16(BYTE p) {
+    return (p&0x80)==0 || (p&0x08)==0;
+}
+
+
 static WORD Read6309TfrRegister(const REGS& r, BYTE code)
 {
     switch(code & 15) {
