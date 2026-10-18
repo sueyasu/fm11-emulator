@@ -643,7 +643,7 @@ void Main8088Board::Core::executeOne()
         case 0xfb: flags_|=0x0200;irqInhibit_=1;return; // EI: next instruction completes before IRQ
         case 0xf3: flags_&=WORD(~0x0200);return; // DI
         case 0xc3: case 0xcb: ip_=fetch16();return; // JMP and 8080 alias
-        case 0xcd: { // CALL
+        case 0xcd: case 0xdd: case 0xfd: { // CALL and 8080 aliases
             const WORD target=fetch16();
             push8080(ip_);
             ip_=target;
