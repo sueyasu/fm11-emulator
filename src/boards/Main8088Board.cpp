@@ -399,10 +399,12 @@ void Main8088Board::Core::executeOne()
             flags_=WORD(flags_&~(CF|PF|AF|ZF|SF));
             if(subtract ? lhs<(rhs+unsigned(carryIn))
                         : result>255u)flags_|=CF;
-            if(((lhs^rhs^out)&0x10u)!=0 ||
-               (carryIn && ((lhs^rhs^out)&0x10u)==0 &&
-                ((lhs&15u)+(subtract ? 0u : (rhs&15u))+unsigned(carryIn)>15u)))
-                flags_|=AF;
+            // AC is a carry/borrow across bit 3, including incoming CY.
+            const unsigned lowLhs=lhs&0x0fu,lowRhs=rhs&0x0fu;
+            const bool auxiliary=subtract
+                ? lowLhs<(lowRhs+unsigned(carryIn))
+                : (lowLhs+lowRhs+unsigned(carryIn))>0x0fu;
+            if(auxiliary)flags_|=AF;
             if(out==0)flags_|=ZF;
             if(out&0x80)flags_|=SF;
             if(parityEven(out))flags_|=PF;
