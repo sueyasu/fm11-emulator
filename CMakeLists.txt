@@ -67,6 +67,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(mainv20_bitfield PRIVATE fm11_core)
     add_test(NAME mainv20_bitfield COMMAND mainv20_bitfield)
 
+    add_executable(main8088_shift_flags tests/main8088_shift_flags.cpp)
+    target_link_libraries(main8088_shift_flags PRIVATE fm11_core)
+    add_test(NAME main8088_shift_flags COMMAND main8088_shift_flags)
+
     add_executable(main8088_carry_flags tests/main8088_carry_flags.cpp)
     target_link_libraries(main8088_carry_flags PRIVATE fm11_core)
     add_test(NAME main8088_carry_flags COMMAND main8088_carry_flags)
