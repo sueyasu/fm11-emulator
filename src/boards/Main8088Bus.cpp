@@ -1,5 +1,6 @@
 #include "Main8088Bus.h"
 #include <utility>
+#include <stdexcept>
 
 Main8088Bus::Main8088Bus():memory_(kMemorySize,0) {}
 
@@ -138,6 +139,7 @@ void Main8088Bus::writeDma(WORD port,BYTE value)
         if(dmaFlip_==0)field=WORD((field&0xff00)|value);
         else field=WORD((field&0x00ff)|(WORD(value)<<8));
         if(port&1)ch.baseCount=ch.count;
+        else ch.baseAddress=ch.address;
         dmaFlip_^=1;
         return;
     }
@@ -162,4 +164,47 @@ void Main8088Bus::writeDma(WORD port,BYTE value)
     case 0x1e:dmaMask_=0;break;
     case 0x1f:dmaMask_=BYTE(value&0x0f);break;
     }
+}
+
+void Main8088Bus::setDmaDevice(unsigned channel,DmaRead reader,DmaWrite writer)
+{
+    if(channel>=dmaChannels_.size())throw std::out_of_range("DMA channel");
+    dmaReaders_[channel]=std::move(reader);
+    dmaWriters_[channel]=std::move(writer);
+}
+bool Main8088Bus::serviceDma()
+{
+    // 8237 transfer modes: 01=I/O to memory, 10=memory to I/O.
+    // Requests are explicitly serviced by the device scheduler.
+    if(dmaCommand_&0x04)return false; // controller disabled
+    for(unsigned channel=0;channel<4;++channel) {
+        const BYTE bit=BYTE(1u<<channel);
+        if(!(dmaRequest_&bit) || (dmaMask_&bit))continue;
+        auto& ch=dmaChannels_[channel];
+        const unsigned type=(ch.mode>>2)&3;
+        if((type==1 && !dmaReaders_[channel]) ||
+           (type==2 && !dmaWriters_[channel]) ||
+           type==3)continue;
+        // The DMA bank byte supplies address bits 16-19 on a 20-bit bus.
+        const std::uint32_t address=
+            ((std::uint32_t(ch.bank&0x0f)<<16)|ch.address)&0xfffff;
+        if(type==1)writeMemory(address,dmaReaders_[channel]());
+        else if(type==2)dmaWriters_[channel](readRam(address));
+        // type==0 is verify: advance without transferring data.
+        ch.address=WORD(ch.address+((ch.mode&0x20)?-1:1));
+        const bool terminal=(ch.count==0);
+        ch.count=WORD(ch.count-1);
+        if(terminal) {
+            dmaStatus_=BYTE(dmaStatus_|bit);
+            dmaRequest_=BYTE(dmaRequest_&~bit);
+            dmaStatus_=BYTE((dmaStatus_&0x0f)|(dmaRequest_<<4));
+            if(ch.mode&0x10) {
+                // Auto-initialize restores the base address as well as count.
+                ch.address=ch.baseAddress;
+                ch.count=ch.baseCount;
+            } else dmaMask_=BYTE(dmaMask_|bit);
+        }
+        return true;
+    }
+    return false;
 }

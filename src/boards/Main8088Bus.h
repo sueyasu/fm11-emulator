@@ -32,9 +32,14 @@ public:
     bool interruptPending() const;
     BYTE acknowledgeInterrupt();
     BYTE interruptMask() const { return picMask_; }
-    struct DmaChannel { WORD address=0, count=0, baseCount=0; BYTE mode=0, bank=0; };
+    struct DmaChannel { WORD address=0, baseAddress=0, count=0, baseCount=0; BYTE mode=0, bank=0; };
     const DmaChannel& dmaChannel(unsigned ch) const { return dmaChannels_.at(ch); }
     BYTE dmaMask() const { return dmaMask_; }
+    using DmaRead = std::function<BYTE()>;
+    using DmaWrite = std::function<void(BYTE)>;
+    void setDmaDevice(unsigned channel,DmaRead reader,DmaWrite writer);
+    // Execute one requested DMA byte; returns false if no transfer can run.
+    bool serviceDma();
 
 private:
     std::vector<BYTE> memory_;
@@ -51,6 +56,8 @@ private:
     bool picSingle_=false;
     std::array<DmaChannel,4> dmaChannels_{};
     BYTE dmaCommand_=0, dmaMask_=0, dmaStatus_=0, dmaFlip_=0, dmaRequest_=0;
+    std::array<DmaRead,4> dmaReaders_{};
+    std::array<DmaWrite,4> dmaWriters_{};
     void resetDma();
     BYTE readDma(WORD port) const;
     void writeDma(WORD port,BYTE value);

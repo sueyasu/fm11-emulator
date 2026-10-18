@@ -76,5 +76,47 @@ int main()
     bus.writeIo(0x1d,0); // master clear
     if(bus.dmaChannel(2).address!=0 || bus.dmaChannel(2).bank!=0 ||
        bus.dmaMask()!=0)return 27;
+    // DMA transfer, masking, terminal count, address wrap and direction.
+    bus.reset();
+    bus.writeIo(0x1c,0);
+    bus.writeIo(0x14,0xfe);bus.writeIo(0x14,0xff); // address FFFE
+    bus.writeIo(0x15,0x01);bus.writeIo(0x15,0x00); // count 1: 2 bytes
+    bus.writeIo(0x22,0x02);                     // physical 2FFFE
+    bus.writeIo(0x1b,0x46);                     // ch2 single, I/O -> memory
+    BYTE value=0x91;
+    bus.setDmaDevice(2,[&](){return value++;},{});
+    bus.writeIo(0x19,0x06);
+    bus.writeIo(0x1f,0x04); // mask channel 2
+    if(bus.serviceDma() || bus.readRam(0x2fffe)!=0)return 28;
+    bus.writeIo(0x1a,0x02);
+    if(!bus.serviceDma() || bus.readRam(0x2fffe)!=0x91 ||
+       bus.dmaChannel(2).address!=0xffff ||
+       bus.dmaChannel(2).count!=0)return 29;
+    if(!bus.serviceDma() || bus.readRam(0x2ffff)!=0x92 ||
+       bus.dmaChannel(2).address!=0 ||
+       bus.dmaChannel(2).count!=0xffff ||
+       !(bus.readIo(0x18)&4) || bus.serviceDma())return 30;
+    if(bus.readIo(0x18)&4)return 31; // TC latch clears on status read
+    // Memory -> I/O, decrement mode, one byte at 0x30100.
+    bus.writeIo(0x1c,0);
+    bus.writeIo(0x16,0x00);bus.writeIo(0x16,0x01);
+    bus.writeIo(0x17,0);bus.writeIo(0x17,0);
+    bus.writeIo(0x23,0x03);
+    bus.writeIo(0x1b,0x6b); // ch3, decrement, memory -> device
+    bus.writeMemory(0x30100,0xa6);
+    BYTE written=0;
+    bus.setDmaDevice(3,{},[&](BYTE b){written=b;});
+    bus.writeIo(0x19,0x07);
+    if(!bus.serviceDma() || written!=0xa6 ||
+       bus.dmaChannel(3).address!=0x00ff)return 32;
+    // Auto-init count/address restoration.
+    bus.writeIo(0x1c,0);
+    bus.writeIo(0x10,0x00);bus.writeIo(0x10,0x02);
+    bus.writeIo(0x11,0);bus.writeIo(0x11,0);
+    bus.writeIo(0x1b,0x54); // ch0, auto-init, I/O -> memory
+    bus.setDmaDevice(0,[]{return BYTE(0x55);},{});
+    bus.writeIo(0x19,0x04);
+    if(!bus.serviceDma() || bus.dmaChannel(0).address!=0x0200 ||
+       bus.dmaChannel(0).count!=0 || bus.readRam(0x200)!=0x55)return 33;
     return 0;
 }
