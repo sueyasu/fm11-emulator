@@ -172,7 +172,7 @@ int main(int argc, char** argv) {
         if (!idleLogPath.empty()) {
             idleLog.open(idleLogPath, std::ios::out | std::ios::trunc);
             if (!idleLog) throw std::runtime_error("cannot open idle log: "+idleLogPath);
-            idleLog << "seconds,instructions,sync_entries,cwai_entries,sync_wait_ms,cwai_wait_ms,irq_accepted,ptm_irq_asserted,pc,cc,wait_state\\n";
+            idleLog << "seconds,instructions,sync_entries,cwai_entries,sync_wait_ms,cwai_wait_ms,irq_accepted,ptm_irq_asserted,pc,cc,wait_state\n";
         }
         using Clock=std::chrono::steady_clock;
         auto statsStart=Clock::now();
@@ -351,7 +351,7 @@ int main(int argc, char** argv) {
                             << board.ptmIrqAssertCount()-lastPtm << ','
                             << hex(regs.r.w.PC,4) << ',' << hex(regs.CC,2) << ','
                             << (state==CSim09::WaitState::Running?"running":
-                                state==CSim09::WaitState::Sync?"sync":"cwai") << '\\n';
+                                state==CSim09::WaitState::Sync?"sync":"cwai") << '\n';
                     idleLog.flush();
                     lastCount=count; lastSyncEntries=syncEntries;
                     lastCwaiEntries=cwaiEntries; lastSyncWaitNs=syncWaitNs;
