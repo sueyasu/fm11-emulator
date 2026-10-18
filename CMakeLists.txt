@@ -67,6 +67,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(mainv20_bitfield PRIVATE fm11_core)
     add_test(NAME mainv20_bitfield COMMAND mainv20_bitfield)
 
+    add_executable(main8088_stack_wrap tests/main8088_stack_wrap.cpp)
+    target_link_libraries(main8088_stack_wrap PRIVATE fm11_core)
+    add_test(NAME main8088_stack_wrap COMMAND main8088_stack_wrap)
+
     add_executable(main8088_rotate_carry tests/main8088_rotate_carry.cpp)
     target_link_libraries(main8088_rotate_carry PRIVATE fm11_core)
     add_test(NAME main8088_rotate_carry COMMAND main8088_rotate_carry)

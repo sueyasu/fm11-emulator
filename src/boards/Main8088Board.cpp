@@ -47,12 +47,12 @@ void Main8088Board::Core::push16(WORD value)
     regs_[4]=WORD(regs_[4]-2);
     const auto addr=physical(segments_[2],regs_[4]);
     bus_.writeMemory(addr,BYTE(value));
-    bus_.writeMemory((addr+1)&0xfffff,BYTE(value>>8));
+    bus_.writeMemory(physical(segments_[2],WORD(regs_[4]+1)),BYTE(value>>8));
 }
 WORD Main8088Board::Core::pop16()
 {
     const auto addr=physical(segments_[2],regs_[4]);
-    const WORD value=WORD(bus_.readMemory(addr)|(WORD(bus_.readMemory((addr+1)&0xfffff))<<8));
+    const WORD value=WORD(bus_.readMemory(addr)|(WORD(bus_.readMemory(physical(segments_[2],WORD(regs_[4]+1))))<<8));
     regs_[4]=WORD(regs_[4]+2);
     return value;
 }
