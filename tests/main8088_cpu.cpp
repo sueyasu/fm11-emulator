@@ -631,7 +631,8 @@ int main()
     segp.bus().writeMemory(0x30100,0x33);
     segp.reset();segp.cpu().executeOne();
     auto& segCore=static_cast<Main8088Board::Core&>(segp.cpu());
-    for(unsigned i=0;i<7;++i)segp.cpu().executeOne();
+    // Seven setup instructions precede the first DS:[BX] load.
+    for(unsigned i=0;i<8;++i)segp.cpu().executeOne();
     if((segCore.reg(0)&0xff)!=0x11)return 103;
     segp.cpu().executeOne();
     if(segCore.reg(0)!=0x2211)return 104;
