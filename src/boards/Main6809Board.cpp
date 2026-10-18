@@ -41,6 +41,8 @@ void Main6809Board::reset()
     serialOutput_.clear();
     ptm_.fill(PtmChannel{});
     ptmStatus_ = 0;
+    acceptedIrqCount_ = 0;
+    ptmIrqAssertCount_ = 0;
     ptmIrqAcknowledged_ = false;
     ptmCycleFraction_ = 0;
     waitNanosecondFraction_ = 0;
@@ -352,7 +354,9 @@ void Main6809Board::refreshPtmIrq()
         ptmStatus_ |= 0x80;
     else
         ptmStatus_ &= 0x7f;
-    setMainIrqSource(0x01, active && !ptmIrqAcknowledged_);
+    const bool asserted = active && !ptmIrqAcknowledged_;
+    if (asserted && (mainIrqSources_ & 0x01) == 0) ++ptmIrqAssertCount_;
+    setMainIrqSource(0x01, asserted);
 }
 
 void Main6809Board::advancePtm(std::uint64_t ticks)
@@ -687,6 +691,7 @@ void Main6809Board::Core::executeOne()
     constexpr BYTE kIrqMask = 0x10; // MC6809 CC.I
     if (board_.irqPending() && (regs.CC & kIrqMask) == 0) {
         SimIRQ();
+        ++board_.acceptedIrqCount_;
         if (board_.cpuClockHz_ != 0)
             board_.advanceCpuCycles(
                 variant_ == CpuType::HD6309 && (regs.MD & 0x01) != 0

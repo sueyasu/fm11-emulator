@@ -103,3 +103,11 @@ To diagnose persistent CPU load while NitrOS-9 is waiting for input, launch
 and receive interrupts remain operational. The default behavior is unchanged.
 Compare host CPU usage at the Shell prompt with and without the switch.
 This is a diagnostic option, not a verified FM-11 hardware correction.
+
+### CPU idle diagnostics
+
+Add `--idle-log idle.csv` to write a CSV sample approximately once per host
+second. The samples contain executed instructions, SYNC/CWAI entries, measured
+host wait duration for each state (milliseconds), IRQ entries accepted by the
+CPU, PTM IRQ assertions, and current PC/CC/wait state. Counts are interval
+deltas, not cumulative. Compare samples at the NitrOS-9 shell prompt.

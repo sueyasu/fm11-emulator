@@ -41,6 +41,8 @@ public:
     void setMainIrqSource(BYTE sourceBit, bool asserted);
     void setExtendedIrqSource(BYTE sourceBit, bool asserted);
     bool irqPending() const;
+    std::uint64_t acceptedIrqCount() const { return acceptedIrqCount_; }
+    std::uint64_t ptmIrqAssertCount() const { return ptmIrqAssertCount_; }
     CSim09::WaitState cpuWaitState() const;
     void advanceWaitTime(std::uint64_t nanoseconds);
     std::uint64_t nextPtmEventNanoseconds() const;
@@ -132,6 +134,8 @@ private:
     };
     std::array<PtmChannel, 3> ptm_{};
     BYTE ptmStatus_ = 0;
+    std::uint64_t acceptedIrqCount_ = 0;
+    std::uint64_t ptmIrqAssertCount_ = 0;
     bool ptmIrqAcknowledged_ = false;
     std::uint64_t cpuClockHz_ = 0;
     std::uint64_t ptmCycleFraction_ = 0;
