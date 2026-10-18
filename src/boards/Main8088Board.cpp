@@ -356,7 +356,84 @@ void Main8088Board::Core::executeOne()
             throw std::runtime_error("NEC V20 8080 mode instruction not implemented");
         }
         if(instruction==0x76) {halted_=true;return;} // 8080 HLT
-        throw std::runtime_error("NEC V20 8080 mode instruction not implemented");
+        // NEC maps A=AL, B/C=CH/CL, D/E=DH/DL, H/L=BH/BL,
+        // and the 8080 stack pointer to BP. The 8080 data segment is DS.
+        const auto readReg=[&](unsigned index)->BYTE {
+            switch(index&7u) {
+            case 0:return getReg8(5); // B=CH
+            case 1:return getReg8(1); // C=CL
+            case 2:return getReg8(6); // D=DH
+            case 3:return getReg8(2); // E=DL
+            case 4:return getReg8(7); // H=BH
+            case 5:return getReg8(3); // L=BL
+            case 6:return bus_.readMemory(physical(segments_[3],regs_[3]));
+            default:return getReg8(0); // A=AL
+            }
+        };
+        const auto writeReg=[&](unsigned index,BYTE value) {
+            switch(index&7u) {
+            case 0:setReg8(5,value);break;
+            case 1:setReg8(1,value);break;
+            case 2:setReg8(6,value);break;
+            case 3:setReg8(2,value);break;
+            case 4:setReg8(7,value);break;
+            case 5:setReg8(3,value);break;
+            case 6:bus_.writeMemory(physical(segments_[3],regs_[3]),value);break;
+            default:setReg8(0,value);break;
+            }
+        };
+        if((instruction&0xc0)==0x40) { // MOV r,r / MOV r,M / MOV M,r
+            writeReg((instruction>>3)&7u,readReg(instruction&7u));
+            return;
+        }
+        if((instruction&0xc7)==0x06) { // MVI r,imm8
+            const BYTE value=fetch8();
+            writeReg((instruction>>3)&7u,value);
+            return;
+        }
+        if((instruction&0xcf)==0x01) { // LXI B,D,H,SP
+            const WORD value=fetch16();
+            switch((instruction>>4)&3u) {
+            case 0:regs_[1]=value;break; // BC=CX
+            case 1:regs_[2]=value;break; // DE=DX
+            case 2:regs_[3]=value;break; // HL=BX
+            case 3:regs_[5]=value;break; // SP=BP
+            }
+            return;
+        }
+        switch(instruction) {
+        case 0x02: case 0x12: { // STAX B / STAX D
+            const WORD off=regs_[instruction==0x02?1u:2u];
+            bus_.writeMemory(physical(segments_[3],off),getReg8(0));
+            return;
+        }
+        case 0x0a: case 0x1a: { // LDAX B / LDAX D
+            const WORD off=regs_[instruction==0x0a?1u:2u];
+            setReg8(0,bus_.readMemory(physical(segments_[3],off)));
+            return;
+        }
+        case 0x22: { // SHLD addr
+            const WORD off=fetch16();
+            bus_.writeMemory(physical(segments_[3],off),BYTE(regs_[3]));
+            bus_.writeMemory(physical(segments_[3],WORD(off+1)),BYTE(regs_[3]>>8));
+            return;
+        }
+        case 0x2a: { // LHLD addr
+            const WORD off=fetch16();
+            const BYTE lo=bus_.readMemory(physical(segments_[3],off));
+            const BYTE hi=bus_.readMemory(physical(segments_[3],WORD(off+1)));
+            regs_[3]=WORD(lo|(WORD(hi)<<8));
+            return;
+        }
+        case 0x32: // STA addr
+            bus_.writeMemory(physical(segments_[3],fetch16()),getReg8(0));
+            return;
+        case 0x3a: // LDA addr
+            setReg8(0,bus_.readMemory(physical(segments_[3],fetch16())));
+            return;
+        default:
+            throw std::runtime_error("NEC V20 8080 mode instruction not implemented");
+        }
     }
     const WORD opAddress=ip_;
     segmentOverride_=-1;
