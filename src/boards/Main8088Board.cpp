@@ -827,6 +827,53 @@ void Main8088Board::Core::executeOne()
             break;
         }
         const BYTE ext=fetch8();
+        if(ext==0x20 || ext==0x22 || ext==0x26) {
+            // NEC V20 packed-BCD string operations: ADD4S, SUB4S, CMP4S.
+            // CL counts digits, not bytes. SI, DI and CL do not change.
+            // The source segment can be overridden, the destination stays ES.
+            const unsigned digits=getReg8(1);
+            const unsigned bytes=(digits+1u)/2u;
+            const WORD sourceSegment=segments_[segmentOverride_>=0
+                ? unsigned(segmentOverride_) : 3u];
+            const WORD targetSegment=segments_[0];
+            unsigned carry=0;
+            bool allZero=true;
+            for(unsigned index=0;index<bytes;++index) {
+                const WORD sourceOffset=WORD(regs_[6]+index);
+                const WORD targetOffset=WORD(regs_[7]+index);
+                const BYTE src=bus_.readMemory(physical(sourceSegment,sourceOffset));
+                const BYTE dst=bus_.readMemory(physical(targetSegment,targetOffset));
+                unsigned out=0;
+                for(unsigned shift=0;shift<=4;shift+=4) {
+                    const unsigned a=(dst>>shift)&15u;
+                    const unsigned b=(src>>shift)&15u;
+                    unsigned digit=0;
+                    if(ext==0x20) {
+                        const unsigned sum=a+b+carry;
+                        carry=sum>9u;
+                        digit=sum>=10u?sum-10u:sum;
+                    } else {
+                        const int difference=int(a)-int(b)-int(carry);
+                        carry=difference<0;
+                        digit=difference<0 ? unsigned(difference+10)
+                                            : unsigned(difference);
+                    }
+                    out|=(digit&15u)<<shift;
+                }
+                if(out!=0)allZero=false;
+                if(ext!=0x26)
+                    bus_.writeMemory(physical(targetSegment,targetOffset),BYTE(out));
+            }
+            // For odd CL, NEC operates on the entire final byte. Its upper
+            // nibble and the resulting CF/ZF are not generally meaningful.
+            // Only ZF/CF are defined for valid even-length BCD strings.
+            if(bytes!=0) {
+                flags_=WORD(flags_&~(CF|ZF));
+                if(carry)flags_|=CF;
+                if(allZero)flags_|=ZF;
+            }
+            break;
+        }
         if(ext==0x28 || ext==0x2a) { // NEC ROL4 / ROR4, r/m8
             const auto operand=decodeModRm();
             if(operand.reg!=0)
