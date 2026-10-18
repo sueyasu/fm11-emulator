@@ -161,8 +161,8 @@ int main(int argc, char** argv) {
         close(slaveFd);
         std::signal(SIGINT,requestStop);
         std::signal(SIGTERM,requestStop);
-        std::cout << "FM-11 headless monitor\\nSerial: " << slavePath
-                  << "\\nCPU halted. Type help for commands.\\n" << std::flush;
+        std::cout << "FM-11 headless monitor\nSerial: " << slavePath
+                  << "\nCPU halted. Type help for commands.\n" << std::flush;
         bool running=false, quitting=false, inputOpen=true;
         unsigned long long count=0;
         std::string line;
@@ -184,7 +184,7 @@ int main(int argc, char** argv) {
                       << " B=" << hex(r.r.b.B,2)
                       << " DP=" << hex(r.DP,2)
                       << " CC=" << hex(r.CC,2)
-                      << " MD=" << hex(r.MD,2) << "\\n";
+                      << " MD=" << hex(r.MD,2) << "\n";
         };
         auto prompt=[&]() { std::cout << "fm11> " << std::flush; };
         auto drain=[&]() {
@@ -210,21 +210,21 @@ int main(int argc, char** argv) {
             input >> cmd;
             if(cmd=="help"||cmd=="h"||cmd=="?") {
                 std::cout << "c/continue, stop, s/step, r/regs, m/mem ADDRESS [LEN], "
-                             "mp ADDRESS [LEN], reset, q/quit, h/help\\n";
+                             "mp ADDRESS [LEN], reset, q/quit, h/help\n";
             } else if(cmd=="c"||cmd=="continue") {
                 running=true;
-                std::cout << "CPU running (type stop to pause).\\n";
+                std::cout << "CPU running (type stop to pause).\n";
             } else if(cmd=="stop") {
-                running=false;std::cout << "CPU halted.\\n";
+                running=false;std::cout << "CPU halted.\n";
             } else if(cmd=="q"||cmd=="quit") {
                 quitting=true;
             } else if(cmd=="r"||cmd=="regs")showRegs();
             else if(cmd=="s"||cmd=="step") {
-                if(running)std::cout << "Stop CPU first.\\n";
+                if(running)std::cout << "Stop CPU first.\n";
                 else {board.cpu().executeOne();++count;drain();showRegs();}
             } else if(cmd=="reset") {
-                if(running)std::cout << "Stop CPU first.\\n";
-                else {resetGuest();std::cout << "CPU reset and image reloaded.\\n";showRegs();}
+                if(running)std::cout << "Stop CPU first.\n";
+                else {resetGuest();std::cout << "CPU reset and image reloaded.\n";showRegs();}
             } else if(cmd=="m"||cmd=="mem"||cmd=="mp") {
                 input >> arg >> nstr;
                 try {
@@ -241,12 +241,12 @@ int main(int argc, char** argv) {
                             ?board.readPhysical(std::uint32_t(addr+i))
                             :board.readCpu(WORD(addr+i));
                         std::cout << " " << hex(b,2);
-                        if(i%16==15 || i+1==len)std::cout << "\\n";
+                        if(i%16==15 || i+1==len)std::cout << "\n";
                     }
                 }catch(const std::exception&) {
-                    std::cout << "usage: m/mp HEXADDR [LENGTH, up to 256]\\n";
+                    std::cout << "usage: m/mp HEXADDR [LENGTH, up to 256]\n";
                 }
-            } else if(!cmd.empty())std::cout << "Unknown command. Type help.\\n";
+            } else if(!cmd.empty())std::cout << "Unknown command. Type help.\n";
             if(!running && !quitting)prompt();
         };
         prompt();
@@ -278,7 +278,7 @@ int main(int argc, char** argv) {
             if(running) {
                 for(unsigned i=0;i<256 && running && !stopping;++i) {
                     if(limit && count>=limit) {
-                        running=false;std::cout << "Instruction limit reached.\\n";
+                        running=false;std::cout << "Instruction limit reached.\n";
                         prompt();break;
                     }
                     board.cpu().executeOne();++count;
