@@ -67,6 +67,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(mainv20_bitfield PRIVATE fm11_core)
     add_test(NAME mainv20_bitfield COMMAND mainv20_bitfield)
 
+    add_executable(main8088_arithmetic_flags tests/main8088_arithmetic_flags.cpp)
+    target_link_libraries(main8088_arithmetic_flags PRIVATE fm11_core)
+    add_test(NAME main8088_arithmetic_flags COMMAND main8088_arithmetic_flags)
+
     add_executable(main8088_segment_boundary tests/main8088_segment_boundary.cpp)
     target_link_libraries(main8088_segment_boundary PRIVATE fm11_core)
     add_test(NAME main8088_segment_boundary COMMAND main8088_segment_boundary)
