@@ -304,6 +304,36 @@ void Main8088Board::Core::executeOne()
         if(opcode!=0x3d)regs_[0]=WORD(value);
         break;
     }
+    case 0x98: // CBW: sign-extend AL into AX (FLAGS unchanged)
+        regs_[0]=WORD(static_cast<std::int16_t>(static_cast<std::int8_t>(BYTE(regs_[0]))));
+        break;
+    case 0x99: // CWD: sign-extend AX into DX:AX
+        regs_[2]=(regs_[0]&0x8000)?0xffff:0;
+        break;
+    case 0xf8: flags_&=WORD(~0x0001);break; // CLC
+    case 0xf9: flags_|=0x0001;break; // STC
+    case 0xf5: flags_^=0x0001;break; // CMC
+    case 0x9e: { // SAHF: AH -> SF,ZF,AF,PF,CF
+        constexpr WORD mask=0x00d5;
+        flags_=WORD((flags_&~mask)|(regs_[0]>>8&mask)|0x0002);
+        break;
+    }
+    case 0x9f: // LAHF: SF,ZF,AF,PF,CF and reserved bit 1 -> AH
+        setReg8(4,BYTE(flags_));
+        break;
+    case 0xe0: case 0xe1: case 0xe2: { // LOOPNE, LOOPE, LOOP
+        const auto displacement=static_cast<std::int8_t>(fetch8());
+        regs_[1]=WORD(regs_[1]-1);
+        const bool zf=(flags_&0x0040)!=0;
+        if(regs_[1]!=0 && (opcode==0xe2 || (opcode==0xe1?zf:!zf)))
+            ip_=WORD(ip_+displacement);
+        break;
+    }
+    case 0xe3: { // JCXZ, no decrement
+        const auto displacement=static_cast<std::int8_t>(fetch8());
+        if(regs_[1]==0)ip_=WORD(ip_+displacement);
+        break;
+    }
     case 0x80: case 0x81: case 0x82: case 0x83: {
         const auto op=decodeModRm();
         const unsigned bits=(opcode==0x81 || opcode==0x83)?16u:8u;

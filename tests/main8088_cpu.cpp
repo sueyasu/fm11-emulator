@@ -428,5 +428,45 @@ int main()
     if(cc.reg(1)!=1 || cc.reg(7)!=0x313 || !(cc.flags()&0x40))return 70;
     compare.cpu().executeOne();
     if(!cc.halted())return 71;
+    // Boot helper opcodes: CBW/CWD, flag manipulation and LOOP/JCXZ.
+    Main8088Board helpers(CpuType::I8088);
+    helpers.bus().loadBootRom(fRom);
+    const BYTE helperCode[]={
+        0xb0,0x80,           // MOV AL,80
+        0x98,                // CBW -> FF80
+        0x99,                // CWD -> DX=FFFF
+        0xf9,                // STC
+        0xf5,                // CMC
+        0xf9,                // STC
+        0x9f,                // LAHF -> AH=03
+        0xb4,0xd5,           // MOV AH,D5
+        0x9e,                // SAHF
+        0xb9,0x03,0x00,      // MOV CX,3
+        0xe2,0xfe,           // LOOP -2 until CX=0
+        0xe3,0x02,           // JCXZ skip HLT
+        0xf4,0x90,
+        0xf8,                // CLC
+        0xf4
+    };
+    for(unsigned i=0;i<sizeof(helperCode);++i)
+        helpers.bus().writeMemory(0x10000+i,helperCode[i]);
+    helpers.reset();helpers.cpu().executeOne();
+    auto& hc=static_cast<Main8088Board::Core&>(helpers.cpu());
+    helpers.cpu().executeOne();helpers.cpu().executeOne();helpers.cpu().executeOne();
+    if(hc.reg(0)!=0xff80 || hc.reg(2)!=0xffff)return 72;
+    helpers.cpu().executeOne();helpers.cpu().executeOne();
+    if(hc.flags()&1)return 73;
+    helpers.cpu().executeOne();helpers.cpu().executeOne();
+    if((hc.reg(0)>>8)!=0x03)return 74;
+    helpers.cpu().executeOne();helpers.cpu().executeOne();
+    if((hc.flags()&0x00d5)!=0x00d5)return 75;
+    helpers.cpu().executeOne(); // MOV CX,3
+    for(unsigned i=0;i<3;++i)helpers.cpu().executeOne();
+    if(hc.reg(1)!=0)return 76;
+    helpers.cpu().executeOne(); // JCXZ
+    helpers.cpu().executeOne(); // CLC
+    if(hc.flags()&1)return 77;
+    helpers.cpu().executeOne(); // HLT
+    if(!hc.halted())return 78;
     return 0;
 }
