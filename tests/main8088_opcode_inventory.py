@@ -74,9 +74,12 @@ def main():
     for op in (0x04, 0x27, 0x2f, 0x37, 0x3f, 0x80, 0x81,
                0xc4, 0xc5, 0xd0, 0xd3, 0xd4, 0xd5, 0xd7, 0xf6, 0xf7, 0xfe, 0xff):
         assert op in direct, f"missing explicit opcode {op:02X}"
-    assert 0x60 not in direct | ranged | prefixes
+    # V20-only instructions share the decoder's switch with 8088.
+    # Their presence here does not imply acceptance by the 8088 core.
+    for op in (0x60, 0x61, 0x68, 0x6a):
+        assert op in direct, f"missing V20 stack opcode {op:02X}"
     covered = direct | ranged | prefixes
-    print("8088 primary opcode dispatch inventory")
+    print("8088/V20 primary opcode dispatch inventory")
     print("    " + " ".join(f"{i:X}" for i in range(16)))
     for row in range(16):
         cells = []
