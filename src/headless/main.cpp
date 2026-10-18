@@ -80,7 +80,7 @@ void loadBinary(Main6809Board& board, const std::string& file,
 void usage() {
     std::cerr << "usage: fm11-headless (--binary FILE --load ADDR --pc ADDR"
                  " | --boottrack FILE --level 1|2)"
-                 " [--floppy RAW-2D|D88] [--cpu 6809|6309] [--clock HZ] [--no-tx-irq] [--instructions COUNT]\n"
+                 " [--floppy RAW-2D|D88] [--cpu 6809|6309] [--clock HZ] [--no-tx-irq] [--idle-log FILE] [--instructions COUNT]\n"
                  "  Boottrack starts AFTER the FM-11 floppy IPL has loaded it;\n"
                  "  there is no disk controller or subsequent disk I/O yet.\n"
                  "  Monitor on stdin; guest serial is on a separate /dev/pts/N.\n\n";
@@ -89,7 +89,7 @@ void usage() {
 
 int main(int argc, char** argv) {
     try {
-        std::string file, boottrack, floppy, cpu = "6809";
+        std::string file, boottrack, floppy, cpu = "6809", idleLogPath;
         unsigned long long load = 0, pc = 0, hz = 2000000, limit = 0;
         bool hasLoad = false, hasPc = false, disableTxIrq = false;
         int level = 0;
@@ -111,6 +111,7 @@ int main(int argc, char** argv) {
             else if (a=="--load") {load=number(v);hasLoad=true;}
             else if (a=="--pc") {pc=number(v);hasPc=true;}
             else if (a=="--clock") hz=number(v);
+            else if (a=="--idle-log") idleLogPath=v;
             else if (a=="--instructions") limit=number(v);
             else {usage(); return 2;}
         }
@@ -167,6 +168,22 @@ int main(int argc, char** argv) {
         std::cout << "FM-11 headless monitor\nSerial: " << slavePath
                   << "\nCPU halted. Type help for commands.\n" << std::flush;
         bool running=false, quitting=false, inputOpen=true;
+        std::ofstream idleLog;
+        if (!idleLogPath.empty()) {
+            idleLog.open(idleLogPath, std::ios::out | std::ios::trunc);
+            if (!idleLog) throw std::runtime_error("cannot open idle log: "+idleLogPath);
+            idleLog << "seconds,instructions,sync_entries,cwai_entries,sync_wait_ms,cwai_wait_ms,irq_accepted,ptm_irq_asserted,pc,cc,wait_state\n";
+        }
+        using Clock=std::chrono::steady_clock;
+        auto statsStart=Clock::now();
+        auto statsLast=statsStart;
+        unsigned long long syncEntries=0, cwaiEntries=0;
+        std::uint64_t syncWaitNs=0, cwaiWaitNs=0;
+        unsigned long long lastCount=0;
+        std::uint64_t lastAccepted=0, lastPtm=0;
+        std::uint64_t lastSyncEntries=0, lastCwaiEntries=0;
+        std::uint64_t lastSyncWaitNs=0, lastCwaiWaitNs=0;
+        auto previousWait=CSim09::WaitState::Running;
         unsigned long long count=0;
         std::string line;
         std::vector<BYTE> pendingTx;
@@ -206,6 +223,7 @@ int main(int argc, char** argv) {
             loadBinary(board,bootMode ? boottrack : file,load,bootMode ? bootSize : 0);
             pendingTx.clear();
             count=0;
+            previousWait=CSim09::WaitState::Running;
         };
         auto command=[&](const std::string& text) {
             std::istringstream input(text);
@@ -275,7 +293,11 @@ int main(int argc, char** argv) {
             if (sleeping) {
                 const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
                     std::chrono::steady_clock::now()-waitStart).count();
-                if (elapsed>0) board.advanceWaitTime(static_cast<std::uint64_t>(elapsed));
+                if (elapsed>0) {
+                    board.advanceWaitTime(static_cast<std::uint64_t>(elapsed));
+                    if(board.cpuWaitState()==CSim09::WaitState::Sync) syncWaitNs+=elapsed;
+                    else cwaiWaitNs+=elapsed;
+                }
             }
             if(ready<0 && errno!=EINTR)throw std::runtime_error("poll failed");
             if(ready>0 && (fds[0].revents&(POLLIN|POLLHUP))) {
@@ -305,10 +327,40 @@ int main(int argc, char** argv) {
                         prompt();break;
                     }
                     board.cpu().executeOne();++count;
-                    if (board.cpuWaitState() != CSim09::WaitState::Running) break;
+                    const auto wait=board.cpuWaitState();
+                    if(wait!=CSim09::WaitState::Running && previousWait!=wait) {
+                        if(wait==CSim09::WaitState::Sync) ++syncEntries;
+                        else ++cwaiEntries;
+                    }
+                    previousWait=wait;
+                    if (wait != CSim09::WaitState::Running) break;
                 }
             }
             drain();
+            if (idleLog.is_open()) {
+                const auto now=Clock::now();
+                if(now-statsLast>=std::chrono::seconds(1)) {
+                    const auto& regs=dynamic_cast<CSim09&>(board.cpu()).regs;
+                    const auto state=board.cpuWaitState();
+                    idleLog << std::chrono::duration<double>(now-statsStart).count() << ','
+                            << count-lastCount << ',' << syncEntries-lastSyncEntries << ','
+                            << cwaiEntries-lastCwaiEntries << ','
+                            << (syncWaitNs-lastSyncWaitNs)/1000000.0 << ','
+                            << (cwaiWaitNs-lastCwaiWaitNs)/1000000.0 << ','
+                            << board.acceptedIrqCount()-lastAccepted << ','
+                            << board.ptmIrqAssertCount()-lastPtm << ','
+                            << hex(regs.r.w.PC,4) << ',' << hex(regs.CC,2) << ','
+                            << (state==CSim09::WaitState::Running?"running":
+                                state==CSim09::WaitState::Sync?"sync":"cwai") << '\n';
+                    idleLog.flush();
+                    lastCount=count; lastSyncEntries=syncEntries;
+                    lastCwaiEntries=cwaiEntries; lastSyncWaitNs=syncWaitNs;
+                    lastCwaiWaitNs=cwaiWaitNs;
+                    lastAccepted=board.acceptedIrqCount();
+                    lastPtm=board.ptmIrqAssertCount();
+                    statsLast=now;
+                }
+            }
         }
         close(slaveFd);
         close(master);
