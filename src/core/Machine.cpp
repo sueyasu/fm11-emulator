@@ -55,6 +55,7 @@ void Machine::reset()
 {
     for (auto& board : boards_)
         board->reset();
+    lastExecutionCycles_=0;
 }
 
 void Machine::advanceTimeNanoseconds(std::uint64_t nanoseconds)
@@ -75,5 +76,6 @@ void Machine::executeOne()
         if (auto* cpu8088=dynamic_cast<Main8088Board*>(board))
             cpu8088->bus().refreshSystemIrq();
         board->cpu().executeOne();
+        lastExecutionCycles_=board->cpu().lastExecutionCycles();
     }
 }
