@@ -22,4 +22,6 @@ public:
     virtual void nmi() = 0;
     virtual void firq() {}
     virtual CpuType type() const = 0;
+    // Zero means precise instruction timing is not yet implemented.
+    virtual std::uint64_t lastExecutionCycles() const {return 0;}
 };
