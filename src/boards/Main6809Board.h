@@ -37,6 +37,7 @@ public:
     void setFloppyDevice(std::shared_ptr<FloppyDevice> device) { floppy_=std::move(device); }
     void loadFloppy2d(const std::vector<BYTE>& raw);
     void loadFloppyD88(const std::vector<BYTE>& d88);
+    void setFloppyDrive(unsigned drive) {floppy_->setMountedDrive(drive);}
     std::array<BYTE,256> floppyBootSector(unsigned sector) const;
     bool floppyDirty() const { return floppy_->dirty2d(); }
     std::vector<BYTE> floppyImage() const;
