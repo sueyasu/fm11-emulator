@@ -79,6 +79,25 @@ FM-11 keyboard + disk GUI. Hardware mode selection and
 text-mode composition are not yet connected; selecting 200/400 lines is
 manual. No ROM image is stored in Git.
 
+## Main/sub-CPU binary integration test
+
+Before diagnosing original firmware, use the synthetic 6809 programs to
+exercise only the main-to-display path. They are generated from opcode
+bytes and **contain no original firmware**:
+
+```sh
+python3 tools/make_display_test_roms.py build/test-roms
+./build/display_binary_integration build/test-roms/main_test.bin build/test-roms/display_test.bin
+ctest --test-dir build -R display_binary_integration --output-on-failure
+```
+
+The main CPU program at `$5000` writes `$80` to `$FC80`.
+The display CPU program at `$B000` waits for the same value at
+`$9F80`, then writes `$80` to VRAM through the three color planes.
+The test asserts shared RAM, physical VRAM and the first rendered white
+pixel. CTest creates temporary binaries automatically; the manual commands
+above keep them under `build/` for inspection.
+
 ## Build
 
 ```sh
