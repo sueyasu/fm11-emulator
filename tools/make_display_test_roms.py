@@ -113,3 +113,33 @@ afe7_display[-2:]=bytes.fromhex("b0 00")
 (out/"display_afe7.bin").write_bytes(afe7_display)
 print(out/"main_afe7.bin")
 print(out/"display_afe7.bin")
+
+# Full 640x200 monochrome (white/black) display exercise.
+# Main writes command $81 and waits for display's $55 response.
+pattern_main=bytearray(0x1000)
+pattern_main_code=bytes.fromhex(
+    "86 81 b7 fc 80 "         # send command
+    "b6 fc 81 81 55 26 f9 "  # wait for ACK
+    "86 66 b7 fc 82 "        # record success
+    "20 fe")
+pattern_main[:len(pattern_main_code)]=pattern_main_code
+pattern_main[-2:]=bytes.fromhex("50 00")
+# Sub scans all 16000 bytes (80 bytes * 200 lines) with STA ,X+.
+# 07 writes all RGB planes; AA yields alternating white/black pixels.
+pattern_display=bytearray(0x5000)
+pattern_display_code=bytes.fromhex(
+    "b6 9f 80 81 81 26 f9 "  # wait for main command
+    "86 07 b7 af e1 "        # enable all RGB planes
+    "86 aa "                 # alternating pixel mask
+    "8e 00 00 "              # LDX #$0000
+    "a7 80 "                 # loop: STA ,X+
+    "8c 3e 80 "              # CMPX #$3E80
+    "26 f9 "                 # BNE loop
+    "86 55 b7 9f 81 "        # completion ACK
+    "20 fe")
+pattern_display[:len(pattern_display_code)]=pattern_display_code
+pattern_display[-2:]=bytes.fromhex("b0 00")
+(out/"main_pattern.bin").write_bytes(pattern_main)
+(out/"display_pattern.bin").write_bytes(pattern_display)
+print(out/"main_pattern.bin")
+print(out/"display_pattern.bin")
