@@ -130,7 +130,11 @@ public:
                 gvuPlane_=std::min<unsigned>(value>>6,2);
                 gvuEnabled_=true;
             } else if(address==0xafe2) {
-                gvdPage_=(value>>3)&3;
+                const auto page=(value>>3)&3;
+                if(gvdPage_!=page) {
+                    gvdPage_=page;
+                    markVideoChanged();
+                }
             } else if(address==0xafe3) {
                 gvuPage_=(value>>3)&3;
             }
