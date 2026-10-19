@@ -107,6 +107,33 @@ This validates bidirectional shared memory and CPU scheduling, **not**
 the original FM-11 interrupt/attention protocol; a hardware notification
 register is not inferred from this test.
 
+### Full-frame binary display test and SDL preview
+
+To check the complete raster path without original firmware, generate
+the synthetic ROM pair and run the test:
+
+```sh
+python3 tools/make_display_test_roms.py build/test-roms
+ctest --test-dir build -R display_binary_pattern --output-on-failure
+./build/display_binary_pattern build/test-roms/main_pattern.bin build/test-roms/display_pattern.bin
+```
+
+The main 6809 sends a command through shared RAM; the display 6809
+writes all 16,000 bytes of the 640x200 plane with an alternating pixel
+pattern in all three colors, then acknowledges completion. The test
+checks **every rendered pixel**, not just the first byte.
+
+To inspect the same pattern visually in the SDL frontend:
+
+```sh
+./build/fm11-sdl --main-rom build/test-roms/main_pattern.bin \\
+    --rom build/test-roms/display_pattern.bin
+```
+
+This should display narrow alternating white and black vertical lines
+across the entire 640x200 framebuffer. It is a deliberately artificial
+bring-up image, not the FM-11 firmware's normal boot screen.
+
 ### Display-generated ATTENTION (original I/O semantics)
 
 Original `Fm11/SubCpu.cpp`, `CSubCpu::GetIoByte`, case
