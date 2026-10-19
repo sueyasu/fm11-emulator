@@ -10,10 +10,10 @@ int main()
     MainBoard board;
     DisplaySubsystem::RomImage rom{};
     // C000: LDA #55; STA $8000; NOP
-    rom[0]=0x86; rom[1]=0x55;
-    rom[2]=0xb7; rom[3]=0x80; rom[4]=0x00;
-    rom[5]=0x12;
-    rom[0x3ffe]=0xc0; rom[0x3fff]=0x00;
+    rom[0x1000]=0x86; rom[0x1001]=0x55;
+    rom[0x1002]=0xb7; rom[0x1003]=0x80; rom[0x1004]=0x00;
+    rom[0x1005]=0x12;
+    rom[0x4ffe]=0xc0; rom[0x4fff]=0x00;
     board.displaySubsystem().loadRom(rom);
     board.reset();
     auto& cpu=board.displayCpu();
@@ -36,10 +36,10 @@ int main()
     // boundaries rather than executing one sub-instruction per main step.
     Machine timed;
     DisplaySubsystem::RomImage timedRom{};
-    timedRom[0]=0x86;timedRom[1]=0x55;  // LDA #55
-    timedRom[2]=0xb7;timedRom[3]=0x80;timedRom[4]=0x00; // STA $8000
-    timedRom[5]=0x12; // NOP
-    timedRom[0x3ffe]=0xc0;timedRom[0x3fff]=0x00;
+    timedRom[0x1000]=0x86;timedRom[0x1001]=0x55;  // LDA #55
+    timedRom[0x1002]=0xb7;timedRom[0x1003]=0x80;timedRom[0x1004]=0x00; // STA $8000
+    timedRom[0x1005]=0x12; // NOP
+    timedRom[0x4ffe]=0xc0;timedRom[0x4fff]=0x00;
     // The main-board display CPU is accessible through a card attachment.
     auto cpuBoard=std::make_unique<Main6809Board>(CpuType::MC6809);
     auto* mainCard=cpuBoard.get();
@@ -74,9 +74,9 @@ int main()
     // Execute sub-CPU writes through the ROM instruction path, too.
     DisplaySubsystem::RomImage mailboxRom{};
     // LDA #A5; STA $9F81
-    mailboxRom[0]=0x86;mailboxRom[1]=0xa5;
-    mailboxRom[2]=0xb7;mailboxRom[3]=0x9f;mailboxRom[4]=0x81;
-    mailboxRom[0x3ffe]=0xc0;mailboxRom[0x3fff]=0x00;
+    mailboxRom[0x1000]=0x86;mailboxRom[0x1001]=0xa5;
+    mailboxRom[0x1002]=0xb7;mailboxRom[0x1003]=0x9f;mailboxRom[0x1004]=0x81;
+    mailboxRom[0x4ffe]=0xc0;mailboxRom[0x4fff]=0x00;
     timed.loadDisplayRom(mailboxRom);
     timed.reset();
     timed.advanceTimeNanoseconds(7000);
@@ -102,9 +102,9 @@ int main()
     if(io.busyStatus()!=0 || io.readMemory(0xaff0)!=0)return 20;
     // BUSY control is accessible from real sub-CPU instructions.
     DisplaySubsystem::RomImage busyRom{};
-    busyRom[0]=0x86;busyRom[1]=0x00; // LDA #$00
-    busyRom[2]=0xb7;busyRom[3]=0xaf;busyRom[4]=0xf0; // STA $AFF0
-    busyRom[0x3ffe]=0xc0;busyRom[0x3fff]=0x00;
+    busyRom[0x1000]=0x86;busyRom[0x1001]=0x00; // LDA #$00
+    busyRom[0x1002]=0xb7;busyRom[0x1003]=0xaf;busyRom[0x1004]=0xf0; // STA $AFF0
+    busyRom[0x4ffe]=0xc0;busyRom[0x4fff]=0x00;
     io.loadRom(busyRom);
     board.reset();
     if(io.busyStatus()!=0x80 || io.readMemory(0xafe0)!=0)return 21;
@@ -338,11 +338,11 @@ int main()
     MainBoard traced;
     DisplaySubsystem::RomImage traceRom{};
     // LDA #$12; STA $AFE6; STA $AFE4; STA $AFF0
-    traceRom[0]=0x86;traceRom[1]=0x12;
-    traceRom[2]=0xb7;traceRom[3]=0xaf;traceRom[4]=0xe6;
-    traceRom[5]=0xb7;traceRom[6]=0xaf;traceRom[7]=0xe4;
-    traceRom[8]=0xb7;traceRom[9]=0xaf;traceRom[10]=0xf0;
-    traceRom[0x3ffe]=0xc0;traceRom[0x3fff]=0x00;
+    traceRom[0x1000]=0x86;traceRom[0x1001]=0x12;
+    traceRom[0x1002]=0xb7;traceRom[0x1003]=0xaf;traceRom[0x1004]=0xe6;
+    traceRom[0x1005]=0xb7;traceRom[0x1006]=0xaf;traceRom[0x1007]=0xe4;
+    traceRom[0x1008]=0xb7;traceRom[0x1009]=0xaf;traceRom[0x100a]=0xf0;
+    traceRom[0x4ffe]=0xc0;traceRom[0x4fff]=0x00;
     traced.displaySubsystem().loadRom(traceRom);
     std::vector<DisplaySubsystem::IoWriteTrace> log;
     traced.displaySubsystem().setIoWriteObserver(
