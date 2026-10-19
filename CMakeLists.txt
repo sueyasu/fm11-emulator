@@ -75,6 +75,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(fdc_command_decode PRIVATE fm11_core)
     add_test(NAME fdc_command_decode COMMAND fdc_command_decode)
 
+    add_executable(machine_ptm_time tests/machine_ptm_time.cpp)
+    target_link_libraries(machine_ptm_time PRIVATE fm11_core)
+    add_test(NAME machine_ptm_time COMMAND machine_ptm_time)
+
     add_executable(machine_floppy_shared tests/machine_floppy_shared.cpp)
     target_link_libraries(machine_floppy_shared PRIVATE fm11_core)
     add_test(NAME machine_floppy_shared COMMAND machine_floppy_shared)
