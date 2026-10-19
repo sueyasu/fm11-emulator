@@ -109,6 +109,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(main8088_cycles PRIVATE fm11_core)
     add_test(NAME main8088_cycles COMMAND main8088_cycles)
 
+    add_executable(display_text_composition tests/display_text_composition.cpp)
+    target_link_libraries(display_text_composition PRIVATE fm11_core)
+    add_test(NAME display_text_composition COMMAND display_text_composition)
+
     add_executable(display_binary_raster tests/display_binary_raster.cpp)
     target_link_libraries(display_binary_raster PRIVATE fm11_core)
     add_test(NAME display_binary_raster
