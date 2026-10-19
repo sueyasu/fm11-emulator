@@ -61,6 +61,15 @@ to pause/resume, F1 to switch 640x200/640x400 display interpretation.
 display CPU instructions executed per frame (default 10000). This is a
 bring-up throttle, **not** a calibrated real-time CPU clock.
 
+If the window stays black, use `./build/fm11-sdl --test-pattern` to
+verify SDL rendering independently of firmware. This displays eight-color
+stripes and does not require a ROM. Normal execution now prints the display
+CPU PC, executed instructions, I/O writes, and count of nonzero physical
+VRAM bytes every two seconds to stderr. An unchanged PC or zero VRAM count
+is useful evidence that the firmware is waiting for main-CPU commands
+rather than drawing a frame; the counters do not themselves establish why
+it is waiting.
+
 The SDL frontend is optional: when SDL2 is missing the existing core,
 headless programs and CTests still build. Set `-DFM11_BUILD_SDL=OFF`
 to disable SDL detection explicitly.
