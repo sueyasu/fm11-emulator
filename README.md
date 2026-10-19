@@ -172,6 +172,28 @@ branch loops. This fixes the status semantics tested here but does
 not yet port the original character-display composition or every
 sub-CPU peripheral behavior.
 
+### Sub-CPU keyboard event queue (source SubCpu.cpp)
+
+The original Windows emulator's first `AFE0` write queues key event
+`0x0050` and clears its NMI mask. Subsequently, `GetKeyCode`
+copies pending keyboard events into `AFEC/AFED`, asserting bit 0 of
+`AFE4` for ordinary key codes. Reading `AFED` invokes
+`GetKeyCode` to advance the queue.
+
+The Linux subsystem now includes `enqueueKeyCode`, `processKeyCode`,
+the one-shot initial `AFE0` key event and the `AFED` queue advancement.
+The independent FIFO regression checks these state transitions:
+
+```sh
+ctest --test-dir build -R 'display_keyboard_queue|display_io_read_clear' --output-on-failure
+```
+
+The original implementation also invokes `GetKeyCode` from a timed
+keyboard/vsync event and supplies interrupts through `SimFIRQ` and
+`SimNMI`. These *CPU-side interrupt delivery and timing paths* remain
+unimplemented and are **not claimed** by the new keyboard FIFO test.
+The original ROM may therefore still be black.
+
 ### Original display I/O read-clear latches
 
 The reference Windows `Fm11/SubCpu.cpp::GetIoByte` clears three
