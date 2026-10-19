@@ -49,6 +49,8 @@ public:
     BYTE readRam(std::uint32_t address) const;
     // 8259A PIC on the 8088 card: ports 00h/01h.
     void requestIrq(unsigned line);
+    // Sample shared USART IRQ as an edge into the on-card 8259.
+    void refreshSystemIrq();
     bool interruptPending() const;
     BYTE acknowledgeInterrupt();
     BYTE interruptMask() const { return picMask_; }
@@ -68,6 +70,7 @@ private:
     Rom bootRom_{};
     // The original FM-11 Sim86 uses the CPU-card SRAM for FCxx port accesses.
     std::array<BYTE,0x100> cardIoRam_{};
+    bool usartIrqPrevious_=false;
     BYTE picMask_=0;
     BYTE picRequest_=0;
     BYTE picInService_=0;
