@@ -47,9 +47,9 @@ public:
     void resetEvents() {eventStatus_=0;eventControl_=0;}
     BYTE eventStatus() const {return eventStatus_;}
     BYTE eventControl() const {return eventControl_;}
-    // FD05: common main/sub control output and the CPU-visible HALT flag.
-    // The actual sub-CPU execution/arbitration is not implemented here.
-    BYTE subCpuStatus() const {return display_.haltRequested()?0x80:0;}
+    // FD05 bit 7 reflects the display sub-CPU BUSY state (original $D05).
+    // Keep an asserted main-side HALT visible until released.
+    BYTE subCpuStatus() const {return (display_.haltRequested() || display_.busyStatus()!=0)?0x80:0;}
     BYTE subCpuControl() const {return subCpuControl_;}
     // FD05 bit 0 selects the optional CPU-card bus-master request.
     // Arbitration/CPU suspension remains in the individual CPU cards.
