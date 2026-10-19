@@ -41,9 +41,9 @@ void Main8088Bus::floppyWriteData(BYTE value)
 
 void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
 {
-    const bool reading=(command&0xf0)==0x80;
-    const bool writing=(command&0xf0)==0xa0;
-    if(!reading && !writing) {
+    const auto decoded=FloppyDevice::decodeCommand(command);
+    const bool writing=decoded==FloppyDevice::Command::WriteSector;
+    if(decoded==FloppyDevice::Command::Other) {
         floppy_->finishTransfer();
         return;
     }
