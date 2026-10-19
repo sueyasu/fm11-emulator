@@ -109,6 +109,14 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(main8088_cycles PRIVATE fm11_core)
     add_test(NAME main8088_cycles COMMAND main8088_cycles)
 
+    add_executable(display_binary_halt tests/display_binary_halt.cpp)
+    target_link_libraries(display_binary_halt PRIVATE fm11_core)
+    add_test(NAME display_binary_halt
+             COMMAND ${Python3_EXECUTABLE}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/display_binary_halt.py
+                     $<TARGET_FILE:display_binary_halt>
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_display_test_roms.py)
+
     add_executable(display_binary_integration tests/display_binary_integration.cpp)
     target_link_libraries(display_binary_integration PRIVATE fm11_core)
     add_test(NAME display_binary_integration
