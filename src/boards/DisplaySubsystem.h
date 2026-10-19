@@ -31,13 +31,14 @@ public:
 
     void reset() {
         haltRequested_=false;
-        busy_=0x80;
+        busy_=true;
         if(videoFlags_!=0)markVideoChanged();
         videoFlags_=0;
         vsyncCount_=0;
         vsyncMode_=0;
         vsyncStatus_=0x40;
         subIoRam_.fill(0);
+        dmaChannel0_=0;
         gvuEnabled_=false;
         gvuPage_=gvuPlane_=gvuOffset_=gvdPage_=0;
         gvuControl_=gvuAddressHigh_=0;
@@ -147,7 +148,7 @@ public:
             return 0;
         }
         if(address==0xafe6)return const_cast<DisplaySubsystem*>(this)->readVsyncStatus();
-        if(address==0xaff0)return subIoRam_[0]; // not BUSY: original maps this to DMA channel register
+        if(address==0xaff0)return dmaChannel0_; // original write target is DMA channel 0
         if(address>=0xb000)return rom_[address-0xb000];
         return 0xff; // unmapped space, including unimplemented sub I/O
     }
@@ -217,7 +218,7 @@ public:
                 markVideoChanged();
             }
         }
-        else if(address==0xaff0)subIoRam_[0]=value; // TODO: original DMA register, not sub BUSY
+        else if(address==0xaff0)dmaChannel0_=value; // original maps to DMA channel 0
         // ROM and unmapped space are read-only. Trace even writes to
         // unimplemented I/O locations; their hardware decode is unknown.
         if(address>=0xa000 && address<0xc000 && ioWriteObserver_)
@@ -239,6 +240,7 @@ private:
     std::function<void()> attentionSink_;
     bool haltRequested_=false;
     bool busy_=true;
+    BYTE dmaChannel0_=0;
     BYTE videoFlags_=0;
     unsigned vsyncCount_=0;
     BYTE vsyncMode_=0,vsyncStatus_=0x40;
