@@ -3,6 +3,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <vector>
 
 // Diagnostic interpretation of a single raw 1-bpp VRAM plane, not the
 // final FM-11 color/plane decoder. 640 * 200 / 8 = 16000 bytes.
@@ -121,16 +122,43 @@ public:
     // Digital 8-color RGB palette: low 3 index bits map to R/G/B.
     // The array is frontend-friendly ARGB8888, independent of SDL.
     using ArgbPixels=std::array<std::uint32_t,kWidth*kHeight>;
+    static std::uint32_t colorArgb(unsigned c) {
+        return 0xff000000u | ((c&1u)?0x00ff0000u:0u) |
+            ((c&2u)?0x0000ff00u:0u) | ((c&4u)?0x000000ffu:0u);
+    }
     static ArgbPixels toArgb(const Pixels& indexes) {
         ArgbPixels out{};
         for(std::size_t i=0;i<out.size();++i) {
-            const unsigned c=indexes[i];
-            out[i]=0xff000000u |
-                ((c&1u)?0x00ff0000u:0u) |
-                ((c&2u)?0x0000ff00u:0u) |
-                ((c&4u)?0x000000ffu:0u);
+            out[i]=colorArgb(indexes[i]);
         }
         return out;
+    }
+
+    // Frontend frame capture. A caller chooses the display height explicitly
+    // until mode-select bits have been verified against the original ROM.
+    // All RGB conversion is done in one call on a copied pixel buffer;
+    // neither the sub CPU state nor physical VRAM is changed.
+    struct Frame {
+        std::size_t width=kWidth;
+        std::size_t height=0;
+        std::uint64_t revision=0;
+        std::vector<std::uint32_t> argb;
+    };
+    static Frame captureFrame(const DisplaySubsystem& display,bool highResolution) {
+        Frame frame{};
+        frame.height=highResolution?kHighHeight:kHeight;
+        frame.revision=display.videoRevision();
+        if(highResolution) {
+            const auto pixels=decodeSelectedGraphics400(display);
+            frame.argb.resize(pixels.size());
+            for(std::size_t i=0;i<pixels.size();++i)
+                frame.argb[i]=colorArgb(pixels[i]);
+        } else {
+            const auto pixels=decodeSelectedGraphics200(display);
+            const auto image=toArgb(pixels);
+            frame.argb.assign(image.begin(),image.end());
+        }
+        return frame;
     }
 
     // Composite a single 8x16 ANK glyph into an indexed 640x200 frame.
