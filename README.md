@@ -107,6 +107,26 @@ This validates bidirectional shared memory and CPU scheduling, **not**
 the original FM-11 interrupt/attention protocol; a hardware notification
 register is not inferred from this test.
 
+### HALT and BUSY binary regression
+
+```sh
+ctest --test-dir build -R display_binary_halt --output-on-failure
+python3 tools/make_display_test_roms.py build/test-roms
+./build/display_binary_halt build/test-roms/main_halt.bin build/test-roms/display_halt.bin
+```
+
+This runs real, standalone MC6809 binary instructions on both CPU
+cores: main writes `$FD05` to halt the display CPU, writes a marker to
+shared `$FC80`, and releases HALT. The test checks that the display
+PC remains frozen during HALT; after release, the display ROM sets
+`$AFF0` (BUSY) and writes a shared-RAM marker at `$9F82`.
+There is no dependency on an original ROM dump.
+
+ATTENTION's sub-CPU hardware trigger is still not mapped. The existing
+`MainBoard::signalAttention()` path does **not** establish how an
+actual display ROM should raise the event; this test deliberately does
+not fabricate one.
+
 The main CPU program at `$5000` writes `$80` to `$FC80`.
 The display CPU program at `$B000` waits for the same value at
 `$9F80`, then writes `$80` to VRAM through the three color planes.
