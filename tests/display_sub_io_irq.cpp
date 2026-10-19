@@ -1,4 +1,5 @@
 #include "DisplaySubsystem.h"
+#include "MainBoard.h"
 #include <iostream>
 
 int main() {
@@ -17,6 +18,23 @@ int main() {
     d.reset();
     if(d.subIrqPending() || d.readMemory(0xa100)!=0 ||
        d.readMemory(0xaff1)!=0 || d.nmiClockCycles()!=60000)return 5;
-    std::cout<<"PASS: original sub RAM aperture and AFE5 IRQ acknowledge\n";
+    // Main-side FD05 bit 6 is the original CANCEL interrupt source.
+    // Lowering FD05 must not acknowledge the request; only AFE5 does.
+    MainBoard board;
+    board.reset();
+    if(board.displaySubsystem().subIrqPending())return 6;
+    board.writeIo(0xfd05,0x40);
+    if(!board.displaySubsystem().subIrqPending())return 7;
+    board.writeIo(0xfd05,0x00);
+    if(!board.displaySubsystem().subIrqPending())return 8;
+    if(board.displaySubsystem().readMemory(0xafe5)!=0 ||
+       board.displaySubsystem().subIrqPending())return 9;
+    board.writeIo(0xfd05,0x00);
+    if(board.displaySubsystem().subIrqPending())return 10;
+    board.writeIo(0xfd05,0x40);
+    if(!board.displaySubsystem().subIrqPending())return 11;
+    board.reset();
+    if(board.displaySubsystem().subIrqPending())return 12;
+    std::cout<<"PASS: sub RAM, AFE5 acknowledgment, FD05 CANCEL IRQ\\n";
     return 0;
 }
