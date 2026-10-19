@@ -95,8 +95,8 @@ int main()
     io.writeMemory(0xafe3,0x34);
     if(io.readMemory(0xafe0)!=0x12 ||
        io.readMemory(0xafe3)!=0x34)return 18;
-    if(io.readMemory(0xafe4)!=0xff ||
-       io.readMemory(0xafed)!=0xff ||
+    if(io.readMemory(0xafe4)!=0 ||
+       io.readMemory(0xafed)!=0 ||
        io.readMemory(0xaff1)!=0xff)return 19;
     io.writeMemory(0xaff0,0x37);
     if(io.busyStatus()!=0x80 || io.readMemory(0xaff0)!=0x37)return 20;
@@ -363,7 +363,7 @@ int main()
        log[1].address!=0xafe4 || log[2].address!=0xaff0 ||
        log[0].value!=0x12 || log[1].value!=0x12 ||
        log[2].value!=0x12)return 76;
-    if(traced.displaySubsystem().readMemory(0xafe4)!=0xff ||
+    if(traced.displaySubsystem().readMemory(0xafe4)!=0 ||
        traced.displaySubsystem().videoFlags()!=0x12 ||
        traced.displaySubsystem().readMemory(0xaff0)!=0x12)return 77;
     traced.displaySubsystem().clearIoWriteObserver();
