@@ -19,7 +19,7 @@ int main()
     board09->writeCpu(0xfd38,0x50); // channel 1, continuous with IRQ
     board09->writeCpu(0xfd3a,0);
     board09->writeCpu(0xfd3b,4);
-    machine.advanceTimeNanoseconds(309278); // 3 timer ticks (rounded down)
+    machine.advanceTimeNanoseconds(309279); // 3 timer ticks
     if(board09->irqPending())return 1;
     machine.advanceTimeNanoseconds(103093); // one additional timer tick
     if(!board09->irqPending())return 2;
