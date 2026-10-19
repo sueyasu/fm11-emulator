@@ -87,6 +87,7 @@ Main8088Board::Core::Operand Main8088Board::Core::decodeModRm()
     Operand op{};
     op.reg=BYTE((modrm>>3)&7);
     if(mod==3) {op.registerOperand=true;op.index=BYTE(rm);return op;}
+    timingModRmMemory_=true;
     WORD base=0;
     bool stack=false;
     switch(rm) {
@@ -380,6 +381,7 @@ const std::array<unsigned,256> kV20Cycles=makeV20Cycles();
 void Main8088Board::Core::executeOne()
 {
     lastCycles_=0;
+    timingModRmMemory_=false;
     // 8088 recognizes maskable IRQs at instruction boundaries. STI and
     // MOV SS defer recognition until the following instruction completes.
     const bool inhibited=irqInhibit_!=0;
@@ -759,6 +761,13 @@ void Main8088Board::Core::executeOne()
     }
     lastCycles_=(variant_==CpuType::NECV20 ? kV20Cycles : k8088Cycles)[opcode];
     lastCycles_+=2*prefixCount; // approximate prefix decoding overhead
+    struct TimingFinalize {
+        Core& cpu;
+        ~TimingFinalize() {
+            if(cpu.timingModRmMemory_)
+                cpu.lastCycles_+=cpu.variant_==CpuType::I8088?8:5;
+        }
+    } timingFinalize{*this};
     // The emulated bus executes one instruction at a time; LOCK imposes
     // no additional atomicity until concurrent bus masters are modeled.
     (void)lockPrefix;
@@ -1506,7 +1515,10 @@ void Main8088Board::Core::executeOne()
         }
         if(opcode>=0x70 && opcode<=0x7f) {
             const auto displacement=static_cast<std::int8_t>(fetch8());
-            if(jumpCondition(opcode&15)) ip_=WORD(ip_+displacement);
+            if(jumpCondition(opcode&15)) {
+                ip_=WORD(ip_+displacement);
+                lastCycles_+=variant_==CpuType::I8088?12:6;
+            }
             break;
         }
         if(opcode>=0x40 && opcode<=0x4f) {
