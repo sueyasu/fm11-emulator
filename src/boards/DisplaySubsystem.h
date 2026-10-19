@@ -295,7 +295,7 @@ private:
     std::array<BYTE,0x1000> ioRam_{};
     BYTE dmaChannel0_=0;
     bool nmiMask_=true;
-    bool subIrq_=false;
+    mutable bool subIrq_=false;
     std::uint64_t nmiClockCycles_=60000;
     std::array<std::uint16_t,256> keyQueue_{};
     mutable std::size_t keyHead_=0,keyTail_=0;
