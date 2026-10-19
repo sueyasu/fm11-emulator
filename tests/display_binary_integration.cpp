@@ -5,7 +5,9 @@
 #include <string>
 
 int main(int argc,char** argv) {
-    if(argc!=3)return 2;
+    if(argc!=3 && argc!=4)return 2;
+    const bool handshake=argc==4 && std::string(argv[3])=="--handshake";
+    if(argc==4 && !handshake)return 2;
     try {
         Machine machine;
         machine.loadDisplayRomFile(argv[2]);
@@ -18,6 +20,23 @@ int main(int argc,char** argv) {
         // Both CPUs run their own machine-code programs; no host-side
         // writes to shared RAM or VRAM are used to produce the result.
         for(int i=0;i<5000;++i)machine.executeOne();
+        if(handshake) {
+            if(machine.displaySharedByte(0)!=0x81 ||
+               machine.displaySharedByte(1)!=0x55 ||
+               machine.displaySharedByte(2)!=0x66) {
+                std::cerr<<"bidirectional command/ack did not complete\n";
+                return 20;
+            }
+            if(machine.displayPhysicalVramByte(0)!=0x80 ||
+               machine.displayPhysicalVramByte(0x10000)!=0x80 ||
+               machine.displayPhysicalVramByte(0x20000)!=0x80 ||
+               machine.captureDisplayFrame().argb[0]!=0xffffffffu) {
+                std::cerr<<"command did not produce a rendered white pixel\n";
+                return 21;
+            }
+            std::cout<<"PASS: main command -> shared RAM -> sub VRAM -> ACK -> main confirmation\n";
+            return 0;
+        }
         if(machine.displaySharedByte(0)!=0x80 ||
            machine.displaySharedByte(1)!=0x01) {
             std::cerr<<"main CPU did not write shared RAM\n";
