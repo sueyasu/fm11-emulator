@@ -11,6 +11,10 @@ int main() {
  if(b.readCpu(0xfd36)!=0xc0)return 12;
  b.writeCpu(0xfd30,0xd0); // Force interrupt clears FDC status.
  if(b.readCpu(0xfd30)!=0)return 13;
+ b.writeCpu(0xfd30,0x08); // RESTORE without verify is valid without 2HD.
+ if(b.readCpu(0xfd30)!=0 || b.readCpu(0xfd31)!=0)return 16;
+ b.writeCpu(0xfd30,0x0c); // RESTORE with verify requires a disk.
+ if((b.readCpu(0xfd30)&0x80)==0)return 17;
 
  { const auto ipl=b.floppyBootSector(1);
    for(unsigned i=0;i<256;++i)if(ipl[i]!=image[i])return 7; }
