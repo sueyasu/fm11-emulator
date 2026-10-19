@@ -258,5 +258,17 @@ int main()
     if((bus.readIo(0xfd07)&0x02)!=0)return 60;
     if((bus.readIo(0xfd04)&0x03)!=0)return 61;
     if(bus.readIo(0xfd05)!=0)return 62;
+    // HALT request is owned by the display subsystem rather than either
+    // main CPU card. A CPU-card reset must leave it intact.
+    MainBoard displayOwner;
+    if(displayOwner.displaySubsystem().haltRequested())return 63;
+    displayOwner.writeIo(0xfd05,0x80);
+    if(!displayOwner.displaySubsystem().haltRequested() ||
+       displayOwner.subCpuStatus()!=0x80)return 64;
+    displayOwner.writeIo(0xfd05,0x00);
+    if(!displayOwner.displaySubsystem().haltRequested())return 65;
+    displayOwner.reset();
+    if(displayOwner.displaySubsystem().haltRequested() ||
+       displayOwner.subCpuStatus()!=0)return 66;
     return 0;
 }
