@@ -4,6 +4,8 @@
 #include "Ptm6840.h"
 #include <cstdint>
 #include <memory>
+#include <limits>
+#include <stdexcept>
 
 // Main-board side of the FM-11 system bus. CPU-card address translation,
 // arbitration and DMA controllers remain on their respective cards.
@@ -13,6 +15,27 @@ public:
     std::shared_ptr<FloppyDevice> floppyDevice() const { return floppy_; }
     std::shared_ptr<Usart8251> usartDevice() const {return usart_;}
     std::shared_ptr<Ptm6840> ptmDevice() const {return ptm_;}
+
+    // PTM input clock is 9700 Hz. The fractional remainder makes elapsed
+    // time independent of how the scheduler divides its time slices.
+    // This clock is owned by the main board, not by the active CPU card.
+    void advanceTimeNanoseconds(std::uint64_t nanoseconds) {
+        constexpr std::uint64_t second=1000000000ULL;
+        constexpr std::uint64_t ptmHz=9700;
+        const auto seconds=nanoseconds/second;
+        const auto remainder=nanoseconds%second;
+        if(seconds>std::numeric_limits<std::uint64_t>::max()/ptmHz)
+            throw std::overflow_error("main-board PTM time interval too large");
+        const std::uint64_t baseTicks=seconds*ptmHz;
+        const std::uint64_t numerator=remainder*ptmHz+ptmTimeRemainder_;
+        const std::uint64_t extraTicks=numerator/second;
+        if(baseTicks>std::numeric_limits<std::uint64_t>::max()-extraTicks)
+            throw std::overflow_error("main-board PTM time interval too large");
+        ptmTimeRemainder_=numerator%second;
+        ptm_->advance(baseTicks+extraTicks);
+        setIrqLine(IrqLine::Timer,ptm_->irqRequest());
+    }
+    void resetTimebase() {ptmTimeRemainder_=0;}
 
     // Main-board sources presented to the 8088 card's 8259 inputs.
     // Corresponds to the original Sim86 interrupt wiring. Each group may
@@ -58,6 +81,7 @@ public:
     }
 private:
     BYTE externalIrqLines_=0;
+    std::uint64_t ptmTimeRemainder_=0;
     std::shared_ptr<FloppyDevice> floppy_=std::make_shared<FloppyDevice>();
     std::shared_ptr<Usart8251> usart_=std::make_shared<Usart8251>();
     std::shared_ptr<Ptm6840> ptm_=std::make_shared<Ptm6840>();
