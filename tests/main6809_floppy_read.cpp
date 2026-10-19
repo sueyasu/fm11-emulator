@@ -2,6 +2,9 @@
 #include <vector>
 int main() {
  Main6809Board b; b.reset();
+ // Boot ROM reads the active-low physical boot DIP switch at FD23.
+ // Original reference emulator initializes it to 0x9F (drive 0).
+ if(b.readCpu(0xfd23)!=0x9f)return 28;
  std::vector<BYTE> image(40*2*16*256);
  const std::size_t off=((1*2+0)*16+0)*256;
  for(int i=0;i<256;++i)image[off+i]=static_cast<BYTE>(i^0x5a);
