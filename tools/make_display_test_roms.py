@@ -419,3 +419,46 @@ protocol_ank[ord("M")*16]=1
 protocol_ank[ord("M")*16+1]=2
 (out/"ank_text_protocol.bin").write_bytes(protocol_ank)
 print(out/"ank_text_protocol.bin")
+
+# Stage 8: copy the *actual* original SubRom.h routine $CAA0-$CACA.
+# It is position-independent internally (relative branches), so place
+# it at $B100 in the synthetic sub-ROM unchanged. It advertises READY
+# via AFE0, waits for FC82/9F82 data, clears READY and acknowledges by
+# clearing bit 7 of the FC81/9F81 request byte.
+original_receive=bytes.fromhex(
+    "b6 af e0 8a 01 b7 af e0 b6 af e0 44 b6 9f 82 "
+    "26 04 24 ed 20 f3 b6 af e0 84 fe b7 af e0 "
+    "b6 9f 81 97 17 84 7f b7 9f 81 b6 9f 82 39"
+)
+assert len(original_receive)==0x2b
+real_sub=bytearray(0x5000)
+rsc=bytearray()
+def rw(address,value):
+    rsc.extend((0x86,value,0xb7,(address>>8)&255,address&255))
+for reg,val in ((1,40),(6,25),(12,0),(13,0)):
+    rw(0xafee,reg);rw(0xafef,val)
+rsc.extend(bytes.fromhex("bd b1 00"))  # JSR transplanted genuine routine
+rsc.extend(bytes.fromhex("b7 80 00"))  # STA 8000 (ASCII supplied by main)
+rw(0x8001,7)
+rw(0x9f83,0x66)             # synthetic display-complete marker
+rsc.extend(bytes.fromhex("20 fe"))
+real_sub[:len(rsc)]=rsc
+real_sub[0x100:0x100+len(original_receive)]=original_receive
+real_sub[-2:]=bytes.fromhex("b0 00")
+(out/"display_text_real_protocol.bin").write_bytes(real_sub)
+print(out/"display_text_real_protocol.bin")
+
+real_main=bytearray(0x1000)
+real_main_code=bytes.fromhex(
+    "b6 fd 05 2b fb "      # poll main FD05 until original READY
+    "86 80 b7 fc 81 "      # FC81 request has bit7 set
+    "86 4d b7 fc 82 "      # FC82 payload 'M', wakes original routine
+    "b6 fc 81 2b fb "      # wait for genuine SubRom ACK (bit7 clear)
+    "b6 fc 83 81 66 26 f9 " # wait for completed text RAM update
+    "86 03 b7 fd a0 "      # enable text
+    "86 77 b7 fc 84 "      # main completion flag
+    "20 fe")
+real_main[:len(real_main_code)]=real_main_code
+real_main[-2:]=bytes.fromhex("50 00")
+(out/"main_text_real_protocol.bin").write_bytes(real_main)
+print(out/"main_text_real_protocol.bin")
