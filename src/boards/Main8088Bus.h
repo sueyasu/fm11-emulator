@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <functional>
 #include <vector>
+#include <memory>
 
 // Hardware-facing bus for the optional FM-11 8088 CPU card.
 // The execution core is deliberately separate.  The original Sim86 maps
@@ -22,12 +23,13 @@ public:
     Main8088Bus();
     void reset();
     void loadBootRom(const Rom& rom);
+    void setFloppyDevice(std::shared_ptr<FloppyDevice> device) { floppy_=std::move(device); }
     void loadFloppy2d(const std::vector<BYTE>& image);
     void loadFloppy2hd(const std::vector<BYTE>& image);
-    std::vector<BYTE> floppy2hdImage() const { return floppy_.image2hd(); }
-    std::vector<BYTE> floppyImage() const { return floppy_.image2d(); }
-    bool floppyDirty() const { return floppy_.dirty2d(); }
-    void clearFloppyDirty() { floppy_.clearDirty2d(); }
+    std::vector<BYTE> floppy2hdImage() const { return floppy_->image2hd(); }
+    std::vector<BYTE> floppyImage() const { return floppy_->image2d(); }
+    bool floppyDirty() const { return floppy_->dirty2d(); }
+    void clearFloppyDirty() { floppy_->clearDirty2d(); }
     BYTE readMemory(std::uint32_t address) const;
     void writeMemory(std::uint32_t address, BYTE value);
     BYTE readIo(WORD port) const;
@@ -71,7 +73,7 @@ private:
     BYTE dmaCommand_=0, dmaMask_=0, dmaStatus_=0, dmaFlip_=0, dmaRequest_=0;
     std::array<DmaRead,4> dmaReaders_{};
     std::array<DmaWrite,4> dmaWriters_{};
-    FloppyDevice floppy_;
+    std::shared_ptr<FloppyDevice> floppy_=std::make_shared<FloppyDevice>();
     std::array<BYTE,0x100> floppyRegisters_{};
     std::array<BYTE,1024> floppyBuffer_{};
     unsigned floppyPosition_=256;
