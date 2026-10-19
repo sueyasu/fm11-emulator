@@ -54,5 +54,10 @@ int main()
     if(timed.displayCpuPc()!=haltedPc)return 11;
     timed.reset();
     if(timed.displayCpuPc()!=0xc000)return 12;
+    // Main-CPU instruction timing also advances the sub CPU.
+    mainCard->setCpuClockHz(1000000);
+    mainCard->writePhysical(0,0x12); // MC6809 NOP, two cycles
+    timed.executeOne();
+    if(timed.displayCpuPc()!=0xc002)return 13;
     return 0;
 }
