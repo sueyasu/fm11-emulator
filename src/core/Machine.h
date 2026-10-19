@@ -50,6 +50,12 @@ public:
     DisplayBitmap::Frame captureDisplayFrame(bool highResolution=false) const {
         return DisplayBitmap::captureFrame(mainBoard_->displaySubsystem(),highResolution);
     }
+    BYTE displaySharedByte(std::size_t offset) const {
+        return mainBoard_->displaySubsystem().readShared(offset);
+    }
+    BYTE displayPhysicalVramByte(std::size_t offset) const {
+        return mainBoard_->displaySubsystem().readPhysicalVram(offset);
+    }
     std::uint16_t displayCpuPc() const {return mainBoard_->displayCpu().pc();}
     void setDisplayIoWriteObserver(DisplaySubsystem::IoWriteObserver observer) {
         mainBoard_->displaySubsystem().setIoWriteObserver(std::move(observer));
