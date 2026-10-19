@@ -896,9 +896,9 @@ void Main8088Board::Core::executeOne()
     case 0x99: // CWD: sign-extend AX into DX:AX
         regs_[2]=(regs_[0]&0x8000)?0xffff:0;
         break;
-    case 0xf8: flags_&=WORD(~0x0001);break; // CLC
-    case 0xf9: flags_|=0x0001;break; // STC
-    case 0xf5: flags_^=0x0001;break; // CMC
+    case 0xf8: flags_&=WORD(~0x0001);if(variant_==CpuType::I8088 && prefixCount==0)lastCycles_=2;break; // CLC
+    case 0xf9: flags_|=0x0001;if(variant_==CpuType::I8088 && prefixCount==0)lastCycles_=2;break; // STC
+    case 0xf5: flags_^=0x0001;if(variant_==CpuType::I8088 && prefixCount==0)lastCycles_=2;break; // CMC
     case 0x9e: { // SAHF: AH -> SF,ZF,AF,PF,CF
         constexpr WORD mask=0x00d5;
         flags_=WORD((flags_&~mask)|(regs_[0]>>8&mask)|0x0002);
@@ -1178,6 +1178,9 @@ void Main8088Board::Core::executeOne()
         bus_.writeIo(WORD(port+1),BYTE(regs_[0]>>8));
         break;
     }
+    // Intel 8088 register-only flag instructions: CLC/STC/CMC are
+    // 2 clocks; CLI/STI/CLD/STD are also 2. No prefix surcharge
+    // is modeled, and V20 timing must be characterized separately.
     case 0x90: // NOP
         // 8088 NOP is 3 clocks. A prefixed NOP includes prefix costs,
         // which are not yet modeled. V20 native timing is separate.
@@ -1187,10 +1190,10 @@ void Main8088Board::Core::executeOne()
     case 0xf4: // HLT
         halted_=true;
         break;
-    case 0xfa: flags_ &= WORD(~0x0200);break; // CLI
-    case 0xfb: flags_ |= 0x0200;irqInhibit_=1;break; // STI
-    case 0xfc: flags_ &= WORD(~0x0400);break; // CLD
-    case 0xfd: flags_ |= 0x0400;break; // STD
+    case 0xfa: flags_ &= WORD(~0x0200);if(variant_==CpuType::I8088 && prefixCount==0)lastCycles_=2;break; // CLI
+    case 0xfb: flags_ |= 0x0200;irqInhibit_=1;if(variant_==CpuType::I8088 && prefixCount==0)lastCycles_=2;break; // STI
+    case 0xfc: flags_ &= WORD(~0x0400);if(variant_==CpuType::I8088 && prefixCount==0)lastCycles_=2;break; // CLD
+    case 0xfd: flags_ |= 0x0400;if(variant_==CpuType::I8088 && prefixCount==0)lastCycles_=2;break; // STD
     case 0xea: { // JMP far ptr16:16
         const WORD off=fetch16(),seg=fetch16();
         ip_=off;segments_[1]=seg;
