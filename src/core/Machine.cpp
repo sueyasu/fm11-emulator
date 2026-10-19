@@ -56,6 +56,7 @@ const CpuBoard* Machine::activeBoard() const
 void Machine::reset()
 {
     mainBoard_->resetEvents();
+    mainBoard_->resetSubCpuControl();
     for (auto& board : boards_)
         board->reset();
     lastExecutionCycles_=0;
