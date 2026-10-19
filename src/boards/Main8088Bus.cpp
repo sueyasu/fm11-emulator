@@ -103,6 +103,8 @@ BYTE Main8088Bus::readIo(WORD port) const
         if(port==0xfd18 || port==0xfd30)return floppy_->transferStatus();
         if(port==0xfd1b || port==0xfd33)
             return const_cast<Main8088Bus*>(this)->floppyReadData();
+        BYTE busValue=0;
+        if(mainBoard_ && mainBoard_->readIo(port,busValue))return busValue;
         return floppy_->registerValue(port&0xff);
     }
     // 8259 PIC and 8237 DMA belong to the future Sim86 adapter.
@@ -148,7 +150,8 @@ void Main8088Bus::writeIo(WORD port,BYTE value)
              (port>=0xfd30 && port<=0xfd35 && floppy_->has2hd()))) {
         if(port==0xfd18 || port==0xfd30)floppyCommand(value,port==0xfd18?0:1);
         else if(port==0xfd1b || port==0xfd33)floppyWriteData(value);
-        else floppy_->writeRegister(port&0xff,value);
+        else if(!mainBoard_ || !mainBoard_->writeIo(port,value))
+            floppy_->writeRegister(port&0xff,value);
     }
 }
 
