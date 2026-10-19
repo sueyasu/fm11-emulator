@@ -35,7 +35,33 @@ public:
         ptm_->advance(baseTicks+extraTicks);
         setIrqLine(IrqLine::Timer,ptm_->irqRequest());
     }
-    void resetTimebase() {ptmTimeRemainder_=0;}
+    // Consume exact CPU cycles without nanosecond quantization.
+    // Rate changes reset phase; only one scheduler must advance a period.
+    void advanceCpuCycles(std::uint64_t cycles,std::uint64_t hz) {
+        if(hz==0 || hz>1000000000ULL)
+            throw std::invalid_argument("invalid main CPU clock frequency");
+        if(ptmCycleClockHz_!=hz) {
+            ptmCycleClockHz_=hz;
+            ptmCycleRemainder_=0;
+        }
+        constexpr std::uint64_t ptmHz=9700;
+        const auto whole=cycles/hz;
+        const auto part=cycles%hz;
+        if(whole>std::numeric_limits<std::uint64_t>::max()/ptmHz)
+            throw std::overflow_error("PTM CPU interval too large");
+        const auto fractional=part*ptmHz+ptmCycleRemainder_;
+        const auto extra=fractional/hz;
+        if(whole*ptmHz>std::numeric_limits<std::uint64_t>::max()-extra)
+            throw std::overflow_error("PTM CPU interval too large");
+        ptmCycleRemainder_=fractional%hz;
+        ptm_->advance(whole*ptmHz+extra);
+        setIrqLine(IrqLine::Timer,ptm_->irqRequest());
+    }
+    void resetTimebase() {
+        ptmTimeRemainder_=0;
+        ptmCycleRemainder_=0;
+        ptmCycleClockHz_=0;
+    }
 
     // Main-board sources presented to the 8088 card's 8259 inputs.
     // Corresponds to the original Sim86 interrupt wiring. Each group may
@@ -82,6 +108,7 @@ public:
 private:
     BYTE externalIrqLines_=0;
     std::uint64_t ptmTimeRemainder_=0;
+    std::uint64_t ptmCycleRemainder_=0,ptmCycleClockHz_=0;
     std::shared_ptr<FloppyDevice> floppy_=std::make_shared<FloppyDevice>();
     std::shared_ptr<Usart8251> usart_=std::make_shared<Usart8251>();
     std::shared_ptr<Ptm6840> ptm_=std::make_shared<Ptm6840>();
