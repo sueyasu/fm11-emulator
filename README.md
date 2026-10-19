@@ -133,6 +133,24 @@ This validates bidirectional shared memory and CPU scheduling, **not**
 the original FM-11 interrupt/attention protocol; a hardware notification
 register is not inferred from this test.
 
+### AFE0 display sub-CPU BUSY/READY (reference SubCpu.cpp)
+
+The original `CSubCpu::SetIoByte($AFE0)` drives the sub-CPU
+BUSY/READY handshake: writing bit 0 = 1 signals READY, and writing
+bit 0 = 0 signals BUSY. Reading `$AFE0` returns the written control
+byte with bit 0 forced to the current READY state. The former Linux
+implementation incorrectly treated `$AFF0` as BUSY; the reference
+instead sends `$AFF0` writes to a DMA channel register.
+
+```sh
+ctest --test-dir build -R 'display_afe0_handshake|display_binary_halt|display_cpu6809' --output-on-failure
+```
+
+The display subsystem now models the AFE0 handshake independently of
+the AFF0 latch. Full agreement with the original **main-side FD05**
+status and sub-CPU interrupt wiring remains to be verified separately;
+the SDL diagnostic `BUSY` reports the AFE0-driven state.
+
 ### AFE6 video status (reference SubCpu.cpp)
 
 The display ROM polls bit 7 at `$AFE6`. The original emulator's
