@@ -151,6 +151,8 @@ private:
     std::array<BYTE,256> floppySector_{};
     unsigned floppyOffset_ = 256;
     BYTE floppyStatus_ = 0;
+    bool floppyTypeIStatus_ = false;
+    std::uint32_t floppyIndexPolls_ = 0;
     std::uint64_t fdcReads_=0,fdcReadSuccesses_=0,fdcReadFailures_=0;
     std::shared_ptr<Usart8251> usart_=std::make_shared<Usart8251>();
     BYTE mainIrqSources_ = 0;
