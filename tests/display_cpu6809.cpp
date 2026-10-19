@@ -369,5 +369,32 @@ int main()
         [&](DisplaySubsystem::IoWriteTrace entry){log.push_back(entry);});
     traced.displaySubsystem().writeMemory(0xafe4,0x77);
     if(log.size()!=4 || log.back().fromCpu)return 80;
+    // Reference SubCpu.cpp graphics access: three 64KiB planes and
+    // AFE1 plane write / preserve controls, AFE3 page, AFE8/9 offset.
+    DisplaySubsystem gvu;
+    gvu.writeMemory(0xafe1,0x07); // broadcast same byte to all planes
+    gvu.writeMemory(0x0000,0xa5);
+    if(gvu.readPhysicalVram(0)!=0xa5 ||
+       gvu.readPhysicalVram(0x10000)!=0xa5 ||
+       gvu.readPhysicalVram(0x20000)!=0xa5)return 81;
+    gvu.writeMemory(0xafe1,0x49); // plane 1 read; plane 0 write; preserve plane 1
+    gvu.writeMemory(0x0000,0x3c);
+    if(gvu.readPhysicalVram(0)!=0x3c ||
+       gvu.readPhysicalVram(0x10000)!=0xa5 ||
+       gvu.readPhysicalVram(0x20000)!=0)return 82;
+    if(gvu.readMemory(0x0000)!=0xa5 || gvu.graphicsReadPlane()!=1)
+        return 83;
+    gvu.writeMemory(0xafe3,0x18); // access page 3
+    gvu.writeMemory(0xafe8,0x00);
+    gvu.writeMemory(0xafe9,0x03); // address offset aligned to even
+    gvu.writeMemory(0xafe1,0x04); // write only third plane
+    gvu.writeMemory(0x0000,0x66);
+    if(gvu.graphicsAccessPage()!=3 || gvu.graphicsOffset()!=2 ||
+       gvu.readPhysicalVram(0x20000+0xc002)!=0x66)return 84;
+    gvu.writeMemory(0xafe2,0x10);
+    if(gvu.graphicsDisplayPage()!=2)return 85;
+    gvu.reset();
+    if(gvu.graphicsAccessPage()!=0 || gvu.graphicsDisplayPage()!=0 ||
+       gvu.graphicsOffset()!=0)return 86;
     return 0;
 }
