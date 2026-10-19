@@ -47,6 +47,10 @@ if(FM11_BUILD_TESTS)
                      ${CMAKE_CURRENT_SOURCE_DIR}/tests/main8088_opcode_inventory.py
                      ${CMAKE_CURRENT_SOURCE_DIR}/src/boards/Main8088Board.cpp)
 
+    add_executable(main6809_dma_multi_ack tests/main6809_dma_multi_ack.cpp)
+    target_link_libraries(main6809_dma_multi_ack PRIVATE fm11_core)
+    add_test(NAME main6809_dma_multi_ack COMMAND main6809_dma_multi_ack)
+
     add_executable(main6809_dma_status_ack tests/main6809_dma_status_ack.cpp)
     target_link_libraries(main6809_dma_status_ack PRIVATE fm11_core)
     add_test(NAME main6809_dma_status_ack COMMAND main6809_dma_status_ack)

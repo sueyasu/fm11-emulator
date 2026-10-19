@@ -605,8 +605,18 @@ BYTE Main6809Board::readIo(WORD address)
         // Original MainCpu.cpp DMA channel-control reads acknowledge DE.
         const BYTE status=ioRegisters_[reg];
         ioRegisters_[reg]=static_cast<BYTE>(status&~0x80);
-        ioRegisters_[0x55]&=static_cast<BYTE>(~0x80);
-        mainIrqSources_&=static_cast<BYTE>(~0x10);
+        // A read acknowledges only this channel. Keep the common DMA
+        // completion/IRQ indication while another channel is still done.
+        bool anyComplete=false;
+        for(unsigned channel=0;channel<4;++channel)
+            anyComplete|=(ioRegisters_[0x50+channel]&0x80)!=0;
+        if(anyComplete) {
+            ioRegisters_[0x55]|=0x80;
+            mainIrqSources_|=0x10;
+        } else {
+            ioRegisters_[0x55]&=static_cast<BYTE>(~0x80);
+            mainIrqSources_&=static_cast<BYTE>(~0x10);
+        }
         mainIrqStatus();
         return status;
     }
