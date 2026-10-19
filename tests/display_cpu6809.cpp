@@ -59,5 +59,27 @@ int main()
     mainCard->writePhysical(0,0x12); // MC6809 NOP, two cycles
     timed.executeOne();
     if(timed.displayCpuPc()!=0xc002)return 13;
+    // Main $FC80-$FCFF and sub $9F80-$9FFF address the same RAM.
+    mainCard->writeCpu(0xfc80,0x61);
+    mainCard->writeCpu(0xfcff,0x72);
+    if(timed.displayMemory(0x9f80)!=0x61 ||
+       timed.displayMemory(0x9fff)!=0x72)return 14;
+    // Execute sub-CPU writes through the ROM instruction path, too.
+    DisplaySubsystem::RomImage mailboxRom{};
+    // LDA #A5; STA $9F81
+    mailboxRom[0]=0x86;mailboxRom[1]=0xa5;
+    mailboxRom[2]=0xb7;mailboxRom[3]=0x9f;mailboxRom[4]=0x81;
+    mailboxRom[0x3ffe]=0xc0;mailboxRom[0x3fff]=0x00;
+    timed.loadDisplayRom(mailboxRom);
+    timed.reset();
+    timed.advanceTimeNanoseconds(7000);
+    if(mainCard->readCpu(0xfc81)!=0xa5)return 15;
+    // System reset does not erase RAM, and adjacent main-board RAM
+    // remains independent from the shared aperture.
+    mainCard->writeCpu(0xfc7f,0x33);
+    mainCard->writeCpu(0xfd05,0x80);
+    mainCard->reset();
+    if(mainCard->readCpu(0xfc80)!=0x61)return 16;
+    if(mainCard->readCpu(0xfc7f)!=0)return 17;
     return 0;
 }
