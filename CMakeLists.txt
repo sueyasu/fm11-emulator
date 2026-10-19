@@ -71,6 +71,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(main6809_dma_status_ack PRIVATE fm11_core)
     add_test(NAME main6809_dma_status_ack COMMAND main6809_dma_status_ack)
 
+    add_executable(main8088_fdd_dma tests/main8088_fdd_dma.cpp)
+    target_link_libraries(main8088_fdd_dma PRIVATE fm11_core)
+    add_test(NAME main8088_fdd_dma COMMAND main8088_fdd_dma)
+
     add_executable(main8088_dma_m2m_block tests/main8088_dma_m2m_block.cpp)
     target_link_libraries(main8088_dma_m2m_block PRIVATE fm11_core)
     add_test(NAME main8088_dma_m2m_block COMMAND main8088_dma_m2m_block)
