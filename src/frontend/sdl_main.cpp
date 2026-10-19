@@ -41,10 +41,10 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N]\\n"
-             <<"  ROM defaults to external/roms/display6809.bin\\n"
-             <<"  ESC quit; SPACE pause/resume; F1 switch 200/400-line view\\n"
-             <<"  Mode is user-selected until hardware mode bits are decoded.\\n";
+    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N]\n"
+             <<"  ROM defaults to external/roms/display6809.bin\n"
+             <<"  ESC quit; SPACE pause/resume; F1 switch 200/400-line view\n"
+             <<"  Mode is user-selected until hardware mode bits are decoded.\n";
 }
 }
 int main(int argc,char** argv) {
@@ -111,7 +111,7 @@ int main(int argc,char** argv) {
         }
         return 0;
     } catch(const std::exception& e) {
-        std::cerr<<"fm11-sdl: "<<e.what()<<"\\n";
+        std::cerr<<"fm11-sdl: "<<e.what()<<"\n";
         return 1;
     }
 }
