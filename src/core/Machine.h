@@ -54,6 +54,14 @@ public:
     void injectDisplayAttention() {mainBoard_->displaySubsystem().notifyMainAttention();}
     void injectBreakEvent() {mainBoard_->signalBreak();}
     BYTE displayBusyStatus() const {return mainBoard_->displayBusyStatus();}
+    BYTE mainSubCpuControl() const {return mainBoard_->subCpuControl();}
+    BYTE mainEventStatus() const {return mainBoard_->eventStatus();}
+    std::uint64_t displaySharedWriteRevision() const {
+        return mainBoard_->displaySubsystem().sharedWriteRevision();
+    }
+    bool displayHalted() const {
+        return mainBoard_->displaySubsystem().haltRequested();
+    }
     BYTE displaySharedByte(std::size_t offset) const {
         return mainBoard_->displaySubsystem().readShared(offset);
     }
