@@ -710,28 +710,32 @@ void Main6809Board::writeIo(WORD address, BYTE value)
                         status=0x03;
                     } else {
                         const unsigned count=(unsigned(ioRegisters_[0x46])<<8)|ioRegisters_[0x47];
-                        if(count<length) {
-                            status=0x10;
-                            ioRegisters_[0x51]|=0x40;
-                        } else {
+                        {
+                            // The reference DMA transfers min(count,sector size).
+                            // Count exhaustion is a successful DMA end, not RNF.
+                            const unsigned transfer=std::min(count,length);
                             const bool down=(ioRegisters_[0x51]&0x08)!=0;
                             const WORD start=WORD((ioRegisters_[0x44]<<8)|ioRegisters_[0x45]);
                             const std::uint32_t bank=std::uint32_t(ioRegisters_[0x95]&15)<<16;
-                            const bool write=(value&0x20)!=0;
-                            for(unsigned i=0;i<length;++i) {
+                            const bool write=(ioRegisters_[0x51]&0x01)!=0;
+                            for(unsigned i=0;i<transfer;++i) {
                                 const WORD address=WORD(start+(down?-int(i):int(i)));
                                 const std::uint32_t physical=bank|address;
                                 if(write)floppy_->write(1,offset+i,readPhysical(physical));
                                 else writePhysical(physical,floppy_->read(1,offset+i));
                             }
-                            const WORD next=WORD(start+(down?-int(length):int(length)));
+                            const WORD next=WORD(start+(down?-int(transfer):int(transfer)));
                             ioRegisters_[0x44]=BYTE(next>>8);
                             ioRegisters_[0x45]=BYTE(next);
-                            const unsigned rest=count-length;
+                            const unsigned rest=count-transfer;
                             ioRegisters_[0x46]=BYTE(rest>>8);
                             ioRegisters_[0x47]=BYTE(rest);
-                            ioRegisters_[0x51]=static_cast<BYTE>((ioRegisters_[0x51]|0x80)&~0x40);
-                            refreshDmaCompletion();
+                            if(rest==0) {
+                                ioRegisters_[0x51]=static_cast<BYTE>((ioRegisters_[0x51]|0x80)&~0x40);
+                                refreshDmaCompletion();
+                            } else {
+                                ioRegisters_[0x51]|=0x40;
+                            }
                         }
                     }
                 }
