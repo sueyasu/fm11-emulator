@@ -557,7 +557,7 @@ BYTE Main6809Board::readIo(WORD address)
     case 0x36:
         // Reference 2HD drive-sense register: C0 | RDY0..RDY3.
         // The shared device currently supports drive zero only.
-        return static_cast<BYTE>(0xc0 | ((floppy_->has2hd()||floppy_->has2d())?0x01:0));
+        return static_cast<BYTE>(0xc0 | ((floppy_->has2hd()||floppy_->has2d()) ? (1u<<floppy_->mountedDrive()) : 0));
     case 0x37: {
         // Reference MainCpu::GetIoByte: reading FDC IRQ status
         // acknowledges the extended FDC interrupt source.
@@ -674,7 +674,7 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         // the disk. Not Ready is returned only when Verify is requested.
         // The boot ROM issues RESTORE $08 with no 2HD disk present.
         BYTE status=0;
-        const bool hasDisk=floppy_->has2hd() || floppy_->has2d();
+        const bool hasDisk=floppy_->present(ioRegisters_[0x35]&3);
         if((value&0x80)==0) {
             switch(value&0xe0) {
             case 0x00:
