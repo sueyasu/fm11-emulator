@@ -134,6 +134,10 @@ if(FM11_BUILD_TESTS)
                      $<TARGET_FILE:display_binary_text_protocol>
                      ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_display_test_roms.py)
 
+    add_executable(display_sub_io_irq tests/display_sub_io_irq.cpp)
+    target_link_libraries(display_sub_io_irq PRIVATE fm11_core)
+    add_test(NAME display_sub_io_irq COMMAND display_sub_io_irq)
+
     add_executable(display_keyboard_queue tests/display_keyboard_queue.cpp)
     target_link_libraries(display_keyboard_queue PRIVATE fm11_core)
     add_test(NAME display_keyboard_queue COMMAND display_keyboard_queue)
