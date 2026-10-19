@@ -57,6 +57,16 @@ void Machine::reset()
         board->reset();
 }
 
+void Machine::advanceTimeNanoseconds(std::uint64_t nanoseconds)
+{
+    mainBoard_->advanceTimeNanoseconds(nanoseconds);
+    // The 6809 IRQ aggregator is still implemented in its CPU adapter.
+    // Synchronize it with the main-board PTM after independent time advance.
+    for(auto& board:boards_)
+        if(auto* cpu6809=dynamic_cast<Main6809Board*>(board.get()))
+            cpu6809->syncPtmIrq();
+}
+
 void Machine::executeOne()
 {
     if (auto* board = activeBoard()) {
