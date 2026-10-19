@@ -545,6 +545,8 @@ BYTE Main6809Board::readIo(WORD address)
         refreshDmaCompletion();
         return status;
     }
+    case 0x33:
+        return ioRegisters_[0x33]; // 2HD FDC PIO data latch
     case 0x30: {
         // Reference MainCpu::GetIoByte: return the status, acknowledge
         // INTRQ (bit 0), then merge the one-shot DRQ latch.
@@ -555,7 +557,7 @@ BYTE Main6809Board::readIo(WORD address)
     case 0x36:
         // Reference 2HD drive-sense register: C0 | RDY0..RDY3.
         // The shared device currently supports drive zero only.
-        return static_cast<BYTE>(0xc0 | (floppy_->has2hd()?0x01:0));
+        return static_cast<BYTE>(0xc0 | ((floppy_->has2hd()||floppy_->has2d())?0x01:0));
     case 0x37: {
         // Reference MainCpu::GetIoByte: reading FDC IRQ status
         // acknowledges the extended FDC interrupt source.
@@ -672,7 +674,7 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         // the disk. Not Ready is returned only when Verify is requested.
         // The boot ROM issues RESTORE $08 with no 2HD disk present.
         BYTE status=0;
-        const bool hasDisk=floppy_->has2hd();
+        const bool hasDisk=floppy_->has2hd() || floppy_->has2d();
         if((value&0x80)==0) {
             switch(value&0xe0) {
             case 0x00:
@@ -688,7 +690,52 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             }
             if((value&0x04) && !hasDisk)status=0x80;
         } else if((value&0xc0)==0x80) {
-            if(!hasDisk)status=0x80;
+            if(!hasDisk) {
+                status=0x80;
+            } else {
+                // A 2D D88 image may be in the physical 2HD drive.
+                // Unlike the MiniFDC, this controller uses DMA channel 1.
+                const unsigned track=ioRegisters_[0x31];
+                const unsigned sector=ioRegisters_[0x32];
+                const unsigned side=ioRegisters_[0x34]&1;
+                const unsigned drive=ioRegisters_[0x35]&3;
+                std::size_t offset=0;
+                if(!floppy_->sectorOffset(1,track,side,sector,drive,offset)) {
+                    status=0x10; // Record Not Found
+                } else {
+                    const unsigned length=static_cast<unsigned>(floppy_->sectorLength(1));
+                    const bool dma=(ioRegisters_[0x51]&0x04)!=0;
+                    if(!dma) {
+                        floppy_->beginSector(1,track,side,sector,drive,(value&0x20)!=0);
+                        status=0x03;
+                    } else {
+                        const unsigned count=(unsigned(ioRegisters_[0x46])<<8)|ioRegisters_[0x47];
+                        if(count<length) {
+                            status=0x10;
+                            ioRegisters_[0x51]|=0x40;
+                        } else {
+                            const bool down=(ioRegisters_[0x51]&0x08)!=0;
+                            const WORD start=WORD((ioRegisters_[0x44]<<8)|ioRegisters_[0x45]);
+                            const std::uint32_t bank=std::uint32_t(ioRegisters_[0x95]&15)<<16;
+                            const bool write=(value&0x20)!=0;
+                            for(unsigned i=0;i<length;++i) {
+                                const WORD address=WORD(start+(down?-int(i):int(i)));
+                                const std::uint32_t physical=bank|address;
+                                if(write)floppy_->write(1,offset+i,readPhysical(physical));
+                                else writePhysical(physical,floppy_->read(1,offset+i));
+                            }
+                            const WORD next=WORD(start+(down?-int(length):int(length)));
+                            ioRegisters_[0x44]=BYTE(next>>8);
+                            ioRegisters_[0x45]=BYTE(next);
+                            const unsigned rest=count-length;
+                            ioRegisters_[0x46]=BYTE(rest>>8);
+                            ioRegisters_[0x47]=BYTE(rest);
+                            ioRegisters_[0x51]=static_cast<BYTE>((ioRegisters_[0x51]|0x80)&~0x40);
+                            refreshDmaCompletion();
+                        }
+                    }
+                }
+            }
         } else if((value&0xf0)==0xd0) {
             status=0;
         } else if(!hasDisk) {
@@ -698,6 +745,12 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         ioRegisters_[0x37]=0x40;
         break;
     }
+    case 0x33:
+        if(floppy_->transferChannel()==1 && (floppy_->transferStatus()&0x02)!=0) {
+            floppy_->transferWrite(value);
+        }
+        ioRegisters_[0x33]=value;
+        break;
     case 0x18:
         // MainCpu::Fm11MiniFDC clears completion before processing a
         // command; when it finishes, FD1C and FD1F both carry IRQ bit 6.
