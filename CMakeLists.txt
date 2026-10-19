@@ -113,6 +113,17 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(display_control PRIVATE fm11_core)
     add_test(NAME display_control COMMAND display_control)
 
+    add_executable(display_binary_text_scroll tests/display_binary_text_scroll.cpp)
+    target_link_libraries(display_binary_text_scroll PRIVATE fm11_core)
+    foreach(mode IN ITEMS top scroll)
+        add_test(NAME display_binary_text_scroll_${mode}
+                 COMMAND ${Python3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/display_binary_text_scroll.py
+                         $<TARGET_FILE:display_binary_text_scroll>
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_display_test_roms.py
+                         ${mode})
+    endforeach()
+
     add_executable(display_binary_layers tests/display_binary_layers.cpp)
     target_link_libraries(display_binary_layers PRIVATE fm11_core)
     foreach(mode IN ITEMS text graphics both)
