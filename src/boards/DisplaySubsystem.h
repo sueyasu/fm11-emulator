@@ -57,6 +57,7 @@ public:
         return ankRom_.at(std::size_t(character)*16+row);
     }
     BYTE kanjiRomByte(std::size_t offset) const {return kanjiRom_.at(offset);}
+    BYTE textByte(std::size_t offset) const {return ram_.at(offset&0x0fffu);}
     // Diagnostic observer for sub-CPU writes to the undecoded A000-BFFF
     // aperture and known sub-I/O latches. Observation is non-invasive:
     // attaching an observer never changes readback or register side effects.
