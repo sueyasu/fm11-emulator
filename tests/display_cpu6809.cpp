@@ -232,5 +232,20 @@ int main()
     const auto invalid=DisplayBitmap::decodeMonochrome(
         pixels.captureVideo(),0x4200);
     if(invalid[0]!=0 || invalid[7]!=0)return 57;
+    // Diagnostic two-plane bit indices; no physical palette is assumed.
+    DisplaySubsystem planes;
+    planes.writeMemory(0x0000,0x50); // bit 0 at x=1 and x=3
+    planes.writeMemory(0x4000,0x30); // bit 1 at x=2 and x=3
+    planes.writeMemory(0x3e7f,0x01);
+    planes.writeMemory(0x7e7f,0x01);
+    const auto indexes=DisplayBitmap::decodeTwoPlanes(planes.captureVideo());
+    if(indexes[0]!=0 || indexes[1]!=1 ||
+       indexes[2]!=2 || indexes[3]!=3 || indexes[4]!=0)return 58;
+    if(indexes[DisplayBitmap::kWidth*DisplayBitmap::kHeight-1]!=3)
+        return 59;
+    // A snapshot is immutable even if either source plane changes.
+    planes.writeMemory(0,0);
+    planes.writeMemory(0x4000,0);
+    if(indexes[1]!=1 || indexes[2]!=2 || indexes[3]!=3)return 60;
     return 0;
 }
