@@ -36,5 +36,20 @@ int main()
     bus.writeIo(0xfd18,0x80);
     for(unsigned i=0;i<256;++i)
         if(bus.readRam(0x2000+i)!=BYTE(i^0x5a))return 2;
+    // Writing a sector through the 8088 card must update the media
+    // visible through the 6809 adapter without reloading the image.
+    for(unsigned i=0;i<256;++i)bus.writeMemory(0x3000+i,BYTE(i^0xa5));
+    bus.writeIo(0x1c,0);
+    bus.writeIo(0x10,0);
+    bus.writeIo(0x10,0x30);
+    bus.writeIo(0x11,0xff);
+    bus.writeIo(0x11,0);
+    bus.writeIo(0x1b,0x48);
+    bus.writeIo(0x1a,0);
+    bus.writeIo(0xfd18,0xa0);
+    const auto shared=p6809->floppyImage();
+    for(unsigned i=0;i<256;++i)
+        if(shared[i]!=BYTE(i^0xa5))return 3;
+    if(!p6809->floppyDirty())return 4;
     return 0;
 }
