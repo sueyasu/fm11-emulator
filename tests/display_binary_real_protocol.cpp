@@ -30,7 +30,7 @@ int main(int argc,char** argv) {
                      <<" FC83=$"<<unsigned(m.displaySharedByte(3))
                      <<" FDA0=$"<<unsigned(m.mainDisplayControl())
                      <<" text0=$"<<unsigned(m.displaySubsystem().textByte(0))
-                     <<std::dec<<"\\n";
+                     <<std::dec<<"\n";
             return 11;
         }
         if(m.displaySharedByte(1)!=0 || m.displaySharedByte(2)!='M' ||
