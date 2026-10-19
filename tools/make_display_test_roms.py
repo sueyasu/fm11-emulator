@@ -376,5 +376,6 @@ for start_cell,name in ((0,"top"),(80,"scroll")):
 scroll_ank=bytearray(4096)
 for ch in b"FIRST LINE SECOND":
     scroll_ank[ch*16]=1
+scroll_ank[ord("S")*16]=2
 (out/"ank_text_scroll.bin").write_bytes(scroll_ank)
 print(out/"ank_text_scroll.bin")
