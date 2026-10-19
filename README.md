@@ -152,6 +152,30 @@ branch loops. This fixes the status semantics tested here but does
 not yet port the original character-display composition or every
 sub-CPU peripheral behavior.
 
+### Synthetic 6809 graphics/text overlay: stage 4
+
+This stage uses a **new pair of synthetic 6809 ROMs**. The main CPU
+enables both text and graphics (`FDA0=$0F`). The display CPU sets
+80-column/25-row CRTC text mode, writes a yellow `T` and a reverse
+red `R` into text RAM, and paints two blue graphics pixels underneath
+their cells using the graphics plane registers.
+
+```sh
+python3 tools/make_display_test_roms.py build/test-roms
+ctest --test-dir build -R display_binary_text_overlay --output-on-failure
+
+./build/fm11-sdl --main-rom build/test-roms/main_text_overlay.bin \\
+    --rom build/test-roms/display_text_overlay.bin \\
+    --ank-rom external/roms/ank.bin --high
+```
+
+The CTest runs the same ROMs with a generated minimal ANK font, and
+checks both 200- and 400-line frames. The `T` glyph overlays the first
+blue pixel in yellow, while the reverse-video `R` leaves the second
+blue pixel visible through the glyph hole and paints the other pixels
+of that character cell red. This tests actual output blending rather
+than simply checking whether the two memory regions were written.
+
 ### Synthetic 6809 text attributes: stage 3
 
 After validating basic text and 40/80-column geometry, the next
