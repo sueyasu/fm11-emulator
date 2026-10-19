@@ -21,6 +21,11 @@ public:
     void resetEvents() {eventStatus_=0;eventControl_=0;}
     BYTE eventStatus() const {return eventStatus_;}
     BYTE eventControl() const {return eventControl_;}
+    // FD05: common main/sub control output and the CPU-visible HALT flag.
+    // The actual sub-CPU execution/arbitration is not implemented here.
+    BYTE subCpuStatus() const {return subCpuStatus_;}
+    BYTE subCpuControl() const {return subCpuControl_;}
+    void resetSubCpuControl() {subCpuStatus_=subCpuControl_=0;}
 
     // PTM input clock is 9700 Hz. The fractional remainder makes elapsed
     // time independent of how the scheduler divides its time slices.
@@ -92,6 +97,7 @@ public:
     // The physical PTM, USART and FDC parameter registers live here.
     bool readIo(std::uint16_t address, BYTE& value) {
         const unsigned reg=address&0xff;
+        if(reg==0x05) {value=subCpuStatus_;return true;}
         if(reg==0x04) {
             value=eventStatus_;
             eventStatus_&=static_cast<BYTE>(~0x03);
@@ -113,6 +119,11 @@ public:
     }
     bool writeIo(std::uint16_t address,BYTE value) {
         const unsigned reg=address&0xff;
+        if(reg==0x05) {
+            subCpuControl_=value;
+            if(value&0x80)subCpuStatus_|=0x80;
+            return true;
+        }
         if(reg==0x04) {
             eventStatus_&=static_cast<BYTE>(~0x01);
             eventControl_=0x80;
@@ -131,6 +142,7 @@ public:
         return true;
     }
 private:
+    BYTE subCpuStatus_=0,subCpuControl_=0;
     BYTE eventStatus_=0;
     BYTE eventControl_=0;
     BYTE externalIrqLines_=0;
