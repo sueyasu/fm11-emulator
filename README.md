@@ -4,6 +4,43 @@ Linux port and ongoing development of the FM-11 emulator.
 
 This first revision establishes a portable CMake build for the existing 6809/6309 and Z80 CPU cores. The Windows MFC/Direct3D frontend is intentionally not part of the Linux build.
 
+## External ROM images (not committed)
+
+Original emulator firmware is supplied as C byte arrays. Extract them once
+from the source ZIP or an unpacked `Fm11/` directory:
+
+```sh
+python3 tools/extract_roms.py /path/to/fm11_x64.zip
+# Or: python3 tools/extract_roms.py /path/to/Fm11/
+```
+
+This writes the following files under `external/roms/`, which is excluded
+by `.gitignore` and **must not be committed**:
+
+| File | Size | Reference array |
+|---|---:|---|
+| `boot6809.bin` | 4096 | `BootRom.h:BootRom` |
+| `boot8088.bin` | 4096 | `BootRom86.h:BootRom86` |
+| `display6809.bin` | 20480 | `SubRom.h:SubRom` |
+| `ank.bin` | 4096 | `CharRom.h:AnkRom` |
+| `kanji.bin` | 131072 | `KanRom.h:KanRom` |
+
+The final emulator will use ROM dumps supplied by the user from their own
+machine, in the same binary file format and directory layout. ROM filenames
+and sizes are validated, but ROM contents are never embedded in the binary.
+The C++ core offers `loadDisplayRomFile` on `Machine` and
+`loadBootRomFile` on the 6809 and 8088 adapters. The diagnostic runner
+defaults to `external/roms/display6809.bin`:
+
+```sh
+./build/fm11-display-romtrace --instructions 100000
+# Or override: --rom /somewhere/display6809.bin
+```
+
+The headless OS boottrack diagnostic currently uses a synthetic boot ROM,
+not the extracted original boot firmware. The font ROMs are staged for the
+later display/keyboard frontend, not consumed by current rendering code.
+
 ## Build
 
 ```sh
