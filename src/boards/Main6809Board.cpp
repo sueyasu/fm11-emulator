@@ -646,7 +646,12 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             default:
                 break;
             }
-            floppyStatus_=(floppy_->has2d()?0:0x80);
+            // WD179x Type-I status: bit 2 is asserted at track zero.
+            // The boot ROM checks this after RESTORE to verify that
+            // the selected drive has reached its home position.
+            floppyStatus_=static_cast<BYTE>(
+                (floppy_->has2d()?0:0x80) |
+                (floppy_->registerValue(0x19)==0?0x04:0));
             break;
         }
         break;
