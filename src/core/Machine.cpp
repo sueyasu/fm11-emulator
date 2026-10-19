@@ -71,6 +71,13 @@ void Machine::advanceTimeNanoseconds(std::uint64_t nanoseconds)
             cpu6809->syncPtmIrq();
 }
 
+void Machine::set8088ClockHz(std::uint64_t hz)
+{
+    if(hz==0 || hz>1000000000ULL)
+        throw std::invalid_argument("8088/V20 clock must be between 1 and 1e9 Hz");
+    clock8088Hz_=hz;
+}
+
 void Machine::executeOne()
 {
     if (auto* board = activeBoard()) {
@@ -81,12 +88,16 @@ void Machine::executeOne()
         board->cpu().executeOne();
         lastExecutionCycles_=board->cpu().lastExecutionCycles();
         if(auto* cpu6809=dynamic_cast<Main6809Board*>(board)) {
-            // The CPU core supplies exact cycles; the machine owns PTM time.
-            // An unconfigured CPU clock never implies a guessed frequency.
             if(lastExecutionCycles_ && cpu6809->cpuClockHz()) {
                 mainBoard_->advanceCpuCycles(lastExecutionCycles_,cpu6809->cpuClockHz());
                 cpu6809->syncPtmIrq();
             }
+        } else if(dynamic_cast<Main8088Board*>(board) &&
+                  lastExecutionCycles_ && clock8088Hz_) {
+            mainBoard_->advanceCpuCycles(lastExecutionCycles_,clock8088Hz_);
+            for(auto& attached:boards_)
+                if(auto* cpu6809=dynamic_cast<Main6809Board*>(attached.get()))
+                    cpu6809->syncPtmIrq();
         }
     }
 }
