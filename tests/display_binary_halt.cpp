@@ -25,7 +25,7 @@ int main(int argc,char** argv) {
         if(machine.displayCpuPc()!=haltedPc ||
            machine.displaySharedByte(0)!=0x11)return 11;
         machine.executeOne(); // STA $FD05: release HALT
-        if(main->readCpu(0xfd05)!=0x80)return 12; // sub still BUSY until it runs
+        if(machine.displayHalted())return 12; // release must clear HALT; sub may already signal READY
         for(int i=0;i<1000;++i)machine.executeOne();
         if(machine.displayCpuPc()==haltedPc ||
            machine.displayBusyStatus()!=0 || main->readCpu(0xfd05)!=0 ||
