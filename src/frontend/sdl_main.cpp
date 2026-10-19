@@ -53,7 +53,7 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE]\n"
+    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3]\n"
              <<"  ROM defaults to external/roms/display6809.bin\n"
              <<"  ESC quit; SPACE pause/resume; F1 switch 200/400-line view\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
@@ -63,6 +63,7 @@ int main(int argc,char** argv) {
     try {
         std::string romPath="external/roms/display6809.bin", mainRomPath, ankPath, floppyPath;
         bool floppyD88=false;
+        unsigned floppyDrive=0;
         bool high=false, testPattern=false, traceBoot=false, diagnostics=false;
         std::uint64_t instructions=10000;
         for(int i=1;i<argc;++i) {
@@ -72,10 +73,15 @@ int main(int argc,char** argv) {
             if(arg=="--test-pattern"){testPattern=true;continue;}
             if(arg=="--trace-boot"){traceBoot=true;continue;}
             if(arg=="--diagnostics"){diagnostics=true;continue;}
-            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--ank-rom" || arg=="--floppy2d" || arg=="--floppy-d88") && i+1<argc) {
+            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--ank-rom" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive") && i+1<argc) {
                 if(arg=="--rom")romPath=argv[++i];
                 else if(arg=="--main-rom")mainRomPath=argv[++i];
                 else if(arg=="--ank-rom")ankPath=argv[++i];
+                else if(arg=="--floppy-drive") {
+                    const auto d=parseCount(argv[++i]);
+                    if(d>3)throw std::invalid_argument("--floppy-drive must be 0..3");
+                    floppyDrive=static_cast<unsigned>(d);
+                }
                 else if(arg=="--floppy2d" || arg=="--floppy-d88") {
                     if(!floppyPath.empty())throw std::invalid_argument("only one floppy image may be mounted");
                     floppyD88=(arg=="--floppy-d88");
@@ -104,6 +110,7 @@ int main(int argc,char** argv) {
                     auto image=readDiskImage(floppyPath);
                     if(floppyD88)mainBoard->loadFloppyD88(image);
                     else mainBoard->loadFloppy2d(image);
+                    mainBoard->setFloppyDrive(floppyDrive);
                 }
             }
         }
