@@ -118,6 +118,13 @@ public:
         if(address==0xafeb)return static_cast<BYTE>(displayAddress_);
         if(address==0xafee)return crtcIndex_;
         if(address==0xafef)return crtcIndex_<crtcRegisters_.size()?crtcRegisters_[crtcIndex_]:0xff;
+        // Original SubCpu.cpp GetIoByte($AFE7): reading this register
+        // asserts the main CPU's ATTENTION event (FD04 bit 0).
+        // Keep the side effect on read, not write.
+        if(address==0xafe7) {
+            if(attentionSink_)attentionSink_();
+            return 0;
+        }
         if(address==0xafe6)return videoFlags_;
         if(address==0xaff0)return busy_;
         if(address>=0xb000)return rom_[address-0xb000];
