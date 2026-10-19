@@ -71,6 +71,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(main6809_dma_status_ack PRIVATE fm11_core)
     add_test(NAME main6809_dma_status_ack COMMAND main6809_dma_status_ack)
 
+    add_executable(fdc_command_decode tests/fdc_command_decode.cpp)
+    target_link_libraries(fdc_command_decode PRIVATE fm11_core)
+    add_test(NAME fdc_command_decode COMMAND fdc_command_decode)
+
     add_executable(machine_floppy_shared tests/machine_floppy_shared.cpp)
     target_link_libraries(machine_floppy_shared PRIVATE fm11_core)
     add_test(NAME machine_floppy_shared COMMAND machine_floppy_shared)
