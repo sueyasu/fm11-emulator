@@ -139,5 +139,23 @@ int main()
     mainCard->setCpuClockHz(4000000);
     timed.executeOne();
     if(timed.displayCpuPc()!=0xc002)return 32;
+    // Repeated configuration with the same frequency is idempotent:
+    // the first half-microsecond has not yet earned an instruction.
+    timed.reset();
+    timed.setDisplayCpuClockHz(1000000);
+    timed.advanceTimeNanoseconds(500);
+    if(timed.displayCpuPc()!=0xc000)return 33;
+    timed.setDisplayCpuClockHz(1000000);
+    timed.advanceTimeNanoseconds(500);
+    if(timed.displayCpuPc()!=0xc002)return 34;
+    // Preserve negative instruction-cycle credit across a redundant
+    // configuration update as well (LDA costs two 6809 cycles).
+    timed.reset();
+    timed.setDisplayCpuClockHz(1000000);
+    timed.advanceTimeNanoseconds(1000);
+    if(timed.displayCpuPc()!=0xc002)return 35;
+    timed.setDisplayCpuClockHz(1000000);
+    timed.advanceTimeNanoseconds(1000);
+    if(timed.displayCpuPc()!=0xc002)return 36;
     return 0;
 }
