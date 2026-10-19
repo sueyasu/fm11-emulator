@@ -36,6 +36,8 @@ void Main6809Board::reset()
     ioStatusLatch_.fill(0);
     mainIrqSources_ = extendedIrqSources_ = 0;
     mainIrqResult_ = extendedIrqResult_ = 0;
+    if(mainBoard_)
+        mainBoard_->setIrqLine(MainBoard::IrqLine::Timer,false);
     usart_->reset();
     ptm_.fill(PtmChannel{});
     ptmStatus_ = 0;
@@ -398,6 +400,10 @@ void Main6809Board::refreshPtmIrq()
     const bool asserted = active && !ptmIrqAcknowledged_;
     if (asserted && (mainIrqSources_ & 0x01) == 0) ++ptmIrqAssertCount_;
     setMainIrqSource(0x01, asserted);
+    // The 6840 PTM is on the main board: its IRQ also reaches the
+    // optional 8088 card through the shared system-bus IR0 line.
+    if(mainBoard_)
+        mainBoard_->setIrqLine(MainBoard::IrqLine::Timer,asserted);
 }
 
 void Main6809Board::advancePtm(std::uint64_t ticks)
