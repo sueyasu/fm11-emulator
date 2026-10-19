@@ -51,5 +51,16 @@ int main()
     for(unsigned i=0;i<256;++i)
         if(shared[i]!=BYTE(i^0xa5))return 3;
     if(!p6809->floppyDirty())return 4;
+    // The same system device also handles programmed I/O on the 6809.
+    p6809->writeCpu(0xfd19,0);
+    p6809->writeCpu(0xfd1a,1);
+    p6809->writeCpu(0xfd1c,0);
+    p6809->writeCpu(0xfd1d,0);
+    p6809->writeCpu(0xfd50,0); // PIO, not 6844 DMA
+    p6809->writeCpu(0xfd18,0x80);
+    if((p6809->readCpu(0xfd18)&2)==0)return 5;
+    for(unsigned i=0;i<256;++i)
+        if(p6809->readCpu(0xfd1b)!=BYTE(i^0xa5))return 6;
+    if(p6809->readCpu(0xfd18)!=0)return 7;
     return 0;
 }
