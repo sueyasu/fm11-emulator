@@ -50,5 +50,34 @@ int main()
     for(int i=0;i<100;++i)b.advanceTimeNanoseconds(1000000);
     if(ca->readCpu(0xfd3a)!=cb->readCpu(0xfd3a))return 5;
     if(ca->readCpu(0xfd3b)!=cb->readCpu(0xfd3b))return 6;
+    // Alternating CPU frequencies must not discard PTM sub-tick phase.
+    // At 19.4 kHz each cycle is half of one PTM tick. An intervening
+    // 9.7 kHz CPU cycle adds one full tick without clearing that half.
+    MainBoard mixed;
+    auto ptm=mixed.ptmDevice();
+    ptm->write(0x39,0x01);
+    ptm->write(0x38,0x50);
+    ptm->write(0x3a,0);
+    ptm->write(0x3b,4);
+    mixed.advanceCpuCycles(1,19400); // 0.5 tick
+    mixed.advanceCpuCycles(1,9700);  // 1.5 ticks total
+    mixed.advanceCpuCycles(1,19400); // 2 ticks total
+    if(ptm->channels[0].counter!=2)return 7;
+    mixed.advanceCpuCycles(1,19400); // 2.5 ticks
+    mixed.advanceCpuCycles(1,19400); // 3 ticks
+    if(ptm->channels[0].counter!=1)return 8;
+    mixed.advanceCpuCycles(1,9700);  // 4 ticks; expiry
+    if(!ptm->irqRequest())return 9;
+    // Explicit elapsed time must share the same fractional phase.
+    MainBoard combined;
+    auto device=combined.ptmDevice();
+    device->write(0x39,0x01);
+    device->write(0x38,0x50);
+    device->write(0x3a,0);
+    device->write(0x3b,2);
+    combined.advanceCpuCycles(1,19400); // half a tick
+    combined.advanceTimeNanoseconds(51547); // nearly half a tick
+    combined.advanceCpuCycles(1,19400); // now more than one tick
+    if(device->channels[0].counter!=1)return 10;
     return 0;
 }
