@@ -3,6 +3,7 @@
 #include "RomFiles.h"
 #include <SDL.h>
 #include <chrono>
+#include <algorithm>
 #include <cstdint>
 #include <iostream>
 #include <stdexcept>
@@ -41,7 +42,7 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N]\n"
+    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern]\n"
              <<"  ROM defaults to external/roms/display6809.bin\n"
              <<"  ESC quit; SPACE pause/resume; F1 switch 200/400-line view\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
@@ -50,19 +51,20 @@ void usage() {
 int main(int argc,char** argv) {
     try {
         std::string romPath="external/roms/display6809.bin";
-        bool high=false;
+        bool high=false, testPattern=false;
         std::uint64_t instructions=10000;
         for(int i=1;i<argc;++i) {
             const std::string arg=argv[i];
             if(arg=="--help"){usage();return 0;}
             if(arg=="--high"){high=true;continue;}
+            if(arg=="--test-pattern"){testPattern=true;continue;}
             if((arg=="--rom" || arg=="--cycles") && i+1<argc) {
                 if(arg=="--rom")romPath=argv[++i];
                 else instructions=parseCount(argv[++i]);
             } else {usage();return 2;}
         }
         MainBoard board;
-        board.displaySubsystem().loadRom(
+        if(!testPattern)board.displaySubsystem().loadRom(
             RomFiles::load<DisplaySubsystem::kRomSize>(romPath));
         board.reset();
         Sdl sdl;
@@ -77,7 +79,11 @@ int main(int argc,char** argv) {
             ui.renderer=SDL_CreateRenderer(ui.window,-1,SDL_RENDERER_SOFTWARE);
         if(!ui.renderer)throw std::runtime_error(SDL_GetError());
         ui.setMode(high);
-        bool running=true,paused=false,cpuStopped=false;
+        bool running=true,paused=false,cpuStopped=testPattern;
+        std::uint64_t executed=0,lastReported=0;
+        std::uint64_t ioWrites=0;
+        board.displaySubsystem().setIoWriteObserver([&](DisplaySubsystem::IoWriteTrace){++ioWrites;});
+        auto lastLog=std::chrono::steady_clock::now();
         while(running) {
             SDL_Event event;
             while(SDL_PollEvent(&event)) {
@@ -94,12 +100,38 @@ int main(int argc,char** argv) {
             if(!paused && !cpuStopped) {
                 for(std::uint64_t i=0;i<instructions;++i) {
                     if(!board.displayCpu().executeOne()) {
-                        cpuStopped=true;break;
+                        cpuStopped=true;
+                        std::cerr<<"display CPU stopped PC="<<std::hex
+                                 <<board.displayCpu().pc()<<std::dec<<"\n";
+                        break;
                     }
+                    ++executed;
                 }
             }
-            const auto frame=DisplayBitmap::captureFrame(
+            auto frame=DisplayBitmap::captureFrame(
                 board.displaySubsystem(),high);
+            if(testPattern) {
+                for(std::size_t y=0;y<frame.height;++y)
+                    for(std::size_t x=0;x<frame.width;++x)
+                        frame.argb[y*frame.width+x]=DisplayBitmap::colorArgb(
+                            static_cast<unsigned>((x/80+y/50)%8));
+            }
+            const auto now=std::chrono::steady_clock::now();
+            if(now-lastLog>=std::chrono::seconds(2)) {
+                const auto& vram=board.displaySubsystem().physicalVram();
+                const auto nonzero=std::count_if(vram.begin(),vram.end(),
+                    [](BYTE b){return b!=0;});
+                std::cerr<<"display PC="<<std::hex<<board.displayCpu().pc()
+                         <<std::dec<<" executed="<<executed
+                         <<" delta="<<(executed-lastReported)
+                         <<" ioWrites="<<ioWrites
+                         <<" VRAM_nonzero="<<nonzero
+                         <<" page="<<board.displaySubsystem().graphicsDisplayPage()
+                         <<" revision="<<board.displaySubsystem().videoRevision()
+                         <<(testPattern?" test-pattern":"")<<"\n";
+                lastReported=executed;
+                lastLog=now;
+            }
             if(SDL_UpdateTexture(ui.texture,nullptr,frame.argb.data(),
                                  640*static_cast<int>(sizeof(std::uint32_t)))!=0)
                 throw std::runtime_error(SDL_GetError());
