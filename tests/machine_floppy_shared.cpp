@@ -241,5 +241,22 @@ int main()
     if(selectorMachine.activeBoard()!=secondaryCard)return 55;
     selectorMachine.enableFd05Selection(true);
     if(selectorMachine.activeBoard()!=&selectorMachine.board(0))return 56;
+    // Resetting either CPU card must not clear state on the shared board.
+    p6809->queueSerialInput(0x61);
+    p6809->signalAttention();
+    p6809->writeCpu(0xfd05,0x80);
+    p8088->reset();
+    p6809->reset();
+    if((bus.readIo(0xfd07)&0x02)==0 || bus.readIo(0xfd06)!=0x61)
+        return 57;
+    if((bus.readIo(0xfd04)&0x01)==0)return 58;
+    if((bus.readIo(0xfd05)&0x80)==0)return 59;
+    // Conversely a full machine reset clears common latches and USART.
+    p6809->queueSerialInput(0x62);
+    p6809->signalAttention();
+    machine.reset();
+    if((bus.readIo(0xfd07)&0x02)!=0)return 60;
+    if((bus.readIo(0xfd04)&0x03)!=0)return 61;
+    if(bus.readIo(0xfd05)!=0)return 62;
     return 0;
 }
