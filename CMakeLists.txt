@@ -113,6 +113,11 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(display_control PRIVATE fm11_core)
     add_test(NAME display_control COMMAND display_control)
 
+    # This probe requires the user's unchanged original display ROM, so it
+    # is deliberately not registered as a hermetic CTest.
+    add_executable(display_real_rom_probe tests/display_real_rom_probe.cpp)
+    target_link_libraries(display_real_rom_probe PRIVATE fm11_core)
+
     add_executable(display_binary_real_protocol tests/display_binary_real_protocol.cpp)
     target_link_libraries(display_binary_real_protocol PRIVATE fm11_core)
     add_test(NAME display_binary_real_protocol
