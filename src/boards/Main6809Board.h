@@ -3,6 +3,7 @@
 #include "CpuBoard.h"
 #include "Sim09.h"
 #include "FloppyDevice.h"
+#include "MainBoard.h"
 
 #include <array>
 #include <cstddef>
@@ -25,6 +26,10 @@ public:
     void reset() override;
 
     void loadBootRom(const BootRomImage& image);
+    void setMainBoard(std::shared_ptr<MainBoard> board) {
+        mainBoard_=std::move(board);
+        setFloppyDevice(mainBoard_->floppyDevice());
+    }
     void setFloppyDevice(std::shared_ptr<FloppyDevice> device) { floppy_=std::move(device); }
     void loadFloppy2d(const std::vector<BYTE>& raw);
     void loadFloppyD88(const std::vector<BYTE>& d88);
@@ -123,6 +128,7 @@ private:
     std::array<BYTE, 256> ioRegisters_{};
     std::array<BYTE, 256> ioOutputLatch_{};
     std::array<BYTE, 256> ioStatusLatch_{};
+    std::shared_ptr<MainBoard> mainBoard_;
     std::shared_ptr<FloppyDevice> floppy_=std::make_shared<FloppyDevice>();
     bool floppyWritePio_ = false;
     std::size_t floppyWriteOffset_ = 0;
