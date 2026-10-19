@@ -172,6 +172,34 @@ branch loops. This fixes the status semantics tested here but does
 not yet port the original character-display composition or every
 sub-CPU peripheral behavior.
 
+### Display CPU interrupt dispatch and sub-I/O RAM port
+
+The original `SubCpu.cpp::SimONE` checks pending sub IRQ, the `AFE4`
+FIRQ latch and a periodic NMI after the first `AFE0` write. The
+display 6809 adapter now invokes `SimIRQ`, `SimFIRQ` and `SimNMI`
+before executing its next instruction, with the original initial
+NMI threshold of 60000 and a CPU-cycle-based clock. Note: the
+reference increments its clock for each memory access and adjusts
+the NMI threshold dynamically against wall time; the Linux timing
+model is thus **not yet cycle-equivalent**.
+
+The original `GetMemByte/SetMemByte` also accesses sub RAM in
+`A000-AFFF` except explicitly decoded registers. Linux previously
+returned `FF` for much of that aperture. Ordinary sub I/O working
+RAM is now readable and writable there; reading `AFE5` acknowledges
+the sub IRQ request as in original `GetIoByte`. Tests exercise RAM
+readback, reset, IRQ acknowledgment and NMI reset-period defaults.
+
+```sh
+cmake --build build -j$(nproc)
+ctest --test-dir build --output-on-failure
+```
+
+This does **not** assert that real display ROM boots: sub IRQ request
+generation from the main-side `FD05` bit6 and original `105`
+ready/interrupt gating are still to be wired, and keyboard host input
+and timing require additional integration.
+
 ### Sub-CPU keyboard event queue (source SubCpu.cpp)
 
 The original Windows emulator's first `AFE0` write queues key event
