@@ -7,7 +7,11 @@ int main() {
  for(int i=0;i<256;++i)image[off+i]=static_cast<BYTE>(i^0x5a);
  b.loadFloppy2d(image);
  // A 2D disk does not make the separate 2HD controller ready.
- if((b.readCpu(0xfd30)&0x80)==0)return 11;
+ // The reference controller's D2SNS is a separate C0 | RDY mask.
+ if(b.readCpu(0xfd36)!=0xc0)return 12;
+ b.writeCpu(0xfd30,0xd0); // Force interrupt clears FDC status.
+ if(b.readCpu(0xfd30)!=0)return 13;
+
  { const auto ipl=b.floppyBootSector(1);
    for(unsigned i=0;i<256;++i)if(ipl[i]!=image[i])return 7; }
 
