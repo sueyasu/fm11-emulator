@@ -23,7 +23,13 @@ public:
     Main8088Bus();
     void reset();
     void loadBootRom(const Rom& rom);
-    void setFloppyDevice(std::shared_ptr<FloppyDevice> device) { floppy_=std::move(device); }
+    void setFloppyDevice(std::shared_ptr<FloppyDevice> device) {
+        floppy_=std::move(device);
+        setDmaDevice(0,[this](){return floppyReadData();},
+                       [this](BYTE value){floppyWriteData(value);});
+        setDmaDevice(1,[this](){return floppyReadData();},
+                       [this](BYTE value){floppyWriteData(value);});
+    }
     void loadFloppy2d(const std::vector<BYTE>& image);
     void loadFloppy2hd(const std::vector<BYTE>& image);
     std::vector<BYTE> floppy2hdImage() const { return floppy_->image2hd(); }
