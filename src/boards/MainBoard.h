@@ -82,11 +82,15 @@ public:
                (usart_->irqRequest()?0x10:0));
     }
 
-    // Common system I/O aperture, decoded after the CPU card has translated
-    // its own bus cycles. Only shared FDC parameter registers are claimed so
-    // far; other registers remain with their existing owners.
+    // Common system I/O aperture, decoded after CPU-card bus translation.
+    // The physical PTM, USART and FDC parameter registers live here.
     bool readIo(std::uint16_t address, BYTE& value) const {
         const unsigned reg=address&0xff;
+        if(reg>=0x38 && reg<=0x3f) {
+            value=ptm_->read(static_cast<BYTE>(reg));
+            const_cast<MainBoard*>(this)->setIrqLine(IrqLine::Timer,ptm_->irqRequest());
+            return true;
+        }
         if(reg==0x06) {value=usart_->readData();return true;}
         if(reg==0x07) {value=usart_->status();return true;}
         if((reg>=0x19 && reg<=0x1a) || (reg>=0x1c && reg<=0x1d) ||
@@ -98,6 +102,11 @@ public:
     }
     bool writeIo(std::uint16_t address,BYTE value) {
         const unsigned reg=address&0xff;
+        if(reg>=0x38 && reg<=0x3f) {
+            ptm_->write(static_cast<BYTE>(reg),value);
+            setIrqLine(IrqLine::Timer,ptm_->irqRequest());
+            return true;
+        }
         if(reg==0x06) {usart_->writeData(value);return true;}
         if(reg==0x07) {usart_->writeCommand(value);return true;}
         BYTE ignored=0;
