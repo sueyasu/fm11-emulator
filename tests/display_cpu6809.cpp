@@ -196,5 +196,20 @@ int main()
        changes.readMemory(0x0000)!=0x80)return 48;
     changes.reset();
     if(changes.videoRevision()!=initial+4)return 49;
+    // A frontend snapshot is an owning copy, not a live VRAM reference.
+    Machine videoMachine;
+    const auto before=videoMachine.captureDisplayVideo();
+    if(before.vram[0]!=0 || before.flags!=0)return 50;
+    const auto captured=changes.captureVideo();
+    if(captured.vram[0]!=0x80 || captured.vram[0x7fff]!=0x01 ||
+       captured.flags!=0 || captured.revision!=changes.videoRevision())
+        return 51;
+    changes.writeMemory(0x0000,0x42);
+    changes.writeMemory(0xafe6,0x20);
+    if(captured.vram[0]!=0x80 || captured.flags!=0 ||
+       captured.revision==changes.videoRevision())return 52;
+    const auto updated=changes.captureVideo();
+    if(updated.vram[0]!=0x42 || updated.flags!=0x20 ||
+       updated.revision!=changes.videoRevision())return 53;
     return 0;
 }
