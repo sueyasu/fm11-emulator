@@ -30,6 +30,7 @@ public:
         mainBoard_=std::move(board);
         setFloppyDevice(mainBoard_->floppyDevice());
         usart_=mainBoard_->usartDevice();
+        ptm_=mainBoard_->ptmDevice();
     }
     void setFloppyDevice(std::shared_ptr<FloppyDevice> device) { floppy_=std::move(device); }
     void loadFloppy2d(const std::vector<BYTE>& raw);
@@ -142,14 +143,7 @@ private:
     BYTE mainIrqResult_ = 0;
     BYTE extendedIrqResult_ = 0;
 
-    struct PtmChannel {
-        BYTE control = 0;
-        WORD latch = 0;
-        std::uint32_t counter = 0;
-        bool running = false;
-    };
-    std::array<PtmChannel, 3> ptm_{};
-    BYTE ptmStatus_ = 0;
+    std::shared_ptr<Ptm6840> ptm_=std::make_shared<Ptm6840>();
     std::uint64_t acceptedIrqCount_ = 0;
     std::uint64_t ptmIrqAssertCount_ = 0;
     bool ptmIrqAcknowledged_ = false;
