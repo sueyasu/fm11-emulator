@@ -21,6 +21,10 @@ public:
     Main8088Bus();
     void reset();
     void loadBootRom(const Rom& rom);
+    void loadFloppy2d(const std::vector<BYTE>& image);
+    std::vector<BYTE> floppyImage() const { return floppy2d_; }
+    bool floppyDirty() const { return floppyDirty_; }
+    void clearFloppyDirty() { floppyDirty_=false; }
     BYTE readMemory(std::uint32_t address) const;
     void writeMemory(std::uint32_t address, BYTE value);
     BYTE readIo(WORD port) const;
@@ -64,6 +68,18 @@ private:
     BYTE dmaCommand_=0, dmaMask_=0, dmaStatus_=0, dmaFlip_=0, dmaRequest_=0;
     std::array<DmaRead,4> dmaReaders_{};
     std::array<DmaWrite,4> dmaWriters_{};
+    std::vector<BYTE> floppy2d_;
+    std::array<BYTE,0x100> floppyRegisters_{};
+    std::array<BYTE,256> floppyBuffer_{};
+    unsigned floppyPosition_=256;
+    std::size_t floppySectorStart_=0;
+    bool floppyWriting_=false;
+    bool floppyDirty_=false;
+    BYTE floppyStatus_=0;
+    bool floppySectorOffset(std::size_t& offset);
+    void floppyCommand(BYTE command);
+    BYTE floppyReadData();
+    void floppyWriteData(BYTE value);
     void resetDma();
     BYTE readDma(WORD port) const;
     void writeDma(WORD port,BYTE value);
