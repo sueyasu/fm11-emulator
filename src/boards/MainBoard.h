@@ -2,6 +2,7 @@
 #include "FloppyDevice.h"
 #include "Usart8251.h"
 #include "Ptm6840.h"
+#include "DisplaySubsystem.h"
 #include <cstdint>
 #include <memory>
 #include <limits>
@@ -15,6 +16,8 @@ public:
     std::shared_ptr<FloppyDevice> floppyDevice() const { return floppy_; }
     std::shared_ptr<Usart8251> usartDevice() const {return usart_;}
     std::shared_ptr<Ptm6840> ptmDevice() const {return ptm_;}
+    DisplaySubsystem& displaySubsystem() {return display_;}
+    const DisplaySubsystem& displaySubsystem() const {return display_;}
     // System reset is distinct from resetting an individual CPU card.
     // Disk media remain mounted; only any in-flight transfer is aborted.
     void reset() {
@@ -34,12 +37,12 @@ public:
     BYTE eventControl() const {return eventControl_;}
     // FD05: common main/sub control output and the CPU-visible HALT flag.
     // The actual sub-CPU execution/arbitration is not implemented here.
-    BYTE subCpuStatus() const {return subCpuStatus_;}
+    BYTE subCpuStatus() const {return display_.haltRequested()?0x80:0;}
     BYTE subCpuControl() const {return subCpuControl_;}
     // FD05 bit 0 selects the optional CPU-card bus-master request.
     // Arbitration/CPU suspension remains in the individual CPU cards.
     bool optionalCpuRequested() const {return (subCpuControl_&0x01)!=0;}
-    void resetSubCpuControl() {subCpuStatus_=subCpuControl_=0;}
+    void resetSubCpuControl() {subCpuControl_=0;display_.reset();}
 
     // One common fractional phase, in billionths of a PTM tick.
     // Nanosecond slices accumulate exactly, without Q32 rounding loss.
@@ -90,7 +93,7 @@ public:
     // The physical PTM, USART and FDC parameter registers live here.
     bool readIo(std::uint16_t address, BYTE& value) {
         const unsigned reg=address&0xff;
-        if(reg==0x05) {value=subCpuStatus_;return true;}
+        if(reg==0x05) {value=subCpuStatus();return true;}
         if(reg==0x04) {
             value=eventStatus_;
             eventStatus_&=static_cast<BYTE>(~0x03);
@@ -114,7 +117,7 @@ public:
         const unsigned reg=address&0xff;
         if(reg==0x05) {
             subCpuControl_=value;
-            if(value&0x80)subCpuStatus_|=0x80;
+            if(value&0x80)display_.requestHalt();
             return true;
         }
         if(reg==0x04) {
@@ -135,7 +138,8 @@ public:
         return true;
     }
 private:
-    BYTE subCpuStatus_=0,subCpuControl_=0;
+    DisplaySubsystem display_;
+    BYTE subCpuControl_=0;
     BYTE eventStatus_=0;
     BYTE eventControl_=0;
     BYTE externalIrqLines_=0;
