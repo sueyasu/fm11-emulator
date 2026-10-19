@@ -194,3 +194,12 @@ text_display[-2:]=bytes.fromhex("b0 00")
 (out/"display_text_stage1.bin").write_bytes(text_display)
 print(out/"main_text_stage1.bin")
 print(out/"display_text_stage1.bin")
+
+# Test-only font: distinguish the glyph path from blank/attribute fill.
+# The SDL visual test should instead use the original extracted ANK ROM.
+text_ank=bytearray(4096)
+for ch in b"HELLO FM-11":
+    text_ank[ch*16]=0x01
+    text_ank[ch*16+1]=0x02
+(out/"ank_text_stage1.bin").write_bytes(text_ank)
+print(out/"ank_text_stage1.bin")
