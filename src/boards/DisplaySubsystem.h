@@ -98,7 +98,13 @@ public:
     void notifyMainAttention() {if(attentionSink_)attentionSink_();}
     // The top 128 bytes of sub RAM also appear at main $FC80-$FCFF.
     BYTE readShared(std::size_t offset) const {return ram_[0x1f80+offset];}
-    void writeShared(std::size_t offset,BYTE value) {ram_[0x1f80+offset]=value;}
+    void writeShared(std::size_t offset,BYTE value) {
+        if(ram_.at(0x1f80+offset)!=value) {
+            ram_[0x1f80+offset]=value;
+            ++sharedWriteRevision_;
+        }
+    }
+    std::uint64_t sharedWriteRevision() const {return sharedWriteRevision_;}
     BYTE readMemory(std::uint16_t address) const {
         if(address<0x8000) {
             if(!gvuEnabled_)return vram_[vramWindow_*kVramSize+address];
@@ -195,6 +201,7 @@ private:
     }
     void markVideoChanged() {++videoRevision_;}
     std::uint64_t videoRevision_=0;
+    std::uint64_t sharedWriteRevision_=0;
     IoWriteObserver ioWriteObserver_;
     std::uint16_t tracePc_=0;
     bool traceCpu_=false;
