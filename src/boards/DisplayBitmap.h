@@ -166,6 +166,18 @@ public:
     // 2-byte CRTC start-address offset. ANK rows use LSB-first pixel order.
     // This entry point is explicit to preserve graphics-only regression
     // frames and to allow comparing text scanout separately.
+    static std::uint32_t referenceColor(unsigned index) {
+        // SubCpu.cpp coltab: palette values are Windows COLORREF indices.
+        static constexpr std::uint8_t levels[16][3]={
+            {0,0,0},{0,0,192},{192,0,0},{192,0,192},
+            {0,192,0},{0,192,192},{192,192,0},{192,192,192},
+            {96,96,96},{0,0,255},{255,0,0},{255,0,255},
+            {0,255,0},{0,255,255},{255,255,0},{255,255,255}
+        };
+        const auto& rgb=levels[index&15u];
+        return 0xff000000u|(unsigned(rgb[0])<<16)|
+               (unsigned(rgb[1])<<8)|rgb[2];
+    }
     static void compositeText(Frame& frame,const DisplaySubsystem& display) {
         const unsigned columns=unsigned(display.crtcRegister(1))*2u;
         const unsigned rows=unsigned(display.crtcRegister(6));
@@ -192,10 +204,10 @@ public:
                     lit=(display.ankGlyphRow(character,sy)&(1u<<glyphX))!=0;
                 if(attribute&0x08)lit=!lit;
                 if(lit) {
-                    const unsigned color=(attribute&0x07);
+                    const unsigned color=(attribute&0x07)|((attribute&0x20)?8u:0u);
                     // Original renderer uses a 16-entry color table;
                     // start with the documented low RGB bits.
-                    frame.argb[y*640+x]=colorArgb(color);
+                    frame.argb[y*640+x]=referenceColor(color);
                 }
             }
         }
