@@ -140,11 +140,28 @@ int main(int argc,char** argv) {
                 executed+=instructions;
             }
             auto frame=machine.captureDisplayFrame(high);
-            // The original shader composites character/attribute RAM over
-            // graphics. Until main FDxx text-enable wiring is available,
-            // enable this stage explicitly when a genuine ANK ROM is loaded.
-            if(!ankPath.empty())
+            // Original SubCpu::OnDraw derives both layers from FD A0.
+            // In particular, loading a font does NOT enable text by itself.
+            if(machine.boardCount()) {
+                const BYTE control=machine.mainDisplayControl();
+                if((control&0x0c)==0) {
+                    std::fill(frame.argb.begin(),frame.argb.end(),0xff000000u);
+                } else {
+                    // Original PalTab is a lookup of eight four-bit indices.
+                    for(auto& pixel:frame.argb) {
+                        unsigned index=0;
+                        if(pixel&0x00ff0000u)index|=1;
+                        if(pixel&0x0000ff00u)index|=2;
+                        if(pixel&0x000000ffu)index|=4;
+                        pixel=DisplayBitmap::referenceColor(
+                            machine.mainDisplayPalette(index));
+                    }
+                }
+                if((control&0x03)!=0 && !ankPath.empty())
+                    DisplayBitmap::compositeText(frame,machine.displaySubsystem());
+            } else if(!ankPath.empty()) {
                 DisplayBitmap::compositeText(frame,machine.displaySubsystem());
+            }
             if(testPattern) {
                 for(std::size_t y=0;y<frame.height;++y)
                     for(std::size_t x=0;x<frame.width;++x)
@@ -161,6 +178,7 @@ int main(int argc,char** argv) {
                          <<" page="<<machine.displayPage()
                          <<" revision="<<machine.displayRevision()
                          <<" mainPC="<<(mainBoard?static_cast<int>(mainBoard->cpu().pc()):-1)
+                         <<" FDA0="<<unsigned(machine.mainDisplayControl())
                          <<" FD05="<<unsigned(machine.mainSubCpuControl())
                          <<" FD04_latch="<<unsigned(machine.mainEventStatus())
                          <<" BUSY="<<unsigned(machine.displayBusyStatus())
