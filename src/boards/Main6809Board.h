@@ -41,6 +41,9 @@ public:
     bool floppyDirty() const { return floppy_->dirty2d(); }
     std::vector<BYTE> floppyImage() const;
     std::uint64_t fdcReadCommands() const {return fdcReads_;}
+    std::uint64_t hdReadAttempts() const {return hdReadAttempts_;}
+    std::uint64_t hdReadSuccesses() const {return hdReadSuccesses_;}
+    std::uint64_t hdReadFailures() const {return hdReadFailures_;}
     std::uint64_t fdcSuccessfulReads() const {return fdcReadSuccesses_;}
     std::uint64_t fdcFailedReads() const {return fdcReadFailures_;}
     BYTE fdcStatus() const {return floppyStatus_;}
@@ -161,6 +164,7 @@ private:
     bool floppyTypeIStatus_ = false;
     std::uint32_t floppyIndexPolls_ = 0;
     std::uint64_t fdcReads_=0,fdcReadSuccesses_=0,fdcReadFailures_=0;
+    std::uint64_t hdReadAttempts_=0,hdReadSuccesses_=0,hdReadFailures_=0;
     std::shared_ptr<Usart8251> usart_=std::make_shared<Usart8251>();
     BYTE mainIrqSources_ = 0;
     BYTE extendedIrqSources_ = 0;
