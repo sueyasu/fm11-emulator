@@ -172,6 +172,41 @@ branch loops. This fixes the status semantics tested here but does
 not yet port the original character-display composition or every
 sub-CPU peripheral behavior.
 
+### Original SubRom receive handshake: stage 8
+
+This stage does **not invent a new receive protocol**. The generated
+display ROM includes, byte-for-byte, the receive subroutine at
+`$CAA0-$CACA` from the reference `Fm11/SubRom.h`, relocated
+unaltered to `$B100` (all its branches are relative).
+
+The reference `Fm11/SubCpu.cpp` maps the display CPU's `$9F80-$9FFF`
+to main shared RAM `$FC80-$FCFF`. Its `$AFE0` bit 0 sets or
+clears main-side `$FD05` bit 7.
+
+- The original subroutine signals READY through `AFE0`, polls
+  `9F82`, signals BUSY, clears bit 7 in `9F81`, then returns
+  the payload from `9F82`.
+- The synthetic main ROM waits for READY at `FD05`, writes a
+  request with bit 7 set to `FC81` and ASCII `M` to `FC82`,
+  and waits until the genuine subroutine clears the request bit.
+- A **test-only wrapper**, not original firmware, writes the
+  returned character to text RAM and signals display completion
+  through `9F83`, after which main enables `FDA0=03`.
+
+```sh
+python3 tools/make_display_test_roms.py build/test-roms
+ctest --test-dir build -R display_binary_real_protocol --output-on-failure
+
+./build/fm11-sdl --main-rom build/test-roms/main_text_real_protocol.bin \\
+    --rom build/test-roms/display_text_real_protocol.bin \\
+    --ank-rom external/roms/ank.bin --high
+```
+
+Expected: a white `M` at the screen origin. This validates the
+**original receive-handshake routine**, but not yet the actual
+original firmware's display-command dispatcher or its character
+command encoding. The real boot ROM is still not used in this test.
+
 ### Synthetic main-to-sub 6809 text request: stage 7
 
 This is the first test where the **main 6809 requests text via shared
