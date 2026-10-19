@@ -390,6 +390,11 @@ void Main6809Board::refreshPtmIrq()
     if(mainBoard_)mainBoard_->setIrqLine(MainBoard::IrqLine::Timer,asserted);
 }
 
+void Main6809Board::syncPtmIrq()
+{
+    refreshPtmIrq();
+}
+
 void Main6809Board::advancePtm(std::uint64_t ticks)
 {
     ptm_->advance(ticks);
