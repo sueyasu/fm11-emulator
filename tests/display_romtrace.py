@@ -26,6 +26,6 @@ with tempfile.TemporaryDirectory() as temporary:
         [exe, "--rom", str(path)], capture_output=True, text=True,
         check=False,
     )
-    if invalid.returncode != 2 or "exactly 20480 bytes" not in invalid.stderr:
+    if invalid.returncode != 2 or "expected 20480 bytes" not in invalid.stderr:
         print(invalid.stdout, invalid.stderr, file=sys.stderr)
         raise SystemExit(2)
