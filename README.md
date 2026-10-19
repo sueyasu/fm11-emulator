@@ -172,6 +172,36 @@ branch loops. This fixes the status semantics tested here but does
 not yet port the original character-display composition or every
 sub-CPU peripheral behavior.
 
+### Synthetic main-to-sub 6809 text request: stage 7
+
+This is the first test where the **main 6809 requests text via shared
+RAM**, rather than the display CPU unconditionally painting a predefined
+message.
+
+1. Sub 6809 initializes CRTC then writes `AFE0=1` (READY).
+2. Main 6809 waits for `FD05 bit7=0`, writes command `A5` to
+   `FC80` and ASCII `M` to `FC81`.
+3. Sub 6809 reads the matching shared addresses `9F80/9F81`, copies
+   the requested character into its text RAM and acknowledges by writing
+   `9F82=66`.
+4. Main 6809 detects the acknowledgement, enables text using
+   `FDA0=03`, and sets a completion marker `FC83=77`.
+
+```sh
+python3 tools/make_display_test_roms.py build/test-roms
+ctest --test-dir build -R display_binary_text_protocol --output-on-failure
+
+./build/fm11-sdl --main-rom build/test-roms/main_text_protocol.bin \\
+    --rom build/test-roms/display_text_protocol.bin \\
+    --ank-rom external/roms/ank.bin --high
+```
+
+Expected SDL display: a white `M` at the upper-left of the screen.
+The regression checks the READY transition, both CPUs' shared
+request/acknowledgement, text/CRTC state, and 200/400-line pixels.
+This is a deliberately minimal *test protocol*, not yet the original
+firmware's command encoding. Original ROM boot is not part of this stage.
+
 ### Synthetic 6809 CRTC display-start scrolling: stage 6
 
 Two sub-CPU ROMs write **identical** `FIRST LINE` and `SECOND LINE`
