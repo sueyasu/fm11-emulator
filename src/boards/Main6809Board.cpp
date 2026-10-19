@@ -36,13 +36,15 @@ void Main6809Board::reset()
     ioStatusLatch_.fill(0);
     mainIrqSources_ = extendedIrqSources_ = 0;
     mainIrqResult_ = extendedIrqResult_ = 0;
-    if(mainBoard_)
-        mainBoard_->setIrqLine(MainBoard::IrqLine::Timer,false);
-    usart_->reset();
-    ptm_->reset();
+    // Shared devices are reset by Machine/MainBoard, never by a CPU-card
+    // reset. Standalone CPU cards still own and reset their own devices.
+    if(!mainBoard_) {
+        usart_->reset();
+        ptm_->reset();
+    }
     acceptedIrqCount_ = 0;
     ptmIrqAssertCount_ = 0;
-    ptm_->irqAcknowledged = false;
+    if(!mainBoard_)ptm_->irqAcknowledged = false;
     ptmCycleFraction_ = 0;
     waitNanosecondFraction_ = 0;
 
