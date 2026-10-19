@@ -118,6 +118,35 @@ public:
         return decodeGraphics400(display,display.graphicsDisplayPage()>>1);
     }
 
+    // Digital 8-color RGB palette: low 3 index bits map to R/G/B.
+    // The array is frontend-friendly ARGB8888, independent of SDL.
+    using ArgbPixels=std::array<std::uint32_t,kWidth*kHeight>;
+    static ArgbPixels toArgb(const Pixels& indexes) {
+        ArgbPixels out{};
+        for(std::size_t i=0;i<out.size();++i) {
+            const unsigned c=indexes[i];
+            out[i]=0xff000000u |
+                ((c&1u)?0x00ff0000u:0u) |
+                ((c&2u)?0x0000ff00u:0u) |
+                ((c&4u)?0x000000ffu:0u);
+        }
+        return out;
+    }
+
+    // Composite a single 8x16 ANK glyph into an indexed 640x200 frame.
+    // This primitive makes no assumptions about text VRAM or cursor I/O.
+    static void drawAnk(Pixels& pixels,const DisplaySubsystem& display,
+                        BYTE character,std::size_t x,std::size_t y,
+                        BYTE foreground,BYTE background) {
+        for(std::size_t row=0;row<16 && y+row<kHeight;++row) {
+            if(x>=kWidth)break;
+            const auto bits=display.ankGlyphRow(character,static_cast<unsigned>(row));
+            for(std::size_t bit=0;bit<8 && x+bit<kWidth;++bit)
+                pixels[(y+row)*kWidth+x+bit]=
+                    (bits&(0x80u>>bit))?foreground:background;
+        }
+    }
+
     // Diagnostic two-plane combination: each bit from the first 16000
     // bytes contributes bit 0, and each corresponding bit at +0x4000
     // contributes bit 1. This is not yet a confirmed FM-11 color mode.
