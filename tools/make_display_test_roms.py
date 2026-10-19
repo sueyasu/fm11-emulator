@@ -19,3 +19,30 @@ display[-2:]=bytes.fromhex("b0 00")
 (out/"display_test.bin").write_bytes(display)
 print(out/"main_test.bin")
 print(out/"display_test.bin")
+
+# Bidirectional command/acknowledgement test. This tests the established
+# shared-RAM transport, NOT an as-yet-unverified hardware IRQ trigger.
+#
+# Main $5000: issue command $81 through $FC80, wait for $55 at $FC81,
+# mark successful acknowledgement with $66 at $FC82.
+handshake_main=bytearray(0x1000)
+handshake_main[:19]=bytes.fromhex(
+    "86 81 b7 fc 80 "      # LDA #$81; STA $FC80
+    "b6 fc 81 81 55 26 f9 " # poll ACK $55: BNE back to LDA
+    "86 66 b7 fc 82 20 fe"  # mark success then loop
+)
+handshake_main[-2:]=bytes.fromhex("50 00")
+# Display $B000: poll command $81, fill first pixel via GVU, return ACK.
+handshake_display=bytearray(0x5000)
+handshake_display[:24]=bytes.fromhex(
+    "b6 9f 80 81 81 26 f9 " # read command, BNE $B000
+    "86 07 b7 af e1 "       # enable writes to three planes
+    "86 80 b7 00 00 "       # white pixel at VRAM start
+    "86 55 b7 9f 81 "       # completion byte
+    "20 fe"                # idle
+)
+handshake_display[-2:]=bytes.fromhex("b0 00")
+(out/"main_handshake.bin").write_bytes(handshake_main)
+(out/"display_handshake.bin").write_bytes(handshake_display)
+print(out/"main_handshake.bin")
+print(out/"display_handshake.bin")
