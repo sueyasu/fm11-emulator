@@ -41,6 +41,35 @@ The headless OS boottrack diagnostic currently uses a synthetic boot ROM,
 not the extracted original boot firmware. The font ROMs are staged for the
 later display/keyboard frontend, not consumed by current rendering code.
 
+## SDL2 display frontend (experimental)
+
+Install `libsdl2-dev` on Ubuntu, then reconfigure CMake so it can
+discover SDL2. This frontend loads and executes the **display sub-CPU**
+ROM and renders its VRAM using the existing 8-color pixel decoder:
+
+```sh
+sudo apt install libsdl2-dev
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build -j$(nproc)
+./build/fm11-sdl --rom external/roms/display6809.bin
+```
+
+The default ROM path is `external/roms/display6809.bin`; use the extraction
+script described above to populate it. Controls: Escape to quit, Space
+to pause/resume, F1 to switch 640x200/640x400 display interpretation.
+`--high` starts in 400-line mode; `--cycles N` controls the number of
+display CPU instructions executed per frame (default 10000). This is a
+bring-up throttle, **not** a calibrated real-time CPU clock.
+
+The SDL frontend is optional: when SDL2 is missing the existing core,
+headless programs and CTests still build. Set `-DFM11_BUILD_SDL=OFF`
+to disable SDL detection explicitly.
+
+**Scope:** This is a display-subsystem bring-up viewer, not yet a complete
+FM-11 main CPU + keyboard + disk GUI. Hardware mode selection and
+text-mode composition are not yet connected; selecting 200/400 lines is
+manual. No ROM image is stored in Git.
+
 ## Build
 
 ```sh
