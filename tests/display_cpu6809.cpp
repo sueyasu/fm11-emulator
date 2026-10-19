@@ -281,5 +281,29 @@ int main()
     try {banked.selectVramWindow(6);}
     catch(const std::out_of_range&) {invalidBank=true;}
     if(!invalidBank || banked.vramWindow()!=0)return 68;
+    // Four candidate 48KiB color pages, three 16KiB planes each.
+    // Set the first pixel of each page to a unique RGB index and
+    // verify no data leaks between the physical VRAM pages.
+    DisplaySubsystem colorRam;
+    if(DisplayBitmap::kColorPages!=4)return 69;
+    for(std::size_t page=0;page<DisplayBitmap::kColorPages;++page) {
+        const unsigned index=static_cast<unsigned>(page)+1;
+        for(std::size_t plane=0;plane<3;++plane) {
+            const auto physical=page*0xc000+plane*0x4000;
+            colorRam.selectVramWindow(physical/0x8000);
+            colorRam.writeMemory(static_cast<WORD>(physical%0x8000),
+                (index&(1u<<plane))?0x80:0);
+        }
+    }
+    for(std::size_t page=0;page<DisplayBitmap::kColorPages;++page) {
+        const auto rgb=DisplayBitmap::decodeColorPage(colorRam,page);
+        if(rgb[0]!=page+1 || rgb[1]!=0 ||
+           rgb[DisplayBitmap::kWidth*DisplayBitmap::kHeight-1]!=0)
+            return 70;
+    }
+    bool invalidPage=false;
+    try {DisplayBitmap::decodeColorPage(colorRam,4);}
+    catch(const std::out_of_range&) {invalidPage=true;}
+    if(!invalidPage)return 71;
     return 0;
 }
