@@ -63,7 +63,10 @@ public:
             refreshIrq();
             return result;
         }
-        const unsigned index=(port-0x3a)/2;
+        // Only the three timer channels ($3A-$3F) have counters.
+        // Guard before unsigned subtraction to avoid wraparound.
+        if(port<0x3a || port>0x3f)return 0xff;
+        const unsigned index=static_cast<unsigned>(port-0x3a)/2;
         auto& ch=channels[index];
         status&=static_cast<BYTE>(~(1u<<index));
         refreshIrq();
@@ -90,7 +93,8 @@ public:
             refreshIrq();
             return;
         }
-        const unsigned index=(port-0x3a)/2;
+        if(port<0x3a || port>0x3f)return;
+        const unsigned index=static_cast<unsigned>(port-0x3a)/2;
         if((port&1)==0)latchHigh[index]=value;
         else {
             auto& ch=channels[index];
