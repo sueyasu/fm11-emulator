@@ -169,9 +169,16 @@ python3 tools/extract_ank_rom.py /path/to/Fm11/CharRom.h external/roms/ank.bin
 ctest --test-dir build -R display_text_composition --output-on-failure
 ```
 
-Loading `--ank-rom` explicitly enables the text-composition stage.
-The original `Fm11Ram[0xDA0]` hardware character/graphics enable
-controls and complete color/palette logic are not yet implemented.
+Providing `--ank-rom` loads font data; it does **not** force the
+text layer on when a main CPU is present. The original display control
+register `$FDA0` enables text with bits 0/1 and graphics with bits
+2/3. The renderer also applies the eight programmable palette entries
+from `$FD98-$FD9F` and the original 16-entry color table.
+The current software scanout supports attribute bit 5 (bright/bold)
+and reverse video; blink, cursor and clip state remain future work.
+Without a main CPU, specifying `--ank-rom` still explicitly enables
+text for standalone diagnostics.
+Other original display behavior, including blink, cursor and clip, remains to be ported.
 Without `--ank-rom`, the established graphics-only regression frames
 remain unchanged.
 
