@@ -404,7 +404,11 @@ int main()
         realLayout.writeMemory(0xafe1,static_cast<BYTE>(0x38|(1u<<plane)));
         realLayout.writeMemory(0,0x80);
     }
+    const auto beforePageSwitch=realLayout.videoRevision();
     realLayout.writeMemory(0xafe2,0x08);
+    if(realLayout.videoRevision()!=beforePageSwitch+1)return 92;
+    realLayout.writeMemory(0xafe2,0x08);
+    if(realLayout.videoRevision()!=beforePageSwitch+1)return 93;
     const auto pageOne=DisplayBitmap::decodeSelectedGraphics200(realLayout);
     const auto pageZero=DisplayBitmap::decodeGraphics200(realLayout,0);
     if(pageOne[0]!=7 || pageOne[1]!=0 || pageZero[0]!=0)
