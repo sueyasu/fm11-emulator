@@ -23,6 +23,9 @@ public:
     bool haltRequested() const {return haltRequested_;}
 
     void loadRom(const RomImage& image) {rom_=image;}
+    // The top 128 bytes of sub RAM also appear at main $FC80-$FCFF.
+    BYTE readShared(std::size_t offset) const {return ram_[0x1f80+offset];}
+    void writeShared(std::size_t offset,BYTE value) {ram_[0x1f80+offset]=value;}
     BYTE readMemory(std::uint16_t address) const {
         if(address<0x8000)return vram_[address];
         if(address<0xa000)return ram_[address-0x8000];
