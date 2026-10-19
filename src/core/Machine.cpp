@@ -76,12 +76,10 @@ const CpuBoard* Machine::activeBoard() const
 
 void Machine::reset()
 {
-    mainBoard_->resetEvents();
-    mainBoard_->resetSubCpuControl();
+    mainBoard_->reset();
     for (auto& board : boards_)
         board->reset();
     lastExecutionCycles_=0;
-    mainBoard_->resetTimebase();
     synchronizeFd05Selection();
 }
 
