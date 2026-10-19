@@ -11,7 +11,7 @@
 namespace {
 void usage() {
     std::cerr << "Usage: fm11-display-romtrace --rom SUBROM.bin [--instructions N] [--trace]\n"
-              << "SUBROM.bin must contain exactly 16384 bytes (mapped C000-FFFF).\n";
+              << "SUBROM.bin must contain exactly 20480 bytes (mapped B000-FFFF).\n";
 }
 unsigned long long count(const char* text) {
     std::size_t used=0;
@@ -38,7 +38,7 @@ int main(int argc,char** argv) {
         const std::vector<char> bytes((std::istreambuf_iterator<char>(input)),
                                        std::istreambuf_iterator<char>());
         if(bytes.size()!=DisplaySubsystem::kRomSize)
-            throw std::runtime_error("display ROM must contain exactly 16384 bytes");
+            throw std::runtime_error("display ROM must contain exactly 20480 bytes");
         DisplaySubsystem::RomImage rom{};
         for(std::size_t i=0;i<rom.size();++i)
             rom[i]=static_cast<BYTE>(bytes[i]);
