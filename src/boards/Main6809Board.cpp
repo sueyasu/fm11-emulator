@@ -671,9 +671,16 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         floppy_->writeRegister(reg,value);
         break;
     case 0x18:
-        if((value&0xf0)==0x80)readFloppySector();
-        else if((value&0xf0)==0xa0)writeFloppySector();
-        else { floppyStatus_=0; floppyOffset_=256; floppyWritePio_=false; }
+        switch(FloppyDevice::decodeCommand(value)) {
+        case FloppyDevice::Command::ReadSector: readFloppySector(); break;
+        case FloppyDevice::Command::WriteSector: writeFloppySector(); break;
+        default:
+            floppy_->finishTransfer();
+            floppyStatus_=0;
+            floppyOffset_=256;
+            floppyWritePio_=false;
+            break;
+        }
         break;
     case 0x1b:
         if(floppyWritePio_ && floppyOffset_<256) {
