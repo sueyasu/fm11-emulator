@@ -23,6 +23,7 @@ public:
 
     void reset();
     void executeOne();
+    std::uint64_t lastExecutionCycles() const {return lastExecutionCycles_;}
     // Advance the common main-board timebase regardless of active CPU.
     // Do not also advance the same interval through board.advanceCpuCycles().
     void advanceTimeNanoseconds(std::uint64_t nanoseconds);
@@ -32,4 +33,5 @@ private:
     std::shared_ptr<MainBoard> mainBoard_=std::make_shared<MainBoard>();
     std::vector<std::unique_ptr<CpuBoard>> boards_;
     std::size_t active_board_ = 0;
+    std::uint64_t lastExecutionCycles_ = 0;
 };
