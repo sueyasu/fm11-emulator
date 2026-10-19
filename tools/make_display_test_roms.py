@@ -228,3 +228,36 @@ for columns in (40,80):
     rom[-2:]=bytes.fromhex("b0 00")
     (out/f"display_text_{columns}col.bin").write_bytes(rom)
     print(out/f"display_text_{columns}col.bin")
+
+# Stage 3: color, bright and reverse-video text attributes.  The glyphs
+# and attribute bytes are written by the display 6809, not the frontend.
+attribute_rom=bytearray(0x5000)
+attribute_code=bytearray()
+def awrite(address,value):
+    attribute_code.extend((0x86,value,0xb7,(address>>8)&255,address&255))
+awrite(0xafee,1)
+awrite(0xafef,40)   # 80 columns
+awrite(0xafee,6)
+awrite(0xafef,25)
+awrite(0xafee,12)
+awrite(0xafef,0)
+awrite(0xafee,13)
+awrite(0xafef,0)
+# Plain red / green / blue / reverse red / bright white / normal white.
+for index,(letter,attribute) in enumerate(zip(b"RGBRHW",
+                                              (2,4,1,0x0a,0x27,7))):
+    awrite(0x8000+index*2,letter)
+    awrite(0x8001+index*2,attribute)
+awrite(0x9f80,0x66)
+attribute_code.extend((0x20,0xfe))
+attribute_rom[:len(attribute_code)]=attribute_code
+attribute_rom[-2:]=bytes.fromhex("b0 00")
+(out/"display_text_attributes.bin").write_bytes(attribute_rom)
+print(out/"display_text_attributes.bin")
+# Test font has just bit 0 in scanline 0 and bit 1 in scanline 1.
+attribute_ank=bytearray(4096)
+for letter in b"RGBRHW":
+    attribute_ank[letter*16]=1
+    attribute_ank[letter*16+1]=2
+(out/"ank_text_attributes.bin").write_bytes(attribute_ank)
+print(out/"ank_text_attributes.bin")
