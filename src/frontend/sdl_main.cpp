@@ -5,6 +5,7 @@
 #include <SDL.h>
 #include <algorithm>
 #include <chrono>
+#include <iomanip>
 #include <cstdint>
 #include <iostream>
 #include <stdexcept>
@@ -43,7 +44,7 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE]\n"
+    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot]\n"
              <<"  ROM defaults to external/roms/display6809.bin\n"
              <<"  ESC quit; SPACE pause/resume; F1 switch 200/400-line view\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
@@ -52,13 +53,14 @@ void usage() {
 int main(int argc,char** argv) {
     try {
         std::string romPath="external/roms/display6809.bin", mainRomPath;
-        bool high=false, testPattern=false;
+        bool high=false, testPattern=false, traceBoot=false;
         std::uint64_t instructions=10000;
         for(int i=1;i<argc;++i) {
             const std::string arg=argv[i];
             if(arg=="--help"){usage();return 0;}
             if(arg=="--high"){high=true;continue;}
             if(arg=="--test-pattern"){testPattern=true;continue;}
+            if(arg=="--trace-boot"){traceBoot=true;continue;}
             if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom") && i+1<argc) {
                 if(arg=="--rom")romPath=argv[++i];
                 else if(arg=="--main-rom")mainRomPath=argv[++i];
@@ -68,11 +70,13 @@ int main(int argc,char** argv) {
         if(instructions>1000000)
             throw std::invalid_argument("--cycles must be <= 1000000");
         Machine machine;
+        Main6809Board* mainBoard=nullptr;
         if(!testPattern) {
             machine.loadDisplayRomFile(romPath);
             if(!mainRomPath.empty()) {
                 auto mainCpu=std::make_unique<Main6809Board>(CpuType::MC6809);
                 mainCpu->loadBootRomFile(mainRomPath);
+                mainBoard=mainCpu.get();
                 mainCpu->setCpuClockHz(2000000);
                 machine.addBoard(std::move(mainCpu));
             }
@@ -112,8 +116,20 @@ int main(int argc,char** argv) {
             }
             if(!paused && !testPattern) {
                 if(machine.boardCount()) {
-                    for(std::uint64_t i=0;i<instructions;++i)
+                    for(std::uint64_t i=0;i<instructions;++i) {
+                        // Only inspect the PC before execution: reading memory
+                        // via CPU bus here might acknowledge I/O registers.
+                        if(traceBoot && executed+i<64 && mainBoard) {
+                            std::cerr<<"main step="<<(executed+i)
+                                     <<" PC=$"<<std::hex
+                                     <<std::setw(4)<<std::setfill('0')
+                                     <<mainBoard->cpu().pc()
+                                     <<" subCtrl=$"<<std::setw(2)
+                                     <<unsigned(machine.mainSubCpuControl())
+                                     <<std::dec<<std::setfill(' ')<<"\n";
+                        }
                         machine.executeOne();
+                    }
                 } else {
                     // 2 MHz display CPU: advance elapsed time without a main
                     // CPU. The Machine scheduler also handles HALT and waits.
@@ -137,6 +153,13 @@ int main(int argc,char** argv) {
                          <<" VRAM_nonzero="<<machine.displayNonzeroVramBytes()
                          <<" page="<<machine.displayPage()
                          <<" revision="<<machine.displayRevision()
+                         <<" mainPC="<<(mainBoard?static_cast<int>(mainBoard->cpu().pc()):-1)
+                         <<" FD05="<<unsigned(machine.mainSubCpuControl())
+                         <<" FD04_latch="<<unsigned(machine.mainEventStatus())
+                         <<" BUSY="<<unsigned(machine.displayBusyStatus())
+                         <<" sharedWrites="<<machine.displaySharedWriteRevision()
+                         <<" shared0="<<unsigned(machine.displaySharedByte(0))
+                         <<" halted="<<machine.displayHalted()
                          <<(machine.boardCount()?" main6809":" display-only")
                          <<(testPattern?" test-pattern":"")<<"\n";
                 lastReported=executed;
