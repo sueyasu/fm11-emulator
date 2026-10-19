@@ -1,4 +1,5 @@
 #include "MainBoard.h"
+#include "DisplayBitmap.h"
 #include "Machine.h"
 #include "Main6809Board.h"
 #include <memory>
@@ -211,5 +212,25 @@ int main()
     const auto updated=changes.captureVideo();
     if(updated.vram[0]!=0x42 || updated.flags!=0x20 ||
        updated.revision!=changes.videoRevision())return 53;
+    // Diagnostic 1-bpp output: first/last pixel, MSB-first bit order,
+    // scanline stride and nonzero source plane offset.
+    DisplaySubsystem pixels;
+    pixels.writeMemory(0x0000,0x81); // x=0 and x=7
+    pixels.writeMemory(0x0050,0x40); // second line, x=1
+    pixels.writeMemory(0x3e7f,0x01); // final pixel (row 199, x=639)
+    const auto mono=DisplayBitmap::decodeMonochrome(pixels.captureVideo());
+    if(mono[0]!=1 || mono[1]!=0 || mono[7]!=1 ||
+       mono[8]!=0 || mono[DisplayBitmap::kWidth+1]!=1 ||
+       mono[DisplayBitmap::kWidth*DisplayBitmap::kHeight-1]!=1)
+        return 54;
+    pixels.writeMemory(0x0000,0);
+    if(mono[0]!=1)return 55; // decoded pixels own their storage
+    pixels.writeMemory(0x4000,0x80);
+    const auto secondPlane=DisplayBitmap::decodeMonochrome(
+        pixels.captureVideo(),0x4000);
+    if(secondPlane[0]!=1 || secondPlane[7]!=0)return 56;
+    const auto invalid=DisplayBitmap::decodeMonochrome(
+        pixels.captureVideo(),0x4001);
+    if(invalid[0]!=0 || invalid[7]!=0)return 57;
     return 0;
 }
