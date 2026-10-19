@@ -127,6 +127,7 @@ public:
         if(reg==0x05) {
             subCpuControl_=value;
             if(value&0x80)display_.requestHalt();
+            else display_.releaseHalt();
             return true;
         }
         if(reg==0x04) {
