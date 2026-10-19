@@ -32,6 +32,10 @@ int main()
     machine.executeOne();
     if (machine.activeBoard()->cpu().pc() != 0x1235)
         return 5;
+    // MC6809 NOP is exactly two clock cycles; Machine must report
+    // those cycles without independently advancing the shared PTM.
+    if (machine.lastExecutionCycles() != 2)
+        return 6;
 
     return 0;
 }
