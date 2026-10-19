@@ -29,6 +29,14 @@ int main()
     if (machine.activeBoard()->cpu().pc() != 0x1234)
         return 4;
 
+    // Two-cycle NOP at 19.4 kHz advances a 9.7 kHz board PTM by one tick.
+    // Card-internal stepping is disabled when owned by Machine.
+    board->setCpuClockHz(19400);
+    board->writeCpu(0xfd02,0x10);
+    board->writeCpu(0xfd39,0x01);
+    board->writeCpu(0xfd38,0x50);
+    board->writeCpu(0xfd3a,0);
+    board->writeCpu(0xfd3b,1);
     machine.executeOne();
     if (machine.activeBoard()->cpu().pc() != 0x1235)
         return 5;
@@ -36,6 +44,8 @@ int main()
     // those cycles without independently advancing the shared PTM.
     if (machine.lastExecutionCycles() != 2)
         return 6;
+    if (!board->irqPending() || board->readCpu(0xfd39)!=0x81)
+        return 7;
 
     return 0;
 }
