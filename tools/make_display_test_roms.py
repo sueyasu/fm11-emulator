@@ -437,6 +437,7 @@ def rw(address,value):
     rsc.extend((0x86,value,0xb7,(address>>8)&255,address&255))
 for reg,val in ((1,40),(6,25),(12,0),(13,0)):
     rw(0xafee,reg);rw(0xafef,val)
+rsc.extend(bytes.fromhex("10 ce 9f 00"))  # LDS #$9F00: valid RAM stack for JSR/RTS
 rsc.extend(bytes.fromhex("bd b1 00"))  # JSR transplanted genuine routine
 rsc.extend(bytes.fromhex("b7 80 00"))  # STA 8000 (ASCII supplied by main)
 rw(0x8001,7)
