@@ -134,6 +134,10 @@ if(FM11_BUILD_TESTS)
                      $<TARGET_FILE:display_binary_text_protocol>
                      ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_display_test_roms.py)
 
+    add_executable(display_io_read_clear tests/display_io_read_clear.cpp)
+    target_link_libraries(display_io_read_clear PRIVATE fm11_core)
+    add_test(NAME display_io_read_clear COMMAND display_io_read_clear)
+
     add_executable(display_afe0_handshake tests/display_afe0_handshake.cpp)
     target_link_libraries(display_afe0_handshake PRIVATE fm11_core)
     add_test(NAME display_afe0_handshake COMMAND display_afe0_handshake)
