@@ -34,6 +34,8 @@ public:
         gvuEnabled_=false;
         gvuPage_=gvuPlane_=gvuOffset_=gvdPage_=0;
         gvuControl_=gvuAddressHigh_=0;
+        displayAddress_=0;displayAddressHigh_=0;crtcIndex_=0;
+        crtcRegisters_.fill(0);
         // ROM contents and display memory survive a CPU reset. Hardware
         // power-on clearing is a separate future operation.
     }
@@ -54,6 +56,8 @@ public:
     std::size_t graphicsDisplayPage() const {return gvdPage_;}
     std::uint16_t graphicsOffset() const {return gvuOffset_;}
     std::size_t graphicsReadPlane() const {return gvuPlane_;}
+    std::uint16_t graphicsDisplayAddress() const {return displayAddress_;}
+    BYTE crtcRegister(unsigned index) const {return crtcRegisters_.at(index);}
     // AFE6 video-control flags. Individual bits are not yet mapped to
     // display modes until their FM-11 semantics have been verified.
     BYTE videoFlags() const {return videoFlags_;}
@@ -94,6 +98,10 @@ public:
         if(address>=0xafe0 && address<=0xafe3)return subIoRam_[address-0xafe0];
         if(address==0xafe8)return gvuAddressHigh_;
         if(address==0xafe9)return static_cast<BYTE>(gvuOffset_);
+        if(address==0xafea)return displayAddressHigh_;
+        if(address==0xafeb)return static_cast<BYTE>(displayAddress_);
+        if(address==0xafee)return crtcIndex_;
+        if(address==0xafef)return crtcIndex_<crtcRegisters_.size()?crtcRegisters_[crtcIndex_]:0xff;
         if(address==0xafe6)return videoFlags_;
         if(address==0xaff0)return busy_;
         if(address>=0xb000)return rom_[address-0xb000];
@@ -142,6 +150,20 @@ public:
         else if(address==0xafe8)gvuAddressHigh_=value;
         else if(address==0xafe9)gvuOffset_=static_cast<std::uint16_t>(
             ((unsigned(gvuAddressHigh_)<<8)|value)&0x7ffe);
+        else if(address==0xafea)displayAddressHigh_=value;
+        else if(address==0xafeb) {
+            const auto next=static_cast<std::uint16_t>(
+                ((unsigned(displayAddressHigh_)<<8)|value)&0x7fff);
+            if(displayAddress_!=next) {displayAddress_=next;markVideoChanged();}
+        }
+        else if(address==0xafee)crtcIndex_=value&0x1f;
+        else if(address==0xafef) {
+            if(crtcIndex_<crtcRegisters_.size() &&
+               crtcRegisters_[crtcIndex_]!=value) {
+                crtcRegisters_[crtcIndex_]=value;
+                markVideoChanged();
+            }
+        }
         else if(address==0xafe6) {
             if(videoFlags_!=value) {
                 videoFlags_=value;
@@ -176,6 +198,9 @@ private:
     BYTE gvuControl_=0,gvuAddressHigh_=0;
     unsigned gvuPage_=0,gvuPlane_=0,gvdPage_=0;
     std::uint16_t gvuOffset_=0;
+    BYTE displayAddressHigh_=0,crtcIndex_=0;
+    std::uint16_t displayAddress_=0;
+    std::array<BYTE,17> crtcRegisters_{};
     std::array<BYTE,kPhysicalVramSize> vram_{};
     std::array<BYTE,kRamSize> ram_{};
     RomImage rom_{};
