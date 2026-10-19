@@ -16,7 +16,7 @@ public:
         mountedDrive_=drive;
     }
     unsigned mountedDrive() const {return mountedDrive_;}
-    bool present(unsigned drive) const {return drive==mountedDrive_ && (has2d()||has2hd());}
+    bool present(unsigned drive) const {return drive==mountedDrive_ && has2hd();}
     void load2d(const std::vector<BYTE>& raw) {
         if(raw.size()!=40u*2*16*256)
             throw std::invalid_argument("FM-11 2D raw image must be 327680 bytes");
@@ -105,23 +105,18 @@ public:
             offset=((track*2+(side&1))*16+(sector-1))*256;
         } else if(channel==1) {
             if(drive!=mountedDrive_)return false;
-            // The 2HD-controller drives can also read 2D-format media.
-            if(!raw2hd_.empty()) {
-                if(track>=77 || sector<1 || sector>8)return false;
-                offset=((track*2+(side&1))*8+(sector-1))*1024;
-            } else if(!raw2d_.empty()) {
-                if(track>=40 || sector<1 || sector>16)return false;
-                offset=((track*2+(side&1))*16+(sector-1))*256;
-            } else return false;
+            // 2D media belong exclusively to Mini FDC (channel 0).
+            if(raw2hd_.empty() || track>=77 || sector<1 || sector>8)return false;
+            offset=((track*2+(side&1))*8+(sector-1))*1024;
         } else return false;
         return true;
     }
-    std::size_t sectorLength(unsigned channel) const {return channel==0 || (channel==1 && raw2hd_.empty())?256:1024;}
+    std::size_t sectorLength(unsigned channel) const {return channel==0?256:1024;}
     BYTE read(unsigned channel,std::size_t offset) const {
-        return (channel==0 || (channel==1 && raw2hd_.empty())?raw2d_:raw2hd_).at(offset);
+        return (channel==0?raw2d_:raw2hd_).at(offset);
     }
     void write(unsigned channel,std::size_t offset,BYTE value) {
-        const bool twoD=channel==0 || (channel==1 && raw2hd_.empty());
+        const bool twoD=channel==0;
         auto& image=twoD?raw2d_:raw2hd_;
         image.at(offset)=value;
         if(twoD) {
