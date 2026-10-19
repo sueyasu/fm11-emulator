@@ -508,8 +508,14 @@ BYTE Main6809Board::readIo(WORD address)
     const BYTE reg = static_cast<BYTE>(address & 0x00ff);
     switch (reg) {
     case 0x38: case 0x39: case 0x3a: case 0x3b:
-    case 0x3c: case 0x3d: case 0x3e: case 0x3f:
+    case 0x3c: case 0x3d: case 0x3e: case 0x3f: {
+        BYTE value=0;
+        if(mainBoard_ && mainBoard_->readIo(address,value)) {
+            syncPtmIrq();
+            return value;
+        }
         return readPtm(reg);
+    }
     case 0x03:
         return mainIrqStatus();
     case 0x50: case 0x51: case 0x52: case 0x53: {
@@ -574,7 +580,10 @@ void Main6809Board::writeIo(WORD address, BYTE value)
     switch (reg) {
     case 0x38: case 0x39: case 0x3a: case 0x3b:
     case 0x3c: case 0x3d: case 0x3e: case 0x3f:
-        writePtm(reg, value);
+        if(!mainBoard_ || !mainBoard_->writeIo(address,value))
+            writePtm(reg,value);
+        else
+            syncPtmIrq();
         break;
     case 0x02:
         ioOutputLatch_[0x02] = value;
