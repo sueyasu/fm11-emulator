@@ -152,6 +152,33 @@ branch loops. This fixes the status semantics tested here but does
 not yet port the original character-display composition or every
 sub-CPU peripheral behavior.
 
+### Synthetic 6809 CRTC display-start scrolling: stage 6
+
+Two sub-CPU ROMs write **identical** `FIRST LINE` and `SECOND LINE`
+text into row 0 and row 1 of the 80-column text RAM. The first
+ROM sets CRTC register 13 to 0; the second sets it to 80 text
+cells (one full row). The main CPU ROM enables text as in stage 1.
+
+```sh
+python3 tools/make_display_test_roms.py build/test-roms
+ctest --test-dir build -R display_binary_text_scroll --output-on-failure
+
+# First row shows FIRST LINE, second row SECOND LINE:
+./build/fm11-sdl --main-rom build/test-roms/main_text_stage1.bin \\
+    --rom build/test-roms/display_text_scroll_top.bin \\
+    --ank-rom external/roms/ank.bin --high
+
+# After CRTC start-address change, SECOND LINE moves to the first row:
+./build/fm11-sdl --main-rom build/test-roms/main_text_stage1.bin \\
+    --rom build/test-roms/display_text_scroll_scroll.bin \\
+    --ank-rom external/roms/ank.bin --high
+```
+
+This stage checks both 200- and 400-line framebuffer results with
+generated distinguishable glyphs and verifies that the **same**
+physical text RAM contents are present in both variants. It tests
+the current CRTC text-start mapping, not original firmware boot.
+
 ### Synthetic 6809 display-layer selection: stage 5
 
 This test makes the graphics region **large enough to see**.
