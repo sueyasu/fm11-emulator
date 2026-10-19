@@ -11,9 +11,9 @@ std::size_t Machine::addBoard(std::unique_ptr<CpuBoard> board)
 
     // The physical FDC/media belongs to the system bus, not either CPU card.
     if(auto* cpu6809=dynamic_cast<Main6809Board*>(board.get()))
-        cpu6809->setFloppyDevice(floppy_);
+        cpu6809->setMainBoard(mainBoard_);
     if(auto* cpu8088=dynamic_cast<Main8088Board*>(board.get()))
-        cpu8088->bus().setFloppyDevice(floppy_);
+        cpu8088->bus().setMainBoard(mainBoard_);
     boards_.push_back(std::move(board));
     return boards_.size() - 1;
 }
