@@ -123,5 +123,20 @@ int main()
     irqBoard->setIrqLine(MainBoard::IrqLine::Timer,true);
     irqBus.refreshSystemIrq();
     if(!irqBus.interruptPending() || irqBus.acknowledgeInterrupt()!=8)return 24;
+
+    // A real PTM expiration on the 6809 side reaches the same IR0 input
+    // of the 8088 PIC, and acknowledgement deasserts the main-board line.
+    p6809->writeCpu(0xfd39,0x01);
+    p6809->writeCpu(0xfd38,0x50);
+    p6809->writeCpu(0xfd3a,0);
+    p6809->writeCpu(0xfd3b,4);
+    p6809->advancePtm(4);
+    bus.refreshSystemIrq();
+    if(!bus.interruptPending() || bus.acknowledgeInterrupt()!=8)return 25;
+    bus.writeIo(0x00,0x20);
+    (void)p6809->readCpu(0xfd39);
+    (void)p6809->readCpu(0xfd3a);
+    bus.refreshSystemIrq();
+    if(bus.interruptPending())return 26;
     return 0;
 }
