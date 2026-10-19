@@ -90,5 +90,20 @@ int main()
     if(!p6809->takeSerialOutput(sent) || sent!=0x42)return 14;
     p6809->writeCpu(0xfd06,0x43);
     if(!p6809->takeSerialOutput(sent) || sent!=0x43)return 15;
+    // USART receive IRQ reaches the on-card 8259 only on assertion edges.
+    bus.writeIo(0xfd07,0x04); // receiver enabled, transmitter disabled
+    p6809->queueSerialInput(0x51);
+    bus.refreshSystemIrq();
+    if(!bus.interruptPending() || bus.acknowledgeInterrupt()!=8)return 16;
+    bus.writeIo(0x00,0x20); // EOI
+    bus.refreshSystemIrq();
+    if(bus.interruptPending())return 17; // no phantom re-trigger
+    if(bus.readIo(0xfd06)!=0x51)return 18;
+    bus.refreshSystemIrq();
+    p6809->queueSerialInput(0x52);
+    bus.refreshSystemIrq();
+    if(!bus.interruptPending() || bus.acknowledgeInterrupt()!=8)return 19;
+    bus.writeIo(0x00,0x20);
+    if(bus.readIo(0xfd06)!=0x52)return 20;
     return 0;
 }
