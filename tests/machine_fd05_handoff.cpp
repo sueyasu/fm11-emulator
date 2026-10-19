@@ -61,5 +61,29 @@ int main()
     machine.executeOne(); // resumed 6809 NOP
     if(machine.activeBoard()!=cpu09 || cpu09->cpu().pc()!=0x123a)return 7;
     if(cpu86->cpu().pc()!=0xffff6)return 8;
+    // CPU card insertion order must not define FD05's primary CPU.
+    Machine reversed;
+    auto reverse86=std::make_unique<Main8088Board>(CpuType::I8088);
+    auto* reverse86Ptr=reverse86.get();
+    auto reverse09=std::make_unique<Main6809Board>(CpuType::MC6809);
+    auto* reverse09Ptr=reverse09.get();
+    reversed.addBoard(std::move(reverse86));
+    reversed.enableFd05Selection(true);
+    reversed.addBoard(std::move(reverse09));
+    if(reversed.activeBoard()!=reverse09Ptr)return 11;
+    reverse09Ptr->writeCpu(0xfd05,0x01);
+    reversed.enableFd05Selection(true);
+    if(reversed.activeBoard()!=reverse86Ptr)return 12;
+    // An explicit debugger choice remains authoritative until FD05 is
+    // deliberately re-enabled.
+    reversed.setActiveBoard(1);
+    if(reversed.fd05SelectionEnabled() ||
+       reversed.activeBoard()!=reverse09Ptr)return 13;
+    reversed.executeOne();
+    if(reversed.activeBoard()!=reverse09Ptr)return 14;
+    reversed.enableFd05Selection(true);
+    if(reversed.activeBoard()!=reverse86Ptr)return 15;
+    reversed.reset();
+    if(reversed.activeBoard()!=reverse09Ptr)return 16;
     return 0;
 }
