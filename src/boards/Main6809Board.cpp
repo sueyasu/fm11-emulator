@@ -265,9 +265,7 @@ void Main6809Board::writeFloppySector()
     ioRegisters_[0x50]=static_cast<BYTE>((ioRegisters_[0x50]|0x80)&~0x40);
     // Completion is visible both in the per-channel status and in the
     // DMA common completion latch, until the channel status is read.
-    ioRegisters_[0x55]|=0x80;
-    mainIrqSources_|=0x10;
-    mainIrqStatus();
+    refreshDmaCompletion();
 }
 
 
@@ -313,9 +311,7 @@ void Main6809Board::readFloppySector()
         ioRegisters_[0x50]=static_cast<BYTE>((ioRegisters_[0x50]|0x80)&~0x40);
         // Completion is visible both in the per-channel status and in the
         // DMA common completion latch, until the channel status is read.
-        ioRegisters_[0x55]|=0x80;
-        mainIrqSources_|=0x10;
-        mainIrqStatus();
+        refreshDmaCompletion();
     }
 }
 
@@ -397,6 +393,21 @@ BYTE Main6809Board::extendedIrqStatus()
     extendedIrqResult_ = value;
     ioRegisters_[0x2c] = value;
     return value;
+}
+
+void Main6809Board::refreshDmaCompletion()
+{
+    bool anyComplete=false;
+    for(unsigned channel=0;channel<4;++channel)
+        anyComplete|=(ioRegisters_[0x50+channel]&0x80)!=0;
+    if(anyComplete) {
+        ioRegisters_[0x55]|=0x80;
+        mainIrqSources_|=0x10;
+    } else {
+        ioRegisters_[0x55]&=static_cast<BYTE>(~0x80);
+        mainIrqSources_&=static_cast<BYTE>(~0x10);
+    }
+    mainIrqStatus();
 }
 
 BYTE Main6809Board::mainIrqStatus()
@@ -655,17 +666,7 @@ BYTE Main6809Board::readIo(WORD address)
         ioRegisters_[reg]=static_cast<BYTE>(status&~0x80);
         // A read acknowledges only this channel. Keep the common DMA
         // completion/IRQ indication while another channel is still done.
-        bool anyComplete=false;
-        for(unsigned channel=0;channel<4;++channel)
-            anyComplete|=(ioRegisters_[0x50+channel]&0x80)!=0;
-        if(anyComplete) {
-            ioRegisters_[0x55]|=0x80;
-            mainIrqSources_|=0x10;
-        } else {
-            ioRegisters_[0x55]&=static_cast<BYTE>(~0x80);
-            mainIrqSources_&=static_cast<BYTE>(~0x10);
-        }
-        mainIrqStatus();
+        refreshDmaCompletion();
         return status;
     }
     case 0x18: return floppyStatus_;
@@ -748,6 +749,8 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         break;
     case 0x50:
         ioRegisters_[reg]=static_cast<BYTE>(value&~0xc0);
+        // Reprogramming channel 0 also acknowledges a previous completion.
+        refreshDmaCompletion();
         break;
     case 0x06:
         serialOutput_.push_back(value);

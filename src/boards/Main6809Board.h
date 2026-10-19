@@ -79,6 +79,7 @@ private:
     void writePtm(BYTE port, BYTE value);
     void refreshPtmIrq();
     BYTE mainIrqStatus();
+    void refreshDmaCompletion();
     BYTE extendedIrqStatus();
     void readFloppySector();
     void writeFloppySector();

@@ -47,6 +47,10 @@ if(FM11_BUILD_TESTS)
                      ${CMAKE_CURRENT_SOURCE_DIR}/tests/main8088_opcode_inventory.py
                      ${CMAKE_CURRENT_SOURCE_DIR}/src/boards/Main8088Board.cpp)
 
+    add_executable(main6809_dma_irq_gating tests/main6809_dma_irq_gating.cpp)
+    target_link_libraries(main6809_dma_irq_gating PRIVATE fm11_core)
+    add_test(NAME main6809_dma_irq_gating COMMAND main6809_dma_irq_gating)
+
     add_executable(main6809_dma_address_wrap tests/main6809_dma_address_wrap.cpp)
     target_link_libraries(main6809_dma_address_wrap PRIVATE fm11_core)
     add_test(NAME main6809_dma_address_wrap COMMAND main6809_dma_address_wrap)
