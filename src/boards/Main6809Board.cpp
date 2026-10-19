@@ -398,15 +398,17 @@ BYTE Main6809Board::extendedIrqStatus()
 void Main6809Board::refreshDmaCompletion()
 {
     bool anyComplete=false;
-    for(unsigned channel=0;channel<4;++channel)
-        anyComplete|=(ioRegisters_[0x50+channel]&0x80)!=0;
-    if(anyComplete) {
-        ioRegisters_[0x55]|=0x80;
-        mainIrqSources_|=0x10;
-    } else {
-        ioRegisters_[0x55]&=static_cast<BYTE>(~0x80);
-        mainIrqSources_&=static_cast<BYTE>(~0x10);
+    bool irqComplete=false;
+    for(unsigned channel=0;channel<4;++channel) {
+        if((ioRegisters_[0x50+channel]&0x80)==0)continue;
+        anyComplete=true;
+        if((ioRegisters_[0x55]&(1u<<channel))!=0)irqComplete=true;
     }
+    // Common DEND reports any completed channel, independent of IRQ masks.
+    if(anyComplete)ioRegisters_[0x55]|=0x80;
+    else ioRegisters_[0x55]&=static_cast<BYTE>(~0x80);
+    if(irqComplete)mainIrqSources_|=0x10;
+    else mainIrqSources_&=static_cast<BYTE>(~0x10);
     mainIrqStatus();
 }
 
@@ -420,7 +422,7 @@ BYTE Main6809Board::mainIrqStatus()
         value |= 0x80;
     if ((mainIrqSources_ & 0x40) != 0 && (mask & 0x80) != 0)
         value |= 0x40;
-    if ((mainIrqSources_ & 0x10) != 0 && (ioRegisters_[0x55] & 0x0f) != 0)
+    if ((mainIrqSources_ & 0x10) != 0)
         value |= 0x10;
     if ((mainIrqSources_ & 0x08) != 0 && (mask & 0x20) != 0)
         value |= 0x08;
@@ -747,9 +749,10 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             }
         }
         break;
-    case 0x50:
+    case 0x50: case 0x51: case 0x52: case 0x53:
+        // DEND and BUSY are hardware status; reprogramming any channel
+        // acknowledges only that channel's completed transfer.
         ioRegisters_[reg]=static_cast<BYTE>(value&~0xc0);
-        // Reprogramming channel 0 also acknowledges a previous completion.
         refreshDmaCompletion();
         break;
     case 0x06:
@@ -786,6 +789,7 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             // HD6844 common IRQ/completion register: bit 7 is read-only.
             // IRQ enable writes must not acknowledge a pending completion.
             ioRegisters_[reg] = static_cast<BYTE>((ioRegisters_[reg] & 0x80) | (value & 0x7f));
+            refreshDmaCompletion();
         } else {
             ioRegisters_[reg] = value;
         }
