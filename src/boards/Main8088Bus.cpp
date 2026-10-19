@@ -22,14 +22,14 @@ void Main8088Bus::reset()
 
 void Main8088Bus::loadFloppy2d(const std::vector<BYTE>& image)
 {
-    floppy_.load2d(image);
+    floppy_->load2d(image);
     setDmaDevice(0,[this](){return floppyReadData();},
                    [this](BYTE value){floppyWriteData(value);});
 }
 
 void Main8088Bus::loadFloppy2hd(const std::vector<BYTE>& image)
 {
-    floppy_.load2hd(image);
+    floppy_->load2hd(image);
     setDmaDevice(1,[this](){return floppyReadData();},
                    [this](BYTE value){floppyWriteData(value);});
 }
@@ -37,7 +37,7 @@ void Main8088Bus::loadFloppy2hd(const std::vector<BYTE>& image)
 bool Main8088Bus::floppySectorOffset(std::size_t& offset,unsigned channel)
 {
     const unsigned base=channel==0?0x18:0x30;
-    if(!floppy_.sectorOffset(channel,floppyRegisters_[base+1],
+    if(!floppy_->sectorOffset(channel,floppyRegisters_[base+1],
              floppyRegisters_[channel==0?0x1c:0x34],
              floppyRegisters_[base+2],
              floppyRegisters_[channel==0?0x1d:0x35],offset)) {
@@ -60,7 +60,7 @@ void Main8088Bus::floppyWriteData(BYTE value)
     if(!floppyWriting_ || floppyPosition_>=floppyLength_)return;
     floppyBuffer_[floppyPosition_++]=value;
     if(floppyPosition_==floppyLength_) {
-        floppy_.writeSector(floppyChannel_,floppySectorStart_,floppyBuffer_.data());
+        floppy_->writeSector(floppyChannel_,floppySectorStart_,floppyBuffer_.data());
         floppyWriting_=false;
         floppyStatus_=0;
     }
@@ -83,7 +83,7 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
     floppyWriting_=write;
     if(read) {
         for(unsigned i=0;i<floppyLength_;++i)
-            floppyBuffer_[i]=floppy_.read(channel,offset+i);
+            floppyBuffer_[i]=floppy_->read(channel,offset+i);
     }
     floppyStatus_=0x02;
     // Original Sim86 dispatches a DMA transfer for the selected FDC.
@@ -130,8 +130,8 @@ BYTE Main8088Bus::readIo(WORD port) const
     if(port==0x01)return picMask_;
     if(port>=0xfc00 && port<=0xfcff) return cardIoRam_[port&0xff];
     if(port>=0xfd00 && port<=0xfdff && systemReader_) return systemReader_(port);
-    if(((port>=0xfd18 && port<=0xfd1d && floppy_.has2d()) ||
-        (port>=0xfd30 && port<=0xfd35 && floppy_.has2hd()))) {
+    if(((port>=0xfd18 && port<=0xfd1d && floppy_->has2d()) ||
+        (port>=0xfd30 && port<=0xfd35 && floppy_->has2hd()))) {
         if(port==0xfd18 || port==0xfd30)return floppyStatus_;
         if(port==0xfd1b || port==0xfd33)
             return const_cast<Main8088Bus*>(this)->floppyReadData();
@@ -176,8 +176,8 @@ void Main8088Bus::writeIo(WORD port,BYTE value)
     }
     if(port>=0xfc00 && port<=0xfcff) cardIoRam_[port&0xff]=value;
     else if(port>=0xfd00 && port<=0xfdff && systemWriter_) systemWriter_(port,value);
-    else if(((port>=0xfd18 && port<=0xfd1d && floppy_.has2d()) ||
-             (port>=0xfd30 && port<=0xfd35 && floppy_.has2hd()))) {
+    else if(((port>=0xfd18 && port<=0xfd1d && floppy_->has2d()) ||
+             (port>=0xfd30 && port<=0xfd35 && floppy_->has2hd()))) {
         if(port==0xfd18 || port==0xfd30)floppyCommand(value,port==0xfd18?0:1);
         else if(port==0xfd1b || port==0xfd33)floppyWriteData(value);
         else floppyRegisters_[port&0xff]=value;
