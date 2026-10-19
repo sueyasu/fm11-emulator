@@ -157,5 +157,23 @@ int main()
     timed.setDisplayCpuClockHz(1000000);
     timed.advanceTimeNanoseconds(1000);
     if(timed.displayCpuPc()!=0xc002)return 36;
+    // AFE6 is display-side video control, not generic unmapped I/O.
+    DisplaySubsystem::RomImage videoRom{};
+    // LDA #$5A; STA $AFE6
+    videoRom[0]=0x86;videoRom[1]=0x5a;
+    videoRom[2]=0xb7;videoRom[3]=0xaf;videoRom[4]=0xe6;
+    videoRom[0x3ffe]=0xc0;videoRom[0x3fff]=0x00;
+    board.displaySubsystem().loadRom(videoRom);
+    board.reset();
+    if(board.displaySubsystem().videoFlags()!=0)return 37;
+    if(!board.displayCpu().executeOne() ||
+       !board.displayCpu().executeOne())return 38;
+    if(board.displaySubsystem().readMemory(0xafe6)!=0x5a ||
+       board.displaySubsystem().videoFlags()!=0x5a)return 39;
+    // Undocumented neighbors must not mirror the flag register.
+    if(board.displaySubsystem().readMemory(0xafe5)!=0xff ||
+       board.displaySubsystem().readMemory(0xafe7)!=0xff)return 40;
+    board.reset();
+    if(board.displaySubsystem().videoFlags()!=0)return 41;
     return 0;
 }
