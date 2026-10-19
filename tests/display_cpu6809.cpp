@@ -88,7 +88,7 @@ int main()
     mainCard->reset();
     if(mainCard->readCpu(0xfc80)!=0x61)return 16;
     if(mainCard->readCpu(0xfc7f)!=0)return 17;
-    // Sub-system I/O: AFE0-AFE3 scratch and AFF0 busy latch.
+    // AFE0 bit0 controls READY; AFF0 is an independent DMA register.
     // Unimplemented neighbors remain unmapped; AFEF is now CRTC data.
     auto& io=board.displaySubsystem();
     io.writeMemory(0xafe0,0x12);
@@ -98,12 +98,12 @@ int main()
     if(io.readMemory(0xafe4)!=0xff ||
        io.readMemory(0xafed)!=0xff ||
        io.readMemory(0xaff1)!=0xff)return 19;
-    io.writeMemory(0xaff0,0x00);
-    if(io.busyStatus()!=0 || io.readMemory(0xaff0)!=0)return 20;
+    io.writeMemory(0xaff0,0x37);
+    if(io.busyStatus()!=0x80 || io.readMemory(0xaff0)!=0x37)return 20;
     // BUSY control is accessible from real sub-CPU instructions.
     DisplaySubsystem::RomImage busyRom{};
-    busyRom[0x1000]=0x86;busyRom[0x1001]=0x00; // LDA #$00
-    busyRom[0x1002]=0xb7;busyRom[0x1003]=0xaf;busyRom[0x1004]=0xf0; // STA $AFF0
+    busyRom[0x1000]=0x86;busyRom[0x1001]=0x01; // LDA #$01 (READY)
+    busyRom[0x1002]=0xb7;busyRom[0x1003]=0xaf;busyRom[0x1004]=0xe0; // STA $AFE0
     busyRom[0x4ffe]=0xc0;busyRom[0x4fff]=0x00;
     io.loadRom(busyRom);
     board.reset();
@@ -111,8 +111,8 @@ int main()
     if(!board.displayCpu().executeOne() ||
        !board.displayCpu().executeOne() ||
        io.busyStatus()!=0x00)return 22;
-    io.writeMemory(0xaff0,0);
-    if(io.busyStatus()!=0)return 23;
+    io.writeMemory(0xafe0,0);
+    if(io.busyStatus()!=0x80 || (io.readMemory(0xafe0)&1u)!=0)return 23;
     // Display-side ATTENTION reaches the common FD04 event latch.
     // FD04 read acknowledges the request; a second read is clear.
     board.displaySubsystem().notifyMainAttention();
@@ -121,8 +121,8 @@ int main()
     if(!board.readIo(0xfd04,event) || (event&0x01)!=0)return 25;
     // BUSY can be sampled by the main board without assuming yet
     // whether or how it shares FD05's HALT/status bit.
-    board.displaySubsystem().writeMemory(0xaff0,0x37);
-    if(board.displayBusyStatus()!=0x37)return 26;
+    board.displaySubsystem().writeMemory(0xafe0,0x01);
+    if(board.displayBusyStatus()!=0)return 26;
     board.displaySubsystem().notifyMainAttention();
     board.reset();
     if(board.displayBusyStatus()!=0x80)return 27;
@@ -365,7 +365,7 @@ int main()
        log[2].value!=0x12)return 76;
     if(traced.displaySubsystem().readMemory(0xafe4)!=0xff ||
        traced.displaySubsystem().videoFlags()!=0x12 ||
-       traced.displaySubsystem().busyStatus()!=0x12)return 77;
+       traced.displaySubsystem().readMemory(0xaff0)!=0x12)return 77;
     traced.displaySubsystem().clearIoWriteObserver();
     traced.displaySubsystem().writeMemory(0xafe4,0x99);
     if(log.size()!=3)return 78;
