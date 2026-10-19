@@ -5,12 +5,15 @@
 #include <cstdint>
 #include <stdexcept>
 #include <functional>
+#include <algorithm>
 
 // Main-board display/sub-CPU memory. I/O and display scanout are deliberately
 // not decoded yet: the reference map still labels those regions tentative.
 class DisplaySubsystem {
 public:
     static constexpr std::size_t kVramSize=0x8000;
+    static constexpr std::size_t kPhysicalVramSize=0x30000; // 192 KiB
+    static constexpr std::size_t kVramWindows=kPhysicalVramSize/kVramSize;
     static constexpr std::size_t kRamSize=0x2000;
     static constexpr std::size_t kRomSize=0x4000;
     using RomImage=std::array<BYTE,kRomSize>;
@@ -43,7 +46,22 @@ public:
     std::uint64_t videoRevision() const {return videoRevision_;}
     // Copy the video state at one emulation boundary. The frontend can
     // retain this value after the emulator updates VRAM again.
-    VideoSnapshot captureVideo() const {return {vram_,videoFlags_,videoRevision_};}
+    VideoSnapshot captureVideo() const {
+        VideoSnapshot snapshot{};
+        std::copy_n(vram_.begin()+vramWindow_*kVramSize,kVramSize,snapshot.vram.begin());
+        snapshot.flags=videoFlags_;
+        snapshot.revision=videoRevision_;
+        return snapshot;
+    }
+    // Diagnostic physical VRAM window selection, not an FM-11 I/O port.
+    // Mapping of hardware bank control bits is not yet verified.
+    std::size_t vramWindow() const {return vramWindow_;}
+    void selectVramWindow(std::size_t window) {
+        if(window>=kVramWindows)throw std::out_of_range("display VRAM window");
+        if(vramWindow_!=window) {vramWindow_=window;markVideoChanged();}
+    }
+    BYTE readPhysicalVram(std::size_t offset) const {return vram_.at(offset);}
+    const std::array<BYTE,kPhysicalVramSize>& physicalVram() const {return vram_;}
     // Handshake output to the main board. The physical sub-I/O trigger
     // remains unassigned until its register decode is confirmed.
     void setAttentionSink(std::function<void()> sink) {attentionSink_=std::move(sink);}
@@ -52,7 +70,7 @@ public:
     BYTE readShared(std::size_t offset) const {return ram_[0x1f80+offset];}
     void writeShared(std::size_t offset,BYTE value) {ram_[0x1f80+offset]=value;}
     BYTE readMemory(std::uint16_t address) const {
-        if(address<0x8000)return vram_[address];
+        if(address<0x8000)return vram_[vramWindow_*kVramSize+address];
         if(address<0xa000)return ram_[address-0x8000];
         if(address>=0xafe0 && address<=0xafe3)return subIoRam_[address-0xafe0];
         if(address==0xafe6)return videoFlags_;
@@ -62,8 +80,9 @@ public:
     }
     void writeMemory(std::uint16_t address,BYTE value) {
         if(address<0x8000) {
-            if(vram_[address]!=value) {
-                vram_[address]=value;
+            const auto offset=vramWindow_*kVramSize+address;
+            if(vram_[offset]!=value) {
+                vram_[offset]=value;
                 markVideoChanged();
             }
         }
@@ -78,7 +97,8 @@ public:
         else if(address==0xaff0)busy_=value;
         // ROM and unmapped space are read-only.
     }
-    const std::array<BYTE,kVramSize>& vram() const {return vram_;}
+    // Physical VRAM; captureVideo() returns the currently mapped 32 KiB.
+    const std::array<BYTE,kPhysicalVramSize>& vram() const {return vram_;}
 
 private:
     void markVideoChanged() {++videoRevision_;}
@@ -88,7 +108,8 @@ private:
     BYTE busy_=0x80;
     BYTE videoFlags_=0;
     std::array<BYTE,4> subIoRam_{};
-    std::array<BYTE,kVramSize> vram_{};
+    std::size_t vramWindow_=0;
+    std::array<BYTE,kPhysicalVramSize> vram_{};
     std::array<BYTE,kRamSize> ram_{};
     RomImage rom_{};
 };
