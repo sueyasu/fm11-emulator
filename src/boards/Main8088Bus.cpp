@@ -1,6 +1,7 @@
 #include "Main8088Bus.h"
 #include <utility>
 #include <stdexcept>
+#include <algorithm>
 
 Main8088Bus::Main8088Bus():memory_(kMemorySize,0) {}
 
@@ -11,6 +12,88 @@ void Main8088Bus::reset()
     picVectorBase_=8;picReadIsr_=0;picInitStep_=0;
     picNeedsIcw4_=false;picSingle_=false;picAutoEoi_=false;
     resetDma();
+    floppyRegisters_.fill(0);
+    floppyStatus_=0;
+    floppyPosition_=256;
+    floppyWriting_=false;
+}
+
+void Main8088Bus::loadFloppy2d(const std::vector<BYTE>& image)
+{
+    if(image.size()!=40u*2*16*256)
+        throw std::invalid_argument("FM-11 2D raw image must be 327680 bytes");
+    floppy2d_=image;
+    floppyDirty_=false;
+    floppyPosition_=256;
+    floppyStatus_=0;
+    floppyWriting_=false;
+    // FM-11 FDD uses the main CPU DMAC. CH0 is the current 2D adapter
+    // wiring assumption; keep the 8237 byte transfers on its usual path.
+    setDmaDevice(0,[this](){return floppyReadData();},
+                   [this](BYTE value){floppyWriteData(value);});
+}
+
+bool Main8088Bus::floppySectorOffset(std::size_t& offset)
+{
+    const unsigned track=floppyRegisters_[0x19];
+    const unsigned sector=floppyRegisters_[0x1a];
+    const unsigned side=floppyRegisters_[0x1c]&1;
+    const unsigned drive=floppyRegisters_[0x1d]&3;
+    if(drive!=0 || track>=40 || sector<1 || sector>16 || floppy2d_.empty()) {
+        floppyStatus_=0x10;
+        return false;
+    }
+    offset=((track*2+side)*16+(sector-1))*256;
+    return true;
+}
+
+BYTE Main8088Bus::floppyReadData()
+{
+    if(floppyPosition_>=256)return 0xff;
+    const BYTE value=floppyBuffer_[floppyPosition_++];
+    if(floppyPosition_==256)floppyStatus_=0;
+    return value;
+}
+
+void Main8088Bus::floppyWriteData(BYTE value)
+{
+    if(!floppyWriting_ || floppyPosition_>=256)return;
+    floppyBuffer_[floppyPosition_++]=value;
+    if(floppyPosition_==256) {
+        std::copy(floppyBuffer_.begin(),floppyBuffer_.end(),
+                  floppy2d_.begin()+floppySectorStart_);
+        floppyDirty_=true;
+        floppyWriting_=false;
+        floppyStatus_=0;
+    }
+}
+
+void Main8088Bus::floppyCommand(BYTE command)
+{
+    floppyStatus_=0;
+    floppyPosition_=256;
+    floppyWriting_=false;
+    const bool read=(command&0xf0)==0x80;
+    const bool write=(command&0xf0)==0xa0;
+    if(!read && !write)return;
+    std::size_t offset=0;
+    if(!floppySectorOffset(offset))return;
+    floppySectorStart_=offset;
+    floppyPosition_=0;
+    floppyWriting_=write;
+    if(read)std::copy_n(floppy2d_.begin()+offset,256,floppyBuffer_.begin());
+    floppyStatus_=0x02;
+    // Complete one sector through the existing 8237 request/arbitration path,
+    // never by writing directly to the 8088 address space.
+    setDmaRequest(0,true);
+    unsigned transferred=0;
+    for(;transferred<256;++transferred) {
+        if(!serviceDma())break;
+        if(floppyPosition_==256)break;
+    }
+    setDmaRequest(0,false);
+    // A short or unavailable DMA transfer remains an error, not success.
+    if(floppyPosition_!=256 && transferred<256)floppyStatus_=0x10;
 }
 
 void Main8088Bus::loadBootRom(const Rom& rom)
@@ -47,6 +130,11 @@ BYTE Main8088Bus::readIo(WORD port) const
     if(port==0x01)return picMask_;
     if(port>=0xfc00 && port<=0xfcff) return cardIoRam_[port&0xff];
     if(port>=0xfd00 && port<=0xfdff && systemReader_) return systemReader_(port);
+    if(port>=0xfd18 && port<=0xfd1d && !floppy2d_.empty()) {
+        if(port==0xfd18)return floppyStatus_;
+        if(port==0xfd1b)return const_cast<Main8088Bus*>(this)->floppyReadData();
+        return floppyRegisters_[port&0xff];
+    }
     // 8259 PIC and 8237 DMA belong to the future Sim86 adapter.
     return 0xff;
 }
@@ -86,6 +174,11 @@ void Main8088Bus::writeIo(WORD port,BYTE value)
     }
     if(port>=0xfc00 && port<=0xfcff) cardIoRam_[port&0xff]=value;
     else if(port>=0xfd00 && port<=0xfdff && systemWriter_) systemWriter_(port,value);
+    else if(port>=0xfd18 && port<=0xfd1d && !floppy2d_.empty()) {
+        if(port==0xfd18)floppyCommand(value);
+        else if(port==0xfd1b)floppyWriteData(value);
+        else floppyRegisters_[port&0xff]=value;
+    }
 }
 
 void Main8088Bus::requestIrq(unsigned line)
