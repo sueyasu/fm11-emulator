@@ -32,6 +32,9 @@ void Main6809Board::reset()
     mmrControl_.fill(0);
     onboardRam_.fill(0);
     ioRegisters_.fill(0);
+    ioReadCounts_.fill(0);
+    ioWriteCounts_.fill(0);
+    lastIoWrites_.fill(0);
     floppyTypeIStatus_=false;
     floppyIndexPolls_=0;
     ioOutputLatch_.fill(0);
@@ -520,6 +523,7 @@ BYTE Main6809Board::readIo(WORD address)
         return readMmrRegister(address);
 
     const BYTE reg = static_cast<BYTE>(address & 0x00ff);
+    ++ioReadCounts_[reg];
     switch (reg) {
     case 0x38: case 0x39: case 0x3a: case 0x3b:
     case 0x3c: case 0x3d: case 0x3e: case 0x3f: {
@@ -605,6 +609,8 @@ void Main6809Board::writeIo(WORD address, BYTE value)
     }
 
     const BYTE reg = static_cast<BYTE>(address & 0x00ff);
+    ++ioWriteCounts_[reg];
+    lastIoWrites_[reg]=value;
     switch (reg) {
     case 0x38: case 0x39: case 0x3a: case 0x3b:
     case 0x3c: case 0x3d: case 0x3e: case 0x3f:
