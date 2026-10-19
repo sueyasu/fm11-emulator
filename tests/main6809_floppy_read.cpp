@@ -53,6 +53,16 @@ int main() {
  if((b.readCpu(0xfd51)&0x80)==0)return 20;
  for(int i=0;i<256;++i)
    if(b.readCpu(0x2000+i)!=static_cast<BYTE>(i^0x5a))return 21;
+ // DMA count may end before the physical sector ends.
+ b.writeCpu(0xfd35,0); b.writeCpu(0xfd34,0);
+ b.writeCpu(0xfd31,1); b.writeCpu(0xfd32,1);
+ b.writeCpu(0xfd44,0x30); b.writeCpu(0xfd45,0);
+ b.writeCpu(0xfd46,0); b.writeCpu(0xfd47,128);
+ b.writeCpu(0xfd51,0x04);
+ b.writeCpu(0xfd30,0x80);
+ if((b.readCpu(0xfd51)&0x80)==0)return 22;
+ for(int i=0;i<128;++i)
+   if(b.readCpu(0x3000+i)!=static_cast<BYTE>(i^0x5a))return 23;
  b.writeCpu(0xfd19,1); b.writeCpu(0xfd1c,0);
  b.writeCpu(0xfd1a,1); b.writeCpu(0xfd1d,0);
  b.writeCpu(0xfd50,0x00);
