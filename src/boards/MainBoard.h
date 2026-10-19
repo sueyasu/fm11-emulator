@@ -89,7 +89,7 @@ public:
 
     // Common system I/O aperture, decoded after CPU-card bus translation.
     // The physical PTM, USART and FDC parameter registers live here.
-    bool readIo(std::uint16_t address, BYTE& value) const {
+    bool readIo(std::uint16_t address, BYTE& value) {
         const unsigned reg=address&0xff;
         if(reg==0x04) {
             value=eventStatus_;
