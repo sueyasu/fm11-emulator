@@ -161,7 +161,9 @@ void Main6809Board::writeFloppySector()
         floppyWritePio_=true;
         floppyWriteOffset_=offset;
         floppyOffset_=0;
-        floppyStatus_=0x02;
+        floppy_->beginSector(0,ioRegisters_[0x19],ioRegisters_[0x1c]&1,
+                             ioRegisters_[0x1a],ioRegisters_[0x1d]&3,true);
+        floppyStatus_=floppy_->transferStatus();
         return;
     }
     const unsigned count=(ioRegisters_[0x42]<<8)|ioRegisters_[0x43];
@@ -208,6 +210,8 @@ void Main6809Board::readFloppySector()
     floppyOffset_=0;
     floppyStatus_=0x02; // DRQ for programmed I/O
     const bool dma=(ioRegisters_[0x50]&0x04)!=0;
+    if(!dma)floppy_->beginSector(0,ioRegisters_[0x19],ioRegisters_[0x1c]&1,
+                                 ioRegisters_[0x1a],ioRegisters_[0x1d]&3,false);
     if(dma) {
         const unsigned count=(ioRegisters_[0x42]<<8)|ioRegisters_[0x43];
         if(count!=256) {
@@ -605,7 +609,8 @@ BYTE Main6809Board::readIo(WORD address)
     case 0x18: return floppyStatus_;
     case 0x1b: {
         if(floppyOffset_==256)return 0;
-        const BYTE value=floppySector_[floppyOffset_++];
+        const BYTE value=floppy_->transferRead();
+        ++floppyOffset_;
         if(floppyOffset_==256)floppyStatus_=0;
         return value;
     }
@@ -667,7 +672,8 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         break;
     case 0x1b:
         if(floppyWritePio_ && floppyOffset_<256) {
-            floppy_->write(0,floppyWriteOffset_+floppyOffset_++,value);
+            floppy_->transferWrite(value);
+            ++floppyOffset_;
             if(floppyOffset_==256) {
                 floppyWritePio_=false;
                 floppyStatus_=0;
