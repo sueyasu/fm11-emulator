@@ -1,4 +1,7 @@
 #include "MainBoard.h"
+#include "Machine.h"
+#include "Main6809Board.h"
+#include <memory>
 
 int main()
 {
@@ -22,5 +25,34 @@ int main()
     board.reset();
     if(cpu.pc()!=0xc000 || board.displaySubsystem().haltRequested())return 6;
     if(board.displaySubsystem().readMemory(0x8000)!=0x55)return 7;
+    // Elapsed-time scheduling is opt-in, and preserves CPU instruction
+    // boundaries rather than executing one sub-instruction per main step.
+    Machine timed;
+    DisplaySubsystem::RomImage timedRom{};
+    timedRom[0]=0x86;timedRom[1]=0x55;  // LDA #55
+    timedRom[2]=0xb7;timedRom[3]=0x80;timedRom[4]=0x00; // STA $8000
+    timedRom[5]=0x12; // NOP
+    timedRom[0x3ffe]=0xc0;timedRom[0x3fff]=0x00;
+    // The main-board display CPU is accessible through a card attachment.
+    auto cpuBoard=std::make_unique<Main6809Board>(CpuType::MC6809);
+    auto* mainCard=cpuBoard.get();
+    timed.addBoard(std::move(cpuBoard));
+    // Configure ROM through the same shared main board attached to 6809.
+    // The display CPU is exposed directly by Machine for scheduler tests.
+    timed.loadDisplayRom(timedRom);
+    timed.reset();
+    timed.advanceTimeNanoseconds(10000);
+    if(timed.displayMemory(0x8000)!=0)return 8;
+    timed.setDisplayCpuClockHz(1000000);
+    timed.advanceTimeNanoseconds(2000);
+    if(timed.displayCpuPc()!=0xc002)return 9;
+    timed.advanceTimeNanoseconds(5000);
+    if(timed.displayMemory(0x8000)!=0x55)return 10;
+    mainCard->writeCpu(0xfd05,0x80);
+    const auto haltedPc=timed.displayCpuPc();
+    timed.advanceTimeNanoseconds(100000);
+    if(timed.displayCpuPc()!=haltedPc)return 11;
+    timed.reset();
+    if(timed.displayCpuPc()!=0xc000)return 12;
     return 0;
 }
