@@ -487,5 +487,35 @@ int main()
     fonts.reset(); // Reset preserves physical font ROMs.
     if(fonts.ankGlyphRow(0x41,0)!=0x81 ||
        fonts.kanjiRomByte(0x1ffff)!=0x5a)return 104;
+    // End-to-end frontend capture: selected physical page, ARGB pixel
+    // ordering, explicit resolution, frame revision and owned buffers.
+    Machine framed;
+    auto displayBoard=std::make_unique<Main6809Board>(CpuType::MC6809);
+    framed.addBoard(std::move(displayBoard));
+    auto& framebuffer=framed.board(0);
+    (void)framebuffer;
+    // The CPU-board-independent renderer is also usable standalone.
+    DisplaySubsystem frameSource;
+    frameSource.writeMemory(0xafe1,0x07);
+    frameSource.writeMemory(0x0000,0x80);
+    const auto captured=DisplayBitmap::captureFrame(frameSource,false);
+    if(captured.width!=640 || captured.height!=200 ||
+       captured.argb.size()!=640*200 ||
+       captured.argb[0]!=0xffffffffu ||
+       captured.argb[1]!=0xff000000u ||
+       captured.revision!=frameSource.videoRevision())return 105;
+    frameSource.writeMemory(0x0000,0);
+    if(captured.argb[0]!=0xffffffffu)return 106;
+    frameSource.writeMemory(0xafe3,0x10);
+    frameSource.writeMemory(0x0000,0x40);
+    frameSource.writeMemory(0xafe2,0x10);
+    const auto capturedHigh=DisplayBitmap::captureFrame(frameSource,true);
+    if(capturedHigh.width!=640 || capturedHigh.height!=400 ||
+       capturedHigh.argb.size()!=640*400 ||
+       capturedHigh.argb[0]!=0xff000000u ||
+       capturedHigh.argb[1]!=0xffffffffu)return 107;
+    const auto emptyMachineFrame=framed.captureDisplayFrame();
+    if(emptyMachineFrame.width!=640 || emptyMachineFrame.height!=200 ||
+       emptyMachineFrame.argb[0]!=0xff000000u)return 108;
     return 0;
 }
