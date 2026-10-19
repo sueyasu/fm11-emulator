@@ -27,7 +27,7 @@ int main()
     // HALT release resumes from the suspended instruction boundary.
     board.writeIo(0xfd05,0x00);
     if(board.displaySubsystem().haltRequested() ||
-       (board.subCpuStatus()&0x80)!=0)return 29;
+       (board.subCpuStatus()&0x80)==0)return 29;
     if(!cpu.executeOne() || cpu.pc()!=0xc006)return 30;
     board.reset();
     if(cpu.pc()!=0xc000 || board.displaySubsystem().haltRequested())return 6;
