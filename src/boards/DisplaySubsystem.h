@@ -17,6 +17,8 @@ public:
     static constexpr std::size_t kRamSize=0x2000;
     static constexpr std::size_t kRomSize=0x4000;
     using RomImage=std::array<BYTE,kRomSize>;
+    struct IoWriteTrace {std::uint16_t address; BYTE value;};
+    using IoWriteObserver=std::function<void(IoWriteTrace)>;
     struct VideoSnapshot {
         std::array<BYTE,kVramSize> vram;
         BYTE flags;
@@ -37,6 +39,11 @@ public:
     bool haltRequested() const {return haltRequested_;}
 
     void loadRom(const RomImage& image) {rom_=image;}
+    // Diagnostic observer for sub-CPU writes to the undecoded A000-BFFF
+    // aperture and known sub-I/O latches. Observation is non-invasive:
+    // attaching an observer never changes readback or register side effects.
+    void setIoWriteObserver(IoWriteObserver observer) {ioWriteObserver_=std::move(observer);}
+    void clearIoWriteObserver() {ioWriteObserver_={};}
     BYTE busyStatus() const {return busy_;}
     // AFE6 video-control flags. Individual bits are not yet mapped to
     // display modes until their FM-11 semantics have been verified.
@@ -95,7 +102,10 @@ public:
             }
         }
         else if(address==0xaff0)busy_=value;
-        // ROM and unmapped space are read-only.
+        // ROM and unmapped space are read-only. Trace even writes to
+        // unimplemented I/O locations; their hardware decode is unknown.
+        if(address>=0xa000 && address<0xc000 && ioWriteObserver_)
+            ioWriteObserver_({address,value});
     }
     // Physical VRAM; captureVideo() returns the currently mapped 32 KiB.
     const std::array<BYTE,kPhysicalVramSize>& vram() const {return vram_;}
@@ -103,6 +113,7 @@ public:
 private:
     void markVideoChanged() {++videoRevision_;}
     std::uint64_t videoRevision_=0;
+    IoWriteObserver ioWriteObserver_;
     std::function<void()> attentionSink_;
     bool haltRequested_=false;
     BYTE busy_=0x80;
