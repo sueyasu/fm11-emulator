@@ -208,10 +208,22 @@ int main(int argc,char** argv) {
                 (outputH-nativeH*scale)/2,
                 nativeW*scale,nativeH*scale
             };
-            SDL_SetRenderDrawColor(ui.renderer,0,0,0,255);
+            // The emulator image stays untouched. Paint the letterbox
+            // margins dark gray, and draw a one-pixel border OUTSIDE
+            // the screen rectangle whenever those pixels are visible.
+            if(SDL_SetRenderDrawColor(ui.renderer,48,52,56,255)!=0)
+                throw std::runtime_error(SDL_GetError());
             if(SDL_RenderClear(ui.renderer)!=0)
                 throw std::runtime_error(SDL_GetError());
             if(SDL_RenderCopy(ui.renderer,ui.texture,nullptr,&destination)!=0)
+                throw std::runtime_error(SDL_GetError());
+            const SDL_Rect border{
+                destination.x-1,destination.y-1,
+                destination.w+2,destination.h+2
+            };
+            if(SDL_SetRenderDrawColor(ui.renderer,144,148,152,255)!=0)
+                throw std::runtime_error(SDL_GetError());
+            if(SDL_RenderDrawRect(ui.renderer,&border)!=0)
                 throw std::runtime_error(SDL_GetError());
             SDL_RenderPresent(ui.renderer);
             SDL_Delay(1);
