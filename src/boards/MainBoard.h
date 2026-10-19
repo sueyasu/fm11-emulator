@@ -14,6 +14,11 @@
 // The sub CPU/display subsystem will also belong to the main board.
 class MainBoard {
 public:
+    MainBoard() {display_.setAttentionSink([this](){signalAttention();});}
+    MainBoard(const MainBoard&)=delete;
+    MainBoard& operator=(const MainBoard&)=delete;
+    // BUSY is available separately until FD05 status bit semantics are proven.
+    BYTE displayBusyStatus() const {return display_.busyStatus();}
     std::shared_ptr<FloppyDevice> floppyDevice() const { return floppy_; }
     std::shared_ptr<Usart8251> usartDevice() const {return usart_;}
     std::shared_ptr<Ptm6840> ptmDevice() const {return ptm_;}
