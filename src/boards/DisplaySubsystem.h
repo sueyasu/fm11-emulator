@@ -17,8 +17,10 @@ public:
     static constexpr std::size_t kRamSize=0x2000;
     static constexpr std::size_t kRomSize=0x5000;
     using RomImage=std::array<BYTE,kRomSize>;
-    using AnkRomImage=std::array<BYTE,0x1000>;
-    using KanjiRomImage=std::array<BYTE,0x20000>;
+    static constexpr std::size_t kAnkRomSize=0x1000;
+    static constexpr std::size_t kKanjiRomSize=0x20000;
+    using AnkRomImage=std::array<BYTE,kAnkRomSize>;
+    using KanjiRomImage=std::array<BYTE,kKanjiRomSize>;
     struct IoWriteTrace {std::uint16_t address; BYTE value; std::uint16_t pc=0; bool fromCpu=false;};
     using IoWriteObserver=std::function<void(IoWriteTrace)>;
     struct VideoSnapshot {
