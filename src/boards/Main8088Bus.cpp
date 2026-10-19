@@ -99,7 +99,7 @@ BYTE Main8088Bus::readIo(WORD port) const
     if(port==0x00)return picReadIsr_?picInService_:picRequest_;
     if(port==0x01)return picMask_;
     if(port>=0xfc00 && port<=0xfcff) return cardIoRam_[port&0xff];
-    if(((port==0xfd04 || port==0xfd06 || port==0xfd07) ||
+    if(((port==0xfd04 || port==0xfd05 || port==0xfd06 || port==0xfd07) ||
         (port>=0xfd38 && port<=0xfd3f)) && mainBoard_) {
         BYTE value=0;
         if(mainBoard_->readIo(port,value))return value;
@@ -153,7 +153,7 @@ void Main8088Bus::writeIo(WORD port,BYTE value)
         return;
     }
     if(port>=0xfc00 && port<=0xfcff) cardIoRam_[port&0xff]=value;
-    else if(((port==0xfd04 || port==0xfd06 || port==0xfd07) ||
+    else if(((port==0xfd04 || port==0xfd05 || port==0xfd06 || port==0xfd07) ||
              (port>=0xfd38 && port<=0xfd3f)) && mainBoard_) {
         mainBoard_->writeIo(port,value);
         refreshSystemIrq();
