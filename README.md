@@ -152,6 +152,34 @@ branch loops. This fixes the status semantics tested here but does
 not yet port the original character-display composition or every
 sub-CPU peripheral behavior.
 
+### Synthetic 6809 text attributes: stage 3
+
+After validating basic text and 40/80-column geometry, the next
+self-contained 6809 ROM writes six text cells with distinct attributes:
+
+- `R`, `G`, `B`: red, green and blue character colors.
+- `R` (fourth cell): reversed red, with the cell background filled.
+- `H`: bright-white attribute.
+- `W`: normal-white attribute.
+
+```sh
+python3 tools/make_display_test_roms.py build/test-roms
+ctest --test-dir build -R display_binary_text_attributes --output-on-failure
+./build/fm11-sdl --main-rom build/test-roms/main_text_stage1.bin \\
+    --rom build/test-roms/display_text_attributes.bin \\
+    --ank-rom external/roms/ank.bin --high
+```
+
+The CTest uses a generated minimal ANK glyph ROM, checking the text
+attribute bytes written by the sub 6809 and the composited pixel colors
+in both 200- and 400-line views. The SDL command uses the actual
+extracted ANK ROM to show the characters.
+
+F1 only changes the *200/400-line view*, not the CRTC 40/80-column
+setting. In the current rendering model the 200-line view downsamples
+400 logical character scanlines, so text appears vertically compressed.
+Fidelity to original hardware scanline behavior remains to be verified.
+
 ### Synthetic 6809 text geometry: 40/80 columns and 200/400 lines
 
 Stage 2 reuses the working stage-1 main ROM and two new display
