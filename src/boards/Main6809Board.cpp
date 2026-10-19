@@ -617,13 +617,39 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         case FloppyDevice::Command::WriteSector: writeFloppySector(); break;
         default:
             floppy_->finishTransfer();
-            floppyStatus_=0;
             floppyOffset_=256;
             floppyWritePio_=false;
+            // WD179x Type-I commands update the track register. The boot
+            // ROM uses RESTORE before attempting to read IPL sectors.
+            // Previously these commands were all silently ignored.
+            switch(value&0xf0) {
+            case 0x00: // RESTORE
+                floppy_->writeRegister(0x19,0);
+                break;
+            case 0x10: // SEEK (target supplied in data register)
+                floppy_->writeRegister(0x19,floppy_->registerValue(0x1b));
+                break;
+            case 0x20: case 0x30: // STEP
+            case 0x40: case 0x50: // STEP IN
+            case 0x60: case 0x70: // STEP OUT
+                // STEP without a remembered direction remains at current
+                // track; STEP IN/OUT update the track counter.
+                if((value&0xe0)==0x40 && floppy_->registerValue(0x19)<255)
+                    floppy_->writeRegister(0x19,floppy_->registerValue(0x19)+1);
+                if((value&0xe0)==0x60 && floppy_->registerValue(0x19)>0)
+                    floppy_->writeRegister(0x19,floppy_->registerValue(0x19)-1);
+                break;
+            default:
+                break;
+            }
+            floppyStatus_=(floppy_->has2d()?0:0x80);
             break;
         }
         break;
     case 0x1b:
+        // The WD179x data register is also the SEEK target and must retain
+        // writes even when no sector transfer is active.
+        floppy_->writeRegister(0x1b,value);
         if(floppyWritePio_ && floppyOffset_<256) {
             floppy_->transferWrite(value);
             ++floppyOffset_;
