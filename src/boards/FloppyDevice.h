@@ -11,6 +11,12 @@
 // The CPU boards retain only their FDC register and DMA-adapter behavior.
 class FloppyDevice {
 public:
+    void setMountedDrive(unsigned drive) {
+        if(drive>3)throw std::invalid_argument("FDC drive must be 0..3");
+        mountedDrive_=drive;
+    }
+    unsigned mountedDrive() const {return mountedDrive_;}
+    bool present(unsigned drive) const {return drive==mountedDrive_ && (has2d()||has2hd());}
     void load2d(const std::vector<BYTE>& raw) {
         if(raw.size()!=40u*2*16*256)
             throw std::invalid_argument("FM-11 2D raw image must be 327680 bytes");
@@ -93,7 +99,7 @@ public:
 
     bool sectorOffset(unsigned channel,unsigned track,unsigned side,unsigned sector,
                       unsigned drive,std::size_t& offset) const {
-        if(drive!=0)return false;
+        if(drive!=mountedDrive_)return false;
         if(channel==0) {
             if(raw2d_.empty() || track>=40 || sector<1 || sector>16)return false;
             offset=((track*2+(side&1))*16+(sector-1))*256;
@@ -197,6 +203,7 @@ public:
     bool has2d() const {return !raw2d_.empty();}
     bool has2hd() const {return !raw2hd_.empty();}
 private:
+    unsigned mountedDrive_=0;
     std::vector<BYTE> raw2d_,raw2hd_,d88_;
     std::array<BYTE,256> registers_{};
     std::array<std::size_t,40*2*16> offsets_{};
