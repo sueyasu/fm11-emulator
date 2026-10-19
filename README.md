@@ -172,6 +172,25 @@ branch loops. This fixes the status semantics tested here but does
 not yet port the original character-display composition or every
 sub-CPU peripheral behavior.
 
+### Original display I/O read-clear latches
+
+The reference Windows `Fm11/SubCpu.cpp::GetIoByte` clears three
+register latches **on read**: `AFE4` (sub FIRQ), `AFEC`
+(keyboard status) and `AFED` (keyboard data). The Linux display
+subsystem now reproduces those read-clear semantics, including zero
+values after reset and ignoring software writes to these registers.
+A regression supplies external latch values using
+`signalSubFirq` / `setKeyboardLatches` and verifies one-shot reads.
+
+```sh
+ctest --test-dir build -R 'display_io_read_clear|display_cpu6809' --output-on-failure
+```
+
+This is **not yet** the whole original keyboard/NMI implementation:
+original `GetKeyCode()` processing after `AFED`, NMI timing, and
+interrupt delivery remain separate work. Do not interpret passing
+this test as proof that original display firmware now boots.
+
 ### Stage 10: original display ROM versus synthetic main sender
 
 The stage-8 synthetic main ROM is kept as a **known, deterministic sender**.
