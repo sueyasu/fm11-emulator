@@ -1,6 +1,7 @@
 #pragma once
 #include "FloppyDevice.h"
 #include "Usart8251.h"
+#include "Ptm6840.h"
 #include <cstdint>
 #include <memory>
 
@@ -11,6 +12,7 @@ class MainBoard {
 public:
     std::shared_ptr<FloppyDevice> floppyDevice() const { return floppy_; }
     std::shared_ptr<Usart8251> usartDevice() const {return usart_;}
+    std::shared_ptr<Ptm6840> ptmDevice() const {return ptm_;}
 
     // Main-board sources presented to the 8088 card's 8259 inputs.
     // Corresponds to the original Sim86 interrupt wiring. Each group may
@@ -58,4 +60,5 @@ private:
     BYTE externalIrqLines_=0;
     std::shared_ptr<FloppyDevice> floppy_=std::make_shared<FloppyDevice>();
     std::shared_ptr<Usart8251> usart_=std::make_shared<Usart8251>();
+    std::shared_ptr<Ptm6840> ptm_=std::make_shared<Ptm6840>();
 };
