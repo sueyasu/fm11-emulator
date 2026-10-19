@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.16)
 project(fm11_emulator LANGUAGES CXX)
 
+# Interpreter-heavy workloads are prohibitively slow without optimization.
+# Preserve explicit Debug/RelWithDebInfo selections by the caller.
+if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build configuration" FORCE)
+endif()
+
 option(FM11_BUILD_TESTS "Build portable-core smoke tests" ON)
 
 add_library(fm11_core STATIC
