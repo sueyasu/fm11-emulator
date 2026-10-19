@@ -106,5 +106,19 @@ int main()
        io.busyStatus()!=0x00)return 22;
     io.writeMemory(0xaff0,0);
     if(io.busyStatus()!=0)return 23;
+    // Display-side ATTENTION reaches the common FD04 event latch.
+    // FD04 read acknowledges the request; a second read is clear.
+    board.displaySubsystem().notifyMainAttention();
+    BYTE event=0;
+    if(!board.readIo(0xfd04,event) || (event&0x01)==0)return 24;
+    if(!board.readIo(0xfd04,event) || (event&0x01)!=0)return 25;
+    // BUSY can be sampled by the main board without assuming yet
+    // whether or how it shares FD05's HALT/status bit.
+    board.displaySubsystem().writeMemory(0xaff0,0x37);
+    if(board.displayBusyStatus()!=0x37)return 26;
+    board.displaySubsystem().notifyMainAttention();
+    board.reset();
+    if(board.displayBusyStatus()!=0x80)return 27;
+    if(!board.readIo(0xfd04,event) || (event&0x01)!=0)return 28;
     return 0;
 }
