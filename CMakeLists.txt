@@ -113,6 +113,14 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(display_control PRIVATE fm11_core)
     add_test(NAME display_control COMMAND display_control)
 
+    add_executable(display_binary_text_protocol tests/display_binary_text_protocol.cpp)
+    target_link_libraries(display_binary_text_protocol PRIVATE fm11_core)
+    add_test(NAME display_binary_text_protocol
+             COMMAND ${Python3_EXECUTABLE}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/display_binary_text_protocol.py
+                     $<TARGET_FILE:display_binary_text_protocol>
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_display_test_roms.py)
+
     add_executable(display_afe0_handshake tests/display_afe0_handshake.cpp)
     target_link_libraries(display_afe0_handshake PRIVATE fm11_core)
     add_test(NAME display_afe0_handshake COMMAND display_afe0_handshake)
