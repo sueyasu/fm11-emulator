@@ -152,6 +152,35 @@ branch loops. This fixes the status semantics tested here but does
 not yet port the original character-display composition or every
 sub-CPU peripheral behavior.
 
+### Synthetic 6809 text geometry: 40/80 columns and 200/400 lines
+
+Stage 2 reuses the working stage-1 main ROM and two new display
+6809 ROMs. The display CPU sets CRTC R1 to 20 (40 columns) or
+40 (80 columns), R6 to 25 rows and writes `40/80 COL TEST`
+into text RAM. The tests check both 640x200 and 640x400 framebuffer
+geometry, using a deterministic test-only ANK font.
+
+```sh
+python3 tools/make_display_test_roms.py build/test-roms
+ctest --test-dir build -R 'display_binary_text_(40|80)col' --output-on-failure
+
+# 40 columns (16 logical pixels per character):
+./build/fm11-sdl --main-rom build/test-roms/main_text_stage1.bin \\
+    --rom build/test-roms/display_text_40col.bin \\
+    --ank-rom external/roms/ank.bin --high
+
+# 80 columns (8 logical pixels per character):
+./build/fm11-sdl --main-rom build/test-roms/main_text_stage1.bin \\
+    --rom build/test-roms/display_text_80col.bin \\
+    --ank-rom external/roms/ank.bin --high
+```
+
+Press F1 in SDL to compare the 200- and 400-line representations.
+The expected 40-column letters are twice as wide as the 80-column
+letters. This stage confirms the current geometry model; fidelity
+to all original CRTC/scanline behavior must still be compared with
+the reference emulator.
+
 ### Synthetic 6809 text display: stage 1
 
 Start with a small **end-to-end** text test before original firmware. Both
