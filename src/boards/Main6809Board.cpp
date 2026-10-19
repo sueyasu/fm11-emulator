@@ -39,11 +39,10 @@ void Main6809Board::reset()
     if(mainBoard_)
         mainBoard_->setIrqLine(MainBoard::IrqLine::Timer,false);
     usart_->reset();
-    ptm_.fill(PtmChannel{});
-    ptmStatus_ = 0;
+    ptm_->reset();
     acceptedIrqCount_ = 0;
     ptmIrqAssertCount_ = 0;
-    ptmIrqAcknowledged_ = false;
+    ptm_->irqAcknowledged = false;
     ptmCycleFraction_ = 0;
     waitNanosecondFraction_ = 0;
 
@@ -390,14 +389,14 @@ void Main6809Board::advanceCpuCycles(std::uint64_t cycles)
 void Main6809Board::refreshPtmIrq()
 {
     bool active = false;
-    for (unsigned i = 0; i < ptm_.size(); ++i)
-        active |= (ptmStatus_ & (1u << i)) != 0 &&
-                  (ptm_[i].control & 0x40) != 0;
+    for (unsigned i = 0; i < ptm_->channels.size(); ++i)
+        active |= (ptm_->status & (1u << i)) != 0 &&
+                  (ptm_->channels[i].control & 0x40) != 0;
     if (active)
-        ptmStatus_ |= 0x80;
+        ptm_->status |= 0x80;
     else
-        ptmStatus_ &= 0x7f;
-    const bool asserted = active && !ptmIrqAcknowledged_;
+        ptm_->status &= 0x7f;
+    const bool asserted = active && !ptm_->irqAcknowledged;
     if (asserted && (mainIrqSources_ & 0x01) == 0) ++ptmIrqAssertCount_;
     setMainIrqSource(0x01, asserted);
     // The 6840 PTM is on the main board: its IRQ also reaches the
@@ -408,8 +407,8 @@ void Main6809Board::refreshPtmIrq()
 
 void Main6809Board::advancePtm(std::uint64_t ticks)
 {
-    for (unsigned i = 0; i < ptm_.size(); ++i) {
-        auto& ch = ptm_[i];
+    for (unsigned i = 0; i < ptm_->channels.size(); ++i) {
+        auto& ch = ptm_->channels[i];
         if (!ch.running || ticks == 0)
             continue;
         if (ticks < ch.counter) {
@@ -417,8 +416,8 @@ void Main6809Board::advancePtm(std::uint64_t ticks)
             continue;
         }
         const auto remaining = ticks - ch.counter;
-        ptmStatus_ |= static_cast<BYTE>(1u << i);
-        ptmIrqAcknowledged_ = false;
+        ptm_->status |= static_cast<BYTE>(1u << i);
+        ptm_->irqAcknowledged = false;
         const bool continuous = (ch.control & 0x28) == 0;
         if (continuous) {
             const std::uint64_t period = ch.latch == 0 ? 0x10000u : ch.latch;
@@ -437,16 +436,16 @@ BYTE Main6809Board::readPtm(BYTE port)
     if (port == 0x38)
         return 0;
     if (port == 0x39) {
-        const BYTE status = ptmStatus_;
+        const BYTE status = ptm_->status;
         // FD39 acknowledges IRQ, but leaves the per-channel status bits
         // available until the corresponding counter register is read.
-        ptmIrqAcknowledged_ = true;
+        ptm_->irqAcknowledged = true;
         refreshPtmIrq();
         return status;
     }
     const unsigned index = (port - 0x3a) / 2;
-    auto& ch = ptm_[index];
-    ptmStatus_ &= static_cast<BYTE>(~(1u << index));
+    auto& ch = ptm_->channels[index];
+    ptm_->status &= static_cast<BYTE>(~(1u << index));
     refreshPtmIrq();
     const WORD value = static_cast<WORD>(ch.counter);
     if ((port & 1) == 0)
@@ -458,18 +457,18 @@ void Main6809Board::writePtm(BYTE port, BYTE value)
 {
     if (port == 0x38 || port == 0x39) {
         const unsigned index = port == 0x39 ? 1 :
-            ((ptm_[1].control & 0x01) != 0 ? 0 : 2);
-        ptm_[index].control = value;
+            ((ptm_->channels[1].control & 0x01) != 0 ? 0 : 2);
+        ptm_->channels[index].control = value;
         if (index == 0 && (value & 0x01) != 0) {
-            ptm_.fill(PtmChannel{});
-            ptm_[0].control = 0x01;
-            ptmStatus_ = 0;
-            ptmIrqAcknowledged_ = false;
+            ptm_->channels.fill(Ptm6840::Channel{});
+            ptm_->channels[0].control = 0x01;
+            ptm_->status = 0;
+            ptm_->irqAcknowledged = false;
         } else {
-            ptmStatus_ &= static_cast<BYTE>(~(1u << index));
+            ptm_->status &= static_cast<BYTE>(~(1u << index));
             const BYTE mode = value & 0x38;
             if (mode == 0x10 || mode == 0x30) {
-                auto& ch = ptm_[index];
+                auto& ch = ptm_->channels[index];
                 ch.counter = ch.latch == 0 ? 0x10000u : ch.latch;
                 ch.running = true;
             }
@@ -480,7 +479,7 @@ void Main6809Board::writePtm(BYTE port, BYTE value)
     ioRegisters_[port] = value;
     const unsigned index = (port - 0x3a) / 2;
     if ((port & 1) != 0) {
-        auto& ch = ptm_[index];
+        auto& ch = ptm_->channels[index];
         ch.latch = static_cast<WORD>((static_cast<WORD>(ioRegisters_[port - 1]) << 8) | value);
         ch.counter = ch.latch == 0 ? 0x10000u : ch.latch;
         ch.running = true;
