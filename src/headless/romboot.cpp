@@ -102,6 +102,17 @@ int main(int argc,char** argv) {
             }
         }
         std::cout.flush();
+        std::cerr<<"FDxx accesses (nonzero, register:read/write[last]):";
+        for(unsigned reg=0;reg<256;++reg) {
+            const auto reads=main->ioReadCount(reg);
+            const auto writes=main->ioWriteCount(reg);
+            if(!reads && !writes)continue;
+            std::cerr<<" "<<std::hex<<std::setw(2)<<std::setfill('0')
+                     <<reg<<std::dec<<":"<<reads<<"/"<<writes;
+            if(writes)std::cerr<<"[$"<<std::hex<<std::setw(2)
+                               <<unsigned(main->lastIoWrite(reg))<<std::dec<<"]";
+        }
+        std::cerr<<"\\n";
         std::cerr<<"ROM boot instruction limit reached: "<<limit
                  <<" mainPC=$"<<std::hex<<main->cpu().pc()
                  <<" subPC=$"<<machine.displayCpuPc()<<std::dec<<"\\n";
