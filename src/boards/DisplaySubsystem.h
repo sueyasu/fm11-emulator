@@ -34,7 +34,9 @@ public:
         busy_=0x80;
         if(videoFlags_!=0)markVideoChanged();
         videoFlags_=0;
-        rasterPhaseNs_=0;
+        vsyncCount_=0;
+        vsyncMode_=0;
+        vsyncStatus_=0x40;
         subIoRam_.fill(0);
         gvuEnabled_=false;
         gvuPage_=gvuPlane_=gvuOffset_=gvdPage_=0;
@@ -60,7 +62,7 @@ public:
     // attaching an observer never changes readback or register side effects.
     void setIoWriteObserver(IoWriteObserver observer) {ioWriteObserver_=std::move(observer);}
     void clearIoWriteObserver() {ioWriteObserver_={};}
-    void beginCpuInstruction(std::uint16_t pc) {tracePc_=pc;traceCpu_=true;}
+    void beginCpuInstruction(std::uint16_t pc) {tracePc_=pc;traceCpu_=true; if(vsyncCount_>0)--vsyncCount_;}
     void endCpuInstruction() {traceCpu_=false;}
     BYTE busyStatus() const {return busy_;}
     std::size_t graphicsAccessPage() const {return gvuPage_;}
@@ -72,14 +74,21 @@ public:
     // AFE6 video-control flags. Individual bits are not yet mapped to
     // display modes until their FM-11 semantics have been verified.
     BYTE videoFlags() const {return videoFlags_;}
-    // Approximate 60 Hz vertical blank pulse, 1 ms high.
-    static constexpr std::uint64_t kFrameNs=16666667;
-    static constexpr std::uint64_t kBlankNs=1000000;
-    void advanceRasterTime(std::uint64_t ns) {
-        rasterPhaseNs_=(rasterPhaseNs_+ns%kFrameNs)%kFrameNs;
+    // Reference SubCpu.cpp GetIoByte($AFE6): reading this register
+    // updates bits 7 and 2, and forces bit 5 high. This is NOT an
+    // independently sampled real-time vertical blank waveform.
+    BYTE readVsyncStatus() {
+        if(vsyncCount_>0) {
+            vsyncCount_=0;
+            vsyncStatus_&=static_cast<BYTE>(~0x84u);
+        } else if(vsyncMode_!=0) {
+            vsyncStatus_|=0x84;
+        } else {
+            vsyncStatus_^=0x84;
+        }
+        vsyncStatus_|=0x20;
+        return vsyncStatus_;
     }
-    bool verticalBlank() const {return rasterPhaseNs_>=kFrameNs-kBlankNs;}
-
     // Renderer-facing change tracking, independent of the eventual display
     // resolution and the meanings assigned to AFE6 bits.
     std::uint64_t videoRevision() const {return videoRevision_;}
@@ -134,7 +143,7 @@ public:
             if(attentionSink_)attentionSink_();
             return 0;
         }
-        if(address==0xafe6)return static_cast<BYTE>((videoFlags_&0x7f) | (verticalBlank()?0x80:0));
+        if(address==0xafe6)return const_cast<DisplaySubsystem*>(this)->readVsyncStatus();
         if(address==0xaff0)return busy_;
         if(address>=0xb000)return rom_[address-0xb000];
         return 0xff; // unmapped space, including unimplemented sub I/O
@@ -193,10 +202,12 @@ public:
             if(crtcIndex_<crtcRegisters_.size() &&
                crtcRegisters_[crtcIndex_]!=value) {
                 crtcRegisters_[crtcIndex_]=value;
+                if(crtcIndex_==13)vsyncCount_=100;
                 markVideoChanged();
             }
         }
         else if(address==0xafe6) {
+            vsyncStatus_=value;
             if(videoFlags_!=value) {
                 videoFlags_=value;
                 markVideoChanged();
@@ -225,7 +236,8 @@ private:
     bool haltRequested_=false;
     BYTE busy_=0x80;
     BYTE videoFlags_=0;
-    std::uint64_t rasterPhaseNs_=0;
+    unsigned vsyncCount_=0;
+    BYTE vsyncMode_=0,vsyncStatus_=0x40;
     std::array<BYTE,4> subIoRam_{};
     std::size_t vramWindow_=0;
     bool gvuEnabled_=false;
