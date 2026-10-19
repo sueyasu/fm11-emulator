@@ -4,6 +4,7 @@
 #include "Sim09.h"
 #include "FloppyDevice.h"
 #include "MainBoard.h"
+#include "RomFiles.h"
 
 #include <array>
 #include <cstddef>
@@ -26,6 +27,7 @@ public:
     void reset() override;
 
     void loadBootRom(const BootRomImage& image);
+    void loadBootRomFile(const std::string& path) {loadBootRom(RomFiles::load<kBootRomSize>(path));}
     void setMainBoard(std::shared_ptr<MainBoard> board) {
         mainBoard_=std::move(board);
         setFloppyDevice(mainBoard_->floppyDevice());
