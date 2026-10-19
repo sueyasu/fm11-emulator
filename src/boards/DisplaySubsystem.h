@@ -6,6 +6,7 @@
 #include <stdexcept>
 #include <functional>
 #include <algorithm>
+#include <utility>
 
 // Main-board display/sub-CPU memory. I/O and display scanout are deliberately
 // not decoded yet: the reference map still labels those regions tentative.
@@ -38,6 +39,7 @@ public:
         vsyncMode_=0;
         vsyncStatus_=0x40;
         subIoRam_.fill(0);
+        subFirqLatch_=keyboardStatusLatch_=keyboardDataLatch_=0;
         dmaChannel0_=0;
         gvuEnabled_=false;
         gvuPage_=gvuPlane_=gvuOffset_=gvdPage_=0;
@@ -66,6 +68,11 @@ public:
     void clearIoWriteObserver() {ioWriteObserver_={};}
     void beginCpuInstruction(std::uint16_t pc) {tracePc_=pc;traceCpu_=true; if(vsyncCount_>0)--vsyncCount_;}
     void endCpuInstruction() {traceCpu_=false;}
+    // Hardware-produced latches; CPU writes to these addresses do not set them.
+    void signalSubFirq(BYTE status) {subFirqLatch_=status;}
+    void setKeyboardLatches(BYTE status,BYTE data) {
+        keyboardStatusLatch_=status;keyboardDataLatch_=data;
+    }
     BYTE busyStatus() const {return busy_?0x80:0;}
     BYTE readSubControl() const {return static_cast<BYTE>((subIoRam_[0]&0xfeu)|(busy_?0u:1u));}
     std::size_t graphicsAccessPage() const {return gvuPage_;}
@@ -132,6 +139,10 @@ public:
             return vram_[gvuPlane_*0x10000+graphicsAddress(address)];
         }
         if(address<0xa000)return ram_[address-0x8000];
+        // Reference SubCpu.cpp: these I/O latches clear on read.
+        if(address==0xafe4)return std::exchange(subFirqLatch_,BYTE{0});
+        if(address==0xafec)return std::exchange(keyboardStatusLatch_,BYTE{0});
+        if(address==0xafed)return std::exchange(keyboardDataLatch_,BYTE{0});
         if(address==0xafe0)return readSubControl();
         if(address>=0xafe1 && address<=0xafe3)return subIoRam_[address-0xafe0];
         if(address==0xafe8)return gvuAddressHigh_;
@@ -241,6 +252,7 @@ private:
     bool haltRequested_=false;
     bool busy_=true;
     BYTE dmaChannel0_=0;
+    mutable BYTE subFirqLatch_=0,keyboardStatusLatch_=0,keyboardDataLatch_=0;
     BYTE videoFlags_=0;
     unsigned vsyncCount_=0;
     BYTE vsyncMode_=0,vsyncStatus_=0x40;
