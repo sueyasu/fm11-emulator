@@ -113,6 +113,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(display_control PRIVATE fm11_core)
     add_test(NAME display_control COMMAND display_control)
 
+    add_executable(display_afe0_handshake tests/display_afe0_handshake.cpp)
+    target_link_libraries(display_afe0_handshake PRIVATE fm11_core)
+    add_test(NAME display_afe0_handshake COMMAND display_afe0_handshake)
+
     add_executable(display_binary_text_scroll tests/display_binary_text_scroll.cpp)
     target_link_libraries(display_binary_text_scroll PRIVATE fm11_core)
     foreach(mode IN ITEMS top scroll)
