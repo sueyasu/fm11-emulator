@@ -97,6 +97,10 @@ BYTE Main8088Bus::readIo(WORD port) const
     if(port==0x00)return picReadIsr_?picInService_:picRequest_;
     if(port==0x01)return picMask_;
     if(port>=0xfc00 && port<=0xfcff) return cardIoRam_[port&0xff];
+    if((port==0xfd06 || port==0xfd07) && mainBoard_) {
+        BYTE value=0;
+        if(mainBoard_->readIo(port,value))return value;
+    }
     if(port>=0xfd00 && port<=0xfdff && systemReader_) return systemReader_(port);
     if(((port>=0xfd18 && port<=0xfd1d && floppy_->has2d()) ||
         (port>=0xfd30 && port<=0xfd35 && floppy_->has2hd()))) {
@@ -145,6 +149,8 @@ void Main8088Bus::writeIo(WORD port,BYTE value)
         return;
     }
     if(port>=0xfc00 && port<=0xfcff) cardIoRam_[port&0xff]=value;
+    else if((port==0xfd06 || port==0xfd07) && mainBoard_)
+        mainBoard_->writeIo(port,value);
     else if(port>=0xfd00 && port<=0xfdff && systemWriter_) systemWriter_(port,value);
     else if(((port>=0xfd18 && port<=0xfd1d && floppy_->has2d()) ||
              (port>=0xfd30 && port<=0xfd35 && floppy_->has2hd()))) {
