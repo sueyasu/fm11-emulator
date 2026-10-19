@@ -9,7 +9,7 @@ void Main8088Bus::reset()
 {
     cardIoRam_.fill(0);
     picMask_=0;picRequest_=0;picInService_=0;
-    usartIrqPrevious_=false;
+    systemIrqPrevious_=0;
     picVectorBase_=8;picReadIsr_=0;picInitStep_=0;
     picNeedsIcw4_=false;picSingle_=false;picAutoEoi_=false;
     resetDma();
@@ -169,12 +169,13 @@ void Main8088Bus::writeIo(WORD port,BYTE value)
 void Main8088Bus::refreshSystemIrq()
 {
     if(!mainBoard_)return;
-    const bool asserted=mainBoard_->usartDevice()->irqRequest();
-    // Original Sim86::SimONE maps FD03 bit 7 (RS-232C) to 8259 IR4.
-    // Latch the rising edge only; EOI must not cause a repeated IRQ
-    // while the USART source remains asserted.
-    if(asserted && !usartIrqPrevious_)requestIrq(4);
-    usartIrqPrevious_=asserted;
+    const BYTE lines=mainBoard_->irqLines();
+    const BYTE rising=static_cast<BYTE>(lines & ~systemIrqPrevious_);
+    // Main-board IRQ wiring is converted to 8259 edge requests on this card.
+    // A continuously asserted source must not retrigger on PIC EOI.
+    for(unsigned line=0;line<8;++line)
+        if(rising & (1u<<line))requestIrq(line);
+    systemIrqPrevious_=lines;
 }
 
 void Main8088Bus::requestIrq(unsigned line)
