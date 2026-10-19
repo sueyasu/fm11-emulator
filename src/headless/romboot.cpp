@@ -78,7 +78,21 @@ int main(int argc,char** argv) {
         // logging it records read commands and whether the FDC reports DRQ.
         // No CPU bus reads are performed by diagnostics.
         std::uint64_t serialBytes=0;
+        bool sawWaitLoop=false;
         for(std::uint64_t i=0;i<limit;++i) {
+            // $5E08 is the boot-ROM wait primitive: BITA 2,Y.
+            // Capture its operands, not millions of instruction traces.
+            if(!sawWaitLoop && main->cpu().pc()==0x5e08) {
+                const auto& r=dynamic_cast<CSim09&>(main->cpu()).regs;
+                std::cerr<<"ROM wait at $5E08: Y=$"<<std::hex<<r.r.w.Y
+                         <<" A=$"<<unsigned(r.r.b.A)
+                         <<" B=$"<<unsigned(r.r.b.B)
+                         <<" U=$"<<r.r.w.U
+                         <<" X=$"<<r.r.w.X
+                         <<" CC=$"<<unsigned(r.CC)
+                         <<std::dec<<" (BITA 2,Y)\\n";
+                sawWaitLoop=true;
+            }
             machine.executeOne();
             BYTE ch=0;
             while(main->takeSerialOutput(ch)) {
