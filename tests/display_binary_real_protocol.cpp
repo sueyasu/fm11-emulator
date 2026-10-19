@@ -20,7 +20,19 @@ int main(int argc,char** argv) {
            m.mainDisplayControl()!=0)return 10;
         for(int i=0;i<200000 && m.displaySharedByte(4)!=0x77;++i)
             m.executeOne();
-        if(m.displaySharedByte(4)!=0x77)return 11;
+        if(m.displaySharedByte(4)!=0x77) {
+            std::cerr<<"stage8 stalled: mainPC=$"<<std::hex<<main->cpu().pc()
+                     <<" subPC=$"<<m.displayCpuPc()
+                     <<" FD05=$"<<unsigned(main->readCpu(0xfd05))
+                     <<" AFE0=$"<<unsigned(m.displaySubsystem().readMemory(0xafe0))
+                     <<" FC81=$"<<unsigned(m.displaySharedByte(1))
+                     <<" FC82=$"<<unsigned(m.displaySharedByte(2))
+                     <<" FC83=$"<<unsigned(m.displaySharedByte(3))
+                     <<" FDA0=$"<<unsigned(m.mainDisplayControl())
+                     <<" text0=$"<<unsigned(m.displaySubsystem().textByte(0))
+                     <<std::dec<<"\\n";
+            return 11;
+        }
         if(m.displaySharedByte(1)!=0 || m.displaySharedByte(2)!='M' ||
            m.displaySharedByte(3)!=0x66)return 12;
         // Original receive subroutine lowers READY while consuming data.
