@@ -659,6 +659,12 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         // Preserve the card-side output latch used by existing callers.
         ioOutputLatch_[reg]=0x80;
         break;
+    case 0xa0:
+    case 0x98: case 0x99: case 0x9a: case 0x9b:
+    case 0x9c: case 0x9d: case 0x9e: case 0x9f:
+        ioRegisters_[reg]=reg==0xa0?value:static_cast<BYTE>(value&0x0f);
+        if(mainBoard_)mainBoard_->writeIo(address,value);
+        break;
     case 0x05:
         // The control latch is a main-board device. Keep the standalone
         // card's previous behavior when no main board is attached.
