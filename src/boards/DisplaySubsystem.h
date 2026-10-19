@@ -40,6 +40,8 @@ public:
         vsyncStatus_=0x40;
         subIoRam_.fill(0);
         subFirqLatch_=keyboardStatusLatch_=keyboardDataLatch_=0;
+        keyHead_=keyTail_=0;
+        nmiMask_=true;
         dmaChannel0_=0;
         gvuEnabled_=false;
         gvuPage_=gvuPlane_=gvuOffset_=gvdPage_=0;
@@ -73,6 +75,21 @@ public:
     void setKeyboardLatches(BYTE status,BYTE data) {
         keyboardStatusLatch_=status;keyboardDataLatch_=data;
     }
+    // Source SubCpu.cpp SetKeyCode/GetKeyCode: interrupt-mode key queue.
+    void enqueueKeyCode(std::uint16_t code) {
+        const auto next=(keyTail_+1)%keyQueue_.size();
+        if(next!=keyHead_) {keyQueue_[keyTail_]=code;keyTail_=next;}
+    }
+    void processKeyCode() const {
+        if(keyHead_==keyTail_ || (subFirqLatch_&1))return;
+        const auto code=keyQueue_[keyHead_];
+        keyboardStatusLatch_=static_cast<BYTE>(code>>8);
+        keyboardDataLatch_=static_cast<BYTE>(code);
+        if(!(code&0x0200))subFirqLatch_|=1;
+        keyHead_=(keyHead_+1)%keyQueue_.size();
+    }
+    bool nmiMask() const {return nmiMask_;}
+    bool subFirqPending() const {return subFirqLatch_!=0;}
     BYTE busyStatus() const {return busy_?0x80:0;}
     BYTE readSubControl() const {return static_cast<BYTE>((subIoRam_[0]&0xfeu)|(busy_?0u:1u));}
     std::size_t graphicsAccessPage() const {return gvuPage_;}
@@ -142,7 +159,11 @@ public:
         // Reference SubCpu.cpp: these I/O latches clear on read.
         if(address==0xafe4)return std::exchange(subFirqLatch_,BYTE{0});
         if(address==0xafec)return std::exchange(keyboardStatusLatch_,BYTE{0});
-        if(address==0xafed)return std::exchange(keyboardDataLatch_,BYTE{0});
+        if(address==0xafed) {
+            const BYTE result=std::exchange(keyboardDataLatch_,BYTE{0});
+            processKeyCode();
+            return result;
+        }
         if(address==0xafe0)return readSubControl();
         if(address>=0xafe1 && address<=0xafe3)return subIoRam_[address-0xafe0];
         if(address==0xafe8)return gvuAddressHigh_;
@@ -189,7 +210,13 @@ public:
         else if(address<0xa000)ram_[address-0x8000]=value;
         else if(address>=0xafe0 && address<=0xafe3) {
             subIoRam_[address-0xafe0]=value;
-            if(address==0xafe0)busy_=(value&1u)==0;
+            if(address==0xafe0) {
+                if(nmiMask_) {
+                    enqueueKeyCode(0x0050);
+                    nmiMask_=false;
+                }
+                busy_=(value&1u)==0;
+            }
             if(address==0xafe1) {
                 gvuControl_=value;
                 gvuPlane_=std::min<unsigned>(value>>6,2);
@@ -252,6 +279,9 @@ private:
     bool haltRequested_=false;
     bool busy_=true;
     BYTE dmaChannel0_=0;
+    bool nmiMask_=true;
+    std::array<std::uint16_t,256> keyQueue_{};
+    mutable std::size_t keyHead_=0,keyTail_=0;
     mutable BYTE subFirqLatch_=0,keyboardStatusLatch_=0,keyboardDataLatch_=0;
     BYTE videoFlags_=0;
     unsigned vsyncCount_=0;
