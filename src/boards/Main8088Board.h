@@ -70,7 +70,8 @@ public:
         unsigned shiftRotate(unsigned operation,unsigned value,unsigned bits,unsigned count);
         Main8088Bus& bus_;
         CpuType variant_;
-        std::uint64_t lastCycles_=0; // 0: timing not characterized
+        std::uint64_t lastCycles_=0;
+        bool timingModRmMemory_=false;
         std::array<WORD,8> regs_{};
         std::array<WORD,4> segments_{}; // ES, CS, SS, DS
         WORD ip_=0;
