@@ -64,6 +64,7 @@ public:
     // Advance the PTM by input clock pulses. The scheduler will later
     // convert emulated CPU time to these PTM ticks.
     void advancePtm(std::uint64_t ticks);
+    void syncPtmIrq(); // shared main-board clock changed PTM independently
 
     // The first PTM timebase runs at PTMCLOCK/2 = 9700 Hz (16-bit mode,
     // internal clock select 0). CPU cycles are supplied by the scheduler.
