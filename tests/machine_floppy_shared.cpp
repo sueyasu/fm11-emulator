@@ -105,5 +105,23 @@ int main()
     if(!bus.interruptPending() || bus.acknowledgeInterrupt()!=12)return 19;
     bus.writeIo(0x00,0x20);
     if(bus.readIo(0xfd06)!=0x52)return 20;
+    // Two simultaneous board-level sources retain the 8259 priority order.
+    auto irqBoard=std::make_shared<MainBoard>();
+    Main8088Bus irqBus;
+    irqBus.setMainBoard(irqBoard);
+    irqBoard->setIrqLine(MainBoard::IrqLine::Timer,true);
+    irqBoard->setIrqLine(MainBoard::IrqLine::Disk5Inch,true);
+    irqBus.refreshSystemIrq();
+    if(!irqBus.interruptPending() || irqBus.acknowledgeInterrupt()!=8)return 21;
+    irqBus.writeIo(0x00,0x20);
+    if(!irqBus.interruptPending() || irqBus.acknowledgeInterrupt()!=14)return 22;
+    irqBus.writeIo(0x00,0x20);
+    irqBus.refreshSystemIrq();
+    if(irqBus.interruptPending())return 23;
+    irqBoard->setIrqLine(MainBoard::IrqLine::Timer,false);
+    irqBus.refreshSystemIrq();
+    irqBoard->setIrqLine(MainBoard::IrqLine::Timer,true);
+    irqBus.refreshSystemIrq();
+    if(!irqBus.interruptPending() || irqBus.acknowledgeInterrupt()!=8)return 24;
     return 0;
 }
