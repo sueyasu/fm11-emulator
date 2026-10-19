@@ -1,4 +1,5 @@
 #include "Main6809Board.h"
+#include <vector>
 
 namespace {
 
@@ -43,13 +44,29 @@ bool individualMasks()
 bool dmaUsesFd55Mask()
 {
     Main6809Board b;
-    b.setMainIrqSource(0x10, true);
+    b.reset();
+    b.loadFloppy2d(std::vector<BYTE>(40 * 2 * 16 * 256, 0x5a));
+    b.writeCpu(0xfd19, 0);    // track
+    b.writeCpu(0xfd1a, 1);    // sector
+    b.writeCpu(0xfd1c, 0);    // side
+    b.writeCpu(0xfd1d, 0);    // drive
+    b.writeCpu(0xfd40, 0x20); // DMA address
+    b.writeCpu(0xfd41, 0);
+    b.writeCpu(0xfd42, 1);    // 256 bytes
+    b.writeCpu(0xfd43, 0);
+    b.writeCpu(0xfd50, 0x04); // CH0 DMA enable
     b.writeCpu(0xfd02, 0xff);
+    b.writeCpu(0xfd55, 0);    // all DMA IRQs disabled
+    b.writeCpu(0xfd18, 0x80); // actual FDD-to-memory DMA completion
+    if ((b.readCpu(0xfd55) & 0x80) == 0 || b.irqPending()) return false;
+    b.writeCpu(0xfd55, 0x02); // CH1 only: CH0 completion stays masked
     if (b.irqPending()) return false;
-    b.writeCpu(0xfd55, 0x01);
+    b.writeCpu(0xfd55, 0x01); // enable IRQ for completed CH0
     if (b.readCpu(0xfd03) != 0x10) return false;
-    b.writeCpu(0xfd55, 0);
-    return !b.irqPending();
+    b.writeCpu(0xfd55, 0);    // mask without acknowledging DEND
+    if (b.irqPending() || (b.readCpu(0xfd55) & 0x80) == 0) return false;
+    b.writeCpu(0xfd50, 0x04); // acknowledge CH0 completion
+    return (b.readCpu(0xfd55) & 0x80) == 0 && !b.irqPending();
 }
 
 bool extendedAggregationAndAck()
