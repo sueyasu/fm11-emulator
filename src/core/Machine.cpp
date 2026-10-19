@@ -129,15 +129,6 @@ void Machine::setDisplayCpuClockHz(std::uint64_t hz)
 
 void Machine::advanceDisplayTime(std::uint64_t ns)
 {
-    // AFE6 raster status must change while the display CPU polls it.
-    // Subdivide long frontend slices so a 1-ms blank pulse cannot be
-    // skipped between two display CPU scheduling calls.
-    constexpr std::uint64_t sliceNs=250000;
-    while(ns>sliceNs) {
-        advanceDisplayTime(sliceNs);
-        ns-=sliceNs;
-    }
-    mainBoard_->displaySubsystem().advanceRasterTime(ns);
     if(!displayCpuClockHz_)return;
     auto& sub=mainBoard_->displayCpu();
     if(mainBoard_->displaySubsystem().haltRequested()) {
