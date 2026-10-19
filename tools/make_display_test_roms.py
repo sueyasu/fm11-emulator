@@ -156,3 +156,41 @@ raster[:len(raster_code)]=raster_code
 raster[-2:]=bytes.fromhex("b0 00")
 (out/"display_raster.bin").write_bytes(raster)
 print(out/"display_raster.bin")
+
+# Stage 1 text end-to-end: the main 6809 enables text; the display 6809
+# configures the CRTC and writes HELLO FM-11 as character/attribute pairs.
+# No display RAM is modified by the C++ regression test or SDL frontend.
+text_main=bytearray(0x1000)
+text_main_code=bytes.fromhex("86 03 b7 fd a0 20 fe")
+text_main[:len(text_main_code)]=text_main_code
+text_main[-2:]=bytes.fromhex("50 00")
+
+text_display=bytearray(0x5000)
+text_program=bytearray()
+def tlda(v):
+    text_program.extend((0x86,v))
+def tsta(addr):
+    text_program.extend((0xb7,(addr>>8)&255,addr&255))
+def twrite(addr,val):
+    tlda(val)
+    tsta(addr)
+
+twrite(0xafee,1)     # CRTC horizontal displayed: 40 units -> 80 chars
+twrite(0xafef,40)
+twrite(0xafee,6)     # 25 text rows
+twrite(0xafef,25)
+twrite(0xafee,12)    # start address = 0
+twrite(0xafef,0)
+twrite(0xafee,13)
+twrite(0xafef,0)
+for i,ch in enumerate(b"HELLO FM-11"):
+    twrite(0x8000+i*2,ch)
+    twrite(0x8001+i*2,7)
+twrite(0x9f80,0x66) # signal done to the test runner
+text_program.extend((0x20,0xfe)) # BRA *
+text_display[:len(text_program)]=text_program
+text_display[-2:]=bytes.fromhex("b0 00")
+(out/"main_text_stage1.bin").write_bytes(text_main)
+(out/"display_text_stage1.bin").write_bytes(text_display)
+print(out/"main_text_stage1.bin")
+print(out/"display_text_stage1.bin")
