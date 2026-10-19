@@ -142,6 +142,10 @@ public:
         }
         if(reg==0x05) {
             subCpuControl_=value;
+            // Reference main-side FD05 bit 6 (CANCEL) requests the
+            // display sub-CPU IRQ. The request remains pending until
+            // the sub CPU acknowledges it by reading AFE5.
+            if(value&0x40)display_.requestSubIrq();
             if(value&0x80)display_.requestHalt();
             else display_.releaseHalt();
             return true;
