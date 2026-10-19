@@ -22,21 +22,14 @@ void Main8088Bus::reset()
 
 void Main8088Bus::loadFloppy2d(const std::vector<BYTE>& image)
 {
-    if(image.size()!=40u*2*16*256)
-        throw std::invalid_argument("FM-11 2D raw image must be 327680 bytes");
-    floppy2d_=image;
-    floppyDirty_=false;
+    floppy_.load2d(image);
     setDmaDevice(0,[this](){return floppyReadData();},
                    [this](BYTE value){floppyWriteData(value);});
 }
 
 void Main8088Bus::loadFloppy2hd(const std::vector<BYTE>& image)
 {
-    // Standard 77-cylinder, double-sided, 8x1024-byte sector format.
-    if(image.size()!=77u*2*8*1024)
-        throw std::invalid_argument("FM-11 2HD raw image must be 1261568 bytes");
-    floppy2hd_=image;
-    floppy2hdDirty_=false;
+    floppy_.load2hd(image);
     setDmaDevice(1,[this](){return floppyReadData();},
                    [this](BYTE value){floppyWriteData(value);});
 }
@@ -44,19 +37,13 @@ void Main8088Bus::loadFloppy2hd(const std::vector<BYTE>& image)
 bool Main8088Bus::floppySectorOffset(std::size_t& offset,unsigned channel)
 {
     const unsigned base=channel==0?0x18:0x30;
-    const unsigned track=floppyRegisters_[base+1];
-    const unsigned sector=floppyRegisters_[base+2];
-    const unsigned side=floppyRegisters_[channel==0?0x1c:0x34]&1;
-    const unsigned drive=floppyRegisters_[channel==0?0x1d:0x35]&3;
-    const unsigned tracks=channel==0?40:77;
-    const unsigned sectors=channel==0?16:8;
-    const unsigned bytes=channel==0?256:1024;
-    const auto& image=channel==0?floppy2d_:floppy2hd_;
-    if(drive!=0 || track>=tracks || sector<1 || sector>sectors || image.empty()) {
+    if(!floppy_.sectorOffset(channel,floppyRegisters_[base+1],
+             floppyRegisters_[channel==0?0x1c:0x34],
+             floppyRegisters_[base+2],
+             floppyRegisters_[channel==0?0x1d:0x35],offset)) {
         floppyStatus_=0x10;
         return false;
     }
-    offset=((track*2+side)*sectors+(sector-1))*bytes;
     return true;
 }
 
@@ -73,10 +60,7 @@ void Main8088Bus::floppyWriteData(BYTE value)
     if(!floppyWriting_ || floppyPosition_>=floppyLength_)return;
     floppyBuffer_[floppyPosition_++]=value;
     if(floppyPosition_==floppyLength_) {
-        auto& image=floppyChannel_==0?floppy2d_:floppy2hd_;
-        std::copy_n(floppyBuffer_.begin(),floppyLength_,image.begin()+floppySectorStart_);
-        if(floppyChannel_==0)floppyDirty_=true;
-        else floppy2hdDirty_=true;
+        floppy_.writeSector(floppyChannel_,floppySectorStart_,floppyBuffer_.data());
         floppyWriting_=false;
         floppyStatus_=0;
     }
@@ -98,8 +82,8 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
     floppyPosition_=0;
     floppyWriting_=write;
     if(read) {
-        const auto& image=channel==0?floppy2d_:floppy2hd_;
-        std::copy_n(image.begin()+offset,floppyLength_,floppyBuffer_.begin());
+        for(unsigned i=0;i<floppyLength_;++i)
+            floppyBuffer_[i]=floppy_.read(channel,offset+i);
     }
     floppyStatus_=0x02;
     // Original Sim86 dispatches a DMA transfer for the selected FDC.
@@ -146,8 +130,8 @@ BYTE Main8088Bus::readIo(WORD port) const
     if(port==0x01)return picMask_;
     if(port>=0xfc00 && port<=0xfcff) return cardIoRam_[port&0xff];
     if(port>=0xfd00 && port<=0xfdff && systemReader_) return systemReader_(port);
-    if(((port>=0xfd18 && port<=0xfd1d && !floppy2d_.empty()) ||
-        (port>=0xfd30 && port<=0xfd35 && !floppy2hd_.empty()))) {
+    if(((port>=0xfd18 && port<=0xfd1d && floppy_.has2d()) ||
+        (port>=0xfd30 && port<=0xfd35 && floppy_.has2hd()))) {
         if(port==0xfd18 || port==0xfd30)return floppyStatus_;
         if(port==0xfd1b || port==0xfd33)
             return const_cast<Main8088Bus*>(this)->floppyReadData();
@@ -192,8 +176,8 @@ void Main8088Bus::writeIo(WORD port,BYTE value)
     }
     if(port>=0xfc00 && port<=0xfcff) cardIoRam_[port&0xff]=value;
     else if(port>=0xfd00 && port<=0xfdff && systemWriter_) systemWriter_(port,value);
-    else if(((port>=0xfd18 && port<=0xfd1d && !floppy2d_.empty()) ||
-             (port>=0xfd30 && port<=0xfd35 && !floppy2hd_.empty()))) {
+    else if(((port>=0xfd18 && port<=0xfd1d && floppy_.has2d()) ||
+             (port>=0xfd30 && port<=0xfd35 && floppy_.has2hd()))) {
         if(port==0xfd18 || port==0xfd30)floppyCommand(value,port==0xfd18?0:1);
         else if(port==0xfd1b || port==0xfd33)floppyWriteData(value);
         else floppyRegisters_[port&0xff]=value;
