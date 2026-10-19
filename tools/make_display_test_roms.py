@@ -57,9 +57,9 @@ halt_main[0:22]=bytes.fromhex(
     "86 22 b7 fc 81 "     # marker after release
     "20 fe")
 halt_main[-2:]=bytes.fromhex("50 00")
-# Display CPU writes BUSY only when allowed to execute.
+# Display CPU sets READY at AFE0 only when allowed to execute.
 halt_display=bytearray(0x5000)
-halt_display[0:12]=bytes.fromhex("86 42 b7 af f0 86 33 b7 9f 82 20 fe")
+halt_display[0:12]=bytes.fromhex("86 01 b7 af e0 86 33 b7 9f 82 20 fe")
 halt_display[-2:]=bytes.fromhex("b0 00")
 (out/"main_halt.bin").write_bytes(halt_main)
 (out/"display_halt.bin").write_bytes(halt_display)
