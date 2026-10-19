@@ -5,6 +5,7 @@
 #include "RomFiles.h"
 #include "DisplayBitmap.h"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -50,6 +51,20 @@ public:
         return DisplayBitmap::captureFrame(mainBoard_->displaySubsystem(),highResolution);
     }
     std::uint16_t displayCpuPc() const {return mainBoard_->displayCpu().pc();}
+    void setDisplayIoWriteObserver(DisplaySubsystem::IoWriteObserver observer) {
+        mainBoard_->displaySubsystem().setIoWriteObserver(std::move(observer));
+    }
+    std::size_t displayNonzeroVramBytes() const {
+        const auto& v=mainBoard_->displaySubsystem().physicalVram();
+        return static_cast<std::size_t>(
+            std::count_if(v.begin(),v.end(),[](BYTE b){return b!=0;}));
+    }
+    std::size_t displayPage() const {
+        return mainBoard_->displaySubsystem().graphicsDisplayPage();
+    }
+    std::uint64_t displayRevision() const {
+        return mainBoard_->displaySubsystem().videoRevision();
+    }
     std::uint64_t displayCpuClockHz() const {return displayCpuClockHz_;}
     std::uint64_t clock8088Hz() const {return clock8088Hz_;}
     std::uint64_t lastExecutionCycles() const {return lastExecutionCycles_;}
