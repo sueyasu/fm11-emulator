@@ -47,6 +47,10 @@ if(FM11_BUILD_TESTS)
                      ${CMAKE_CURRENT_SOURCE_DIR}/tests/main8088_opcode_inventory.py
                      ${CMAKE_CURRENT_SOURCE_DIR}/src/boards/Main8088Board.cpp)
 
+    add_executable(main8088_dma_m2m_block tests/main8088_dma_m2m_block.cpp)
+    target_link_libraries(main8088_dma_m2m_block PRIVATE fm11_core)
+    add_test(NAME main8088_dma_m2m_block COMMAND main8088_dma_m2m_block)
+
     add_executable(main8088_dma_m2m_other_channels tests/main8088_dma_m2m_other_channels.cpp)
     target_link_libraries(main8088_dma_m2m_other_channels PRIVATE fm11_core)
     add_test(NAME main8088_dma_m2m_other_channels COMMAND main8088_dma_m2m_other_channels)

@@ -220,15 +220,22 @@ bool Main8088Bus::serviceDma()
     // 8237 transfer modes: 01=I/O to memory, 10=memory to I/O.
     // Requests are explicitly serviced by the device scheduler.
     if(dmaCommand_&0x04)return false; // controller disabled
+    // Memory-to-memory uses CH0 as the request/source channel and CH1
+    // as the destination/count channel. A Block transfer continues after
+    // its initiating DREQ is released, until CH1 reaches terminal count.
+    const bool memoryPairRequested=(activeDmaRequests()&0x01)!=0;
+    const bool memoryPairBlock=(dmaChannels_[1].mode&0xc0u)==0x80u;
     if((dmaCommand_&0x01) &&
        (dmaMask_&0x03)==0 &&
-       (activeDmaRequests()&0x01)!=0) { // CH0 source, CH1 destination
+       (memoryPairRequested ||
+        (memoryPairBlock && (dmaBlockActive_&0x01)))) { // CH0 -> CH1
         auto& source=dmaChannels_[0];
         auto& dest=dmaChannels_[1];
         const std::uint32_t sourceAddress=
             (std::uint32_t(source.bank&0x0f)<<16)|source.address;
         const std::uint32_t destAddress=
             (std::uint32_t(dest.bank&0x0f)<<16)|dest.address;
+        if(memoryPairBlock)dmaBlockActive_=BYTE(dmaBlockActive_|0x01);
         dmaTemporary_=readMemory(sourceAddress);
         writeMemory(destAddress,dmaTemporary_);
         if(!(dmaCommand_&0x02))
@@ -239,6 +246,7 @@ bool Main8088Bus::serviceDma()
         if(terminal) {
             dmaStatus_=BYTE(dmaStatus_|0x02); // CH1 terminal count
             dmaRequest_=BYTE(dmaRequest_&~0x01);
+            dmaBlockActive_=BYTE(dmaBlockActive_&~0x01);
             dmaStatus_=BYTE((dmaStatus_&0x0f)|(activeDmaRequests()<<4));
             if(dest.mode&0x10) {
                 dest.address=dest.baseAddress;
