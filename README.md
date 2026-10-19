@@ -57,8 +57,15 @@ cmake --build build -j$(nproc)
 To run the main 6809 CPU alongside the display CPU, supply its boot ROM:\n\n```sh\n./build/fm11-sdl --main-rom external/roms/boot6809.bin\n```\n\nThe default display ROM path is `external/roms/display6809.bin`; use the extraction
 script described above to populate it. Controls: Escape to quit, Space
 to pause/resume, F1 to switch 640x200/640x400 display interpretation.
-`--high` starts in 400-line mode; `--cycles N` controls the number of
-display CPU instructions executed per frame (default 10000). This is a
+SDL always scales the image by an **integer** factor and centers it on
+black margins. At the default 960-pixel window width, the 640-pixel image
+is shown at native 1:1 size rather than distorted to 1.5x. Enlarge the
+window to at least 1280x400 for a sharp 2x 640x200 display, or 1280x800
+for a sharp 2x 640x400 display. Smaller windows clip instead of using
+fractional resampling.
+`--high` starts in 400-line mode; `--cycles N` controls main CPU instructions
+per frame, or the approximate display CPU cycle budget without a main CPU
+(default 10000). This is a
 bring-up throttle, **not** a calibrated real-time CPU clock.
 
 If the window stays black, use `./build/fm11-sdl --test-pattern` to
