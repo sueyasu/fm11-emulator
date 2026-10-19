@@ -77,3 +77,15 @@ attention_main[:len(attention_code)]=attention_code
 attention_main[-2:]=bytes.fromhex("50 00")
 (out/"main_attention.bin").write_bytes(attention_main)
 print(out/"main_attention.bin")
+
+# Two separate external events delivered before first FD04 read. The program
+# captures two FD04 samples, then the event state is read again.
+events_main=bytearray(0x1000)
+events_code=bytes.fromhex(
+    "b6 fd 04 b7 fc 80 "
+    "b6 fd 04 b7 fc 81 "
+    "20 fe")
+events_main[:len(events_code)]=events_code
+events_main[-2:]=bytes.fromhex("50 00")
+(out/"main_events.bin").write_bytes(events_main)
+print(out/"main_events.bin")
