@@ -601,6 +601,15 @@ BYTE Main6809Board::readIo(WORD address)
         return readPtm(reg);
     case 0x03:
         return mainIrqStatus();
+    case 0x50: case 0x51: case 0x52: case 0x53: {
+        // Original MainCpu.cpp DMA channel-control reads acknowledge DE.
+        const BYTE status=ioRegisters_[reg];
+        ioRegisters_[reg]=static_cast<BYTE>(status&~0x80);
+        ioRegisters_[0x55]&=static_cast<BYTE>(~0x80);
+        mainIrqSources_&=static_cast<BYTE>(~0x10);
+        mainIrqStatus();
+        return status;
+    }
     case 0x18: return floppyStatus_;
     case 0x1b: {
         if(floppyOffset_==256)return 0;
