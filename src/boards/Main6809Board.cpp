@@ -236,11 +236,17 @@ void Main6809Board::writeFloppySector()
         ioRegisters_[0x50]|=0x40;
         return;
     }
-    for(unsigned i=0;i<256;++i)floppy2d_[offset+i]=readPhysical(src+i);
+    const bool down=(ioRegisters_[0x50]&0x08)!=0;
+        const WORD startAddress=WORD((ioRegisters_[0x40]<<8)|ioRegisters_[0x41]);
+        const std::uint32_t dmaBank=std::uint32_t(ioRegisters_[0x94]&0x0f)<<16;
+    for(unsigned i=0;i<256;++i) {
+        const WORD address=WORD(startAddress+(down?-int(i):int(i)));
+        floppy2d_[offset+i]=readPhysical(dmaBank|address);
+    }
     // The completed 256-byte transfer advances the channel address and
     // exhausts the byte count, as a DMA engine would do.
     const WORD nextAddress=WORD((ioRegisters_[0x40]<<8)|ioRegisters_[0x41]);
-    const WORD advanced=WORD(nextAddress+256);
+    const WORD advanced=WORD(nextAddress+((ioRegisters_[0x50]&0x08)?-256:256));
     ioRegisters_[0x40]=BYTE(advanced>>8);
     ioRegisters_[0x41]=BYTE(advanced);
     ioRegisters_[0x42]=0;
@@ -277,11 +283,17 @@ void Main6809Board::readFloppySector()
             ioRegisters_[0x50]|=0x40;
             return;
         }
-        for(unsigned i=0;i<256;++i) writePhysical(dest+i,floppySector_[i]);
+        const bool down=(ioRegisters_[0x50]&0x08)!=0;
+            const WORD startAddress=WORD((ioRegisters_[0x40]<<8)|ioRegisters_[0x41]);
+            const std::uint32_t dmaBank=std::uint32_t(ioRegisters_[0x94]&0x0f)<<16;
+        for(unsigned i=0;i<256;++i) {
+            const WORD address=WORD(startAddress+(down?-int(i):int(i)));
+            writePhysical(dmaBank|address,floppySector_[i]);
+        }
         // The completed 256-byte transfer advances the channel address and
         // exhausts the byte count, as a DMA engine would do.
         const WORD nextAddress=WORD((ioRegisters_[0x40]<<8)|ioRegisters_[0x41]);
-        const WORD advanced=WORD(nextAddress+256);
+        const WORD advanced=WORD(nextAddress+((ioRegisters_[0x50]&0x08)?-256:256));
         ioRegisters_[0x40]=BYTE(advanced>>8);
         ioRegisters_[0x41]=BYTE(advanced);
         ioRegisters_[0x42]=0;

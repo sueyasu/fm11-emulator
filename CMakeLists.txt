@@ -47,6 +47,10 @@ if(FM11_BUILD_TESTS)
                      ${CMAKE_CURRENT_SOURCE_DIR}/tests/main8088_opcode_inventory.py
                      ${CMAKE_CURRENT_SOURCE_DIR}/src/boards/Main8088Board.cpp)
 
+    add_executable(main6809_dma_decrement tests/main6809_dma_decrement.cpp)
+    target_link_libraries(main6809_dma_decrement PRIVATE fm11_core)
+    add_test(NAME main6809_dma_decrement COMMAND main6809_dma_decrement)
+
     add_executable(main6809_dma_register_advance tests/main6809_dma_register_advance.cpp)
     target_link_libraries(main6809_dma_register_advance PRIVATE fm11_core)
     add_test(NAME main6809_dma_register_advance COMMAND main6809_dma_register_advance)
