@@ -80,7 +80,6 @@ private:
     std::array<DmaRead,4> dmaReaders_{};
     std::array<DmaWrite,4> dmaWriters_{};
     std::shared_ptr<FloppyDevice> floppy_=std::make_shared<FloppyDevice>();
-    std::array<BYTE,0x100> floppyRegisters_{};
     void floppyCommand(BYTE command,unsigned channel);
     BYTE floppyReadData();
     void floppyWriteData(BYTE value);
