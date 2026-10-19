@@ -23,6 +23,7 @@ public:
         // power-on clearing is a separate future operation.
     }
     void requestHalt() {haltRequested_=true;}
+    void releaseHalt() {haltRequested_=false;}
     bool haltRequested() const {return haltRequested_;}
 
     void loadRom(const RomImage& image) {rom_=image;}
