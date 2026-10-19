@@ -643,9 +643,16 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         ioOutputLatch_[0x2c] = value;
         mainIrqStatus();
         break;
-    case 0x19: case 0x1a: case 0x1c: case 0x1d:
+    case 0x19: case 0x1a: case 0x1d:
         if(!mainBoard_ || !mainBoard_->writeIo(address,value))
             floppy_->writeRegister(reg,value);
+        if(reg==0x1d)floppyStatus_=0;
+        break;
+    case 0x1c:
+        // MainCpu.cpp keeps the side-selection latch separate from
+        // the hardware IRQ-completion bit in the readable register.
+        floppy_->writeRegister(0x1c,static_cast<BYTE>(
+            (floppy_->registerValue(0x1c)&0xfe)|(value&1)));
         break;
     case 0x30:
         // Source Fm11FDC: a force-interrupt command terminates
@@ -660,6 +667,10 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         ioRegisters_[0x37]=0x40;
         break;
     case 0x18:
+        // MainCpu::Fm11MiniFDC clears completion before processing a
+        // command; when it finishes, FD1C and FD1F both carry IRQ bit 6.
+        floppy_->writeRegister(0x1c,floppy_->registerValue(0x1c)&1);
+        floppy_->writeRegister(0x1f,floppy_->registerValue(0x1c));
         floppyTypeIStatus_=(value&0x80)==0;
         switch(FloppyDevice::decodeCommand(value)) {
         case FloppyDevice::Command::ReadSector: readFloppySector(); break;
@@ -697,6 +708,10 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             floppyStatus_=static_cast<BYTE>(
                 (floppy_->has2d()?0:0x80) |
                 (floppy_->registerValue(0x19)==0?0x04:0));
+            // Original Fm11MiniFDC unconditionally latches completion
+            // for Type I and force-interrupt commands.
+            floppy_->writeRegister(0x1c,floppy_->registerValue(0x1c)|0x40);
+            floppy_->writeRegister(0x1f,floppy_->registerValue(0x1c));
             break;
         }
         break;
