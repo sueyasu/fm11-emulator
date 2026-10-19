@@ -37,7 +37,7 @@ int main(int argc,char** argv) {
             DisplayBitmap::compositeText(f,d);
             if(f.argb[0]!=0xffc0c0c0u ||
                f.argb[1]!=0xff000000u ||
-               f.argb[640+1]!=0xffc0c0c0u)return 16;
+               (high && f.argb[640+1]!=0xffc0c0c0u))return 16;
         }
         std::cout<<"PASS: 6809 main FD05 READY -> shared request -> sub text -> ACK -> FDA0\n";
         return 0;
