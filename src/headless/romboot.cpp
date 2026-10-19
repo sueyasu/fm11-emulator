@@ -119,6 +119,15 @@ int main(int argc,char** argv) {
             }
         }
         std::cout.flush();
+        std::cerr<<"2HD read outcomes: badCHS="<<main->hdBadChs()
+                 <<" zeroDMA="<<main->hdZeroDma()
+                 <<" lastCHS="<<unsigned(main->hdLastTrack())<<":"
+                 <<unsigned(main->hdLastSide())<<":"
+                 <<unsigned(main->hdLastSector())<<"\\n";
+        for(unsigned drive=0;drive<4;++drive)
+            std::cerr<<"  drive"<<drive<<": reads="
+                     <<main->hdReadAttemptsForDrive(drive)
+                     <<" fails="<<main->hdReadFailuresForDrive(drive)<<"\\n";
         const auto sector=main->floppyBootSector(1);
         unsigned mismatches=0;
         std::cerr<<"IPL T0/H0/S1 first16:";
