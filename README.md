@@ -172,6 +172,37 @@ branch loops. This fixes the status semantics tested here but does
 not yet port the original character-display composition or every
 sub-CPU peripheral behavior.
 
+### Stage 10: original display ROM versus synthetic main sender
+
+The stage-8 synthetic main ROM is kept as a **known, deterministic sender**.
+Unlike stage 8, however, the sub CPU runs the user's **unmodified
+original 20 KiB ROM**. This isolates genuine firmware startup/READY
+handling from the main boot ROM and from the synthetic sub-CPU wrapper.
+
+```sh
+git pull
+cmake --build build -j$(nproc)
+python3 tools/make_display_test_roms.py build/test-roms
+./build/display_real_rom_probe \\
+    build/test-roms/main_text_real_protocol.bin \\
+    external/roms/display6809.bin
+```
+
+The probe records up to 32 original-sub-CPU AFE0 writes with the
+instruction PC, values, main FD05 status, READY/BUSY totals and
+the busiest sub-CPU PCs. It also prints FC81/FC82/FC83/FC84 and
+FDA0 after a bounded instruction budget. A zero exit code means
+**the diagnostic completed**, not that the original firmware has
+accepted the stage-8 test command.
+
+The stage-8 main ROM's request format is only a controlled stimulus:
+there is **no assertion** that it is the real firmware character
+command. Do not use this probe's output to claim the original text
+command works. This program intentionally is not a CTest because it
+requires the operator's original display ROM. Once the firmware's
+own command parsing is established, write a genuine command sender
+and its regression test rather than inventing any new protocol.
+
 ### Stage 9: audit actual ROM display-command dispatch (preparation)
 
 Do **not** treat the stage-8 `CAA0` byte-receive routine as proof of the
