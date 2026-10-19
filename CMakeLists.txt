@@ -565,4 +565,15 @@ if(FM11_BUILD_TESTS)
     add_executable(main6809_floppy_d88 tests/main6809_floppy_d88.cpp)
     target_link_libraries(main6809_floppy_d88 PRIVATE fm11_core)
     add_test(NAME main6809_floppy_d88 COMMAND main6809_floppy_d88)
+    # Keep completed CPU-component regressions available without requiring
+    # all of them during ongoing display/boot subsystem development.
+    # The full suite remains accessible with plain 'ctest'.
+    get_property(fm11_registered_tests DIRECTORY PROPERTY TESTS)
+    foreach(fm11_test IN LISTS fm11_registered_tests)
+        if(fm11_test MATCHES "^(display_|machine_|main6809_|sdl_help$)")
+            set_tests_properties(${fm11_test} PROPERTIES LABELS "boot")
+        else()
+            set_tests_properties(${fm11_test} PROPERTIES LABELS "extended")
+        endif()
+    endforeach()
 endif()
