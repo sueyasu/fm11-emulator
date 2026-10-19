@@ -81,7 +81,7 @@ public:
         Pixels output{};
         const auto& memory=display.physicalVram();
         for(std::size_t pos=0;pos<kBytesPerLine*kHeight;++pos) {
-            const auto address=page*0x4000+pos;
+            const auto address=(page*0x4000+((display.graphicsDisplayAddress()+pos)&0x7fff))&0xffff;
             for(unsigned bit=0;bit<8;++bit) {
                 const auto shift=7-bit;
                 unsigned index=0;
@@ -99,7 +99,7 @@ public:
         HighPixels output{};
         const auto& memory=display.physicalVram();
         for(std::size_t pos=0;pos<kBytesPerLine*kHighHeight;++pos) {
-            const auto address=page*0x8000+pos;
+            const auto address=(page*0x8000+((display.graphicsDisplayAddress()+pos)&0x7fff))&0xffff;
             for(unsigned bit=0;bit<8;++bit) {
                 const auto shift=7-bit;
                 unsigned index=0;
