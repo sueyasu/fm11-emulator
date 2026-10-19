@@ -59,6 +59,11 @@ void Machine::reset()
 
 void Machine::executeOne()
 {
-    if (auto* board = activeBoard())
+    if (auto* board = activeBoard()) {
+        // Sample the main-board USART before the 8088 tests its PIC.
+        // No CPU-card bus conversion or interrupt controller is moved here.
+        if (auto* cpu8088=dynamic_cast<Main8088Board*>(board))
+            cpu8088->bus().refreshSystemIrq();
         board->cpu().executeOne();
+    }
 }
