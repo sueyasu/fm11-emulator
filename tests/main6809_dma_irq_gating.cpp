@@ -29,5 +29,9 @@ int main()
     b.writeCpu(0xfd50,0x04); // reprogram and acknowledge CH0
     if((b.readCpu(0xfd55)&0x80)!=0 || (b.readCpu(0xfd03)&0x10)!=0)return 6;
     if((b.readCpu(0xfd50)&0x80)!=0)return 7;
+    // A software write cannot fabricate a DMA completion.
+    b.writeCpu(0xfd55,0x81);
+    if((b.readCpu(0xfd55)&0x80)!=0)return 8;
+    if((b.readCpu(0xfd03)&0x10)!=0)return 9;
     return 0;
 }
