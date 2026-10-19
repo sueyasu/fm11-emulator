@@ -715,13 +715,13 @@ void Main6809Board::Core::executeOne()
         ++board_.acceptedIrqCount_;
         lastCycles_=variant_ == CpuType::HD6309 && (regs.MD & 0x01) != 0
                     ? 21 : 19; // W adds two native-mode stack cycles
-        if(board_.cpuClockHz_ != 0)
+        if(board_.cpuClockHz_ != 0 && !board_.externalClocking_)
             board_.advanceCpuCycles(lastCycles_);
         return;
     }
     SimONE();
     lastCycles_=LastInstructionCycles();
-    if(board_.cpuClockHz_ != 0 && lastCycles_ != 0)
+    if(board_.cpuClockHz_ != 0 && !board_.externalClocking_ && lastCycles_ != 0)
         board_.advanceCpuCycles(lastCycles_);
 }
 
@@ -742,7 +742,7 @@ void Main6809Board::Core::nmi()
     if ((regs.ST & kNmiInService) != 0)
         return;
     SimNMI();
-    if (board_.cpuClockHz_ != 0)
+    if (board_.cpuClockHz_ != 0 && !board_.externalClocking_)
         board_.advanceCpuCycles(
             variant_ == CpuType::HD6309 && (regs.MD & 0x01) != 0
                 ? 21 : 19);
@@ -754,7 +754,7 @@ void Main6809Board::Core::firq()
     if ((regs.CC & kFirqMask) != 0)
         return;
     SimFIRQ();
-    if (board_.cpuClockHz_ != 0)
+    if (board_.cpuClockHz_ != 0 && !board_.externalClocking_)
         board_.advanceCpuCycles(
             variant_ == CpuType::HD6309 && (regs.MD & 0x02) != 0
                 ? ((regs.MD & 0x01) != 0 ? 21 : 19)
