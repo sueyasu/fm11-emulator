@@ -94,7 +94,7 @@ int main()
     bus.writeIo(0xfd07,0x04); // receiver enabled, transmitter disabled
     p6809->queueSerialInput(0x51);
     bus.refreshSystemIrq();
-    if(!bus.interruptPending() || bus.acknowledgeInterrupt()!=8)return 16;
+    if(!bus.interruptPending() || bus.acknowledgeInterrupt()!=12)return 16;
     bus.writeIo(0x00,0x20); // EOI
     bus.refreshSystemIrq();
     if(bus.interruptPending())return 17; // no phantom re-trigger
@@ -102,7 +102,7 @@ int main()
     bus.refreshSystemIrq();
     p6809->queueSerialInput(0x52);
     bus.refreshSystemIrq();
-    if(!bus.interruptPending() || bus.acknowledgeInterrupt()!=8)return 19;
+    if(!bus.interruptPending() || bus.acknowledgeInterrupt()!=12)return 19;
     bus.writeIo(0x00,0x20);
     if(bus.readIo(0xfd06)!=0x52)return 20;
     return 0;
