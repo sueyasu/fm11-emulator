@@ -1,9 +1,9 @@
-#include "MainBoard.h"
+#include "Machine.h"
+#include "Main6809Board.h"
 #include "DisplayBitmap.h"
 #include "RomFiles.h"
 #include <SDL.h>
 #include <chrono>
-#include <algorithm>
 #include <cstdint>
 #include <iostream>
 #include <stdexcept>
@@ -42,7 +42,7 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern]\n"
+    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE]\n"
              <<"  ROM defaults to external/roms/display6809.bin\n"
              <<"  ESC quit; SPACE pause/resume; F1 switch 200/400-line view\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
@@ -50,7 +50,7 @@ void usage() {
 }
 int main(int argc,char** argv) {
     try {
-        std::string romPath="external/roms/display6809.bin";
+        std::string romPath="external/roms/display6809.bin", mainRomPath;
         bool high=false, testPattern=false;
         std::uint64_t instructions=10000;
         for(int i=1;i<argc;++i) {
@@ -58,15 +58,26 @@ int main(int argc,char** argv) {
             if(arg=="--help"){usage();return 0;}
             if(arg=="--high"){high=true;continue;}
             if(arg=="--test-pattern"){testPattern=true;continue;}
-            if((arg=="--rom" || arg=="--cycles") && i+1<argc) {
+            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom") && i+1<argc) {
                 if(arg=="--rom")romPath=argv[++i];
+                else if(arg=="--main-rom")mainRomPath=argv[++i];
                 else instructions=parseCount(argv[++i]);
             } else {usage();return 2;}
         }
-        MainBoard board;
-        if(!testPattern)board.displaySubsystem().loadRom(
-            RomFiles::load<DisplaySubsystem::kRomSize>(romPath));
-        board.reset();
+        if(instructions>1000000)
+            throw std::invalid_argument("--cycles must be <= 1000000");
+        Machine machine;
+        if(!testPattern) {
+            machine.loadDisplayRomFile(romPath);
+            if(!mainRomPath.empty()) {
+                auto mainCpu=std::make_unique<Main6809Board>(CpuType::MC6809);
+                mainCpu->loadBootRomFile(mainRomPath);
+                mainCpu->setCpuClockHz(2000000);
+                machine.addBoard(std::move(mainCpu));
+            }
+        }
+        machine.setDisplayCpuClockHz(testPattern?0:2000000);
+        machine.reset();
         Sdl sdl;
         Window ui;
         ui.window=SDL_CreateWindow("FM-11 display subsystem",
@@ -79,10 +90,10 @@ int main(int argc,char** argv) {
             ui.renderer=SDL_CreateRenderer(ui.window,-1,SDL_RENDERER_SOFTWARE);
         if(!ui.renderer)throw std::runtime_error(SDL_GetError());
         ui.setMode(high);
-        bool running=true,paused=false,cpuStopped=testPattern;
+        bool running=true,paused=false;
         std::uint64_t executed=0,lastReported=0;
         std::uint64_t ioWrites=0;
-        board.displaySubsystem().setIoWriteObserver([&](DisplaySubsystem::IoWriteTrace){++ioWrites;});
+        machine.setDisplayIoWriteObserver([&](DisplaySubsystem::IoWriteTrace){++ioWrites;});
         auto lastLog=std::chrono::steady_clock::now();
         while(running) {
             SDL_Event event;
@@ -97,19 +108,18 @@ int main(int argc,char** argv) {
                     }
                 }
             }
-            if(!paused && !cpuStopped) {
-                for(std::uint64_t i=0;i<instructions;++i) {
-                    if(!board.displayCpu().executeOne()) {
-                        cpuStopped=true;
-                        std::cerr<<"display CPU stopped PC="<<std::hex
-                                 <<board.displayCpu().pc()<<std::dec<<"\n";
-                        break;
-                    }
-                    ++executed;
+            if(!paused && !testPattern) {
+                if(machine.boardCount()) {
+                    for(std::uint64_t i=0;i<instructions;++i)
+                        machine.executeOne();
+                } else {
+                    // 2 MHz display CPU: advance elapsed time without a main
+                    // CPU. The Machine scheduler also handles HALT and waits.
+                    machine.advanceTimeNanoseconds(instructions*500);
                 }
+                executed+=instructions;
             }
-            auto frame=DisplayBitmap::captureFrame(
-                board.displaySubsystem(),high);
+            auto frame=machine.captureDisplayFrame(high);
             if(testPattern) {
                 for(std::size_t y=0;y<frame.height;++y)
                     for(std::size_t x=0;x<frame.width;++x)
@@ -118,16 +128,14 @@ int main(int argc,char** argv) {
             }
             const auto now=std::chrono::steady_clock::now();
             if(now-lastLog>=std::chrono::seconds(2)) {
-                const auto& vram=board.displaySubsystem().physicalVram();
-                const auto nonzero=std::count_if(vram.begin(),vram.end(),
-                    [](BYTE b){return b!=0;});
-                std::cerr<<"display PC="<<std::hex<<board.displayCpu().pc()
-                         <<std::dec<<" executed="<<executed
+                std::cerr<<"display PC="<<std::hex<<machine.displayCpuPc()
+                         <<std::dec<<" steps="<<executed
                          <<" delta="<<(executed-lastReported)
                          <<" ioWrites="<<ioWrites
-                         <<" VRAM_nonzero="<<nonzero
-                         <<" page="<<board.displaySubsystem().graphicsDisplayPage()
-                         <<" revision="<<board.displaySubsystem().videoRevision()
+                         <<" VRAM_nonzero="<<machine.displayNonzeroVramBytes()
+                         <<" page="<<machine.displayPage()
+                         <<" revision="<<machine.displayRevision()
+                         <<(machine.boardCount()?" main6809":" display-only")
                          <<(testPattern?" test-pattern":"")<<"\n";
                 lastReported=executed;
                 lastLog=now;
