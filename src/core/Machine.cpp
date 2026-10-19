@@ -17,7 +17,11 @@ std::size_t Machine::addBoard(std::unique_ptr<CpuBoard> board)
     if(auto* cpu8088=dynamic_cast<Main8088Board*>(board.get()))
         cpu8088->bus().setMainBoard(mainBoard_);
     boards_.push_back(std::move(board));
-    return boards_.size() - 1;
+    const auto index=boards_.size()-1;
+    // A newly attached CPU card may complete the FD05 primary/optional
+    // pair. Resolve the selection without relying on insertion order.
+    synchronizeFd05Selection();
+    return index;
 }
 
 std::size_t Machine::boardCount() const
@@ -41,6 +45,9 @@ void Machine::setActiveBoard(std::size_t index)
         throw std::out_of_range("active CPU board index out of range");
 
     active_board_ = index;
+    // Explicit selection disables automatic FD05 arbitration. Callers can
+    // re-enable it after completing manual setup/debugging.
+    fd05SelectionEnabled_=false;
 }
 
 void Machine::enableFd05Selection(bool enabled)
