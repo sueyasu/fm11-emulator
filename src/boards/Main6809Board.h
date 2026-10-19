@@ -40,6 +40,13 @@ public:
     std::array<BYTE,256> floppyBootSector(unsigned sector) const;
     bool floppyDirty() const { return floppy_->dirty2d(); }
     std::vector<BYTE> floppyImage() const;
+    std::uint64_t fdcReadCommands() const {return fdcReads_;}
+    std::uint64_t fdcSuccessfulReads() const {return fdcReadSuccesses_;}
+    std::uint64_t fdcFailedReads() const {return fdcReadFailures_;}
+    BYTE fdcStatus() const {return floppyStatus_;}
+    BYTE fdcTrack() const {return floppy_->registerValue(0x19);}
+    BYTE fdcSector() const {return floppy_->registerValue(0x1a);}
+    BYTE fdcDrive() const {return floppy_->registerValue(0x1d)&3;}
     void clearFloppyDirty() { floppy_->clearDirty2d(); }
 
     // Board-local event inputs used by the main-system control registers.
@@ -144,6 +151,7 @@ private:
     std::array<BYTE,256> floppySector_{};
     unsigned floppyOffset_ = 256;
     BYTE floppyStatus_ = 0;
+    std::uint64_t fdcReads_=0,fdcReadSuccesses_=0,fdcReadFailures_=0;
     std::shared_ptr<Usart8251> usart_=std::make_shared<Usart8251>();
     BYTE mainIrqSources_ = 0;
     BYTE extendedIrqSources_ = 0;
