@@ -396,5 +396,39 @@ int main()
     gvu.reset();
     if(gvu.graphicsAccessPage()!=0 || gvu.graphicsDisplayPage()!=0 ||
        gvu.graphicsOffset()!=0)return 86;
+    // Actual physical layout: R/G/B bits are in distinct 64KiB planes.
+    // Select access page 1, then choose display page 1 independently.
+    DisplaySubsystem realLayout;
+    realLayout.writeMemory(0xafe3,0x08);
+    for(unsigned plane=0;plane<3;++plane) {
+        realLayout.writeMemory(0xafe1,static_cast<BYTE>(0x38|(1u<<plane)));
+        realLayout.writeMemory(0,0x80);
+    }
+    realLayout.writeMemory(0xafe2,0x08);
+    const auto pageOne=DisplayBitmap::decodeSelectedGraphics200(realLayout);
+    const auto pageZero=DisplayBitmap::decodeGraphics200(realLayout,0);
+    if(pageOne[0]!=7 || pageOne[1]!=0 || pageZero[0]!=0)
+        return 87;
+    if(realLayout.readPhysicalVram(0x4000)!=0x80 ||
+       realLayout.readPhysicalVram(0x14000)!=0x80 ||
+       realLayout.readPhysicalVram(0x24000)!=0x80)
+        return 88;
+    // 400-line page 1 spans 32KiB in each of the same three planes.
+    realLayout.writeMemory(0xafe3,0x10);
+    realLayout.writeMemory(0xafe1,0x3f);
+    realLayout.writeMemory(0,0x40);
+    realLayout.writeMemory(0xafe2,0x10);
+    const auto highPage=DisplayBitmap::decodeSelectedGraphics400(realLayout);
+    if(highPage[1]!=7 || highPage[0]!=0 ||
+       DisplayBitmap::decodeGraphics400(realLayout,0)[1]!=0)
+        return 89;
+    bool rejected=false;
+    try {DisplayBitmap::decodeGraphics200(realLayout,4);}
+    catch(const std::out_of_range&) {rejected=true;}
+    if(!rejected)return 90;
+    rejected=false;
+    try {DisplayBitmap::decodeGraphics400(realLayout,2);}
+    catch(const std::out_of_range&) {rejected=true;}
+    if(!rejected)return 91;
     return 0;
 }
