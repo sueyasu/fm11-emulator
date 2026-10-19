@@ -20,7 +20,14 @@ public:
     bool executeOne() {
         if(display_.haltRequested())return false;
         if(waitState()!=WaitState::Running)return false;
-        SimONE();
+        display_.beginCpuInstruction(regs.r.w.PC);
+        try {
+            SimONE();
+        } catch(...) {
+            display_.endCpuInstruction();
+            throw;
+        }
+        display_.endCpuInstruction();
         return true;
     }
     std::uint16_t pc() const {return regs.r.w.PC;}
