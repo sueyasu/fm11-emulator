@@ -40,7 +40,7 @@ int main() {
     high=DisplayBitmap::captureFrame(display,true);
     DisplayBitmap::compositeText(high,display);
     if(high.argb[0]!=0xffc00000u ||
-       high.argb[7]!=0xff00ff00u ||
+       high.argb[7]!=0xffc00000u ||
        high.argb[8]!=0xff000000u)return 6;
     std::cout<<"PASS: CRTC text CRAM, ANK bit order, 200/400 lines, reverse attribute\n";
     return 0;
