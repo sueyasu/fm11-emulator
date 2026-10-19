@@ -68,6 +68,24 @@ per frame, or the approximate display CPU cycle budget without a main CPU
 (default 10000). This is a
 bring-up throttle, **not** a calibrated real-time CPU clock.
 
+For a black screen while running **original** main and display ROMs, first
+inspect the main CPU boot path and shared-bus handshake without changing
+emulated memory or acknowledging IRQ/event registers:
+
+```sh
+./build/fm11-sdl --main-rom external/roms/boot6809.bin \\
+    --rom external/roms/display6809.bin --trace-boot
+```
+
+`--trace-boot` prints the first 64 main 6809 instruction addresses
+before execution. The periodic diagnostic line also reports the current
+main PC (**decimal**), FD05 sub-CPU control latch, FD04 event latch,
+display BUSY byte, number of main-to-sub shared RAM changes, first
+shared byte, and display HALT state. All of these readings are
+non-destructive; unlike a guest read from FD04, the diagnostic does
+not acknowledge the event. Compare changes over multiple reports.
+A constant display PC alone does not establish why firmware is waiting.
+
 If the window stays black, use `./build/fm11-sdl --test-pattern` to
 verify SDL rendering independently of firmware. This displays eight-color
 stripes and does not require a ROM. Normal execution now prints the display
