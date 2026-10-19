@@ -39,8 +39,20 @@ int main()
     machine.executeOne(); // 6809 STA $FD05
     if(machine.activeBoard()!=cpu86 || cpu09->cpu().pc()!=0x1239)return 3;
 
+    // The main-board PTM keeps running while the optional CPU owns the
+    // bus. Configure it only after the 6809 has yielded, so this test
+    // measures time charged to 8088 instructions, not prior 6809 work.
+    machine.set8088ClockHz(9700); // one approximate CPU cycle per PTM tick
+    cpu09->writeCpu(0xfd39,0x01);
+    cpu09->writeCpu(0xfd38,0x50);
+    cpu09->writeCpu(0xfd3a,0);
+    cpu09->writeCpu(0xfd3b,1);
+    if(cpu09->readCpu(0xfd39)!=0)return 9;
+
     machine.executeOne(); // 8088 MOV DX,FD05h
     if(machine.activeBoard()!=cpu86 || cpu86->cpu().pc()!=0xffff3)return 4;
+    // A shared device must advance even with the 6809 CPU suspended.
+    if((cpu09->readCpu(0xfd39)&0x81)!=0x81)return 10;
     machine.executeOne(); // 8088 MOV AL,0
     if(machine.activeBoard()!=cpu86 || cpu86->cpu().pc()!=0xffff5)return 5;
     machine.executeOne(); // 8088 OUT DX,AL
