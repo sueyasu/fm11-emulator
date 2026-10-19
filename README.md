@@ -132,6 +132,28 @@ This validates bidirectional shared memory and CPU scheduling, **not**
 the original FM-11 interrupt/attention protocol; a hardware notification
 register is not inferred from this test.
 
+### AFE6 raster status (experimental timing model)
+
+The display firmware loops at `$CDBD/$CDC0` until `$AFE6` bit 7
+changes. That bit is now an emulated-time raster/blanking input rather
+than a static writable video-control flag. The initial model assumes
+a 60 Hz frame and a 1 ms high interval near the end of each frame;
+these durations are **provisional** pending comparison with the
+original emulator/hardware timing. SDL's display-only scheduling
+uses 250-us substeps so the pulse is not skipped.
+
+```sh
+ctest --test-dir build -R display_binary_raster --output-on-failure
+python3 tools/make_display_test_roms.py build/test-roms
+./build/display_binary_raster build/test-roms/display_raster.bin
+```
+
+The synthetic ROM executes actual `TST $AFE6 / BPL` and
+`TST $AFE6 / BMI` loops, then stores an ACK byte in shared RAM.
+It checks that both phase transitions are visible to the display CPU.
+The full original ROM may still require additional video/keyboard
+hardware implementation before displaying its startup screen.
+
 ### Full-frame binary display test and SDL preview
 
 To check the complete raster path without original firmware, generate
