@@ -230,7 +230,7 @@ int main()
         pixels.captureVideo(),0x4000);
     if(secondPlane[0]!=1 || secondPlane[7]!=0)return 56;
     const auto invalid=DisplayBitmap::decodeMonochrome(
-        pixels.captureVideo(),0x4001);
+        pixels.captureVideo(),0x4200);
     if(invalid[0]!=0 || invalid[7]!=0)return 57;
     return 0;
 }
