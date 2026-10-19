@@ -25,10 +25,10 @@ int main(int argc,char** argv) {
         if(machine.displayCpuPc()!=haltedPc ||
            machine.displaySharedByte(0)!=0x11)return 11;
         machine.executeOne(); // STA $FD05: release HALT
-        if(main->readCpu(0xfd05)!=0)return 12;
+        if(main->readCpu(0xfd05)!=0x80)return 12; // sub still BUSY until it runs
         for(int i=0;i<1000;++i)machine.executeOne();
         if(machine.displayCpuPc()==haltedPc ||
-           machine.displayBusyStatus()!=0 ||
+           machine.displayBusyStatus()!=0 || main->readCpu(0xfd05)!=0 ||
            machine.displaySharedByte(2)!=0x33 ||
            machine.displaySharedByte(1)!=0x22) {
             std::cerr<<"release did not resume display READY/shared-RAM writes\n";
