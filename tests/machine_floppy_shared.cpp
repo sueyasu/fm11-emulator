@@ -165,5 +165,28 @@ int main()
     if(timer->irqRequest())return 33;
     (void)timer->read(0x3a);
     if(timer->read(0x39)!=0)return 34;
+
+    // Both CPU-card buses access the same PTM registers on the main board.
+    Machine ptmMachine;
+    auto ptm6809=std::make_unique<Main6809Board>(CpuType::MC6809);
+    auto* card09=ptm6809.get();
+    auto ptm8088=std::make_unique<Main8088Board>(CpuType::I8088);
+    auto* card86=ptm8088.get();
+    ptmMachine.addBoard(std::move(ptm6809));
+    ptmMachine.addBoard(std::move(ptm8088));
+    card86->bus().writeIo(0xfd39,0x01);
+    card86->bus().writeIo(0xfd38,0x50);
+    card86->bus().writeIo(0xfd3a,0);
+    card86->bus().writeIo(0xfd3b,4);
+    if(card09->readCpu(0xfd3a)!=0 || card09->readCpu(0xfd3b)!=4)
+        return 35;
+    card09->advancePtm(4);
+    card86->bus().refreshSystemIrq();
+    if(!card86->bus().interruptPending() ||
+       card86->bus().acknowledgeInterrupt()!=8)return 36;
+    // ACK issued via 8088 must clear the shared source seen by 6809.
+    if((card86->bus().readIo(0xfd39)&0x81)!=0x81)return 37;
+    card09->syncPtmIrq();
+    if((card09->readCpu(0xfd03)&0x01)!=0)return 38;
     return 0;
 }
