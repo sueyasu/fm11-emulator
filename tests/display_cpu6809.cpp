@@ -360,5 +360,14 @@ int main()
     traced.displaySubsystem().clearIoWriteObserver();
     traced.displaySubsystem().writeMemory(0xafe4,0x99);
     if(log.size()!=3)return 78;
+    // The PC identifies the instruction that performed each I/O write.
+    if(log[0].pc!=0xc002 || log[1].pc!=0xc005 ||
+       log[2].pc!=0xc008 ||
+       !log[0].fromCpu || !log[1].fromCpu || !log[2].fromCpu)
+        return 79;
+    traced.displaySubsystem().setIoWriteObserver(
+        [&](DisplaySubsystem::IoWriteTrace entry){log.push_back(entry);});
+    traced.displaySubsystem().writeMemory(0xafe4,0x77);
+    if(log.size()!=4 || log.back().fromCpu)return 80;
     return 0;
 }
