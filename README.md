@@ -58,7 +58,8 @@ To run the main 6809 CPU alongside the display CPU, supply its boot ROM:\n\n```s
 script described above to populate it. Controls: Escape to quit, Space
 to pause/resume, F1 to switch 640x200/640x400 display interpretation.
 SDL always scales the image by an **integer** factor and centers it on
-black margins. At the default 960-pixel window width, the 640-pixel image
+dark-gray margins with a thin light-gray outline just outside the emulated
+screen. Neither the margins nor the outline alter any emulated pixels. At the default 960-pixel window width, the 640-pixel image
 is shown at native 1:1 size rather than distorted to 1.5x. Enlarge the
 window to at least 1280x400 for a sharp 2x 640x200 display, or 1280x800
 for a sharp 2x 640x400 display. Smaller windows clip instead of using
