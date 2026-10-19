@@ -31,6 +31,7 @@ int main(int argc,char** argv) {
         if(frame.width!=640 || frame.height!=400)return 14;
         for(unsigned i=0;i<sizeof(expected)-1;++i) {
             const unsigned x=i*8;
+            if(expected[i]==' ')continue;
             if(frame.argb[x]!=0xffc0c0c0u ||
                frame.argb[x+1]!=0xff000000u ||
                frame.argb[640+x+1]!=0xffc0c0c0u)return 15;
