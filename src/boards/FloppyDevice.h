@@ -118,6 +118,52 @@ public:
     void writeSector(unsigned channel,std::size_t offset,const BYTE* bytes) {
         for(std::size_t i=0;i<sectorLength(channel);++i)write(channel,offset+i,bytes[i]);
     }
+    // Shared FDC transfer FIFO. CPU-specific DMA controllers only move bytes
+    // through this interface; the sector buffer belongs to the system device.
+    bool beginSector(unsigned channel,unsigned track,unsigned side,unsigned sector,
+                     unsigned drive,bool writing) {
+        transferChannel_=channel;
+        transferLength_=sectorLength(channel);
+        transferPosition_=transferLength_;
+        transferWriting_=false;
+        status_=0;
+        if(!sectorOffset(channel,track,side,sector,drive,transferOffset_)) {
+            status_=0x10;
+            return false;
+        }
+        transferPosition_=0;
+        transferWriting_=writing;
+        if(!writing)
+            for(std::size_t i=0;i<transferLength_;++i)
+                transferBuffer_[i]=read(channel,transferOffset_+i);
+        status_=0x02;
+        return true;
+    }
+    BYTE transferRead() {
+        if(transferWriting_ || transferPosition_>=transferLength_)return 0xff;
+        const BYTE result=transferBuffer_[transferPosition_++];
+        if(transferPosition_==transferLength_)status_=0;
+        return result;
+    }
+    void transferWrite(BYTE value) {
+        if(!transferWriting_ || transferPosition_>=transferLength_)return;
+        transferBuffer_[transferPosition_++]=value;
+        if(transferPosition_==transferLength_) {
+            writeSector(transferChannel_,transferOffset_,transferBuffer_.data());
+            transferWriting_=false;
+            status_=0;
+        }
+    }
+    void finishTransfer() {
+        transferPosition_=transferLength_;
+        transferWriting_=false;
+        status_=0;
+    }
+    void transferError() {status_=0x10;}
+    BYTE transferStatus() const {return status_;}
+    std::size_t transferPosition() const {return transferPosition_;}
+    std::size_t transferLength() const {return transferLength_;}
+    unsigned transferChannel() const {return transferChannel_;}
     const std::vector<BYTE>& raw2d() const {return raw2d_;}
     const std::vector<BYTE>& raw2hd() const {return raw2hd_;}
     std::vector<BYTE> image2d() const {return d88_.empty()?raw2d_:d88_;}
@@ -132,4 +178,9 @@ private:
     std::vector<BYTE> raw2d_,raw2hd_,d88_;
     std::array<std::size_t,40*2*16> offsets_{};
     bool dirty2d_=false,dirty2hd_=false;
+    std::array<BYTE,1024> transferBuffer_{};
+    std::size_t transferOffset_=0,transferPosition_=256,transferLength_=256;
+    unsigned transferChannel_=0;
+    bool transferWriting_=false;
+    BYTE status_=0;
 };
