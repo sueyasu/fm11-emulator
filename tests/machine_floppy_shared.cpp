@@ -302,5 +302,17 @@ int main()
        display.readMemory(0xb000)!=0x91 ||
        display.readMemory(0xc000)!=0x83 ||
        display.readMemory(0xffff)!=0x42)return 70;
+    // Invalid MC6840 addresses must not wrap the channel index.
+    Ptm6840 guardedPtm;
+    guardedPtm.write(0x3a,0x12);
+    guardedPtm.write(0x3b,0x34);
+    const auto latch=guardedPtm.channels[0].latch;
+    const auto statusBefore=guardedPtm.status;
+    if(guardedPtm.read(0x37)!=0xff ||
+       guardedPtm.read(0x40)!=0xff)return 71;
+    guardedPtm.write(0x37,0xff);
+    guardedPtm.write(0x40,0xff);
+    if(guardedPtm.channels[0].latch!=latch ||
+       guardedPtm.status!=statusBefore)return 72;
     return 0;
 }
