@@ -377,7 +377,7 @@ int main()
     if(gvu.readPhysicalVram(0)!=0xa5 ||
        gvu.readPhysicalVram(0x10000)!=0xa5 ||
        gvu.readPhysicalVram(0x20000)!=0xa5)return 81;
-    gvu.writeMemory(0xafe1,0x49); // plane 1 read; plane 0 write; preserve plane 1
+    gvu.writeMemory(0xafe1,0x51); // plane 1 read; plane 0 write; preserve plane 1
     gvu.writeMemory(0x0000,0x3c);
     if(gvu.readPhysicalVram(0)!=0x3c ||
        gvu.readPhysicalVram(0x10000)!=0xa5 ||
