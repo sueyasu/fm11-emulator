@@ -175,5 +175,26 @@ int main()
        board.displaySubsystem().readMemory(0xafe7)!=0xff)return 40;
     board.reset();
     if(board.displaySubsystem().videoFlags()!=0)return 41;
+    // Video clients can detect changes without interpreting AFE6 bits.
+    DisplaySubsystem changes;
+    const auto initial=changes.videoRevision();
+    changes.writeMemory(0x0000,0x80);
+    if(changes.videoRevision()!=initial+1)return 42;
+    changes.writeMemory(0x0000,0x80); // unchanged byte
+    if(changes.videoRevision()!=initial+1)return 43;
+    changes.writeMemory(0x7fff,0x01);
+    if(changes.videoRevision()!=initial+2)return 44;
+    changes.writeMemory(0x8000,0x11); // regular RAM is not video
+    changes.writeMemory(0xaff0,0); // BUSY is not video
+    if(changes.videoRevision()!=initial+2)return 45;
+    changes.writeMemory(0xafe6,0x40);
+    if(changes.videoRevision()!=initial+3)return 46;
+    changes.writeMemory(0xafe6,0x40);
+    if(changes.videoRevision()!=initial+3)return 47;
+    changes.reset(); // control returns to zero, VRAM remains intact
+    if(changes.videoRevision()!=initial+4 ||
+       changes.readMemory(0x0000)!=0x80)return 48;
+    changes.reset();
+    if(changes.videoRevision()!=initial+4)return 49;
     return 0;
 }
