@@ -12,7 +12,6 @@ void Main8088Bus::reset()
     picVectorBase_=8;picReadIsr_=0;picInitStep_=0;
     picNeedsIcw4_=false;picSingle_=false;picAutoEoi_=false;
     resetDma();
-    floppyRegisters_.fill(0);
     floppy_->finishTransfer();
 }
 
@@ -49,10 +48,10 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
         return;
     }
     const unsigned base=channel==0?0x18:0x30;
-    if(!floppy_->beginSector(channel,floppyRegisters_[base+1],
-            floppyRegisters_[channel==0?0x1c:0x34],
-            floppyRegisters_[base+2],
-            floppyRegisters_[channel==0?0x1d:0x35],writing))return;
+    if(!floppy_->beginSector(channel,floppy_->registerValue(base+1),
+            floppy_->registerValue(channel==0?0x1c:0x34),
+            floppy_->registerValue(base+2),
+            floppy_->registerValue(channel==0?0x1d:0x35),writing))return;
 
     // The 8237 remains the bus master; the system FDC only supplies data.
     setDmaRequest(channel,true);
@@ -104,7 +103,7 @@ BYTE Main8088Bus::readIo(WORD port) const
         if(port==0xfd18 || port==0xfd30)return floppy_->transferStatus();
         if(port==0xfd1b || port==0xfd33)
             return const_cast<Main8088Bus*>(this)->floppyReadData();
-        return floppyRegisters_[port&0xff];
+        return floppy_->registerValue(port&0xff);
     }
     // 8259 PIC and 8237 DMA belong to the future Sim86 adapter.
     return 0xff;
@@ -149,7 +148,7 @@ void Main8088Bus::writeIo(WORD port,BYTE value)
              (port>=0xfd30 && port<=0xfd35 && floppy_->has2hd()))) {
         if(port==0xfd18 || port==0xfd30)floppyCommand(value,port==0xfd18?0:1);
         else if(port==0xfd1b || port==0xfd33)floppyWriteData(value);
-        else floppyRegisters_[port&0xff]=value;
+        else floppy_->writeRegister(port&0xff,value);
     }
 }
 
