@@ -99,12 +99,8 @@ public:
 
     bool sectorOffset(unsigned channel,unsigned track,unsigned side,unsigned sector,
                       unsigned drive,std::size_t& offset) const {
-        // The ROM selects a 2HD-controller drive (3 in this configuration),
-        // while the OS-9 IPL addresses MiniFDC logical drive 0. With one
-        // mounted 2D image, expose it to the MiniFDC's drive 0 as well.
-        // Keep the 2HD-controller drive selection independent.
         if(channel==0) {
-            if(drive!=0 && drive!=mountedDrive_)return false;
+            if(drive!=0)return false;
             if(raw2d_.empty() || track>=40 || sector<1 || sector>16)return false;
             offset=((track*2+(side&1))*16+(sector-1))*256;
         } else if(channel==1) {
