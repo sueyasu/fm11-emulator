@@ -160,9 +160,13 @@ void Machine::advanceDisplayCpuCycles(std::uint64_t cycles,std::uint64_t cpuHz)
 {
     if(!displayCpuClockHz_ || !cycles || !cpuHz)return;
     constexpr std::uint64_t second=1000000000ULL;
+    // The remainder is represented as nanosecond fractions in units of
+    // 1/cpuHz. On a CPU-card clock switch, preserve the elapsed fraction
+    // instead of discarding it (which otherwise slows the display CPU).
     if(displayCpuInputHz_!=cpuHz) {
+        if(displayCpuInputHz_!=0)
+            displayCycleFraction_=(displayCycleFraction_*cpuHz)/displayCpuInputHz_;
         displayCpuInputHz_=cpuHz;
-        displayCycleFraction_=0;
     }
     const auto whole=cycles/cpuHz;
     const auto rem=cycles%cpuHz;
