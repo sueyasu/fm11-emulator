@@ -202,10 +202,10 @@ int main()
     p6809->writeCpu(0xfd05,0x80);
     if((bus.readIo(0xfd05)&0x80)==0)return 43;
     bus.writeIo(0xfd05,0x00);
-    if((p6809->readCpu(0xfd05)&0x80)!=0)return 44;
+    if((p6809->readCpu(0xfd05)&0x80)==0)return 44;
     // Writing a zero releases display HALT.
     machine.reset();
-    if(bus.readIo(0xfd05)!=0)return 45;
+    if(bus.readIo(0xfd05)!=0x80)return 45;
     bus.writeIo(0xfd05,0x80);
     if((p6809->readCpu(0xfd05)&0x80)==0)return 46;
     // FD05 bit 0 is a CPU-card takeover request, distinct from bit 7
@@ -213,14 +213,14 @@ int main()
     MainBoard selector;
     if(selector.optionalCpuRequested())return 47;
     selector.writeIo(0xfd05,0x01);
-    if(!selector.optionalCpuRequested() || selector.subCpuStatus()!=0)return 48;
+    if(!selector.optionalCpuRequested() || selector.subCpuStatus()!=0x80)return 48;
     selector.writeIo(0xfd05,0x00);
     if(selector.optionalCpuRequested())return 49;
     selector.writeIo(0xfd05,0x80);
     if(selector.optionalCpuRequested() || (selector.subCpuStatus()&0x80)==0)
         return 50;
     selector.resetSubCpuControl();
-    if(selector.optionalCpuRequested() || selector.subCpuStatus()!=0)return 51;
+    if(selector.optionalCpuRequested() || selector.subCpuStatus()!=0x80)return 51;
     // FD05 selection is opt-in; manual board selection remains supported.
     Machine selectorMachine;
     auto primary=std::make_unique<Main6809Board>(CpuType::MC6809);
@@ -257,7 +257,7 @@ int main()
     machine.reset();
     if((bus.readIo(0xfd07)&0x02)!=0)return 60;
     if((bus.readIo(0xfd04)&0x03)!=0)return 61;
-    if(bus.readIo(0xfd05)!=0)return 62;
+    if(bus.readIo(0xfd05)!=0x80)return 62;
     // HALT request is owned by the display subsystem rather than either
     // main CPU card. A CPU-card reset must leave it intact.
     MainBoard displayOwner;
@@ -269,7 +269,7 @@ int main()
     if(displayOwner.displaySubsystem().haltRequested())return 65;
     displayOwner.reset();
     if(displayOwner.displaySubsystem().haltRequested() ||
-       displayOwner.subCpuStatus()!=0)return 66;
+       displayOwner.subCpuStatus()!=0x80)return 66;
     // Basic sub-CPU map: VRAM 0000-7FFF, RAM 8000-9FFF,
     // unmapped A000-AFFF, and 20KiB ROM B000-FFFF.
     auto& display=displayOwner.displaySubsystem();
