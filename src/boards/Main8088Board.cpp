@@ -785,7 +785,7 @@ void Main8088Board::Core::executeOne()
         const bool word=(opcode&1)!=0;
         const bool input=(opcode&2)==0;
         const WORD delta=WORD((flags_&0x0400) ? (word?-2:-1) : (word?2:1));
-        if(repeat && regs_[1]==0)break;
+        if(repeat && regs_[1]==0) {lastCycles_=2*prefixCount+2;break;}
         const WORD port=regs_[2];
         if(input) {
             const WORD value=word
@@ -809,6 +809,8 @@ void Main8088Board::Core::executeOne()
         }
         if(repeat) {
             regs_[1]=WORD(regs_[1]-1);
+            // REP is executed one iteration per executeOne(), so the DB
+            // base represents one iteration, not the whole CX count.
             if(regs_[1]!=0)ip_=opAddress;
         }
         break;
@@ -818,7 +820,7 @@ void Main8088Board::Core::executeOne()
     case 0xae: case 0xaf: {
         const bool word=(opcode&1)!=0;
         const WORD delta=WORD((flags_&0x0400)?(word?-2:-1):(word?2:1));
-        if(repeat && regs_[1]==0)break;
+        if(repeat && regs_[1]==0) {lastCycles_=2*prefixCount+2;break;}
         const bool mov=opcode==0xa4 || opcode==0xa5;
         const bool cmp=opcode==0xa6 || opcode==0xa7;
         const bool stos=opcode==0xaa || opcode==0xab;
@@ -847,6 +849,8 @@ void Main8088Board::Core::executeOne()
         if(mov || cmp || stos || scas)regs_[7]=WORD(regs_[7]+delta);
         if(repeat) {
             regs_[1]=WORD(regs_[1]-1);
+            // REP is executed one iteration per executeOne(), so the DB
+            // base represents one iteration, not the whole CX count.
             const bool carryRepeat=repeat==0x64 || repeat==0x65;
             const bool continueRepeat=carryRepeat
                 ? (((flags_&CF)!=0)==(repeat==0x65))
