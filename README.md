@@ -147,9 +147,11 @@ ctest --test-dir build -R 'display_afe0_handshake|display_binary_halt|display_cp
 ```
 
 The display subsystem now models the AFE0 handshake independently of
-the AFF0 latch. Full agreement with the original **main-side FD05**
-status and sub-CPU interrupt wiring remains to be verified separately;
-the SDL diagnostic `BUSY` reports the AFE0-driven state.
+the AFF0 latch. Main-side **FD05 bit 7 now also reports BUSY** as controlled by
+sub-CPU AFE0. An asserted main-side HALT is kept visible until release;
+subsequent AFE0 READY clears the bit when HALT is released. Other FD05
+bits and the original sub-CPU interrupt wiring still need verification.
+The SDL diagnostic `BUSY` reports the AFE0-driven state.
 
 ### AFE6 video status (reference SubCpu.cpp)
 
