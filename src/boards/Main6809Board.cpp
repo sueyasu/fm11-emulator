@@ -237,6 +237,14 @@ void Main6809Board::writeFloppySector()
         return;
     }
     for(unsigned i=0;i<256;++i)floppy2d_[offset+i]=readPhysical(src+i);
+    // The completed 256-byte transfer advances the channel address and
+    // exhausts the byte count, as a DMA engine would do.
+    const WORD nextAddress=WORD((ioRegisters_[0x40]<<8)|ioRegisters_[0x41]);
+    const WORD advanced=WORD(nextAddress+256);
+    ioRegisters_[0x40]=BYTE(advanced>>8);
+    ioRegisters_[0x41]=BYTE(advanced);
+    ioRegisters_[0x42]=0;
+    ioRegisters_[0x43]=0;
     if(!floppyD88_.empty()) {
         const std::size_t idx=offset/256;
         std::copy_n(floppy2d_.begin()+offset,256,
@@ -270,6 +278,14 @@ void Main6809Board::readFloppySector()
             return;
         }
         for(unsigned i=0;i<256;++i) writePhysical(dest+i,floppySector_[i]);
+        // The completed 256-byte transfer advances the channel address and
+        // exhausts the byte count, as a DMA engine would do.
+        const WORD nextAddress=WORD((ioRegisters_[0x40]<<8)|ioRegisters_[0x41]);
+        const WORD advanced=WORD(nextAddress+256);
+        ioRegisters_[0x40]=BYTE(advanced>>8);
+        ioRegisters_[0x41]=BYTE(advanced);
+        ioRegisters_[0x42]=0;
+        ioRegisters_[0x43]=0;
         floppyOffset_=256;
         floppyStatus_=0;
         ioRegisters_[0x50]=static_cast<BYTE>((ioRegisters_[0x50]|0x80)&~0x40);
