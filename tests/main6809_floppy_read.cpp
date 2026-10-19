@@ -13,6 +13,13 @@ int main() {
  b.writeCpu(0xfd19,9);
  b.writeCpu(0xfd18,0x00);
  if(b.readCpu(0xfd19)!=0 || (b.readCpu(0xfd18)&0x84)!=0x04)return 8;
+ bool sawIndex=false,sawGap=false;
+ for(unsigned n=0;n<512;++n) {
+   const BYTE status=b.readCpu(0xfd18);
+   sawIndex|=(status&0x02)!=0;
+   sawGap|=(status&0x02)==0;
+ }
+ if(!sawIndex || !sawGap)return 10;
  b.writeCpu(0xfd1b,1);
  b.writeCpu(0xfd18,0x10);
  if(b.readCpu(0xfd19)!=1 || (b.readCpu(0xfd18)&0x04)!=0)return 9;
