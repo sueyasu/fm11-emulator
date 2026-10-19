@@ -15,6 +15,17 @@ public:
     std::shared_ptr<FloppyDevice> floppyDevice() const { return floppy_; }
     std::shared_ptr<Usart8251> usartDevice() const {return usart_;}
     std::shared_ptr<Ptm6840> ptmDevice() const {return ptm_;}
+    // System reset is distinct from resetting an individual CPU card.
+    // Disk media remain mounted; only any in-flight transfer is aborted.
+    void reset() {
+        resetEvents();
+        resetSubCpuControl();
+        resetTimebase();
+        externalIrqLines_=0;
+        usart_->reset();
+        ptm_->reset();
+        floppy_->finishTransfer();
+    }
     // FD04 main-board event latch: ATENT bit 0, BREAK bit 1.
     void signalAttention() {eventStatus_|=0x01;}
     void signalBreak() {eventStatus_|=0x02;}
