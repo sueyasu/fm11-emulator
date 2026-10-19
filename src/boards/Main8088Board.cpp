@@ -19,6 +19,7 @@ void Main8088Board::Core::reset()
     segments_[1]=0xffff;
     ip_=0;
     flags_=0x0002;
+    lastCycles_=0;
     halted_=false;
     emulation8080_=false;
     interruptModeStack_.clear();
@@ -336,6 +337,7 @@ bool Main8088Board::Core::jumpCondition(unsigned code) const
 }
 void Main8088Board::Core::executeOne()
 {
+    lastCycles_=0;
     // 8088 recognizes maskable IRQs at instruction boundaries. STI and
     // MOV SS defer recognition until the following instruction completes.
     const bool inhibited=irqInhibit_!=0;
@@ -1177,6 +1179,10 @@ void Main8088Board::Core::executeOne()
         break;
     }
     case 0x90: // NOP
+        // 8088 NOP is 3 clocks. A prefixed NOP includes prefix costs,
+        // which are not yet modeled. V20 native timing is separate.
+        if(variant_==CpuType::I8088 && prefixCount==1)
+            lastCycles_=3;
         break;
     case 0xf4: // HLT
         halted_=true;
