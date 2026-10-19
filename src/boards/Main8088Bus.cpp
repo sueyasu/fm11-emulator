@@ -220,9 +220,9 @@ bool Main8088Bus::serviceDma()
     // 8237 transfer modes: 01=I/O to memory, 10=memory to I/O.
     // Requests are explicitly serviced by the device scheduler.
     if(dmaCommand_&0x04)return false; // controller disabled
-    if(dmaCommand_&0x01) { // 8237 memory-to-memory: CH0 source, CH1 destination
-        if((dmaMask_&0x03)!=0 ||
-           (activeDmaRequests()&0x01)==0)return false;
+    if((dmaCommand_&0x01) &&
+       (dmaMask_&0x03)==0 &&
+       (activeDmaRequests()&0x01)!=0) { // CH0 source, CH1 destination
         auto& source=dmaChannels_[0];
         auto& dest=dmaChannels_[1];
         const std::uint32_t sourceAddress=
@@ -250,6 +250,9 @@ bool Main8088Bus::serviceDma()
     for(unsigned rank=0;rank<4;++rank) {
         const unsigned channel=(rank+((dmaCommand_&0x10)?dmaPriorityBase_:0u))&3u;
         const BYTE bit=BYTE(1u<<channel);
+        // In memory-to-memory mode channels 0/1 are reserved as a pair.
+        // Other channels remain usable when the pair is idle.
+        if((dmaCommand_&0x01) && channel<2)continue;
         if(dmaMask_&bit)continue;
         auto& ch=dmaChannels_[channel];
         const unsigned transferMode=(ch.mode>>6)&3u;
