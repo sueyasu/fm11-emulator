@@ -564,9 +564,12 @@ BYTE Main6809Board::readIo(WORD address)
         ioRegisters_[reg]&=static_cast<BYTE>(~0x03);
         return value;
     }
-    case 0x05:
-        // Main/sub CPU control status is CPU-visible through FD05.
+    case 0x05: {
+        BYTE busValue=0;
+        if(mainBoard_ && mainBoard_->readIo(address,busValue))
+            return busValue;
         return ioRegisters_[reg];
+    }
     default:
         // Device-specific side effects are introduced with each device. Until
         // then, retain a side-effect-free register backing for the FDxx aperture.
@@ -651,12 +654,14 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         ioOutputLatch_[reg]=0x80;
         break;
     case 0x05:
-        // FD05 writes go to the output/control latch. A HALT request sets the
-        // CPU-visible halt status and clears the corresponding input status.
-        ioOutputLatch_[reg] = value;
-        if ((value & 0x80) != 0) {
-            ioRegisters_[reg] |= 0x80;
-            ioStatusLatch_[reg] &= 0x7f;
+        // The control latch is a main-board device. Keep the standalone
+        // card's previous behavior when no main board is attached.
+        ioOutputLatch_[reg]=value;
+        if(!mainBoard_ || !mainBoard_->writeIo(address,value)) {
+            if(value&0x80) {
+                ioRegisters_[reg]|=0x80;
+                ioStatusLatch_[reg]&=0x7f;
+            }
         }
         break;
     default:
