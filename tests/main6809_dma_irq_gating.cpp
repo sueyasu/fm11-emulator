@@ -43,5 +43,17 @@ int main()
     b.writeCpu(0xfd53,0x40);
     if(b.readCpu(0xfd53)!=0x00)return 12;
     if((b.readCpu(0xfd55)&0x80)!=0)return 13;
+    // CH1 IRQ enable must not report CH0's completed transfer.
+    b.writeCpu(0xfd42,1);
+    b.writeCpu(0xfd43,0);
+    b.writeCpu(0xfd50,0x04);
+    b.writeCpu(0xfd55,0x02); // only CH1 can raise a DMA IRQ
+    b.writeCpu(0xfd18,0x80);
+    if((b.readCpu(0xfd55)&0x80)==0)return 14;
+    if((b.readCpu(0xfd03)&0x10)!=0)return 15;
+    b.writeCpu(0xfd55,0x01); // unmask completed CH0
+    if((b.readCpu(0xfd03)&0x10)==0)return 16;
+    b.writeCpu(0xfd50,0x04); // acknowledge CH0
+    if((b.readCpu(0xfd03)&0x10)!=0)return 17;
     return 0;
 }
