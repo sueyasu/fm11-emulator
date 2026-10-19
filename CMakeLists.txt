@@ -79,6 +79,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(main8088_cycles PRIVATE fm11_core)
     add_test(NAME main8088_cycles COMMAND main8088_cycles)
 
+    add_executable(display_cpu6809 tests/display_cpu6809.cpp)
+    target_link_libraries(display_cpu6809 PRIVATE fm11_core)
+    add_test(NAME display_cpu6809 COMMAND display_cpu6809)
+
     add_executable(machine_fd05_handoff tests/machine_fd05_handoff.cpp)
     target_link_libraries(machine_fd05_handoff PRIVATE fm11_core)
     add_test(NAME machine_fd05_handoff COMMAND machine_fd05_handoff)
