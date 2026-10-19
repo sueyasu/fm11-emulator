@@ -434,5 +434,33 @@ int main()
     try {DisplayBitmap::decodeGraphics400(realLayout,2);}
     catch(const std::out_of_range&) {rejected=true;}
     if(!rejected)return 91;
+    // Display origin and indexed MC6845 register file.
+    DisplaySubsystem crtc;
+    crtc.writeMemory(0xafee,12);
+    crtc.writeMemory(0xafef,0x34);
+    crtc.writeMemory(0xafee,13);
+    crtc.writeMemory(0xafef,0x56);
+    if(crtc.crtcRegister(12)!=0x34 || crtc.crtcRegister(13)!=0x56 ||
+       crtc.readMemory(0xafef)!=0x56)return 94;
+    crtc.writeMemory(0xafee,31);
+    crtc.writeMemory(0xafef,0xff);
+    if(crtc.readMemory(0xafef)!=0xff || crtc.crtcRegister(12)!=0x34)
+        return 95;
+    crtc.writeMemory(0xafea,0x80);
+    crtc.writeMemory(0xafeb,0x02);
+    if(crtc.graphicsDisplayAddress()!=2)return 96;
+    crtc.writeMemory(0xafe1,0x07);
+    crtc.writeMemory(2,0x80);
+    auto shifted=DisplayBitmap::decodeGraphics200(crtc,0);
+    if(shifted[0]!=7 || shifted[1]!=0)return 97;
+    crtc.writeMemory(0xafeb,0);
+    auto unshifted=DisplayBitmap::decodeGraphics200(crtc,0);
+    if(unshifted[0]!=0 || unshifted[16]!=7)return 98;
+    const auto rev=crtc.videoRevision();
+    crtc.writeMemory(0xafeb,0);
+    if(crtc.videoRevision()!=rev)return 99;
+    crtc.reset();
+    if(crtc.graphicsDisplayAddress()!=0 || crtc.crtcRegister(12)!=0)
+        return 100;
     return 0;
 }
