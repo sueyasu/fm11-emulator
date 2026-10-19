@@ -30,6 +30,9 @@ public:
     void set8088ClockHz(std::uint64_t hz);
     // Display CPU scheduling is opt-in until the hardware clock is resolved.
     void setDisplayCpuClockHz(std::uint64_t hz);
+    void loadDisplayRom(const DisplaySubsystem::RomImage& rom) {mainBoard_->displaySubsystem().loadRom(rom);}
+    BYTE displayMemory(std::uint16_t address) const {return mainBoard_->displaySubsystem().readMemory(address);}
+    std::uint16_t displayCpuPc() const {return mainBoard_->displayCpu().pc();}
     std::uint64_t displayCpuClockHz() const {return displayCpuClockHz_;}
     std::uint64_t clock8088Hz() const {return clock8088Hz_;}
     std::uint64_t lastExecutionCycles() const {return lastExecutionCycles_;}
