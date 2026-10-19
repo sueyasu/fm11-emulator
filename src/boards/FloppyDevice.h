@@ -118,6 +118,11 @@ public:
     void writeSector(unsigned channel,std::size_t offset,const BYTE* bytes) {
         for(std::size_t i=0;i<sectorLength(channel);++i)write(channel,offset+i,bytes[i]);
     }
+    // FDC control/data registers are system-side, not CPU-card local.
+    // Command and data ports are dispatched separately by DMA adapters.
+    BYTE registerValue(unsigned reg) const {return registers_.at(reg);}
+    void writeRegister(unsigned reg,BYTE value) {registers_.at(reg)=value;}
+    void resetRegisters() {registers_.fill(0);}
     // Shared FDC transfer FIFO. CPU-specific DMA controllers only move bytes
     // through this interface; the sector buffer belongs to the system device.
     bool beginSector(unsigned channel,unsigned track,unsigned side,unsigned sector,
@@ -176,6 +181,7 @@ public:
     bool has2hd() const {return !raw2hd_.empty();}
 private:
     std::vector<BYTE> raw2d_,raw2hd_,d88_;
+    std::array<BYTE,256> registers_{};
     std::array<std::size_t,40*2*16> offsets_{};
     bool dirty2d_=false,dirty2hd_=false;
     std::array<BYTE,1024> transferBuffer_{};
