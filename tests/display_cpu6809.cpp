@@ -498,14 +498,14 @@ int main()
     DisplaySubsystem frameSource;
     frameSource.writeMemory(0xafe1,0x07);
     frameSource.writeMemory(0x0000,0x80);
-    const auto captured=DisplayBitmap::captureFrame(frameSource,false);
-    if(captured.width!=640 || captured.height!=200 ||
-       captured.argb.size()!=640*200 ||
-       captured.argb[0]!=0xffffffffu ||
-       captured.argb[1]!=0xff000000u ||
-       captured.revision!=frameSource.videoRevision())return 105;
+    const auto capturedFrame=DisplayBitmap::captureFrame(frameSource,false);
+    if(capturedFrame.width!=640 || capturedFrame.height!=200 ||
+       capturedFrame.argb.size()!=640*200 ||
+       capturedFrame.argb[0]!=0xffffffffu ||
+       capturedFrame.argb[1]!=0xff000000u ||
+       capturedFrame.revision!=frameSource.videoRevision())return 105;
     frameSource.writeMemory(0x0000,0);
-    if(captured.argb[0]!=0xffffffffu)return 106;
+    if(capturedFrame.argb[0]!=0xffffffffu)return 106;
     frameSource.writeMemory(0xafe3,0x10);
     frameSource.writeMemory(0x0000,0x40);
     frameSource.writeMemory(0xafe2,0x10);
