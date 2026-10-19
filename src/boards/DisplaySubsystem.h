@@ -42,6 +42,8 @@ public:
         subFirqLatch_=keyboardStatusLatch_=keyboardDataLatch_=0;
         keyHead_=keyTail_=0;
         nmiMask_=true;
+        nmiClockCycles_=60000;
+        subIrq_=false;
         dmaChannel0_=0;
         gvuEnabled_=false;
         gvuPage_=gvuPlane_=gvuOffset_=gvdPage_=0;
@@ -89,6 +91,10 @@ public:
         keyHead_=(keyHead_+1)%keyQueue_.size();
     }
     bool nmiMask() const {return nmiMask_;}
+    std::uint64_t nmiClockCycles() const {return nmiClockCycles_;}
+    void resetInterruptClock() {nmiClockCycles_=60000;}
+    void setSubIrq(bool pending) {subIrq_=pending;}
+    bool subIrqPending() const {return subIrq_;}
     bool subFirqPending() const {return subFirqLatch_!=0;}
     BYTE busyStatus() const {return busy_?0x80:0;}
     BYTE readSubControl() const {return static_cast<BYTE>((subIoRam_[0]&0xfeu)|(busy_?0u:1u));}
@@ -280,6 +286,8 @@ private:
     bool busy_=true;
     BYTE dmaChannel0_=0;
     bool nmiMask_=true;
+    bool subIrq_=false;
+    std::uint64_t nmiClockCycles_=60000;
     std::array<std::uint16_t,256> keyQueue_{};
     mutable std::size_t keyHead_=0,keyTail_=0;
     mutable BYTE subFirqLatch_=0,keyboardStatusLatch_=0,keyboardDataLatch_=0;
