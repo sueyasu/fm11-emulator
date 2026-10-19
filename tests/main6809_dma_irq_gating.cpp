@@ -33,5 +33,15 @@ int main()
     b.writeCpu(0xfd55,0x81);
     if((b.readCpu(0xfd55)&0x80)!=0)return 8;
     if((b.readCpu(0xfd03)&0x10)!=0)return 9;
+    // Channel 1 completion must not manufacture CH0's enabled IRQ.
+    // With no peripheral attached, exercise the status-register contract:
+    // programming CH1 must not set the hardware-owned DEND/BUSY flags.
+    b.writeCpu(0xfd51,0xc1);
+    if(b.readCpu(0xfd51)!=0x01)return 10;
+    b.writeCpu(0xfd52,0x80);
+    if(b.readCpu(0xfd52)!=0x00)return 11;
+    b.writeCpu(0xfd53,0x40);
+    if(b.readCpu(0xfd53)!=0x00)return 12;
+    if((b.readCpu(0xfd55)&0x80)!=0)return 13;
     return 0;
 }
