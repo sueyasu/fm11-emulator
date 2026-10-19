@@ -10,16 +10,16 @@ int main() {
     rom.fill(0x90); // NOP
     rom[0xff1]=0x26; // ES override prefix on next NOP
     rom[0xff2]=0x90;
-    rom[0xff3]=0xf4; // HLT: timing not characterized
+    rom[0xff3]=0xf4; // HLT
     b->bus().loadBootRom(rom);
     m.addBoard(std::move(card));
     m.reset();
     m.executeOne();
     if(m.lastExecutionCycles()!=3)return 1;
     m.executeOne();
-    if(m.lastExecutionCycles()!=0)return 2;
+    if(m.lastExecutionCycles()!=5)return 2;
     m.executeOne();
-    if(m.lastExecutionCycles()!=0)return 3;
+    if(m.lastExecutionCycles()!=2)return 3;
     m.executeOne(); // halted: no elapsed instruction cycles
     if(m.lastExecutionCycles()!=0)return 4;
     Machine v;
@@ -28,7 +28,7 @@ int main() {
     v.addBoard(std::move(c));
     v.reset();
     v.executeOne();
-    if(v.lastExecutionCycles()!=0)return 5;
+    if(v.lastExecutionCycles()!=3)return 5;
     // 8088 flag-only instructions each take two clocks.
     Machine flags;
     auto f=std::make_unique<Main8088Board>(CpuType::I8088);
@@ -43,5 +43,18 @@ int main() {
         flags.executeOne();
         if(flags.lastExecutionCycles()!=2)return int(6+i);
     }
+    // The approximate CPU clock also advances the shared system PTM.
+    Machine timed;
+    auto cpu=std::make_unique<Main8088Board>(CpuType::I8088);
+    cpu->bus().loadBootRom(rom);
+    timed.addBoard(std::move(cpu));
+    timed.set8088ClockHz(29100); // NOP 3 cycles -> 1 PTM input tick
+    timed.reset();
+    timed.executeOne();
+    if(timed.lastExecutionCycles()!=3)return 13;
+    // Confirm that a second NOP accumulates another tick without an
+    // implicit or duplicate CPU-card time source.
+    timed.executeOne();
+    if(timed.lastExecutionCycles()!=5)return 14;
     return 0;
 }
