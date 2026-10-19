@@ -81,14 +81,6 @@ private:
     std::array<DmaWrite,4> dmaWriters_{};
     std::shared_ptr<FloppyDevice> floppy_=std::make_shared<FloppyDevice>();
     std::array<BYTE,0x100> floppyRegisters_{};
-    std::array<BYTE,1024> floppyBuffer_{};
-    unsigned floppyPosition_=256;
-    unsigned floppyChannel_=0;
-    unsigned floppyLength_=256;
-    std::size_t floppySectorStart_=0;
-    bool floppyWriting_=false;
-    BYTE floppyStatus_=0;
-    bool floppySectorOffset(std::size_t& offset,unsigned channel);
     void floppyCommand(BYTE command,unsigned channel);
     BYTE floppyReadData();
     void floppyWriteData(BYTE value);
