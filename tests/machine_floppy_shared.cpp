@@ -202,8 +202,8 @@ int main()
     p6809->writeCpu(0xfd05,0x80);
     if((bus.readIo(0xfd05)&0x80)==0)return 43;
     bus.writeIo(0xfd05,0x00);
-    if((p6809->readCpu(0xfd05)&0x80)==0)return 44;
-    // Writing a zero does not clear the existing latched HALT flag.
+    if((p6809->readCpu(0xfd05)&0x80)!=0)return 44;
+    // Writing a zero releases display HALT.
     machine.reset();
     if(bus.readIo(0xfd05)!=0)return 45;
     bus.writeIo(0xfd05,0x80);
@@ -266,7 +266,7 @@ int main()
     if(!displayOwner.displaySubsystem().haltRequested() ||
        displayOwner.subCpuStatus()!=0x80)return 64;
     displayOwner.writeIo(0xfd05,0x00);
-    if(!displayOwner.displaySubsystem().haltRequested())return 65;
+    if(displayOwner.displaySubsystem().haltRequested())return 65;
     displayOwner.reset();
     if(displayOwner.displaySubsystem().haltRequested() ||
        displayOwner.subCpuStatus()!=0)return 66;
