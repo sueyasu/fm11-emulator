@@ -105,6 +105,7 @@ int main(int argc,char** argv) {
         std::uint64_t ioWrites=0;
         machine.setDisplayIoWriteObserver([&](DisplaySubsystem::IoWriteTrace){++ioWrites;});
         auto lastLog=std::chrono::steady_clock::now();
+        auto lastFrame=lastLog-std::chrono::milliseconds(17);
         while(running) {
             SDL_Event event;
             while(SDL_PollEvent(&event)) {
@@ -150,6 +151,9 @@ int main(int argc,char** argv) {
                 }
                 executed+=instructions;
             }
+            const auto frameTime=std::chrono::steady_clock::now();
+            if(frameTime-lastFrame>=std::chrono::microseconds(16667)) {
+                lastFrame=frameTime;
             auto frame=machine.captureDisplayFrame(high);
             // Original SubCpu::OnDraw derives both layers from FD A0.
             // In particular, loading a font does NOT enable text by itself.
@@ -237,7 +241,10 @@ int main(int argc,char** argv) {
             if(SDL_RenderDrawRect(ui.renderer,&border)!=0)
                 throw std::runtime_error(SDL_GetError());
             SDL_RenderPresent(ui.renderer);
-            SDL_Delay(1);
+            }
+            // Keep the CPU executing between display refreshes. Rendering
+            // every 10,000 guest instructions throttled ROM memory checks
+            // with texture uploads, software composition and vsync waits.
         }
         return 0;
     } catch(const std::exception& e) {
