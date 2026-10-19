@@ -143,3 +143,16 @@ pattern_display[-2:]=bytes.fromhex("b0 00")
 (out/"display_pattern.bin").write_bytes(pattern_display)
 print(out/"main_pattern.bin")
 print(out/"display_pattern.bin")
+
+# Display CPU: wait for $AFE6 bit7 rising and falling edges, then
+# write marker $66 to shared RAM. No original firmware is involved.
+raster=bytearray(0x5000)
+raster_code=bytes.fromhex(
+    "7d af e6 2a fb "  # $B000 TST AFE6; BPL $B000
+    "7d af e6 2b fb "  # $B005 TST AFE6; BMI $B005
+    "86 66 b7 9f 80 "  # write success marker
+    "20 fe")
+raster[:len(raster_code)]=raster_code
+raster[-2:]=bytes.fromhex("b0 00")
+(out/"display_raster.bin").write_bytes(raster)
+print(out/"display_raster.bin")
