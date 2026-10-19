@@ -8,13 +8,13 @@ int main() {
  b.loadFloppy2d(image);
  // A 2D disk does not make the separate 2HD controller ready.
  // The reference controller's D2SNS is a separate C0 | RDY mask.
- if(b.readCpu(0xfd36)!=0xc0)return 12;
+ if(b.readCpu(0xfd36)!=0xc1)return 12;
  b.writeCpu(0xfd30,0xd0); // Force interrupt clears FDC status.
  if(b.readCpu(0xfd30)!=0)return 13;
  b.writeCpu(0xfd30,0x08); // RESTORE without verify is valid without 2HD.
  if(b.readCpu(0xfd30)!=0 || b.readCpu(0xfd31)!=0)return 16;
- b.writeCpu(0xfd30,0x0c); // RESTORE with verify requires a disk.
- if((b.readCpu(0xfd30)&0x80)==0)return 17;
+ b.writeCpu(0xfd30,0x0c); // A 2D disk is present in drive 0.
+ if((b.readCpu(0xfd30)&0x80)!=0)return 17;
  b.writeCpu(0xfd35,0x01); // Changing drive acknowledges status.
  if(b.readCpu(0xfd30)!=0)return 18;
  b.writeCpu(0xfd30,0x0c);
@@ -41,6 +41,18 @@ int main() {
  b.writeCpu(0xfd1b,1);
  b.writeCpu(0xfd18,0x10);
  if(b.readCpu(0xfd19)!=1 || (b.readCpu(0xfd18)&0x04)!=0)return 9;
+ // Boot ROM uses the 2HD controller for drive 0, even on a 2D disk.
+ b.writeCpu(0xfd35,0);
+ b.writeCpu(0xfd34,0);
+ b.writeCpu(0xfd31,1);
+ b.writeCpu(0xfd32,1);
+ b.writeCpu(0xfd44,0x20); b.writeCpu(0xfd45,0);
+ b.writeCpu(0xfd46,0x01); b.writeCpu(0xfd47,0);
+ b.writeCpu(0xfd51,0x04); // DMA read, channel 1
+ b.writeCpu(0xfd30,0x80);
+ if((b.readCpu(0xfd51)&0x80)==0)return 20;
+ for(int i=0;i<256;++i)
+   if(b.readCpu(0x2000+i)!=static_cast<BYTE>(i^0x5a))return 21;
  b.writeCpu(0xfd19,1); b.writeCpu(0xfd1c,0);
  b.writeCpu(0xfd1a,1); b.writeCpu(0xfd1d,0);
  b.writeCpu(0xfd50,0x00);
