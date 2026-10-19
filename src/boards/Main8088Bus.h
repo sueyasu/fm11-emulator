@@ -22,6 +22,8 @@ public:
     void reset();
     void loadBootRom(const Rom& rom);
     void loadFloppy2d(const std::vector<BYTE>& image);
+    void loadFloppy2hd(const std::vector<BYTE>& image);
+    std::vector<BYTE> floppy2hdImage() const { return floppy2hd_; }
     std::vector<BYTE> floppyImage() const { return floppy2d_; }
     bool floppyDirty() const { return floppyDirty_; }
     void clearFloppyDirty() { floppyDirty_=false; }
@@ -69,16 +71,18 @@ private:
     std::array<DmaRead,4> dmaReaders_{};
     std::array<DmaWrite,4> dmaWriters_{};
     std::vector<BYTE> floppy2d_;
+    std::vector<BYTE> floppy2hd_;
     std::array<BYTE,0x100> floppyRegisters_{};
-    std::array<BYTE,256> floppyBuffer_{};
+    std::array<BYTE,1024> floppyBuffer_{};
     unsigned floppyPosition_=256;
     unsigned floppyChannel_=0;
     unsigned floppyLength_=256;
     std::size_t floppySectorStart_=0;
     bool floppyWriting_=false;
     bool floppyDirty_=false;
+    bool floppy2hdDirty_=false;
     BYTE floppyStatus_=0;
-    bool floppySectorOffset(std::size_t& offset);
+    bool floppySectorOffset(std::size_t& offset,unsigned channel);
     void floppyCommand(BYTE command,unsigned channel);
     BYTE floppyReadData();
     void floppyWriteData(BYTE value);
