@@ -3,6 +3,7 @@
 #include "CpuBoard.h"
 #include "MainBoard.h"
 #include "RomFiles.h"
+#include "DisplayBitmap.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -45,6 +46,9 @@ public:
     }
     BYTE displayMemory(std::uint16_t address) const {return mainBoard_->displaySubsystem().readMemory(address);}
     DisplaySubsystem::VideoSnapshot captureDisplayVideo() const {return mainBoard_->displaySubsystem().captureVideo();}
+    DisplayBitmap::Frame captureDisplayFrame(bool highResolution=false) const {
+        return DisplayBitmap::captureFrame(mainBoard_->displaySubsystem(),highResolution);
+    }
     std::uint16_t displayCpuPc() const {return mainBoard_->displayCpu().pc();}
     std::uint64_t displayCpuClockHz() const {return displayCpuClockHz_;}
     std::uint64_t clock8088Hz() const {return clock8088Hz_;}
