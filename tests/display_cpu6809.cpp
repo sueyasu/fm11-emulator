@@ -95,7 +95,7 @@ int main()
     if(io.busyStatus()!=0 || io.readMemory(0xaff0)!=0)return 20;
     // BUSY control is accessible from real sub-CPU instructions.
     DisplaySubsystem::RomImage busyRom{};
-    busyRom[0]=0x86;busyRom[1]=0x80; // LDA #$80
+    busyRom[0]=0x86;busyRom[1]=0x00; // LDA #$00
     busyRom[2]=0xb7;busyRom[3]=0xaf;busyRom[4]=0xf0; // STA $AFF0
     busyRom[0x3ffe]=0xc0;busyRom[0x3fff]=0x00;
     io.loadRom(busyRom);
@@ -103,7 +103,7 @@ int main()
     if(io.busyStatus()!=0x80 || io.readMemory(0xafe0)!=0)return 21;
     if(!board.displayCpu().executeOne() ||
        !board.displayCpu().executeOne() ||
-       io.busyStatus()!=0x80)return 22;
+       io.busyStatus()!=0x00)return 22;
     io.writeMemory(0xaff0,0);
     if(io.busyStatus()!=0)return 23;
     return 0;
