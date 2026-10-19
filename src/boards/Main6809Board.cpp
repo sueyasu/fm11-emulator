@@ -229,8 +229,6 @@ void Main6809Board::writeFloppySector()
         return;
     }
     const unsigned count=(ioRegisters_[0x42]<<8)|ioRegisters_[0x43];
-    const std::uint32_t src=((ioRegisters_[0x94]&0x0f)<<16)|
-        (ioRegisters_[0x40]<<8)|ioRegisters_[0x41];
     if((ioRegisters_[0x50]&0x01)==0 || count!=256) {
         floppyStatus_=0x10;
         ioRegisters_[0x50]|=0x40;
@@ -253,8 +251,7 @@ void Main6809Board::writeFloppySector()
     }
     // The completed 256-byte transfer advances the channel address and
     // exhausts the byte count, as a DMA engine would do.
-    const WORD nextAddress=WORD((ioRegisters_[0x40]<<8)|ioRegisters_[0x41]);
-    const WORD advanced=WORD(nextAddress+((ioRegisters_[0x50]&0x08)?-256:256));
+    const WORD advanced=WORD(startAddress+(down?-256:256));
     ioRegisters_[0x40]=BYTE(advanced>>8);
     ioRegisters_[0x41]=BYTE(advanced);
     ioRegisters_[0x42]=0;
@@ -283,8 +280,6 @@ void Main6809Board::readFloppySector()
     floppyStatus_=0x02; // DRQ for programmed I/O
     const bool dma=(ioRegisters_[0x50]&0x04)!=0;
     if(dma) {
-        const std::uint32_t dest=((ioRegisters_[0x94]&0x0f)<<16)|
-            (ioRegisters_[0x40]<<8)|ioRegisters_[0x41];
         const unsigned count=(ioRegisters_[0x42]<<8)|ioRegisters_[0x43];
         if(count!=256) {
             floppyStatus_=0x10;
@@ -308,8 +303,7 @@ void Main6809Board::readFloppySector()
         }
         // The completed 256-byte transfer advances the channel address and
         // exhausts the byte count, as a DMA engine would do.
-        const WORD nextAddress=WORD((ioRegisters_[0x40]<<8)|ioRegisters_[0x41]);
-        const WORD advanced=WORD(nextAddress+((ioRegisters_[0x50]&0x08)?-256:256));
+        const WORD advanced=WORD(startAddress+(down?-256:256));
         ioRegisters_[0x40]=BYTE(advanced>>8);
         ioRegisters_[0x41]=BYTE(advanced);
         ioRegisters_[0x42]=0;
@@ -317,11 +311,11 @@ void Main6809Board::readFloppySector()
         floppyOffset_=256;
         floppyStatus_=0;
         ioRegisters_[0x50]=static_cast<BYTE>((ioRegisters_[0x50]|0x80)&~0x40);
-    // Completion is visible both in the per-channel status and in the
-    // DMA common completion latch, until the channel status is read.
-    ioRegisters_[0x55]|=0x80;
-    mainIrqSources_|=0x10;
-    mainIrqStatus();
+        // Completion is visible both in the per-channel status and in the
+        // DMA common completion latch, until the channel status is read.
+        ioRegisters_[0x55]|=0x80;
+        mainIrqSources_|=0x10;
+        mainIrqStatus();
     }
 }
 
