@@ -4,3 +4,6 @@ CMakeUserPresets.json
 *.o
 *.a
 *.so
+
+# User-supplied ROM images (never commit firmware)
+/external/roms/
