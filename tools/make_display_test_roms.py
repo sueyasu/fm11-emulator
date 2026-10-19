@@ -50,7 +50,7 @@ print(out/"display_handshake.bin")
 # FD05 HALT/release test: unlike the shared-RAM polling tests, the main
 # CPU writes the real modeled control register.
 halt_main=bytearray(0x1000)
-halt_main[:25]=bytes.fromhex(
+halt_main[0:22]=bytes.fromhex(
     "86 80 b7 fd 05 "     # HALT display CPU
     "86 11 b7 fc 80 "     # marker while HALTed
     "86 00 b7 fd 05 "     # release HALT
@@ -59,7 +59,7 @@ halt_main[:25]=bytes.fromhex(
 halt_main[-2:]=bytes.fromhex("50 00")
 # Display CPU writes BUSY only when allowed to execute.
 halt_display=bytearray(0x5000)
-halt_display[:10]=bytes.fromhex("86 42 b7 af f0 86 33 b7 9f 82 20 fe")
+halt_display[0:12]=bytes.fromhex("86 42 b7 af f0 86 33 b7 9f 82 20 fe")
 halt_display[-2:]=bytes.fromhex("b0 00")
 (out/"main_halt.bin").write_bytes(halt_main)
 (out/"display_halt.bin").write_bytes(halt_display)
