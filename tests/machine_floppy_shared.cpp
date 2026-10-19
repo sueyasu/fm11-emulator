@@ -188,5 +188,15 @@ int main()
     if((card86->bus().readIo(0xfd39)&0x81)!=0x81)return 37;
     card09->syncPtmIrq();
     if((card09->readCpu(0xfd03)&0x01)!=0)return 38;
+    // FD04 event latch is physically shared, regardless of CPU card.
+    p6809->signalAttention();
+    p6809->signalBreak();
+    if((bus.readIo(0xfd04)&0x03)!=0x03)return 39;
+    if((p6809->readCpu(0xfd04)&0x03)!=0)return 40;
+    p6809->signalAttention();
+    p6809->signalBreak();
+    bus.writeIo(0xfd04,0x80); // ATTENTION ACK does not clear BREAK
+    if((p6809->readCpu(0xfd04)&0x03)!=0x02)return 41;
+    if((bus.readIo(0xfd04)&0x03)!=0)return 42;
     return 0;
 }
