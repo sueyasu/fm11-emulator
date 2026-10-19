@@ -152,6 +152,34 @@ branch loops. This fixes the status semantics tested here but does
 not yet port the original character-display composition or every
 sub-CPU peripheral behavior.
 
+### Synthetic 6809 display-layer selection: stage 5
+
+This test makes the graphics region **large enough to see**.
+The common display ROM writes yellow text `LAYER TEST` plus a 640x200
+blue/black alternating-pixel stripe field, and the main ROM selects
+which layers are enabled via `FDA0`:
+
+| Main ROM | FDA0 | Expected appearance |
+| --- | --- | --- |
+| `main_layers_text.bin` | `03` | Yellow text on black |
+| `main_layers_graphics.bin` | `0C` | Blue/black stripes across the screen, no text |
+| `main_layers_both.bin` | `0F` | Yellow text over blue/black stripes |
+
+```sh
+python3 tools/make_display_test_roms.py build/test-roms
+ctest --test-dir build -R display_binary_layers --output-on-failure
+
+# Change 'both' to 'text' or 'graphics' for the other two modes:
+./build/fm11-sdl --main-rom build/test-roms/main_layers_both.bin \\
+    --rom build/test-roms/display_layers.bin \\
+    --ank-rom external/roms/ank.bin
+```
+
+The three new tests check actual main/sub-6809 writes and pixels for
+both 200- and 400-line scanout. The 400-line view includes the
+graphics plane's upper area, which is still blank because the test
+draws only the first 200 scanlines.
+
 ### Synthetic 6809 graphics/text overlay: stage 4
 
 This stage uses a **new pair of synthetic 6809 ROMs**. The main CPU
