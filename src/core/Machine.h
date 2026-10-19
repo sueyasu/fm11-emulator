@@ -2,6 +2,7 @@
 
 #include "CpuBoard.h"
 #include "MainBoard.h"
+#include "RomFiles.h"
 
 #include <cstddef>
 #include <cstdint>
@@ -31,6 +32,9 @@ public:
     // Display CPU scheduling is opt-in until the hardware clock is resolved.
     void setDisplayCpuClockHz(std::uint64_t hz);
     void loadDisplayRom(const DisplaySubsystem::RomImage& rom) {mainBoard_->displaySubsystem().loadRom(rom);}
+    void loadDisplayRomFile(const std::string& path) {
+        loadDisplayRom(RomFiles::load<DisplaySubsystem::kRomSize>(path));
+    }
     BYTE displayMemory(std::uint16_t address) const {return mainBoard_->displaySubsystem().readMemory(address);}
     DisplaySubsystem::VideoSnapshot captureDisplayVideo() const {return mainBoard_->displaySubsystem().captureVideo();}
     std::uint16_t displayCpuPc() const {return mainBoard_->displayCpu().pc();}
