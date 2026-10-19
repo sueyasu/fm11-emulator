@@ -71,6 +71,53 @@ public:
         return output;
     }
 
+    // Graphics scanout follows the source emulator's three separate
+    // 64KiB VRAM planes, unlike the earlier diagnostic contiguous layout.
+    // In 200-line mode each plane contains four 16KiB page slots;
+    // in 400-line mode each plane contains two 32KiB page slots.
+    static Pixels decodeGraphics200(const DisplaySubsystem& display,
+                                    std::size_t page) {
+        if(page>=4)throw std::out_of_range("graphics 200-line page");
+        Pixels output{};
+        const auto& memory=display.physicalVram();
+        for(std::size_t pos=0;pos<kBytesPerLine*kHeight;++pos) {
+            const auto address=page*0x4000+pos;
+            for(unsigned bit=0;bit<8;++bit) {
+                const auto shift=7-bit;
+                unsigned index=0;
+                for(unsigned plane=0;plane<3;++plane)
+                    index|=((memory[plane*0x10000+address]>>shift)&1u)<<plane;
+                output[pos*8+bit]=static_cast<std::uint8_t>(index);
+            }
+        }
+        return output;
+    }
+
+    static HighPixels decodeGraphics400(const DisplaySubsystem& display,
+                                        std::size_t page) {
+        if(page>=2)throw std::out_of_range("graphics 400-line page");
+        HighPixels output{};
+        const auto& memory=display.physicalVram();
+        for(std::size_t pos=0;pos<kBytesPerLine*kHighHeight;++pos) {
+            const auto address=page*0x8000+pos;
+            for(unsigned bit=0;bit<8;++bit) {
+                const auto shift=7-bit;
+                unsigned index=0;
+                for(unsigned plane=0;plane<3;++plane)
+                    index|=((memory[plane*0x10000+address]>>shift)&1u)<<plane;
+                output[pos*8+bit]=static_cast<std::uint8_t>(index);
+            }
+        }
+        return output;
+    }
+
+    static Pixels decodeSelectedGraphics200(const DisplaySubsystem& display) {
+        return decodeGraphics200(display,display.graphicsDisplayPage());
+    }
+    static HighPixels decodeSelectedGraphics400(const DisplaySubsystem& display) {
+        return decodeGraphics400(display,display.graphicsDisplayPage()>>1);
+    }
+
     // Diagnostic two-plane combination: each bit from the first 16000
     // bytes contributes bit 0, and each corresponding bit at +0x4000
     // contributes bit 1. This is not yet a confirmed FM-11 color mode.
