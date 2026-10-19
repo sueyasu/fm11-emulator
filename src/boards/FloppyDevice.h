@@ -123,6 +123,16 @@ public:
     BYTE registerValue(unsigned reg) const {return registers_.at(reg);}
     void writeRegister(unsigned reg,BYTE value) {registers_.at(reg)=value;}
     void resetRegisters() {registers_.fill(0);}
+    enum class Command : BYTE { Other, ReadSector, WriteSector };
+    static Command decodeCommand(BYTE value) {
+        switch(value&0xf0) {
+        case 0x80: return Command::ReadSector;
+        case 0xa0: return Command::WriteSector;
+        default: return Command::Other;
+        }
+    }
+    // Command decoding is independent of the processor and its DMA chip.
+    // Reset/seek commands still need their own controller implementation.
     // Shared FDC transfer FIFO. CPU-specific DMA controllers only move bytes
     // through this interface; the sector buffer belongs to the system device.
     bool beginSector(unsigned channel,unsigned track,unsigned side,unsigned sector,
