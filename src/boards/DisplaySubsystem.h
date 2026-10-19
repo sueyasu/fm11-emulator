@@ -31,6 +31,9 @@ public:
         if(videoFlags_!=0)markVideoChanged();
         videoFlags_=0;
         subIoRam_.fill(0);
+        gvuEnabled_=false;
+        gvuPage_=gvuPlane_=gvuOffset_=gvdPage_=0;
+        gvuControl_=gvuAddressHigh_=0;
         // ROM contents and display memory survive a CPU reset. Hardware
         // power-on clearing is a separate future operation.
     }
@@ -47,6 +50,10 @@ public:
     void beginCpuInstruction(std::uint16_t pc) {tracePc_=pc;traceCpu_=true;}
     void endCpuInstruction() {traceCpu_=false;}
     BYTE busyStatus() const {return busy_;}
+    std::size_t graphicsAccessPage() const {return gvuPage_;}
+    std::size_t graphicsDisplayPage() const {return gvdPage_;}
+    std::uint16_t graphicsOffset() const {return gvuOffset_;}
+    std::size_t graphicsReadPlane() const {return gvuPlane_;}
     // AFE6 video-control flags. Individual bits are not yet mapped to
     // display modes until their FM-11 semantics have been verified.
     BYTE videoFlags() const {return videoFlags_;}
@@ -79,9 +86,14 @@ public:
     BYTE readShared(std::size_t offset) const {return ram_[0x1f80+offset];}
     void writeShared(std::size_t offset,BYTE value) {ram_[0x1f80+offset]=value;}
     BYTE readMemory(std::uint16_t address) const {
-        if(address<0x8000)return vram_[vramWindow_*kVramSize+address];
+        if(address<0x8000) {
+            if(!gvuEnabled_)return vram_[vramWindow_*kVramSize+address];
+            return vram_[gvuPlane_*0x10000+graphicsAddress(address)];
+        }
         if(address<0xa000)return ram_[address-0x8000];
         if(address>=0xafe0 && address<=0xafe3)return subIoRam_[address-0xafe0];
+        if(address==0xafe8)return gvuAddressHigh_;
+        if(address==0xafe9)return static_cast<BYTE>(gvuOffset_);
         if(address==0xafe6)return videoFlags_;
         if(address==0xaff0)return busy_;
         if(address>=0xb000)return rom_[address-0xb000];
@@ -89,14 +101,43 @@ public:
     }
     void writeMemory(std::uint16_t address,BYTE value) {
         if(address<0x8000) {
-            const auto offset=vramWindow_*kVramSize+address;
-            if(vram_[offset]!=value) {
-                vram_[offset]=value;
-                markVideoChanged();
+            if(gvuEnabled_) {
+                const auto offset=graphicsAddress(address);
+                for(unsigned plane=0;plane<3;++plane) {
+                    const unsigned writeMask=1u<<plane;
+                    const unsigned preserveMask=1u<<(plane+3);
+                    BYTE next=vram_[plane*0x10000+offset];
+                    if(gvuControl_&writeMask)next=value;
+                    else if(!(gvuControl_&preserveMask))next=0;
+                    if(next!=vram_[plane*0x10000+offset]) {
+                        vram_[plane*0x10000+offset]=next;
+                        markVideoChanged();
+                    }
+                }
+            } else {
+                const auto offset=vramWindow_*kVramSize+address;
+                if(vram_[offset]!=value) {
+                    vram_[offset]=value;
+                    markVideoChanged();
+                }
             }
         }
         else if(address<0xa000)ram_[address-0x8000]=value;
-        else if(address>=0xafe0 && address<=0xafe3)subIoRam_[address-0xafe0]=value;
+        else if(address>=0xafe0 && address<=0xafe3) {
+            subIoRam_[address-0xafe0]=value;
+            if(address==0xafe1) {
+                gvuControl_=value;
+                gvuPlane_=std::min<unsigned>(value>>6,2);
+                gvuEnabled_=true;
+            } else if(address==0xafe2) {
+                gvdPage_=(value>>3)&3;
+            } else if(address==0xafe3) {
+                gvuPage_=(value>>3)&3;
+            }
+        }
+        else if(address==0xafe8)gvuAddressHigh_=value;
+        else if(address==0xafe9)gvuOffset_=static_cast<std::uint16_t>(
+            ((unsigned(gvuAddressHigh_)<<8)|value)&0x7ffe);
         else if(address==0xafe6) {
             if(videoFlags_!=value) {
                 videoFlags_=value;
@@ -113,6 +154,9 @@ public:
     const std::array<BYTE,kPhysicalVramSize>& vram() const {return vram_;}
 
 private:
+    std::size_t graphicsAddress(std::uint16_t address) const {
+        return (gvuPage_*0x4000+((gvuOffset_+address)&0x7fff))&0xffff;
+    }
     void markVideoChanged() {++videoRevision_;}
     std::uint64_t videoRevision_=0;
     IoWriteObserver ioWriteObserver_;
@@ -124,6 +168,10 @@ private:
     BYTE videoFlags_=0;
     std::array<BYTE,4> subIoRam_{};
     std::size_t vramWindow_=0;
+    bool gvuEnabled_=false;
+    BYTE gvuControl_=0,gvuAddressHigh_=0;
+    unsigned gvuPage_=0,gvuPlane_=0,gvdPage_=0;
+    std::uint16_t gvuOffset_=0;
     std::array<BYTE,kPhysicalVramSize> vram_{};
     std::array<BYTE,kRamSize> ram_{};
     RomImage rom_{};
