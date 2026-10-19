@@ -9,6 +9,7 @@ void Main8088Bus::reset()
 {
     cardIoRam_.fill(0);
     picMask_=0;picRequest_=0;picInService_=0;
+    usartIrqPrevious_=false;
     picVectorBase_=8;picReadIsr_=0;picInitStep_=0;
     picNeedsIcw4_=false;picSingle_=false;picAutoEoi_=false;
     resetDma();
@@ -93,6 +94,7 @@ void Main8088Bus::setSystemIo(IoReader reader,IoWriter writer)
 
 BYTE Main8088Bus::readIo(WORD port) const
 {
+    const_cast<Main8088Bus*>(this)->refreshSystemIrq();
     if(port>=0x10 && port<=0x23)return readDma(port);
     if(port==0x00)return picReadIsr_?picInService_:picRequest_;
     if(port==0x01)return picMask_;
@@ -117,6 +119,7 @@ BYTE Main8088Bus::readIo(WORD port) const
 
 void Main8088Bus::writeIo(WORD port,BYTE value)
 {
+    refreshSystemIrq();
     if(port>=0x10 && port<=0x23){writeDma(port,value);return;}
     if(port==0x00) {
         if(value&0x10) {
@@ -149,8 +152,10 @@ void Main8088Bus::writeIo(WORD port,BYTE value)
         return;
     }
     if(port>=0xfc00 && port<=0xfcff) cardIoRam_[port&0xff]=value;
-    else if((port==0xfd06 || port==0xfd07) && mainBoard_)
+    else if((port==0xfd06 || port==0xfd07) && mainBoard_) {
         mainBoard_->writeIo(port,value);
+        refreshSystemIrq();
+    }
     else if(port>=0xfd00 && port<=0xfdff && systemWriter_) systemWriter_(port,value);
     else if(((port>=0xfd18 && port<=0xfd1d && floppy_->has2d()) ||
              (port>=0xfd30 && port<=0xfd35 && floppy_->has2hd()))) {
@@ -159,6 +164,17 @@ void Main8088Bus::writeIo(WORD port,BYTE value)
         else if(!mainBoard_ || !mainBoard_->writeIo(port,value))
             floppy_->writeRegister(port&0xff,value);
     }
+}
+
+void Main8088Bus::refreshSystemIrq()
+{
+    if(!mainBoard_)return;
+    const bool asserted=mainBoard_->usartDevice()->irqRequest();
+    // The current 8088 adapter presents main-board interrupts on PIC IRQ0.
+    // Only the rising edge is latched; EOI must not cause a fresh request
+    // while the USART source stays asserted.
+    if(asserted && !usartIrqPrevious_)requestIrq(0);
+    usartIrqPrevious_=asserted;
 }
 
 void Main8088Bus::requestIrq(unsigned line)
