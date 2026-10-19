@@ -30,19 +30,6 @@ void Main8088Bus::loadFloppy2hd(const std::vector<BYTE>& image)
                    [this](BYTE value){floppyWriteData(value);});
 }
 
-bool Main8088Bus::floppySectorOffset(std::size_t& offset,unsigned channel)
-{
-    const unsigned base=channel==0?0x18:0x30;
-    if(!floppy_->sectorOffset(channel,floppyRegisters_[base+1],
-             floppyRegisters_[channel==0?0x1c:0x34],
-             floppyRegisters_[base+2],
-             floppyRegisters_[channel==0?0x1d:0x35],offset)) {
-        floppyStatus_=0x10;
-        return false;
-    }
-    return true;
-}
-
 BYTE Main8088Bus::floppyReadData()
 {
     return floppy_->transferRead();
