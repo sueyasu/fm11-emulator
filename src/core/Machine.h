@@ -18,6 +18,10 @@ public:
     const CpuBoard& board(std::size_t index) const;
 
     void setActiveBoard(std::size_t index);
+    // Optional FD05 bit-0 CPU-card selection. Disabled by default to
+    // preserve explicit board selection during existing bring-up tests.
+    void enableFd05Selection(bool enabled);
+    bool fd05SelectionEnabled() const {return fd05SelectionEnabled_;}
     CpuBoard* activeBoard();
     const CpuBoard* activeBoard() const;
 
@@ -32,6 +36,8 @@ public:
 
 
 private:
+    void synchronizeFd05Selection();
+    bool fd05SelectionEnabled_=false;
     std::shared_ptr<MainBoard> mainBoard_=std::make_shared<MainBoard>();
     std::vector<std::unique_ptr<CpuBoard>> boards_;
     std::size_t active_board_ = 0;
