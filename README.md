@@ -91,6 +91,22 @@ python3 tools/make_display_test_roms.py build/test-roms
 ctest --test-dir build -R display_binary_integration --output-on-failure
 ```
 
+A second, separate regression tests a complete command/acknowledgement
+exchange through the same transport. The synthetic main-CPU ROM writes
+command `$81` to `$FC80`, the display ROM reads it from `$9F80`,
+draws a white pixel, then writes acknowledgement `$55` to `$9F81`.
+The main CPU polls `$FC81` and records success as `$66` at
+`$FC82`. Run it independently:
+
+```sh
+ctest --test-dir build -R display_binary_handshake --output-on-failure
+./build/display_binary_integration build/test-roms/main_handshake.bin build/test-roms/display_handshake.bin --handshake
+```
+
+This validates bidirectional shared memory and CPU scheduling, **not**
+the original FM-11 interrupt/attention protocol; a hardware notification
+register is not inferred from this test.
+
 The main CPU program at `$5000` writes `$80` to `$FC80`.
 The display CPU program at `$B000` waits for the same value at
 `$9F80`, then writes `$80` to VRAM through the three color planes.
