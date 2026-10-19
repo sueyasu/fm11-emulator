@@ -18,6 +18,7 @@ public:
     void reset() {
         haltRequested_=false;
         busy_=0x80;
+        if(videoFlags_!=0)markVideoChanged();
         videoFlags_=0;
         subIoRam_.fill(0);
         // ROM contents and display memory survive a CPU reset. Hardware
@@ -32,6 +33,9 @@ public:
     // AFE6 video-control flags. Individual bits are not yet mapped to
     // display modes until their FM-11 semantics have been verified.
     BYTE videoFlags() const {return videoFlags_;}
+    // Renderer-facing change tracking, independent of the eventual display
+    // resolution and the meanings assigned to AFE6 bits.
+    std::uint64_t videoRevision() const {return videoRevision_;}
     // Handshake output to the main board. The physical sub-I/O trigger
     // remains unassigned until its register decode is confirmed.
     void setAttentionSink(std::function<void()> sink) {attentionSink_=std::move(sink);}
@@ -49,16 +53,28 @@ public:
         return 0xff; // unmapped space, including unimplemented sub I/O
     }
     void writeMemory(std::uint16_t address,BYTE value) {
-        if(address<0x8000)vram_[address]=value;
+        if(address<0x8000) {
+            if(vram_[address]!=value) {
+                vram_[address]=value;
+                markVideoChanged();
+            }
+        }
         else if(address<0xa000)ram_[address-0x8000]=value;
         else if(address>=0xafe0 && address<=0xafe3)subIoRam_[address-0xafe0]=value;
-        else if(address==0xafe6)videoFlags_=value;
+        else if(address==0xafe6) {
+            if(videoFlags_!=value) {
+                videoFlags_=value;
+                markVideoChanged();
+            }
+        }
         else if(address==0xaff0)busy_=value;
         // ROM and unmapped space are read-only.
     }
     const std::array<BYTE,kVramSize>& vram() const {return vram_;}
 
 private:
+    void markVideoChanged() {++videoRevision_;}
+    std::uint64_t videoRevision_=0;
     std::function<void()> attentionSink_;
     bool haltRequested_=false;
     BYTE busy_=0x80;
