@@ -136,10 +136,10 @@ std::vector<BYTE> Main6809Board::floppyImage() const
 
 bool Main6809Board::floppySectorOffset(std::size_t& offset)
 {
-    const unsigned track=ioRegisters_[0x19];
-    const unsigned side=ioRegisters_[0x1c]&1;
-    const unsigned sector=ioRegisters_[0x1a];
-    const unsigned drive=ioRegisters_[0x1d]&3;
+    const unsigned track=floppy_->registerValue(0x19);
+    const unsigned side=floppy_->registerValue(0x1c)&1;
+    const unsigned sector=floppy_->registerValue(0x1a);
+    const unsigned drive=floppy_->registerValue(0x1d)&3;
     if(!floppy_->sectorOffset(0,track,side,sector,drive,offset)) {
         floppyStatus_=0x10;
         floppyOffset_=256;
@@ -161,8 +161,8 @@ void Main6809Board::writeFloppySector()
         floppyWritePio_=true;
         floppyWriteOffset_=offset;
         floppyOffset_=0;
-        floppy_->beginSector(0,ioRegisters_[0x19],ioRegisters_[0x1c]&1,
-                             ioRegisters_[0x1a],ioRegisters_[0x1d]&3,true);
+        floppy_->beginSector(0,floppy_->registerValue(0x19),floppy_->registerValue(0x1c)&1,
+                             floppy_->registerValue(0x1a),floppy_->registerValue(0x1d)&3,true);
         floppyStatus_=floppy_->transferStatus();
         return;
     }
@@ -210,8 +210,8 @@ void Main6809Board::readFloppySector()
     floppyOffset_=0;
     floppyStatus_=0x02; // DRQ for programmed I/O
     const bool dma=(ioRegisters_[0x50]&0x04)!=0;
-    if(!dma)floppy_->beginSector(0,ioRegisters_[0x19],ioRegisters_[0x1c]&1,
-                                 ioRegisters_[0x1a],ioRegisters_[0x1d]&3,false);
+    if(!dma)floppy_->beginSector(0,floppy_->registerValue(0x19),floppy_->registerValue(0x1c)&1,
+                                 floppy_->registerValue(0x1a),floppy_->registerValue(0x1d)&3,false);
     if(dma) {
         const unsigned count=(ioRegisters_[0x42]<<8)|ioRegisters_[0x43];
         if(count!=256) {
@@ -607,6 +607,8 @@ BYTE Main6809Board::readIo(WORD address)
         return status;
     }
     case 0x18: return floppyStatus_;
+    case 0x19: case 0x1a: case 0x1c: case 0x1d:
+        return floppy_->registerValue(reg);
     case 0x1b: {
         if(floppyOffset_==256)return 0;
         const BYTE value=floppy_->transferRead();
@@ -664,6 +666,9 @@ void Main6809Board::writeIo(WORD address, BYTE value)
     case 0x2c:
         ioOutputLatch_[0x2c] = value;
         mainIrqStatus();
+        break;
+    case 0x19: case 0x1a: case 0x1c: case 0x1d:
+        floppy_->writeRegister(reg,value);
         break;
     case 0x18:
         if((value&0xf0)==0x80)readFloppySector();
