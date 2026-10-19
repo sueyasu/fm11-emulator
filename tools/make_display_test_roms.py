@@ -347,3 +347,34 @@ for ch in b"LAYER TEST":
     layers_ank[ch*16]=0x01
 (out/"ank_layers.bin").write_bytes(layers_ank)
 print(out/"ank_layers.bin")
+
+# Stage 6: CRTC display-start scrolling. Both ROMs populate TWO lines in
+# the same physical text RAM; only CRTC R13 changes (0 vs 80 cells).
+# Thus changing the displayed first line must not rewrite character RAM.
+for start_cell,name in ((0,"top"),(80,"scroll")):
+    rom=bytearray(0x5000)
+    code=bytearray()
+    def sw(address,value):
+        code.extend((0x86,value,0xb7,(address>>8)&255,address&255))
+    for reg,value in ((1,40),(6,25),(12,0),(13,0)):
+        sw(0xafee,reg)
+        sw(0xafef,value)
+    for line,label in enumerate((b"FIRST LINE",b"SECOND LINE")):
+        for i,ch in enumerate(label):
+            address=0x8000+2*(line*80+i)
+            sw(address,ch)
+            sw(address+1,7)
+    # Set displayed first text cell to start_cell, in CRTC units.
+    sw(0xafee,13)
+    sw(0xafef,start_cell)
+    sw(0x9f80,0x66)
+    code.extend((0x20,0xfe))
+    rom[:len(code)]=code
+    rom[-2:]=bytes.fromhex("b0 00")
+    (out/f"display_text_scroll_{name}.bin").write_bytes(rom)
+    print(out/f"display_text_scroll_{name}.bin")
+scroll_ank=bytearray(4096)
+for ch in b"FIRST LINE SECOND":
+    scroll_ank[ch*16]=1
+(out/"ank_text_scroll.bin").write_bytes(scroll_ank)
+print(out/"ank_text_scroll.bin")
