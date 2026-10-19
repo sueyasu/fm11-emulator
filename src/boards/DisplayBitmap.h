@@ -42,6 +42,35 @@ public:
         return output;
     }
 
+    // Diagnostic 640x400 mode: 32 KiB per plane, three planes per
+    // 96 KiB page. 192 KiB physical VRAM holds two such pages.
+    // Plane order and CPU-side bank selection remain hardware-dependent.
+    static constexpr std::size_t kHighHeight=400;
+    static constexpr std::size_t kHighPlaneBytes=0x8000;
+    static constexpr std::size_t kHighPageBytes=3*kHighPlaneBytes;
+    static constexpr std::size_t kHighPages=
+        DisplaySubsystem::kPhysicalVramSize/kHighPageBytes;
+    using HighPixels=std::array<std::uint8_t,kWidth*kHighHeight>;
+
+    static HighPixels decodeHighColorPage(const DisplaySubsystem& display,
+                                          std::size_t page) {
+        if(page>=kHighPages)
+            throw std::out_of_range("display high-resolution page");
+        HighPixels output{};
+        const auto& memory=display.physicalVram();
+        const auto base=page*kHighPageBytes;
+        for(std::size_t y=0;y<kHighHeight;++y)
+            for(std::size_t x=0;x<kWidth;++x) {
+                const auto pos=y*kBytesPerLine+x/8;
+                const auto shift=7-(x%8);
+                unsigned color=0;
+                for(std::size_t plane=0;plane<3;++plane)
+                    color|=((memory[base+plane*kHighPlaneBytes+pos]>>shift)&1u)<<plane;
+                output[y*kWidth+x]=static_cast<std::uint8_t>(color);
+            }
+        return output;
+    }
+
     // Diagnostic two-plane combination: each bit from the first 16000
     // bytes contributes bit 0, and each corresponding bit at +0x4000
     // contributes bit 1. This is not yet a confirmed FM-11 color mode.
