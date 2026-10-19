@@ -92,7 +92,13 @@ int main(int argc,char** argv) {
                          <<std::dec<<" serial="<<serialBytes
                          <<" busy="<<unsigned(machine.displayBusyStatus())
                          <<" displayWrites="<<machine.displaySharedWriteRevision()
-                         <<" halted="<<machine.displayHalted()<<"\\n";
+                         <<" halted="<<machine.displayHalted()
+                         <<" fdcReads="<<main->fdcReadCommands()
+                         <<" fdcOK="<<main->fdcSuccessfulReads()
+                         <<" fdcFail="<<main->fdcFailedReads()
+                         <<" fdcStatus="<<unsigned(main->fdcStatus())
+                         <<" CHS="<<unsigned(main->fdcTrack())<<":"<<unsigned(main->fdcSector())
+                         <<" drive="<<unsigned(main->fdcDrive())<<"\\n";
             }
         }
         std::cout.flush();
