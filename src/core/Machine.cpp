@@ -3,6 +3,7 @@
 #include "Main8088Board.h"
 
 #include <stdexcept>
+#include <limits>
 
 std::size_t Machine::addBoard(std::unique_ptr<CpuBoard> board)
 {
@@ -87,12 +88,17 @@ void Machine::reset()
     for (auto& board : boards_)
         board->reset();
     lastExecutionCycles_=0;
+    displayCycleCredit_=0;
+    displayCycleFraction_=0;
+    displayNanosecondFraction_=0;
+    displayCpuInputHz_=0;
     synchronizeFd05Selection();
 }
 
 void Machine::advanceTimeNanoseconds(std::uint64_t nanoseconds)
 {
     mainBoard_->advanceTimeNanoseconds(nanoseconds);
+    advanceDisplayTime(nanoseconds);
     // The 6809 IRQ aggregator is still implemented in its CPU adapter.
     // Synchronize it with the main-board PTM after independent time advance.
     for(auto& board:boards_)
@@ -105,6 +111,67 @@ void Machine::set8088ClockHz(std::uint64_t hz)
     if(hz==0 || hz>1000000000ULL)
         throw std::invalid_argument("8088/V20 clock must be between 1 and 1e9 Hz");
     clock8088Hz_=hz;
+}
+
+void Machine::setDisplayCpuClockHz(std::uint64_t hz)
+{
+    if(hz>1000000000ULL)
+        throw std::invalid_argument("display CPU clock must not exceed 1 GHz");
+    displayCpuClockHz_=hz;
+    displayCycleCredit_=0;
+    displayCycleFraction_=0;
+    displayNanosecondFraction_=0;
+    displayCpuInputHz_=0;
+}
+
+void Machine::advanceDisplayTime(std::uint64_t ns)
+{
+    if(!displayCpuClockHz_)return;
+    auto& sub=mainBoard_->displayCpu();
+    if(mainBoard_->displaySubsystem().haltRequested()) {
+        displayCycleCredit_=0;
+        displayNanosecondFraction_=0;
+        return;
+    }
+    constexpr std::uint64_t second=1000000000ULL;
+    const auto seconds=ns/second;
+    const auto remainder=ns%second;
+    if(seconds>static_cast<std::uint64_t>(
+            std::numeric_limits<std::int64_t>::max())/displayCpuClockHz_)
+        throw std::overflow_error("display CPU time interval too large");
+    const auto fractional=remainder*displayCpuClockHz_+displayNanosecondFraction_;
+    const auto cycles=seconds*displayCpuClockHz_+fractional/second;
+    if(cycles>static_cast<std::uint64_t>(
+            std::numeric_limits<std::int64_t>::max()-displayCycleCredit_))
+        throw std::overflow_error("display CPU cycle budget too large");
+    displayNanosecondFraction_=fractional%second;
+    displayCycleCredit_+=static_cast<std::int64_t>(cycles);
+    while(displayCycleCredit_>0) {
+        if(!sub.executeOne()) {
+            displayCycleCredit_=0;
+            break;
+        }
+        const auto used=sub.LastInstructionCycles();
+        displayCycleCredit_-=static_cast<std::int64_t>(used?used:1);
+    }
+}
+
+void Machine::advanceDisplayCpuCycles(std::uint64_t cycles,std::uint64_t cpuHz)
+{
+    if(!displayCpuClockHz_ || !cycles || !cpuHz)return;
+    constexpr std::uint64_t second=1000000000ULL;
+    if(displayCpuInputHz_!=cpuHz) {
+        displayCpuInputHz_=cpuHz;
+        displayCycleFraction_=0;
+    }
+    const auto whole=cycles/cpuHz;
+    const auto rem=cycles%cpuHz;
+    if(whole>std::numeric_limits<std::uint64_t>::max()/second)
+        throw std::overflow_error("CPU time interval too large");
+    const auto numerator=rem*second+displayCycleFraction_;
+    const auto ns=whole*second+numerator/cpuHz;
+    displayCycleFraction_=numerator%cpuHz;
+    advanceDisplayTime(ns);
 }
 
 void Machine::executeOne()
@@ -120,11 +187,13 @@ void Machine::executeOne()
         if(auto* cpu6809=dynamic_cast<Main6809Board*>(board)) {
             if(lastExecutionCycles_ && cpu6809->cpuClockHz()) {
                 mainBoard_->advanceCpuCycles(lastExecutionCycles_,cpu6809->cpuClockHz());
+                advanceDisplayCpuCycles(lastExecutionCycles_,cpu6809->cpuClockHz());
                 cpu6809->syncPtmIrq();
             }
         } else if(dynamic_cast<Main8088Board*>(board) &&
                   lastExecutionCycles_ && clock8088Hz_) {
             mainBoard_->advanceCpuCycles(lastExecutionCycles_,clock8088Hz_);
+            advanceDisplayCpuCycles(lastExecutionCycles_,clock8088Hz_);
             for(auto& attached:boards_)
                 if(auto* cpu6809=dynamic_cast<Main6809Board*>(attached.get()))
                     cpu6809->syncPtmIrq();
