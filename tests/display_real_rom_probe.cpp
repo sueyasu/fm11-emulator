@@ -6,6 +6,7 @@
 #include <iomanip>
 #include <iostream>
 #include <memory>
+#include <string>
 
 // Stage 10: actual, unchanged display firmware plus synthetic main ROM.
 // This is a diagnostic probe, NOT a character-output regression pass.
@@ -27,7 +28,7 @@ int main(int argc,char** argv) {
         m.addBoard(std::move(board));
         m.setDisplayCpuClockHz(2000000);
         std::array<unsigned,65536> pcCounts{};
-        std::uint64_t afe0Writes=0,sharedWrites=0,readyWrites=0,busyWrites=0;
+        std::uint64_t afe0Writes=0,readyWrites=0,busyWrites=0;
         unsigned logged=0;
         m.displaySubsystem().setIoWriteObserver(
             [&](DisplaySubsystem::IoWriteTrace w) {
