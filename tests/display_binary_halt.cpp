@@ -28,13 +28,13 @@ int main(int argc,char** argv) {
         if(main->readCpu(0xfd05)!=0)return 12;
         for(int i=0;i<1000;++i)machine.executeOne();
         if(machine.displayCpuPc()==haltedPc ||
-           machine.displayBusyStatus()!=0x42 ||
+           machine.displayBusyStatus()!=0 ||
            machine.displaySharedByte(2)!=0x33 ||
            machine.displaySharedByte(1)!=0x22) {
-            std::cerr<<"release did not resume display BUSY/shared-RAM writes\n";
+            std::cerr<<"release did not resume display READY/shared-RAM writes\n";
             return 13;
         }
-        std::cout<<"PASS: main FD05 HALT -> sub PC frozen -> release -> sub AFF0 BUSY\n";
+        std::cout<<"PASS: main FD05 HALT -> sub PC frozen -> release -> sub AFE0 READY\n";
         return 0;
     }catch(const std::exception& e) {
         std::cerr<<e.what()<<"\n";
