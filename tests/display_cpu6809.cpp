@@ -22,6 +22,11 @@ int main()
     // HALT request via shared FD05 prevents further instructions.
     board.writeIo(0xfd05,0x80);
     if(cpu.executeOne() || cpu.pc()!=0xc005)return 5;
+    // HALT release resumes from the suspended instruction boundary.
+    board.writeIo(0xfd05,0x00);
+    if(board.displaySubsystem().haltRequested() ||
+       (board.subCpuStatus()&0x80)!=0)return 29;
+    if(!cpu.executeOne() || cpu.pc()!=0xc006)return 30;
     board.reset();
     if(cpu.pc()!=0xc000 || board.displaySubsystem().haltRequested())return 6;
     if(board.displaySubsystem().readMemory(0x8000)!=0x55)return 7;
