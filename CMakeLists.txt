@@ -36,6 +36,8 @@ if(UNIX)
     target_link_libraries(fm11-display-romtrace PRIVATE fm11_core)
     add_executable(fm11-headless src/headless/main.cpp)
     target_link_libraries(fm11-headless PRIVATE fm11_core)
+    add_executable(fm11-romboot src/headless/romboot.cpp)
+    target_link_libraries(fm11-romboot PRIVATE fm11_core)
 endif()
 
 # SDL2 is optional. Headless targets and existing regression tests remain
