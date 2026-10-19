@@ -26,6 +26,8 @@ target_compile_options(fm11_core PRIVATE
 if(UNIX)
     add_executable(fm11-8088-romtrace src/headless/romtrace8088.cpp)
     target_link_libraries(fm11-8088-romtrace PRIVATE fm11_core)
+    add_executable(fm11-display-romtrace src/headless/romtrace_display.cpp)
+    target_link_libraries(fm11-display-romtrace PRIVATE fm11_core)
     add_executable(fm11-headless src/headless/main.cpp)
     target_link_libraries(fm11-headless PRIVATE fm11_core)
 endif()
