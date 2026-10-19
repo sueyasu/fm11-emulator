@@ -3,6 +3,7 @@
 #include "Machine.h"
 #include "Main6809Board.h"
 #include <memory>
+#include <vector>
 
 int main()
 {
@@ -332,5 +333,32 @@ int main()
     try {DisplayBitmap::decodeHighColorPage(highRam,2);}
     catch(const std::out_of_range&) {invalidHigh=true;}
     if(!invalidHigh)return 74;
+    // Trace sub-CPU I/O writes executed from ROM, including an unknown
+    // location. The observer must not accidentally implement the port.
+    MainBoard traced;
+    DisplaySubsystem::RomImage traceRom{};
+    // LDA #$12; STA $AFE6; STA $AFE4; STA $AFF0
+    traceRom[0]=0x86;traceRom[1]=0x12;
+    traceRom[2]=0xb7;traceRom[3]=0xaf;traceRom[4]=0xe6;
+    traceRom[5]=0xb7;traceRom[6]=0xaf;traceRom[7]=0xe4;
+    traceRom[8]=0xb7;traceRom[9]=0xaf;traceRom[10]=0xf0;
+    traceRom[0x3ffe]=0xc0;traceRom[0x3fff]=0x00;
+    traced.displaySubsystem().loadRom(traceRom);
+    std::vector<DisplaySubsystem::IoWriteTrace> log;
+    traced.displaySubsystem().setIoWriteObserver(
+        [&](DisplaySubsystem::IoWriteTrace entry){log.push_back(entry);});
+    traced.reset();
+    for(int i=0;i<4;++i)
+        if(!traced.displayCpu().executeOne())return 75;
+    if(log.size()!=3 || log[0].address!=0xafe6 ||
+       log[1].address!=0xafe4 || log[2].address!=0xaff0 ||
+       log[0].value!=0x12 || log[1].value!=0x12 ||
+       log[2].value!=0x12)return 76;
+    if(traced.displaySubsystem().readMemory(0xafe4)!=0xff ||
+       traced.displaySubsystem().videoFlags()!=0x12 ||
+       traced.displaySubsystem().busyStatus()!=0x12)return 77;
+    traced.displaySubsystem().clearIoWriteObserver();
+    traced.displaySubsystem().writeMemory(0xafe4,0x99);
+    if(log.size()!=3)return 78;
     return 0;
 }
