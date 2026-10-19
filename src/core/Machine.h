@@ -32,6 +32,7 @@ public:
     void setDisplayCpuClockHz(std::uint64_t hz);
     void loadDisplayRom(const DisplaySubsystem::RomImage& rom) {mainBoard_->displaySubsystem().loadRom(rom);}
     BYTE displayMemory(std::uint16_t address) const {return mainBoard_->displaySubsystem().readMemory(address);}
+    DisplaySubsystem::VideoSnapshot captureDisplayVideo() const {return mainBoard_->displaySubsystem().captureVideo();}
     std::uint16_t displayCpuPc() const {return mainBoard_->displayCpu().pc();}
     std::uint64_t displayCpuClockHz() const {return displayCpuClockHz_;}
     std::uint64_t clock8088Hz() const {return clock8088Hz_;}
