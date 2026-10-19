@@ -78,7 +78,7 @@ public:
     void advanceRasterTime(std::uint64_t ns) {
         rasterPhaseNs_=(rasterPhaseNs_+ns%kFrameNs)%kFrameNs;
     }
-    bool verticalBlank() const {return rasterPhaseNs_<kBlankNs;}
+    bool verticalBlank() const {return rasterPhaseNs_>=kFrameNs-kBlankNs;}
 
     // Renderer-facing change tracking, independent of the eventual display
     // resolution and the meanings assigned to AFE6 bits.
