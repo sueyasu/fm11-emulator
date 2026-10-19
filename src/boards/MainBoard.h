@@ -31,7 +31,7 @@ public:
     void resetSubCpuControl() {subCpuStatus_=subCpuControl_=0;}
 
     // The PTM is clocked at 9700 Hz independently of the active CPU.
-    // A shared 64-bit fixed-point phase preserves sub-tick time across
+    // A shared Q32 fixed-point phase preserves sub-tick time across
     // changes between 6809, 8088 and wall-clock stepping.
     void advanceTimeNanoseconds(std::uint64_t nanoseconds) {
         advancePtmTime(nanoseconds,1000000000ULL);
@@ -121,16 +121,22 @@ private:
         const std::uint64_t remainder=amount%unitsPerSecond;
         if(whole>std::numeric_limits<std::uint64_t>::max()/ptmHz)
             throw std::overflow_error("PTM time interval too large");
-        // 64.64 fixed-point conversion. All intermediates fit in 128 bits
-        // for the supported clock-rate range and a uint64 input amount.
-        using Wide=unsigned __int128;
-        const Wide fractional=(Wide(remainder)*ptmHz<<64)/unitsPerSecond;
-        const Wide combined=fractional+ptmPhase_;
-        const std::uint64_t additional=static_cast<std::uint64_t>(combined>>64);
+        // Q32 fractional PTM ticks; 9700 * (unitsPerSecond - 1)
+        // fits in uint64_t for the supported <= 1 GHz input clocks.
+        // Split integer/fraction before shifting to avoid __int128.
+        constexpr unsigned fractionBits=32;
+        constexpr std::uint64_t fractionUnit=std::uint64_t{1}<<fractionBits;
+        const std::uint64_t scaled=remainder*ptmHz;
+        const std::uint64_t integerPart=scaled/unitsPerSecond;
+        const std::uint64_t fractionalPart=
+            ((scaled%unitsPerSecond)<<fractionBits)/unitsPerSecond;
+        const std::uint64_t combined=ptmPhase_+fractionalPart;
+        const std::uint64_t carry=combined/fractionUnit;
+        const std::uint64_t additional=integerPart+carry;
         const std::uint64_t base=whole*ptmHz;
         if(base>std::numeric_limits<std::uint64_t>::max()-additional)
             throw std::overflow_error("PTM time interval too large");
-        ptmPhase_=static_cast<std::uint64_t>(combined);
+        ptmPhase_=combined%fractionUnit;
         ptm_->advance(base+additional);
         setIrqLine(IrqLine::Timer,ptm_->irqRequest());
     }
