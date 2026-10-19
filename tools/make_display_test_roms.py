@@ -65,3 +65,15 @@ halt_display[-2:]=bytes.fromhex("b0 00")
 (out/"display_halt.bin").write_bytes(halt_display)
 print(out/"main_halt.bin")
 print(out/"display_halt.bin")
+
+# A diagnostic ATTENTION event is injected by the host; main CPU firmware
+# reads FD04 twice. First read must see bit 0, second must see it clear.
+attention_main=bytearray(0x1000)
+attention_code=bytes.fromhex(
+    "b6 fd 04 b7 fc 80 "  # LDA FD04; STA FC80
+    "b6 fd 04 b7 fc 81 "  # LDA FD04; STA FC81
+    "20 fe")               # idle
+attention_main[:len(attention_code)]=attention_code
+attention_main[-2:]=bytes.fromhex("50 00")
+(out/"main_attention.bin").write_bytes(attention_main)
+print(out/"main_attention.bin")
