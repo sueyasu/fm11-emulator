@@ -607,8 +607,12 @@ BYTE Main6809Board::readIo(WORD address)
         return status;
     }
     case 0x18: return floppyStatus_;
-    case 0x19: case 0x1a: case 0x1c: case 0x1d:
+    case 0x19: case 0x1a: case 0x1c: case 0x1d: {
+        BYTE busValue=0;
+        if(mainBoard_ && mainBoard_->readIo(address,busValue))
+            return busValue;
         return floppy_->registerValue(reg);
+    }
     case 0x1b: {
         if(floppyOffset_==256)return 0;
         const BYTE value=floppy_->transferRead();
@@ -668,7 +672,8 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         mainIrqStatus();
         break;
     case 0x19: case 0x1a: case 0x1c: case 0x1d:
-        floppy_->writeRegister(reg,value);
+        if(!mainBoard_ || !mainBoard_->writeIo(address,value))
+            floppy_->writeRegister(reg,value);
         break;
     case 0x18:
         switch(FloppyDevice::decodeCommand(value)) {
