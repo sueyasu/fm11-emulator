@@ -305,5 +305,32 @@ int main()
     try {DisplayBitmap::decodeColorPage(colorRam,4);}
     catch(const std::out_of_range&) {invalidPage=true;}
     if(!invalidPage)return 71;
+    // 640x400 diagnostics: two independent 96KiB pages with three planes.
+    DisplaySubsystem highRam;
+    if(DisplayBitmap::kHighPages!=2 ||
+       DisplayBitmap::kHighPageBytes!=0x18000)return 72;
+    for(std::size_t page=0;page<2;++page) {
+        const auto base=page*DisplayBitmap::kHighPageBytes;
+        for(std::size_t plane=0;plane<3;++plane) {
+            const auto first=base+plane*DisplayBitmap::kHighPlaneBytes;
+            const auto last=first+399*DisplayBitmap::kBytesPerLine+79;
+            highRam.selectVramWindow(first/DisplaySubsystem::kVramSize);
+            highRam.writeMemory(static_cast<WORD>(
+                first%DisplaySubsystem::kVramSize),0x80);
+            highRam.selectVramWindow(last/DisplaySubsystem::kVramSize);
+            highRam.writeMemory(static_cast<WORD>(
+                last%DisplaySubsystem::kVramSize),0x01);
+        }
+    }
+    for(std::size_t page=0;page<2;++page) {
+        const auto pixel=DisplayBitmap::decodeHighColorPage(highRam,page);
+        if(pixel[0]!=7 || pixel[1]!=0 ||
+           pixel[DisplayBitmap::kWidth*DisplayBitmap::kHighHeight-1]!=7)
+            return 73;
+    }
+    bool invalidHigh=false;
+    try {DisplayBitmap::decodeHighColorPage(highRam,2);}
+    catch(const std::out_of_range&) {invalidHigh=true;}
+    if(!invalidHigh)return 74;
     return 0;
 }
