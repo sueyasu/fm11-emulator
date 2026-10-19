@@ -208,5 +208,18 @@ int main()
     if(bus.readIo(0xfd05)!=0)return 45;
     bus.writeIo(0xfd05,0x80);
     if((p6809->readCpu(0xfd05)&0x80)==0)return 46;
+    // FD05 bit 0 is a CPU-card takeover request, distinct from bit 7
+    // display-sub-CPU HALT status; the board does not arbitrate yet.
+    MainBoard selector;
+    if(selector.optionalCpuRequested())return 47;
+    selector.writeIo(0xfd05,0x01);
+    if(!selector.optionalCpuRequested() || selector.subCpuStatus()!=0)return 48;
+    selector.writeIo(0xfd05,0x00);
+    if(selector.optionalCpuRequested())return 49;
+    selector.writeIo(0xfd05,0x80);
+    if(selector.optionalCpuRequested() || (selector.subCpuStatus()&0x80)==0)
+        return 50;
+    selector.resetSubCpuControl();
+    if(selector.optionalCpuRequested() || selector.subCpuStatus()!=0)return 51;
     return 0;
 }
