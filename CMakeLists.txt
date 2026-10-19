@@ -109,6 +109,14 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(main8088_cycles PRIVATE fm11_core)
     add_test(NAME main8088_cycles COMMAND main8088_cycles)
 
+    add_executable(display_binary_pattern tests/display_binary_pattern.cpp)
+    target_link_libraries(display_binary_pattern PRIVATE fm11_core)
+    add_test(NAME display_binary_pattern
+             COMMAND ${Python3_EXECUTABLE}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/display_binary_pattern.py
+                     $<TARGET_FILE:display_binary_pattern>
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_display_test_roms.py)
+
     add_executable(display_binary_afe7 tests/display_binary_afe7.cpp)
     target_link_libraries(display_binary_afe7 PRIVATE fm11_core)
     add_test(NAME display_binary_afe7
