@@ -170,7 +170,9 @@ int main()
     if(board.displaySubsystem().videoFlags()!=0)return 37;
     if(!board.displayCpu().executeOne() ||
        !board.displayCpu().executeOne())return 38;
-    if(board.displaySubsystem().readMemory(0xafe6)!=0x5a ||
+    // GetIoByte($AFE6) toggles bits 7/2 and forces bit 5 on read.
+    if(board.displaySubsystem().readMemory(0xafe6)!=0xfe ||
+       board.displaySubsystem().readMemory(0xafe6)!=0x7a ||
        board.displaySubsystem().videoFlags()!=0x5a)return 39;
     // AFE5 is unmapped, but reading AFE7 signals ATTENTION to the
     // main board (original SubCpu.cpp). It is not a mirror of AFE6.
