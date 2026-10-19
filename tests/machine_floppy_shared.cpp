@@ -138,5 +138,19 @@ int main()
     (void)p6809->readCpu(0xfd3a);
     bus.refreshSystemIrq();
     if(bus.interruptPending())return 26;
+    // The MC6840 timer state now belongs to the shared main board.
+    auto timerBoard=std::make_shared<MainBoard>();
+    Main6809Board timerCard(CpuType::MC6809);
+    timerCard.setMainBoard(timerBoard);
+    timerCard.writeCpu(0xfd39,0x01);
+    timerCard.writeCpu(0xfd38,0x50);
+    timerCard.writeCpu(0xfd3a,0);
+    timerCard.writeCpu(0xfd3b,4);
+    if(timerBoard->ptmDevice()->channels[0].counter!=4)return 27;
+    timerCard.advancePtm(4);
+    if((timerBoard->ptmDevice()->status&0x81)!=0x81)return 28;
+    if((timerBoard->irqLines()&0x01)==0)return 29;
+    (void)timerCard.readCpu(0xfd39);
+    if((timerBoard->irqLines()&0x01)!=0)return 30;
     return 0;
 }
