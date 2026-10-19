@@ -44,6 +44,13 @@ public:
     std::uint64_t hdReadAttempts() const {return hdReadAttempts_;}
     std::uint64_t hdReadSuccesses() const {return hdReadSuccesses_;}
     std::uint64_t hdReadFailures() const {return hdReadFailures_;}
+    std::uint64_t hdReadAttemptsForDrive(unsigned d) const {return hdAttemptsByDrive_.at(d);}
+    std::uint64_t hdReadFailuresForDrive(unsigned d) const {return hdFailuresByDrive_.at(d);}
+    std::uint64_t hdBadChs() const {return hdBadChs_;}
+    std::uint64_t hdZeroDma() const {return hdZeroDma_;}
+    BYTE hdLastTrack() const {return hdLastTrack_;}
+    BYTE hdLastSector() const {return hdLastSector_;}
+    BYTE hdLastSide() const {return hdLastSide_;}
     std::uint64_t fdcSuccessfulReads() const {return fdcReadSuccesses_;}
     std::uint64_t fdcFailedReads() const {return fdcReadFailures_;}
     BYTE fdcStatus() const {return floppyStatus_;}
@@ -165,6 +172,9 @@ private:
     std::uint32_t floppyIndexPolls_ = 0;
     std::uint64_t fdcReads_=0,fdcReadSuccesses_=0,fdcReadFailures_=0;
     std::uint64_t hdReadAttempts_=0,hdReadSuccesses_=0,hdReadFailures_=0;
+    std::array<std::uint64_t,4> hdAttemptsByDrive_{},hdFailuresByDrive_{};
+    std::uint64_t hdBadChs_=0,hdZeroDma_=0;
+    BYTE hdLastTrack_=0,hdLastSector_=0,hdLastSide_=0;
     std::shared_ptr<Usart8251> usart_=std::make_shared<Usart8251>();
     BYTE mainIrqSources_ = 0;
     BYTE extendedIrqSources_ = 0;
