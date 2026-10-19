@@ -16,6 +16,15 @@ int main()
     std::vector<BYTE> image(40u*2*16*256,0);
     for(unsigned i=0;i<256;++i)image[i]=BYTE(i^0x5a);
     p6809->loadFloppy2d(image);
+    // CHS register writes are visible from the other CPU card.
+    p6809->writeCpu(0xfd19,2);
+    p6809->writeCpu(0xfd1a,3);
+    if(p8088->bus().readIo(0xfd19)!=2 || p8088->bus().readIo(0xfd1a)!=3)
+        return 8;
+    p8088->bus().writeIo(0xfd19,0);
+    p8088->bus().writeIo(0xfd1a,1);
+    if(p6809->readCpu(0xfd19)!=0 || p6809->readCpu(0xfd1a)!=1)
+        return 9;
     if(p8088->bus().floppyImage()!=image)return 1;
 
     auto& bus=p8088->bus();
