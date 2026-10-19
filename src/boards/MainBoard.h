@@ -15,6 +15,11 @@ public:
     std::shared_ptr<FloppyDevice> floppyDevice() const { return floppy_; }
     std::shared_ptr<Usart8251> usartDevice() const {return usart_;}
     std::shared_ptr<Ptm6840> ptmDevice() const {return ptm_;}
+    // FD04 main-board event latch: ATENT bit 0, BREAK bit 1.
+    void signalAttention() {eventStatus_|=0x01;}
+    void signalBreak() {eventStatus_|=0x02;}
+    BYTE eventStatus() const {return eventStatus_;}
+    BYTE eventControl() const {return eventControl_;}
 
     // PTM input clock is 9700 Hz. The fractional remainder makes elapsed
     // time independent of how the scheduler divides its time slices.
@@ -86,6 +91,11 @@ public:
     // The physical PTM, USART and FDC parameter registers live here.
     bool readIo(std::uint16_t address, BYTE& value) const {
         const unsigned reg=address&0xff;
+        if(reg==0x04) {
+            value=eventStatus_;
+            eventStatus_&=static_cast<BYTE>(~0x03);
+            return true;
+        }
         if(reg>=0x38 && reg<=0x3f) {
             value=ptm_->read(static_cast<BYTE>(reg));
             const_cast<MainBoard*>(this)->setIrqLine(IrqLine::Timer,ptm_->irqRequest());
@@ -102,6 +112,11 @@ public:
     }
     bool writeIo(std::uint16_t address,BYTE value) {
         const unsigned reg=address&0xff;
+        if(reg==0x04) {
+            eventStatus_&=static_cast<BYTE>(~0x01);
+            eventControl_=0x80;
+            return true;
+        }
         if(reg>=0x38 && reg<=0x3f) {
             ptm_->write(static_cast<BYTE>(reg),value);
             setIrqLine(IrqLine::Timer,ptm_->irqRequest());
@@ -115,6 +130,8 @@ public:
         return true;
     }
 private:
+    BYTE eventStatus_=0;
+    BYTE eventControl_=0;
     BYTE externalIrqLines_=0;
     std::uint64_t ptmTimeRemainder_=0;
     std::uint64_t ptmCycleRemainder_=0,ptmCycleClockHz_=0;
