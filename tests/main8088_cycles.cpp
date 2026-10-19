@@ -8,9 +8,9 @@ int main() {
     auto* b=card.get();
     Main8088Bus::Rom rom{};
     rom.fill(0x90); // NOP
-    rom[1]=0x26; // ES override prefix on next NOP
-    rom[2]=0x90;
-    rom[3]=0xf4; // HLT: timing not characterized
+    rom[0xff1]=0x26; // ES override prefix on next NOP
+    rom[0xff2]=0x90;
+    rom[0xff3]=0xf4; // HLT: timing not characterized
     b->bus().loadBootRom(rom);
     m.addBoard(std::move(card));
     m.reset();
