@@ -654,18 +654,37 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         floppy_->writeRegister(0x1c,static_cast<BYTE>(
             (floppy_->registerValue(0x1c)&0xfe)|(value&1)));
         break;
-    case 0x30:
-        // Source Fm11FDC: a force-interrupt command terminates
-        // immediately with status zero and the IRQ completion latch.
-        if((value&0xf0)==0xd0) {
-            ioRegisters_[0x30]=0;
-            ioRegisters_[0x37]=0x40;
-            break;
+    case 0x30: {
+        // MainCpu::Fm11FDC: Type I RESTORE/SEEK/STEP need not access
+        // the disk. Not Ready is returned only when Verify is requested.
+        // The boot ROM issues RESTORE $08 with no 2HD disk present.
+        BYTE status=0;
+        const bool hasDisk=floppy_->has2hd();
+        if((value&0x80)==0) {
+            switch(value&0xe0) {
+            case 0x00:
+                if((value&0x10)==0)ioRegisters_[0x31]=0;
+                else ioRegisters_[0x31]=ioRegisters_[0x33];
+                break;
+            case 0x20:
+                if(value&0x10)
+                    ioRegisters_[0x31]=static_cast<BYTE>(ioRegisters_[0x31]+1);
+                break;
+            case 0x40: ++ioRegisters_[0x31]; break;
+            case 0x60: --ioRegisters_[0x31]; break;
+            }
+            if((value&0x04) && !hasDisk)status=0x80;
+        } else if((value&0xc0)==0x80) {
+            if(!hasDisk)status=0x80;
+        } else if((value&0xf0)==0xd0) {
+            status=0;
+        } else if(!hasDisk) {
+            status=0x80;
         }
-        // A missing 2HD disk reports Not Ready for data commands.
-        ioRegisters_[0x30]=floppy_->has2hd()?0:0x80;
+        ioRegisters_[0x30]=status;
         ioRegisters_[0x37]=0x40;
         break;
+    }
     case 0x18:
         // MainCpu::Fm11MiniFDC clears completion before processing a
         // command; when it finishes, FD1C and FD1F both carry IRQ bit 6.
