@@ -113,6 +113,14 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(display_control PRIVATE fm11_core)
     add_test(NAME display_control COMMAND display_control)
 
+    add_executable(display_binary_text_overlay tests/display_binary_text_overlay.cpp)
+    target_link_libraries(display_binary_text_overlay PRIVATE fm11_core)
+    add_test(NAME display_binary_text_overlay
+             COMMAND ${Python3_EXECUTABLE}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/display_binary_text_overlay.py
+                     $<TARGET_FILE:display_binary_text_overlay>
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_display_test_roms.py)
+
     add_executable(display_binary_text_attributes tests/display_binary_text_attributes.cpp)
     target_link_libraries(display_binary_text_attributes PRIVATE fm11_core)
     add_test(NAME display_binary_text_attributes
