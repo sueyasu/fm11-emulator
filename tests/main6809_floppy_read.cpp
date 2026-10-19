@@ -15,6 +15,11 @@ int main() {
  if(b.readCpu(0xfd30)!=0 || b.readCpu(0xfd31)!=0)return 16;
  b.writeCpu(0xfd30,0x0c); // RESTORE with verify requires a disk.
  if((b.readCpu(0xfd30)&0x80)==0)return 17;
+ b.writeCpu(0xfd35,0x01); // Changing drive acknowledges status.
+ if(b.readCpu(0xfd30)!=0)return 18;
+ b.writeCpu(0xfd30,0x0c);
+ b.writeCpu(0xfd34,0x01); // Changing side also clears status.
+ if(b.readCpu(0xfd30)!=0)return 19;
 
  { const auto ipl=b.floppyBootSector(1);
    for(unsigned i=0;i<256;++i)if(ipl[i]!=image[i])return 7; }
