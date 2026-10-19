@@ -98,19 +98,26 @@ public:
             if(raw2d_.empty() || track>=40 || sector<1 || sector>16)return false;
             offset=((track*2+(side&1))*16+(sector-1))*256;
         } else if(channel==1) {
-            if(raw2hd_.empty() || track>=77 || sector<1 || sector>8)return false;
-            offset=((track*2+(side&1))*8+(sector-1))*1024;
+            // The 2HD-controller drives can also read 2D-format media.
+            if(!raw2hd_.empty()) {
+                if(track>=77 || sector<1 || sector>8)return false;
+                offset=((track*2+(side&1))*8+(sector-1))*1024;
+            } else if(!raw2d_.empty()) {
+                if(track>=40 || sector<1 || sector>16)return false;
+                offset=((track*2+(side&1))*16+(sector-1))*256;
+            } else return false;
         } else return false;
         return true;
     }
-    std::size_t sectorLength(unsigned channel) const {return channel==0?256:1024;}
+    std::size_t sectorLength(unsigned channel) const {return channel==0 || (channel==1 && raw2hd_.empty())?256:1024;}
     BYTE read(unsigned channel,std::size_t offset) const {
-        return (channel==0?raw2d_:raw2hd_).at(offset);
+        return (channel==0 || (channel==1 && raw2hd_.empty())?raw2d_:raw2hd_).at(offset);
     }
     void write(unsigned channel,std::size_t offset,BYTE value) {
-        auto& image=channel==0?raw2d_:raw2hd_;
+        const bool twoD=channel==0 || (channel==1 && raw2hd_.empty());
+        auto& image=twoD?raw2d_:raw2hd_;
         image.at(offset)=value;
-        if(channel==0) {
+        if(twoD) {
             dirty2d_=true;
             if(!d88_.empty())d88_.at(offsets_.at(offset/256)+(offset%256))=value;
         } else dirty2hd_=true;
