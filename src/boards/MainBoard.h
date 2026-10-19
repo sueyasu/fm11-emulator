@@ -3,6 +3,7 @@
 #include "Usart8251.h"
 #include "Ptm6840.h"
 #include "DisplaySubsystem.h"
+#include "DisplayCpu6809.h"
 #include <cstdint>
 #include <memory>
 #include <limits>
@@ -18,11 +19,14 @@ public:
     std::shared_ptr<Ptm6840> ptmDevice() const {return ptm_;}
     DisplaySubsystem& displaySubsystem() {return display_;}
     const DisplaySubsystem& displaySubsystem() const {return display_;}
+    DisplayCpu6809& displayCpu() {return displayCpu_;}
+    const DisplayCpu6809& displayCpu() const {return displayCpu_;}
     // System reset is distinct from resetting an individual CPU card.
     // Disk media remain mounted; only any in-flight transfer is aborted.
     void reset() {
         resetEvents();
         resetSubCpuControl();
+        displayCpu_.resetCpu();
         resetTimebase();
         externalIrqLines_=0;
         usart_->reset();
@@ -139,6 +143,7 @@ public:
     }
 private:
     DisplaySubsystem display_;
+    DisplayCpu6809 displayCpu_{display_};
     BYTE subCpuControl_=0;
     BYTE eventStatus_=0;
     BYTE eventControl_=0;
