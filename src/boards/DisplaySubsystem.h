@@ -34,6 +34,7 @@ public:
         busy_=0x80;
         if(videoFlags_!=0)markVideoChanged();
         videoFlags_=0;
+        rasterPhaseNs_=0;
         subIoRam_.fill(0);
         gvuEnabled_=false;
         gvuPage_=gvuPlane_=gvuOffset_=gvdPage_=0;
@@ -71,6 +72,14 @@ public:
     // AFE6 video-control flags. Individual bits are not yet mapped to
     // display modes until their FM-11 semantics have been verified.
     BYTE videoFlags() const {return videoFlags_;}
+    // Approximate 60 Hz vertical blank pulse, 1 ms high.
+    static constexpr std::uint64_t kFrameNs=16666667;
+    static constexpr std::uint64_t kBlankNs=1000000;
+    void advanceRasterTime(std::uint64_t ns) {
+        rasterPhaseNs_=(rasterPhaseNs_+ns%kFrameNs)%kFrameNs;
+    }
+    bool verticalBlank() const {return rasterPhaseNs_<kBlankNs;}
+
     // Renderer-facing change tracking, independent of the eventual display
     // resolution and the meanings assigned to AFE6 bits.
     std::uint64_t videoRevision() const {return videoRevision_;}
@@ -125,7 +134,7 @@ public:
             if(attentionSink_)attentionSink_();
             return 0;
         }
-        if(address==0xafe6)return videoFlags_;
+        if(address==0xafe6)return static_cast<BYTE>((videoFlags_&0x7f) | (verticalBlank()?0x80:0));
         if(address==0xaff0)return busy_;
         if(address>=0xb000)return rom_[address-0xb000];
         return 0xff; // unmapped space, including unimplemented sub I/O
@@ -216,6 +225,7 @@ private:
     bool haltRequested_=false;
     BYTE busy_=0x80;
     BYTE videoFlags_=0;
+    std::uint64_t rasterPhaseNs_=0;
     std::array<BYTE,4> subIoRam_{};
     std::size_t vramWindow_=0;
     bool gvuEnabled_=false;
