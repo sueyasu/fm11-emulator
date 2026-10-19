@@ -379,3 +379,43 @@ for ch in b"FIRST LINE SECOND":
 scroll_ank[ord("S")*16]=2
 (out/"ank_text_scroll.bin").write_bytes(scroll_ank)
 print(out/"ank_text_scroll.bin")
+
+# Stage 7: main-to-sub protocol, exercising FD05/AFE0 READY, shared
+# FC80-83 <-> 9F80-83, command, completion and final FDA0 text enable.
+protocol_main=bytearray(0x1000)
+protocol_main_code=bytes.fromhex(
+    "b6 fd 05 2b fb "       # wait: LDA FD05; BMI wait
+    "86 a5 b7 fc 80 "       # command = A5
+    "86 4d b7 fc 81 "       # character = 'M'
+    "b6 fc 82 81 66 26 f9 " # wait for completion = 66
+    "86 03 b7 fd a0 "       # enable text only after completion
+    "86 77 b7 fc 83 "       # main completion marker
+    "20 fe")
+protocol_main[:len(protocol_main_code)]=protocol_main_code
+protocol_main[-2:]=bytes.fromhex("50 00")
+(out/"main_text_protocol.bin").write_bytes(protocol_main)
+print(out/"main_text_protocol.bin")
+
+protocol_sub=bytearray(0x5000)
+protocol_code=bytearray()
+def pw(address,value):
+    protocol_code.extend((0x86,value,0xb7,(address>>8)&255,address&255))
+for reg,value in ((1,40),(6,25),(12,0),(13,0)):
+    pw(0xafee,reg);pw(0xafef,value)
+pw(0xafe0,1)                # announce READY to main FD05
+protocol_code.extend(bytes.fromhex(
+    "b6 9f 80 81 a5 26 f9 " # wait for main command
+    "b6 9f 81 b7 80 00 "    # copy requested char to text RAM
+    "86 07 b7 80 01 "       # white foreground
+    "86 66 b7 9f 82 "       # signal request completed
+    "20 fe"))
+protocol_sub[:len(protocol_code)]=protocol_code
+protocol_sub[-2:]=bytes.fromhex("b0 00")
+(out/"display_text_protocol.bin").write_bytes(protocol_sub)
+print(out/"display_text_protocol.bin")
+
+protocol_ank=bytearray(4096)
+protocol_ank[ord("M")*16]=1
+protocol_ank[ord("M")*16+1]=2
+(out/"ank_text_protocol.bin").write_bytes(protocol_ank)
+print(out/"ank_text_protocol.bin")
