@@ -341,3 +341,9 @@ layers[:len(lc)]=lc
 layers[-2:]=bytes.fromhex("b0 00")
 (out/"display_layers.bin").write_bytes(layers)
 print(out/"display_layers.bin")
+
+layers_ank=bytearray(4096)
+for ch in b"LAYER TEST":
+    layers_ank[ch*16]=0x01
+(out/"ank_layers.bin").write_bytes(layers_ank)
+print(out/"ank_layers.bin")
