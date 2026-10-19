@@ -261,3 +261,41 @@ for letter in b"RGBRHW":
     attribute_ank[letter*16+1]=2
 (out/"ank_text_attributes.bin").write_bytes(attribute_ank)
 print(out/"ank_text_attributes.bin")
+
+# Stage 4: actual 6809 text/graphics overlap.
+# Main turns on both layers (FDA0=$0F); sub paints a blue striped
+# background through GVU, then a yellow glyph and reverse-video cell.
+overlay_main=bytearray(0x1000)
+overlay_main[:7]=bytes.fromhex("86 0f b7 fd a0 20 fe")
+overlay_main[-2:]=bytes.fromhex("50 00")
+overlay_sub=bytearray(0x5000)
+oc=bytearray()
+def ow(addr,value):
+    oc.extend((0x86,value,0xb7,(addr>>8)&255,addr&255))
+ow(0xafee,1); ow(0xafef,40)
+ow(0xafee,6); ow(0xafef,25)
+ow(0xafee,12);ow(0xafef,0)
+ow(0xafee,13);ow(0xafef,0)
+# first cell: yellow foreground over graphics, second cell reverse red
+ow(0x8000,ord("T"));ow(0x8001,6)
+ow(0x8002,ord("R"));ow(0x8003,0x0a)
+# graphics writes: all three plane bits enabled; $80 lights x=0
+ow(0xafe1,7)
+ow(0x0000,0x80)
+# Make background BLUE only: reset the red and green plane bytes by
+# temporarily enabling blue-only writes and clearing other planes.
+ow(0xafe1,4)
+ow(0x0000,0x80)
+ow(0x9f80,0x66)
+oc.extend((0x20,0xfe))
+overlay_sub[:len(oc)]=oc
+overlay_sub[-2:]=bytes.fromhex("b0 00")
+(out/"main_text_overlay.bin").write_bytes(overlay_main)
+(out/"display_text_overlay.bin").write_bytes(overlay_sub)
+print(out/"main_text_overlay.bin")
+print(out/"display_text_overlay.bin")
+overlay_ank=bytearray(4096)
+overlay_ank[ord("T")*16]=1
+overlay_ank[ord("R")*16]=1
+(out/"ank_text_overlay.bin").write_bytes(overlay_ank)
+print(out/"ank_text_overlay.bin")
