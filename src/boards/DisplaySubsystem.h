@@ -15,7 +15,7 @@ public:
     static constexpr std::size_t kPhysicalVramSize=0x30000; // 192 KiB
     static constexpr std::size_t kVramWindows=kPhysicalVramSize/kVramSize;
     static constexpr std::size_t kRamSize=0x2000;
-    static constexpr std::size_t kRomSize=0x4000;
+    static constexpr std::size_t kRomSize=0x5000;
     using RomImage=std::array<BYTE,kRomSize>;
     struct IoWriteTrace {std::uint16_t address; BYTE value; std::uint16_t pc=0; bool fromCpu=false;};
     using IoWriteObserver=std::function<void(IoWriteTrace)>;
@@ -84,7 +84,7 @@ public:
         if(address>=0xafe0 && address<=0xafe3)return subIoRam_[address-0xafe0];
         if(address==0xafe6)return videoFlags_;
         if(address==0xaff0)return busy_;
-        if(address>=0xc000)return rom_[address-0xc000];
+        if(address>=0xb000)return rom_[address-0xb000];
         return 0xff; // unmapped space, including unimplemented sub I/O
     }
     void writeMemory(std::uint16_t address,BYTE value) {
