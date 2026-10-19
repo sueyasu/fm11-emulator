@@ -28,6 +28,9 @@ public:
     void reset();
     void executeOne();
     void set8088ClockHz(std::uint64_t hz);
+    // Display CPU scheduling is opt-in until the hardware clock is resolved.
+    void setDisplayCpuClockHz(std::uint64_t hz);
+    std::uint64_t displayCpuClockHz() const {return displayCpuClockHz_;}
     std::uint64_t clock8088Hz() const {return clock8088Hz_;}
     std::uint64_t lastExecutionCycles() const {return lastExecutionCycles_;}
     // Advance the common main-board timebase regardless of active CPU.
@@ -37,10 +40,16 @@ public:
 
 private:
     void synchronizeFd05Selection();
+    void advanceDisplayTime(std::uint64_t ns);
+    void advanceDisplayCpuCycles(std::uint64_t cycles,std::uint64_t cpuHz);
     bool fd05SelectionEnabled_=false;
     std::shared_ptr<MainBoard> mainBoard_=std::make_shared<MainBoard>();
     std::vector<std::unique_ptr<CpuBoard>> boards_;
     std::size_t active_board_ = 0;
     std::uint64_t lastExecutionCycles_ = 0;
     std::uint64_t clock8088Hz_ = 0;
+    std::uint64_t displayCpuClockHz_ = 0;
+    std::uint64_t displayCycleFraction_ = 0;
+    std::uint64_t displayNanosecondFraction_ = 0;
+    std::int64_t displayCycleCredit_ = 0;
 };
