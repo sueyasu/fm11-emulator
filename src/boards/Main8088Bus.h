@@ -2,6 +2,7 @@
 #include "portable_types.h"
 #include "FloppyDevice.h"
 #include "MainBoard.h"
+#include "RomFiles.h"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -24,6 +25,7 @@ public:
     Main8088Bus();
     void reset();
     void loadBootRom(const Rom& rom);
+    void loadBootRomFile(const std::string& path) {loadBootRom(RomFiles::load<kRomSize>(path));}
     void setMainBoard(std::shared_ptr<MainBoard> board) {
         mainBoard_=std::move(board);
         setFloppyDevice(mainBoard_->floppyDevice());
