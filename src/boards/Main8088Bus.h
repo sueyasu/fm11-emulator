@@ -72,12 +72,14 @@ private:
     std::array<BYTE,0x100> floppyRegisters_{};
     std::array<BYTE,256> floppyBuffer_{};
     unsigned floppyPosition_=256;
+    unsigned floppyChannel_=0;
+    unsigned floppyLength_=256;
     std::size_t floppySectorStart_=0;
     bool floppyWriting_=false;
     bool floppyDirty_=false;
     BYTE floppyStatus_=0;
     bool floppySectorOffset(std::size_t& offset);
-    void floppyCommand(BYTE command);
+    void floppyCommand(BYTE command,unsigned channel);
     BYTE floppyReadData();
     void floppyWriteData(BYTE value);
     void resetDma();
