@@ -151,6 +151,34 @@ branch loops. This fixes the status semantics tested here but does
 not yet port the original character-display composition or every
 sub-CPU peripheral behavior.
 
+### Synthetic 6809 text display: stage 1
+
+Start with a small **end-to-end** text test before original firmware. Both
+processors run real 6809 binary instructions: the main CPU writes `$FDA0=3`
+(text enabled); the display CPU initializes the CRTC to 80x25, writes
+`HELLO FM-11` as alternating character/attribute bytes starting at
+`$8000`, and places `$66` in shared RAM on completion.
+
+```sh
+python3 tools/make_display_test_roms.py build/test-roms
+ctest --test-dir build -R display_binary_text_stage1 --output-on-failure
+./build/fm11-sdl --main-rom build/test-roms/main_text_stage1.bin \\
+    --rom build/test-roms/display_text_stage1.bin \\
+    --ank-rom external/roms/ank.bin --high
+```
+
+The headless regression uses a separate generated font
+`ank_text_stage1.bin` with simple known glyph pixels, and checks
+CPU-written text RAM, CRTC values, and output pixels. The SDL run above
+uses the **actual** extracted ANK ROM, so `HELLO FM-11` should appear
+at the top left. If the original ANK ROM is not available, the same SDL
+command can use `build/test-roms/ank_text_stage1.bin` to show simple
+glyph marks rather than letters.
+
+This is **stage 1 only**: plain text on black. After confirming its
+SDL result, later stages will cover colors, reverse attributes and
+graphics/text overlays separately.
+
 ### Reference ANK text composition (first implementation)
 
 The original `Fm11/fm11.hlsl` composites two-byte character/attribute
