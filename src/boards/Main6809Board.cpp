@@ -693,6 +693,7 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             ++hdReadAttempts_;
             if(!hasDisk) {
                 ++hdReadFailures_;
+                ++hdFailuresByDrive_[ioRegisters_[0x35]&3];
                 status=0x80;
             } else {
                 // A 2D D88 image may be in the physical 2HD drive.
@@ -701,9 +702,15 @@ void Main6809Board::writeIo(WORD address, BYTE value)
                 const unsigned sector=ioRegisters_[0x32];
                 const unsigned side=ioRegisters_[0x34]&1;
                 const unsigned drive=ioRegisters_[0x35]&3;
+                ++hdAttemptsByDrive_[drive];
+                hdLastTrack_=static_cast<BYTE>(track);
+                hdLastSector_=static_cast<BYTE>(sector);
+                hdLastSide_=static_cast<BYTE>(side);
                 std::size_t offset=0;
                 if(!floppy_->sectorOffset(1,track,side,sector,drive,offset)) {
                     ++hdReadFailures_;
+                    ++hdFailuresByDrive_[drive];
+                    ++hdBadChs_;
                     status=0x10; // Record Not Found
                 } else {
                     const unsigned length=static_cast<unsigned>(floppy_->sectorLength(1));
@@ -719,7 +726,11 @@ void Main6809Board::writeIo(WORD address, BYTE value)
                             // Count exhaustion is a successful DMA end, not RNF.
                             const unsigned transfer=std::min(count,length);
                             if(transfer)++hdReadSuccesses_;
-                            else ++hdReadFailures_;
+                            else {
+                                ++hdReadFailures_;
+                                ++hdFailuresByDrive_[drive];
+                                ++hdZeroDma_;
+                            }
                             const bool down=(ioRegisters_[0x51]&0x08)!=0;
                             const WORD start=WORD((ioRegisters_[0x44]<<8)|ioRegisters_[0x45]);
                             const std::uint32_t bank=std::uint32_t(ioRegisters_[0x95]&15)<<16;
