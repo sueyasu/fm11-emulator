@@ -782,7 +782,13 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         }
         break;
     default:
-        ioRegisters_[reg] = value;
+        if (reg == 0x55) {
+            // HD6844 common IRQ/completion register: bit 7 is read-only.
+            // IRQ enable writes must not acknowledge a pending completion.
+            ioRegisters_[reg] = static_cast<BYTE>((ioRegisters_[reg] & 0x80) | (value & 0x7f));
+        } else {
+            ioRegisters_[reg] = value;
+        }
         if (reg == 0x55 || reg == 0xc2)
             mainIrqStatus();
         break;
