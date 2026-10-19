@@ -28,6 +28,7 @@ public:
         void irq() override;
         void nmi() override;
         CpuType type() const override {return variant_;}
+        std::uint64_t lastExecutionCycles() const override {return lastCycles_;}
         WORD ip() const {return ip_;}
         WORD cs() const {return segments_[1];}
         WORD flags() const {return flags_;}
@@ -69,6 +70,7 @@ public:
         unsigned shiftRotate(unsigned operation,unsigned value,unsigned bits,unsigned count);
         Main8088Bus& bus_;
         CpuType variant_;
+        std::uint64_t lastCycles_=0; // 0: timing not characterized
         std::array<WORD,8> regs_{};
         std::array<WORD,4> segments_{}; // ES, CS, SS, DS
         WORD ip_=0;
