@@ -44,6 +44,10 @@ public:
     std::uint64_t fdcSuccessfulReads() const {return fdcReadSuccesses_;}
     std::uint64_t fdcFailedReads() const {return fdcReadFailures_;}
     BYTE fdcStatus() const {return floppyStatus_;}
+    std::uint64_t ioReadCount(unsigned reg) const {return ioReadCounts_.at(reg);}
+    std::uint64_t ioWriteCount(unsigned reg) const {return ioWriteCounts_.at(reg);}
+    BYTE lastIoWrite(unsigned reg) const {return lastIoWrites_.at(reg);}
+
     BYTE fdcTrack() const {return floppy_->registerValue(0x19);}
     BYTE fdcSector() const {return floppy_->registerValue(0x1a);}
     BYTE fdcDrive() const {return floppy_->registerValue(0x1d)&3;}
@@ -142,6 +146,9 @@ private:
     // FDxx is the CPU-visible I/O register bank. The original implementation
     // also keeps separate FX/FY latches for output/control and device status.
     std::array<BYTE, 256> ioRegisters_{};
+    std::array<std::uint64_t,256> ioReadCounts_{};
+    std::array<std::uint64_t,256> ioWriteCounts_{};
+    std::array<BYTE,256> lastIoWrites_{};
     std::array<BYTE, 256> ioOutputLatch_{};
     std::array<BYTE, 256> ioStatusLatch_{};
     std::shared_ptr<MainBoard> mainBoard_;
