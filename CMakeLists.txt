@@ -35,6 +35,9 @@ endif()
 if(FM11_BUILD_TESTS)
     if(UNIX)
         find_package(Python3 COMPONENTS Interpreter REQUIRED)
+        add_test(NAME extract_roms
+                 COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/extract_roms.py
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tools/extract_roms.py)
         add_test(NAME display_romtrace
                  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/display_romtrace.py
                          $<TARGET_FILE:fm11-display-romtrace>)
