@@ -12,6 +12,25 @@ public:
     std::shared_ptr<FloppyDevice> floppyDevice() const { return floppy_; }
     std::shared_ptr<Usart8251> usartDevice() const {return usart_;}
 
+    // Main-board sources presented to the 8088 card's 8259 inputs.
+    // Corresponds to the original Sim86 interrupt wiring. Each group may
+    // eventually combine multiple physical device signals.
+    enum class IrqLine : unsigned {
+        Timer=0, KeyboardBreak=1, Disk8InchHdd=2,
+        AttentionExtendedFirq=3, Rs232c=4,
+        CoprocessorExtendedIrq=5, Disk5Inch=6, PrinterAck=7
+    };
+    void setIrqLine(IrqLine line,bool asserted) {
+        const BYTE bit=static_cast<BYTE>(1u<<static_cast<unsigned>(line));
+        if(asserted) externalIrqLines_|=bit;
+        else externalIrqLines_&=static_cast<BYTE>(~bit);
+    }
+    BYTE irqLines() const {
+        // USART is a shared device, not owned by either CPU card.
+        return static_cast<BYTE>(externalIrqLines_ |
+               (usart_->irqRequest()?0x10:0));
+    }
+
     // Common system I/O aperture, decoded after the CPU card has translated
     // its own bus cycles. Only shared FDC parameter registers are claimed so
     // far; other registers remain with their existing owners.
@@ -36,6 +55,7 @@ public:
         return true;
     }
 private:
+    BYTE externalIrqLines_=0;
     std::shared_ptr<FloppyDevice> floppy_=std::make_shared<FloppyDevice>();
     std::shared_ptr<Usart8251> usart_=std::make_shared<Usart8251>();
 };
