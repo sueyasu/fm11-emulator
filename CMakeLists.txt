@@ -79,6 +79,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(main8088_cycles PRIVATE fm11_core)
     add_test(NAME main8088_cycles COMMAND main8088_cycles)
 
+    add_executable(machine_fd05_handoff tests/machine_fd05_handoff.cpp)
+    target_link_libraries(machine_fd05_handoff PRIVATE fm11_core)
+    add_test(NAME machine_fd05_handoff COMMAND machine_fd05_handoff)
+
     add_executable(machine_ptm_time tests/machine_ptm_time.cpp)
     target_link_libraries(machine_ptm_time PRIVATE fm11_core)
     add_test(NAME machine_ptm_time COMMAND machine_ptm_time)
