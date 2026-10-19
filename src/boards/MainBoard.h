@@ -5,6 +5,7 @@
 #include "DisplaySubsystem.h"
 #include "DisplayCpu6809.h"
 #include <cstdint>
+#include <array>
 #include <memory>
 #include <limits>
 #include <stdexcept>
@@ -19,6 +20,8 @@ public:
     MainBoard& operator=(const MainBoard&)=delete;
     // BUSY is available separately until FD05 status bit semantics are proven.
     BYTE displayBusyStatus() const {return display_.busyStatus();}
+    BYTE displayControl() const {return displayControl_;}
+    BYTE displayPalette(unsigned index) const {return displayPalette_[index&7];}
     std::shared_ptr<FloppyDevice> floppyDevice() const { return floppy_; }
     std::shared_ptr<Usart8251> usartDevice() const {return usart_;}
     std::shared_ptr<Ptm6840> ptmDevice() const {return ptm_;}
@@ -51,7 +54,12 @@ public:
     // FD05 bit 0 selects the optional CPU-card bus-master request.
     // Arbitration/CPU suspension remains in the individual CPU cards.
     bool optionalCpuRequested() const {return (subCpuControl_&0x01)!=0;}
-    void resetSubCpuControl() {subCpuControl_=0;display_.reset();}
+    void resetSubCpuControl() {
+        subCpuControl_=0;
+        displayControl_=0;
+        for(unsigned i=0;i<8;++i)displayPalette_[i]=static_cast<BYTE>(i);
+        display_.reset();
+    }
 
     // One common fractional phase, in billionths of a PTM tick.
     // Nanosecond slices accumulate exactly, without Q32 rounding loss.
@@ -124,6 +132,14 @@ public:
     }
     bool writeIo(std::uint16_t address,BYTE value) {
         const unsigned reg=address&0xff;
+        if(reg==0xa0) {
+            displayControl_=value;
+            return true;
+        }
+        if(reg>=0x98 && reg<=0x9f) {
+            displayPalette_[reg&7]=value&0x0f;
+            return true;
+        }
         if(reg==0x05) {
             subCpuControl_=value;
             if(value&0x80)display_.requestHalt();
@@ -151,6 +167,8 @@ private:
     DisplaySubsystem display_;
     DisplayCpu6809 displayCpu_{display_};
     BYTE subCpuControl_=0;
+    BYTE displayControl_=0;
+    std::array<BYTE,8> displayPalette_{{0,1,2,3,4,5,6,7}};
     BYTE eventStatus_=0;
     BYTE eventControl_=0;
     BYTE externalIrqLines_=0;
