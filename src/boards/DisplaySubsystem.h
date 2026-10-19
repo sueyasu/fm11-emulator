@@ -44,6 +44,7 @@ public:
         nmiMask_=true;
         nmiClockCycles_=60000;
         subIrq_=false;
+        ioRam_.fill(0);
         dmaChannel0_=0;
         gvuEnabled_=false;
         gvuPage_=gvuPlane_=gvuOffset_=gvdPage_=0;
@@ -95,6 +96,7 @@ public:
     void resetInterruptClock() {nmiClockCycles_=60000;}
     void setSubIrq(bool pending) {subIrq_=pending;}
     bool subIrqPending() const {return subIrq_;}
+    void requestSubIrq() {subIrq_=true;}
     bool subFirqPending() const {return subFirqLatch_!=0;}
     BYTE busyStatus() const {return busy_?0x80:0;}
     BYTE readSubControl() const {return static_cast<BYTE>((subIoRam_[0]&0xfeu)|(busy_?0u:1u));}
@@ -170,6 +172,10 @@ public:
             processKeyCode();
             return result;
         }
+        if(address==0xafe5) {
+            subIrq_=false; // Original GetIoByte: clear sub-IRQ request on read.
+            return 0;
+        }
         if(address==0xafe0)return readSubControl();
         if(address>=0xafe1 && address<=0xafe3)return subIoRam_[address-0xafe0];
         if(address==0xafe8)return gvuAddressHigh_;
@@ -188,6 +194,7 @@ public:
         if(address==0xafe6)return const_cast<DisplaySubsystem*>(this)->readVsyncStatus();
         if(address==0xaff0)return dmaChannel0_; // original write target is DMA channel 0
         if(address>=0xb000)return rom_[address-0xb000];
+        if(address>=0xa000)return ioRam_[address-0xa000];
         return 0xff; // unmapped space, including unimplemented sub I/O
     }
     void writeMemory(std::uint16_t address,BYTE value) {
@@ -262,7 +269,8 @@ public:
                 markVideoChanged();
             }
         }
-        else if(address==0xaff0)dmaChannel0_=value; // original maps to DMA channel 0
+        else if(address==0xaff0)dmaChannel0_=value;
+        else if(address>=0xa000 && address<0xb000)ioRam_[address-0xa000]=value; // original maps to DMA channel 0
         // ROM and unmapped space are read-only. Trace even writes to
         // unimplemented I/O locations; their hardware decode is unknown.
         if(address>=0xa000 && address<0xc000 && ioWriteObserver_)
@@ -284,6 +292,7 @@ private:
     std::function<void()> attentionSink_;
     bool haltRequested_=false;
     bool busy_=true;
+    std::array<BYTE,0x1000> ioRam_{};
     BYTE dmaChannel0_=0;
     bool nmiMask_=true;
     bool subIrq_=false;
