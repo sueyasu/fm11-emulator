@@ -462,5 +462,30 @@ int main()
     crtc.reset();
     if(crtc.graphicsDisplayAddress()!=0 || crtc.crtcRegister(12)!=0)
         return 100;
+    // External character ROM and renderer primitives do not require
+    // guessing the hardware text-mode register mapping.
+    DisplaySubsystem fonts;
+    DisplaySubsystem::AnkRomImage ank{};
+    ank[0x41*16]=0x81;
+    ank[0x41*16+15]=0x42;
+    fonts.loadAnkRom(ank);
+    DisplaySubsystem::KanjiRomImage kanji{};
+    kanji[0x1ffff]=0x5a;
+    fonts.loadKanjiRom(kanji);
+    if(fonts.ankGlyphRow(0x41,0)!=0x81 ||
+       fonts.ankGlyphRow(0x41,15)!=0x42 ||
+       fonts.kanjiRomByte(0x1ffff)!=0x5a)return 101;
+    DisplayBitmap::Pixels textPixels{};
+    DisplayBitmap::drawAnk(textPixels,fonts,0x41,0,0,7,1);
+    if(textPixels[0]!=7 || textPixels[1]!=1 ||
+       textPixels[7]!=7 || textPixels[15*640+1]!=7 ||
+       textPixels[15*640+6]!=7 ||
+       textPixels[16*640]!=0)return 102;
+    const auto argb=DisplayBitmap::toArgb(textPixels);
+    if(argb[0]!=0xffffffffu || argb[1]!=0xffff0000u ||
+       argb[16*640]!=0xff000000u)return 103;
+    fonts.reset(); // Reset preserves physical font ROMs.
+    if(fonts.ankGlyphRow(0x41,0)!=0x81 ||
+       fonts.kanjiRomByte(0x1ffff)!=0x5a)return 104;
     return 0;
 }
