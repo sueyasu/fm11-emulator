@@ -32,6 +32,8 @@ void Main6809Board::reset()
     mmrControl_.fill(0);
     onboardRam_.fill(0);
     ioRegisters_.fill(0);
+    floppyTypeIStatus_=false;
+    floppyIndexPolls_=0;
     ioOutputLatch_.fill(0);
     ioStatusLatch_.fill(0);
     mainIrqSources_ = extendedIrqSources_ = 0;
@@ -539,7 +541,15 @@ BYTE Main6809Board::readIo(WORD address)
         refreshDmaCompletion();
         return status;
     }
-    case 0x18: return floppyStatus_;
+    case 0x18: {
+        if(!floppyTypeIStatus_)return floppyStatus_;
+        // The index hole produces a short pulse once per revolution.
+        // Model its periodic assertion in polling-driven firmware even
+        // when the guest has no dedicated index pulse clock yet.
+        const bool index=(++floppyIndexPolls_%256u)<16u;
+        return static_cast<BYTE>((floppyStatus_&~0x02u) |
+            ((floppy_->has2d() && index)?0x02u:0));
+    }
     case 0x19: case 0x1a: case 0x1c: case 0x1d: {
         BYTE busValue=0;
         if(mainBoard_ && mainBoard_->readIo(address,busValue))
@@ -616,6 +626,7 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             floppy_->writeRegister(reg,value);
         break;
     case 0x18:
+        floppyTypeIStatus_=(value&0x80)==0;
         switch(FloppyDevice::decodeCommand(value)) {
         case FloppyDevice::Command::ReadSector: readFloppySector(); break;
         case FloppyDevice::Command::WriteSector: writeFloppySector(); break;
