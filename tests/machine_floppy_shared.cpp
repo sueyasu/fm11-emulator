@@ -294,10 +294,13 @@ int main()
        display.readMemory(0xffff)!=0x42)return 68;
     display.writeMemory(0xa000,0x55);
     if(display.readMemory(0xa000)!=0xff ||
-       display.readMemory(0xbfff)!=0xff)return 69;
+       display.readMemory(0xafff)!=0xff ||
+       display.readMemory(0xbfff)!=0x00)return 69;
     displayOwner.reset();
     if(display.readMemory(0x7fff)!=0x34 ||
        display.readMemory(0x9fff)!=0x78 ||
-       display.readMemory(0xc000)!=0x91)return 70;
+       display.readMemory(0xb000)!=0x91 ||
+       display.readMemory(0xc000)!=0x83 ||
+       display.readMemory(0xffff)!=0x42)return 70;
     return 0;
 }
