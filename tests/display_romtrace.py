@@ -6,10 +6,10 @@ import tempfile
 
 exe = sys.argv[1]
 with tempfile.TemporaryDirectory() as temporary:
-    rom = bytearray(0x4000)
+    rom = bytearray(0x5000)
     # C000: LDA #12; C002: STA $AFE4; C005: BRA $C005
-    rom[0:7] = bytes([0x86, 0x12, 0xb7, 0xaf, 0xe4, 0x20, 0xfe])
-    rom[0x3ffe:0x4000] = bytes([0xc0, 0x00])
+    rom[0x1000:0x1007] = bytes([0x86, 0x12, 0xb7, 0xaf, 0xe4, 0x20, 0xfe])
+    rom[0x4ffe:0x5000] = bytes([0xc0, 0x00])
     path = pathlib.Path(temporary) / "sub.rom"
     path.write_bytes(rom)
     run = subprocess.run(
@@ -26,6 +26,6 @@ with tempfile.TemporaryDirectory() as temporary:
         [exe, "--rom", str(path)], capture_output=True, text=True,
         check=False,
     )
-    if invalid.returncode != 2 or "exactly 16384 bytes" not in invalid.stderr:
+    if invalid.returncode != 2 or "exactly 20480 bytes" not in invalid.stderr:
         print(invalid.stdout, invalid.stderr, file=sys.stderr)
         raise SystemExit(2)
