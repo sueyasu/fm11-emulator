@@ -30,7 +30,7 @@ std::uint64_t numeric(const std::string& value) {
 }
 void usage() {
     std::cerr<<"usage: fm11-romboot --floppy-d88 FILE [--main-rom FILE]"
-       <<" [--sub-rom FILE] [--instructions N] [--report-every N] [--trace-fdc]\\n"
+       <<" [--sub-rom FILE] [--instructions N] [--report-every N]\\n"
        <<"ROM defaults: external/roms/boot6809.bin and display6809.bin\\n"
        <<"Full 6809 ROM boot, no SDL; serial TX appears on stdout.\\n";
 }
@@ -40,12 +40,10 @@ int main(int argc,char** argv) {
         std::string mainPath="external/roms/boot6809.bin";
         std::string subPath="external/roms/display6809.bin";
         std::string floppyPath;
-        bool traceFdc=false;
         std::uint64_t limit=20000000, reportEvery=2000000;
         for(int i=1;i<argc;++i) {
             const std::string arg=argv[i];
             if(arg=="--help"){usage();return 0;}
-            if(arg=="--trace-fdc"){traceFdc=true;continue;}
             if(i+1>=argc){usage();return 2;}
             const std::string value=argv[++i];
             if(arg=="--floppy-d88")floppyPath=value;
@@ -101,7 +99,6 @@ int main(int argc,char** argv) {
         std::cerr<<"ROM boot instruction limit reached: "<<limit
                  <<" mainPC=$"<<std::hex<<main->cpu().pc()
                  <<" subPC=$"<<machine.displayCpuPc()<<std::dec<<"\\n";
-        (void)traceFdc;
         return 0;
     } catch(const std::exception& e) {
         std::cerr<<"fm11-romboot: "<<e.what()<<"\\n";
