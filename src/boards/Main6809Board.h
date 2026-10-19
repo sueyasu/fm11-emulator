@@ -116,10 +116,12 @@ private:
         void nmi() override;
         void firq() override;
         CpuType type() const override;
+        std::uint64_t lastExecutionCycles() const override {return lastCycles_;}
 
     private:
         Main6809Board& board_;
         CpuType variant_;
+        std::uint64_t lastCycles_=0;
     };
 
     std::vector<BYTE> memory_;
