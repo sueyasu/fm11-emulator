@@ -43,6 +43,27 @@ void Machine::setActiveBoard(std::size_t index)
     active_board_ = index;
 }
 
+void Machine::enableFd05Selection(bool enabled)
+{
+    fd05SelectionEnabled_=enabled;
+    if(enabled)synchronizeFd05Selection();
+}
+
+void Machine::synchronizeFd05Selection()
+{
+    if(!fd05SelectionEnabled_)return;
+    std::size_t primary=boards_.size(),optional=boards_.size();
+    for(std::size_t i=0;i<boards_.size();++i) {
+        if(primary==boards_.size() &&
+           dynamic_cast<Main6809Board*>(boards_[i].get()))primary=i;
+        if(optional==boards_.size() &&
+           dynamic_cast<Main8088Board*>(boards_[i].get()))optional=i;
+    }
+    // Do not invent a CPU card when only one kind is installed.
+    if(primary==boards_.size() || optional==boards_.size())return;
+    active_board_=mainBoard_->optionalCpuRequested()?optional:primary;
+}
+
 CpuBoard* Machine::activeBoard()
 {
     return boards_.empty() ? nullptr : boards_[active_board_].get();
@@ -61,6 +82,7 @@ void Machine::reset()
         board->reset();
     lastExecutionCycles_=0;
     mainBoard_->resetTimebase();
+    synchronizeFd05Selection();
 }
 
 void Machine::advanceTimeNanoseconds(std::uint64_t nanoseconds)
@@ -82,6 +104,7 @@ void Machine::set8088ClockHz(std::uint64_t hz)
 
 void Machine::executeOne()
 {
+    synchronizeFd05Selection();
     if (auto* board = activeBoard()) {
         // Sample the main-board USART before the 8088 tests its PIC.
         // No CPU-card bus conversion or interrupt controller is moved here.
@@ -101,5 +124,8 @@ void Machine::executeOne()
                 if(auto* cpu6809=dynamic_cast<Main6809Board*>(attached.get()))
                     cpu6809->syncPtmIrq();
         }
+        // The instruction may have written FD05. Perform the next
+        // instruction on the newly selected CPU card.
+        synchronizeFd05Selection();
     }
 }
