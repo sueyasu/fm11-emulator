@@ -107,6 +107,9 @@ int main(int argc,char** argv) {
                          <<" busy="<<unsigned(machine.displayBusyStatus())
                          <<" displayWrites="<<machine.displaySharedWriteRevision()
                          <<" halted="<<machine.displayHalted()
+                         <<" hdReads="<<main->hdReadAttempts()
+                         <<" hdOK="<<main->hdReadSuccesses()
+                         <<" hdFail="<<main->hdReadFailures()
                          <<" fdcReads="<<main->fdcReadCommands()
                          <<" fdcOK="<<main->fdcSuccessfulReads()
                          <<" fdcFail="<<main->fdcFailedReads()
@@ -116,6 +119,20 @@ int main(int argc,char** argv) {
             }
         }
         std::cout.flush();
+        const auto sector=main->floppyBootSector(1);
+        unsigned mismatches=0;
+        std::cerr<<"IPL T0/H0/S1 first16:";
+        for(unsigned n=0;n<16;++n)
+            std::cerr<<" "<<std::hex<<std::setw(2)<<std::setfill('0')
+                     <<unsigned(sector[n]);
+        std::cerr<<"\\nRAM $0400 first16:";
+        for(unsigned n=0;n<16;++n)
+            std::cerr<<" "<<std::hex<<std::setw(2)<<std::setfill('0')
+                     <<unsigned(main->readPhysical(0x0400+n));
+        for(unsigned n=0;n<256;++n)
+            if(sector[n]!=main->readPhysical(0x0400+n))++mismatches;
+        std::cerr<<std::dec<<"\\nIPL sector mismatches at $0400: "<<mismatches
+                 <<" (RAM may have been modified after loading)\\n";
         std::cerr<<"FDxx accesses (nonzero, register:read/write[last]):";
         for(unsigned reg=0;reg<256;++reg) {
             const auto reads=main->ioReadCount(reg);
