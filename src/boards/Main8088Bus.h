@@ -1,5 +1,6 @@
 #pragma once
 #include "portable_types.h"
+#include "FloppyDevice.h"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -23,10 +24,10 @@ public:
     void loadBootRom(const Rom& rom);
     void loadFloppy2d(const std::vector<BYTE>& image);
     void loadFloppy2hd(const std::vector<BYTE>& image);
-    std::vector<BYTE> floppy2hdImage() const { return floppy2hd_; }
-    std::vector<BYTE> floppyImage() const { return floppy2d_; }
-    bool floppyDirty() const { return floppyDirty_; }
-    void clearFloppyDirty() { floppyDirty_=false; }
+    std::vector<BYTE> floppy2hdImage() const { return floppy_.image2hd(); }
+    std::vector<BYTE> floppyImage() const { return floppy_.image2d(); }
+    bool floppyDirty() const { return floppy_.dirty2d(); }
+    void clearFloppyDirty() { floppy_.clearDirty2d(); }
     BYTE readMemory(std::uint32_t address) const;
     void writeMemory(std::uint32_t address, BYTE value);
     BYTE readIo(WORD port) const;
@@ -70,8 +71,7 @@ private:
     BYTE dmaCommand_=0, dmaMask_=0, dmaStatus_=0, dmaFlip_=0, dmaRequest_=0;
     std::array<DmaRead,4> dmaReaders_{};
     std::array<DmaWrite,4> dmaWriters_{};
-    std::vector<BYTE> floppy2d_;
-    std::vector<BYTE> floppy2hd_;
+    FloppyDevice floppy_;
     std::array<BYTE,0x100> floppyRegisters_{};
     std::array<BYTE,1024> floppyBuffer_{};
     unsigned floppyPosition_=256;
@@ -79,8 +79,6 @@ private:
     unsigned floppyLength_=256;
     std::size_t floppySectorStart_=0;
     bool floppyWriting_=false;
-    bool floppyDirty_=false;
-    bool floppy2hdDirty_=false;
     BYTE floppyStatus_=0;
     bool floppySectorOffset(std::size_t& offset,unsigned channel);
     void floppyCommand(BYTE command,unsigned channel);
