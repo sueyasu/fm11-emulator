@@ -172,9 +172,16 @@ int main()
        !board.displayCpu().executeOne())return 38;
     if(board.displaySubsystem().readMemory(0xafe6)!=0x5a ||
        board.displaySubsystem().videoFlags()!=0x5a)return 39;
-    // Undocumented neighbors must not mirror the flag register.
-    if(board.displaySubsystem().readMemory(0xafe5)!=0xff ||
-       board.displaySubsystem().readMemory(0xafe7)!=0xff)return 40;
+    // AFE5 is unmapped, but reading AFE7 signals ATTENTION to the
+    // main board (original SubCpu.cpp). It is not a mirror of AFE6.
+    if(board.displaySubsystem().readMemory(0xafe5)!=0xff)return 40;
+    if(board.eventStatus()!=0)return 40;
+    if(board.displaySubsystem().readMemory(0xafe7)!=0x00 ||
+       (board.eventStatus()&0x01)==0)return 40;
+    BYTE attentionStatus=0;
+    if(!board.readIo(0xfd04,attentionStatus) ||
+       (attentionStatus&0x01)==0 ||
+       board.eventStatus()!=0)return 40;
     board.reset();
     if(board.displaySubsystem().videoFlags()!=0)return 41;
     // Video clients can detect changes without interpreting AFE6 bits.
