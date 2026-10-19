@@ -335,6 +335,48 @@ bool Main8088Board::Core::jumpCondition(unsigned code) const
     }
     return false;
 }
+// Coarse timing DB in CPU clock cycles. This deliberately excludes 8088
+// prefetch-queue stalls, bus wait states, and detailed V20 microtiming.
+// A single shared approximation is enough to run system timers; it is not
+// a cycle-accurate benchmark. Unsupported opcodes still throw in executeOne.
+namespace {
+std::array<unsigned,256> make8088Cycles() {
+    std::array<unsigned,256> t{};
+    t.fill(4); // typical short instruction fallback
+    for(unsigned op=0x00;op<=0x3b;++op)
+        if((op&7)<=3)t[op]=3; // ALU: register case; memory adds below
+    for(unsigned op=0x40;op<=0x4f;++op)t[op]=3;
+    for(unsigned op=0x50;op<=0x57;++op)t[op]=15;
+    for(unsigned op=0x58;op<=0x5f;++op)t[op]=12;
+    for(unsigned op=0x70;op<=0x7f;++op)t[op]=4; // untaken conditional
+    for(unsigned op=0x90;op<=0x97;++op)t[op]=3;
+    for(unsigned op=0xb0;op<=0xbf;++op)t[op]=4;
+    for(unsigned op=0xa4;op<=0xaf;++op)t[op]=14;
+    t[0x90]=3; t[0xf4]=2; t[0x9b]=3;
+    t[0xf5]=2;t[0xf8]=2;t[0xf9]=2;
+    t[0xfa]=2;t[0xfb]=2;t[0xfc]=2;t[0xfd]=2;
+    t[0x98]=2;t[0x99]=5;
+    t[0xe8]=19;t[0xc3]=20;t[0xcb]=18;
+    t[0xeb]=15;t[0xe9]=15;t[0xea]=15;
+    t[0xcc]=72;t[0xcd]=71;t[0xcf]=44;
+    t[0x06]=14;t[0x0e]=14;t[0x16]=14;t[0x1e]=14;
+    t[0x07]=12;t[0x17]=12;t[0x1f]=12;
+    t[0x88]=3;t[0x89]=3;t[0x8a]=3;t[0x8b]=3;t[0x8c]=3;t[0x8e]=3;
+    t[0xc6]=4;t[0xc7]=4;t[0x80]=4;t[0x81]=4;t[0x83]=4;
+    t[0xec]=8;t[0xed]=8;t[0xee]=8;t[0xef]=8;
+    return t;
+}
+const std::array<unsigned,256> k8088Cycles=make8088Cycles();
+std::array<unsigned,256> makeV20Cycles() {
+    auto t=make8088Cycles();
+    // V20 generally executes simple native instructions faster. Exact
+    // per-opcode and prefetch behavior remains outside this model.
+    for(auto& clocks:t)clocks=clocks>3 ? (clocks*3+3)/4 : clocks;
+    t[0x90]=3;
+    return t;
+}
+const std::array<unsigned,256> kV20Cycles=makeV20Cycles();
+}
 void Main8088Board::Core::executeOne()
 {
     lastCycles_=0;
@@ -348,6 +390,7 @@ void Main8088Board::Core::executeOne()
     }
     if(halted_)return;
     if(emulation8080_) {
+        lastCycles_=4; // coarse 8080-mode default; no detailed bus timing
         const BYTE instruction=fetch8();
         // On the 8080 these unused opcodes behave as one-byte NOPs.
         // They must not consume an immediate operand or alter flags.
@@ -714,6 +757,8 @@ void Main8088Board::Core::executeOne()
         else break;
         if(++prefixCount>=15)throw std::runtime_error("too many 8088 prefixes");
     }
+    lastCycles_=(variant_==CpuType::NECV20 ? kV20Cycles : k8088Cycles)[opcode];
+    lastCycles_+=2*prefixCount; // approximate prefix decoding overhead
     // The emulated bus executes one instruction at a time; LOCK imposes
     // no additional atomicity until concurrent bus masters are modeled.
     (void)lockPrefix;
@@ -896,9 +941,9 @@ void Main8088Board::Core::executeOne()
     case 0x99: // CWD: sign-extend AX into DX:AX
         regs_[2]=(regs_[0]&0x8000)?0xffff:0;
         break;
-    case 0xf8: flags_&=WORD(~0x0001);if(variant_==CpuType::I8088 && prefixCount==0)lastCycles_=2;break; // CLC
-    case 0xf9: flags_|=0x0001;if(variant_==CpuType::I8088 && prefixCount==0)lastCycles_=2;break; // STC
-    case 0xf5: flags_^=0x0001;if(variant_==CpuType::I8088 && prefixCount==0)lastCycles_=2;break; // CMC
+    case 0xf8: flags_&=WORD(~0x0001);break; // CLC
+    case 0xf9: flags_|=0x0001;break; // STC
+    case 0xf5: flags_^=0x0001;break; // CMC
     case 0x9e: { // SAHF: AH -> SF,ZF,AF,PF,CF
         constexpr WORD mask=0x00d5;
         flags_=WORD((flags_&~mask)|(regs_[0]>>8&mask)|0x0002);
@@ -1182,18 +1227,14 @@ void Main8088Board::Core::executeOne()
     // 2 clocks; CLI/STI/CLD/STD are also 2. No prefix surcharge
     // is modeled, and V20 timing must be characterized separately.
     case 0x90: // NOP
-        // 8088 NOP is 3 clocks. A prefixed NOP includes prefix costs,
-        // which are not yet modeled. V20 native timing is separate.
-        if(variant_==CpuType::I8088 && prefixCount==0)
-            lastCycles_=3;
         break;
     case 0xf4: // HLT
         halted_=true;
         break;
-    case 0xfa: flags_ &= WORD(~0x0200);if(variant_==CpuType::I8088 && prefixCount==0)lastCycles_=2;break; // CLI
-    case 0xfb: flags_ |= 0x0200;irqInhibit_=1;if(variant_==CpuType::I8088 && prefixCount==0)lastCycles_=2;break; // STI
-    case 0xfc: flags_ &= WORD(~0x0400);if(variant_==CpuType::I8088 && prefixCount==0)lastCycles_=2;break; // CLD
-    case 0xfd: flags_ |= 0x0400;if(variant_==CpuType::I8088 && prefixCount==0)lastCycles_=2;break; // STD
+    case 0xfa: flags_ &= WORD(~0x0200);break; // CLI
+    case 0xfb: flags_ |= 0x0200;irqInhibit_=1;break; // STI
+    case 0xfc: flags_ &= WORD(~0x0400);break; // CLD
+    case 0xfd: flags_ |= 0x0400;break; // STD
     case 0xea: { // JMP far ptr16:16
         const WORD off=fetch16(),seg=fetch16();
         ip_=off;segments_[1]=seg;
