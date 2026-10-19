@@ -71,5 +71,15 @@ int main()
     for(unsigned i=0;i<256;++i)
         if(p6809->readCpu(0xfd1b)!=BYTE(i^0xa5))return 6;
     if(p6809->readCpu(0xfd18)!=0)return 7;
+    // Standard FDC parameter registers use the same main-board bus.
+    bus.loadFloppy2hd(std::vector<BYTE>(77u*2*8*1024,0));
+    bus.writeIo(0xfd31,7);
+    bus.writeIo(0xfd32,2);
+    if(bus.readIo(0xfd31)!=7 || bus.readIo(0xfd32)!=2)return 10;
+    // Unrelated card-local control registers must not be claimed by bus.
+    MainBoard main;
+    BYTE value=0;
+    if(main.readIo(0xfd55,value) || main.writeIo(0xfd55,0x7f))
+        return 11;
     return 0;
 }
