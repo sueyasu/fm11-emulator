@@ -65,7 +65,8 @@ public:
     void clearIoWriteObserver() {ioWriteObserver_={};}
     void beginCpuInstruction(std::uint16_t pc) {tracePc_=pc;traceCpu_=true; if(vsyncCount_>0)--vsyncCount_;}
     void endCpuInstruction() {traceCpu_=false;}
-    BYTE busyStatus() const {return busy_;}
+    BYTE busyStatus() const {return busy_?0x80:0;}
+    BYTE readSubControl() const {return static_cast<BYTE>((subIoRam_[0]&0xfeu)|(busy_?0u:1u));}
     std::size_t graphicsAccessPage() const {return gvuPage_;}
     std::size_t graphicsDisplayPage() const {return gvdPage_;}
     std::uint16_t graphicsOffset() const {return gvuOffset_;}
@@ -130,7 +131,8 @@ public:
             return vram_[gvuPlane_*0x10000+graphicsAddress(address)];
         }
         if(address<0xa000)return ram_[address-0x8000];
-        if(address>=0xafe0 && address<=0xafe3)return subIoRam_[address-0xafe0];
+        if(address==0xafe0)return readSubControl();
+        if(address>=0xafe1 && address<=0xafe3)return subIoRam_[address-0xafe0];
         if(address==0xafe8)return gvuAddressHigh_;
         if(address==0xafe9)return static_cast<BYTE>(gvuOffset_);
         if(address==0xafea)return displayAddressHigh_;
@@ -145,7 +147,7 @@ public:
             return 0;
         }
         if(address==0xafe6)return const_cast<DisplaySubsystem*>(this)->readVsyncStatus();
-        if(address==0xaff0)return busy_;
+        if(address==0xaff0)return subIoRam_[0]; // not BUSY: original maps this to DMA channel register
         if(address>=0xb000)return rom_[address-0xb000];
         return 0xff; // unmapped space, including unimplemented sub I/O
     }
@@ -175,6 +177,7 @@ public:
         else if(address<0xa000)ram_[address-0x8000]=value;
         else if(address>=0xafe0 && address<=0xafe3) {
             subIoRam_[address-0xafe0]=value;
+            if(address==0xafe0)busy_=(value&1u)==0;
             if(address==0xafe1) {
                 gvuControl_=value;
                 gvuPlane_=std::min<unsigned>(value>>6,2);
@@ -214,7 +217,7 @@ public:
                 markVideoChanged();
             }
         }
-        else if(address==0xaff0)busy_=value;
+        else if(address==0xaff0)subIoRam_[0]=value; // TODO: original DMA register, not sub BUSY
         // ROM and unmapped space are read-only. Trace even writes to
         // unimplemented I/O locations; their hardware decode is unknown.
         if(address>=0xa000 && address<0xc000 && ioWriteObserver_)
@@ -235,7 +238,7 @@ private:
     bool traceCpu_=false;
     std::function<void()> attentionSink_;
     bool haltRequested_=false;
-    BYTE busy_=0x80;
+    bool busy_=true;
     BYTE videoFlags_=0;
     unsigned vsyncCount_=0;
     BYTE vsyncMode_=0,vsyncStatus_=0x40;
