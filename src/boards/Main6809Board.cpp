@@ -189,8 +189,9 @@ void Main6809Board::writeFloppySector()
 
 void Main6809Board::readFloppySector()
 {
+    ++fdcReads_;
     std::size_t offset=0;
-    if(!floppySectorOffset(offset))return;
+    if(!floppySectorOffset(offset)) {++fdcReadFailures_;return;}
     for(unsigned i=0;i<256;++i)floppySector_[i]=floppy_->read(0,offset+i);
     floppyOffset_=0;
     floppyStatus_=0x02; // DRQ for programmed I/O
@@ -200,6 +201,7 @@ void Main6809Board::readFloppySector()
     if(dma) {
         const unsigned count=(ioRegisters_[0x42]<<8)|ioRegisters_[0x43];
         if(count!=256) {
+            ++fdcReadFailures_;
             floppyStatus_=0x10;
             ioRegisters_[0x50]|=0x40;
             return;
@@ -210,6 +212,7 @@ void Main6809Board::readFloppySector()
         for(unsigned i=0;i<256;++i) {
             const WORD address=WORD(startAddress+(down?-int(i):int(i)));
             if((dmaBank|address)>=memory_.size()) {
+                ++fdcReadFailures_;
                 floppyStatus_=0x10;
                 ioRegisters_[0x50]|=0x40;
                 return;
@@ -233,6 +236,7 @@ void Main6809Board::readFloppySector()
         // DMA common completion latch, until the channel status is read.
         refreshDmaCompletion();
     }
+    ++fdcReadSuccesses_;
 }
 
 void Main6809Board::signalAttention()
