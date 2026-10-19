@@ -14,6 +14,11 @@ public:
     static constexpr std::size_t kRamSize=0x2000;
     static constexpr std::size_t kRomSize=0x4000;
     using RomImage=std::array<BYTE,kRomSize>;
+    struct VideoSnapshot {
+        std::array<BYTE,kVramSize> vram;
+        BYTE flags;
+        std::uint64_t revision;
+    };
 
     void reset() {
         haltRequested_=false;
@@ -36,6 +41,9 @@ public:
     // Renderer-facing change tracking, independent of the eventual display
     // resolution and the meanings assigned to AFE6 bits.
     std::uint64_t videoRevision() const {return videoRevision_;}
+    // Copy the video state at one emulation boundary. The frontend can
+    // retain this value after the emulator updates VRAM again.
+    VideoSnapshot captureVideo() const {return {vram_,videoFlags_,videoRevision_};}
     // Handshake output to the main board. The physical sub-I/O trigger
     // remains unassigned until its register decode is confirmed.
     void setAttentionSink(std::function<void()> sink) {attentionSink_=std::move(sink);}
