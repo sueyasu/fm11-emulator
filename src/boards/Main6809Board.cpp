@@ -288,7 +288,7 @@ void Main6809Board::advanceWaitTime(std::uint64_t nanoseconds)
 std::uint64_t Main6809Board::nextPtmEventNanoseconds() const
 {
     std::uint64_t soonest = UINT64_MAX;
-    for (const auto& ch : ptm_)
+    for (const auto& ch : ptm_->channels)
         if (ch.running && ch.counter)
             soonest = std::min(soonest, std::uint64_t(ch.counter));
     if (soonest == UINT64_MAX) return soonest;
