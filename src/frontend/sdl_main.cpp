@@ -98,6 +98,8 @@ int main(int argc,char** argv) {
         if(!ui.renderer)throw std::runtime_error(SDL_GetError());
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"0");
         ui.setMode(high);
+        // Host printable keys enter the original sub-CPU keyboard queue.
+        SDL_StartTextInput();
         bool running=true,paused=false;
         std::uint64_t executed=0,lastReported=0;
         std::uint64_t ioWrites=0;
@@ -107,6 +109,15 @@ int main(int argc,char** argv) {
             SDL_Event event;
             while(SDL_PollEvent(&event)) {
                 if(event.type==SDL_QUIT)running=false;
+                if(event.type==SDL_TEXTINPUT && !paused && !testPattern) {
+                    for(const unsigned char* p=reinterpret_cast<const unsigned char*>(event.text.text);
+                        *p;++p) {
+                        // The original keyboard queue carries 8-bit codes;
+                        // UTF-8 multibyte input needs a separate keymap.
+                        if(*p>=0x20 && *p<0x7f)
+                            machine.displaySubsystem().enqueueKeyCode(*p);
+                    }
+                }
                 if(event.type==SDL_KEYDOWN && !event.key.repeat) {
                     if(event.key.keysym.sym==SDLK_ESCAPE)running=false;
                     if(event.key.keysym.sym==SDLK_SPACE)paused=!paused;
