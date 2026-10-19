@@ -1181,7 +1181,7 @@ void Main8088Board::Core::executeOne()
     case 0x90: // NOP
         // 8088 NOP is 3 clocks. A prefixed NOP includes prefix costs,
         // which are not yet modeled. V20 native timing is separate.
-        if(variant_==CpuType::I8088 && prefixCount==1)
+        if(variant_==CpuType::I8088 && prefixCount==0)
             lastCycles_=3;
         break;
     case 0xf4: // HLT
