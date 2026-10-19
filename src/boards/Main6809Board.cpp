@@ -696,6 +696,7 @@ void Main6809Board::Core::SetMemByte(WORD address, BYTE value)
 
 void Main6809Board::Core::reset()
 {
+    lastCycles_=0;
     SimRESET();
 }
 
@@ -712,15 +713,16 @@ void Main6809Board::Core::executeOne()
     if (board_.irqPending() && (regs.CC & kIrqMask) == 0) {
         SimIRQ();
         ++board_.acceptedIrqCount_;
-        if (board_.cpuClockHz_ != 0)
-            board_.advanceCpuCycles(
-                variant_ == CpuType::HD6309 && (regs.MD & 0x01) != 0
-                    ? 21 : 19); // W adds two native-mode stack cycles
+        lastCycles_=variant_ == CpuType::HD6309 && (regs.MD & 0x01) != 0
+                    ? 21 : 19; // W adds two native-mode stack cycles
+        if(board_.cpuClockHz_ != 0)
+            board_.advanceCpuCycles(lastCycles_);
         return;
     }
     SimONE();
-    if (board_.cpuClockHz_ != 0 && LastInstructionCycles() != 0)
-        board_.advanceCpuCycles(LastInstructionCycles());
+    lastCycles_=LastInstructionCycles();
+    if(board_.cpuClockHz_ != 0 && lastCycles_ != 0)
+        board_.advanceCpuCycles(lastCycles_);
 }
 
 std::uint32_t Main6809Board::Core::pc() const
