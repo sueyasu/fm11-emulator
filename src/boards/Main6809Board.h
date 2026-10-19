@@ -69,6 +69,8 @@ public:
     // The first PTM timebase runs at PTMCLOCK/2 = 9700 Hz (16-bit mode,
     // internal clock select 0). CPU cycles are supplied by the scheduler.
     void setCpuClockHz(std::uint64_t hz);
+    std::uint64_t cpuClockHz() const {return cpuClockHz_;}
+    void setExternalClocking(bool enabled) {externalClocking_=enabled;}
     void advanceCpuCycles(std::uint64_t cycles);
 
     BYTE readCpu(WORD address);
@@ -150,6 +152,7 @@ private:
     std::uint64_t acceptedIrqCount_ = 0;
     std::uint64_t ptmIrqAssertCount_ = 0;
     bool ptmIrqAcknowledged_ = false;
+    bool externalClocking_=false;
     std::uint64_t cpuClockHz_ = 0;
     std::uint64_t ptmCycleFraction_ = 0;
     std::uint64_t waitNanosecondFraction_ = 0;
