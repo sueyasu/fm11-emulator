@@ -1,6 +1,7 @@
 #pragma once
 #include "portable_types.h"
 #include "FloppyDevice.h"
+#include "MainBoard.h"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -23,6 +24,10 @@ public:
     Main8088Bus();
     void reset();
     void loadBootRom(const Rom& rom);
+    void setMainBoard(std::shared_ptr<MainBoard> board) {
+        mainBoard_=std::move(board);
+        setFloppyDevice(mainBoard_->floppyDevice());
+    }
     void setFloppyDevice(std::shared_ptr<FloppyDevice> device) {
         floppy_=std::move(device);
         setDmaDevice(0,[this](){return floppyReadData();},
@@ -79,6 +84,7 @@ private:
     BYTE dmaCommand_=0, dmaMask_=0, dmaStatus_=0, dmaFlip_=0, dmaRequest_=0;
     std::array<DmaRead,4> dmaReaders_{};
     std::array<DmaWrite,4> dmaWriters_{};
+    std::shared_ptr<MainBoard> mainBoard_;
     std::shared_ptr<FloppyDevice> floppy_=std::make_shared<FloppyDevice>();
     void floppyCommand(BYTE command,unsigned channel);
     BYTE floppyReadData();
