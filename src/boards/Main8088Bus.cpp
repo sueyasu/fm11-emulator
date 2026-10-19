@@ -13,11 +13,7 @@ void Main8088Bus::reset()
     picNeedsIcw4_=false;picSingle_=false;picAutoEoi_=false;
     resetDma();
     floppyRegisters_.fill(0);
-    floppyStatus_=0;
-    floppyPosition_=256;
-    floppyLength_=256;
-    floppyChannel_=0;
-    floppyWriting_=false;
+    floppy_->finishTransfer();
 }
 
 void Main8088Bus::loadFloppy2d(const std::vector<BYTE>& image)
@@ -49,51 +45,37 @@ bool Main8088Bus::floppySectorOffset(std::size_t& offset,unsigned channel)
 
 BYTE Main8088Bus::floppyReadData()
 {
-    if(floppyPosition_>=floppyLength_)return 0xff;
-    const BYTE value=floppyBuffer_[floppyPosition_++];
-    if(floppyPosition_==floppyLength_)floppyStatus_=0;
-    return value;
+    return floppy_->transferRead();
 }
 
 void Main8088Bus::floppyWriteData(BYTE value)
 {
-    if(!floppyWriting_ || floppyPosition_>=floppyLength_)return;
-    floppyBuffer_[floppyPosition_++]=value;
-    if(floppyPosition_==floppyLength_) {
-        floppy_->writeSector(floppyChannel_,floppySectorStart_,floppyBuffer_.data());
-        floppyWriting_=false;
-        floppyStatus_=0;
-    }
+    floppy_->transferWrite(value);
 }
 
 void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
 {
-    floppyChannel_=channel;
-    floppyLength_=channel==0?256:1024;
-    floppyStatus_=0;
-    floppyPosition_=floppyLength_;
-    floppyWriting_=false;
-    const bool read=(command&0xf0)==0x80;
-    const bool write=(command&0xf0)==0xa0;
-    if(!read && !write)return;
-    std::size_t offset=0;
-    if(!floppySectorOffset(offset,channel))return;
-    floppySectorStart_=offset;
-    floppyPosition_=0;
-    floppyWriting_=write;
-    if(read) {
-        for(unsigned i=0;i<floppyLength_;++i)
-            floppyBuffer_[i]=floppy_->read(channel,offset+i);
+    const bool reading=(command&0xf0)==0x80;
+    const bool writing=(command&0xf0)==0xa0;
+    if(!reading && !writing) {
+        floppy_->finishTransfer();
+        return;
     }
-    floppyStatus_=0x02;
-    // Original Sim86 dispatches a DMA transfer for the selected FDC.
+    const unsigned base=channel==0?0x18:0x30;
+    if(!floppy_->beginSector(channel,floppyRegisters_[base+1],
+            floppyRegisters_[channel==0?0x1c:0x34],
+            floppyRegisters_[base+2],
+            floppyRegisters_[channel==0?0x1d:0x35],writing))return;
+
+    // The 8237 remains the bus master; the system FDC only supplies data.
     setDmaRequest(channel,true);
-    unsigned transferred=0;
-    for(;transferred<floppyLength_;++transferred) {
-        if(!serviceDma() || floppyPosition_==floppyLength_)break;
+    for(unsigned i=0;i<floppy_->transferLength();++i) {
+        if(!serviceDma() || floppy_->transferPosition()==floppy_->transferLength())
+            break;
     }
     setDmaRequest(channel,false);
-    if(floppyPosition_!=floppyLength_)floppyStatus_=0x10;
+    if(floppy_->transferPosition()!=floppy_->transferLength())
+        floppy_->transferError();
 }
 
 void Main8088Bus::loadBootRom(const Rom& rom)
@@ -132,7 +114,7 @@ BYTE Main8088Bus::readIo(WORD port) const
     if(port>=0xfd00 && port<=0xfdff && systemReader_) return systemReader_(port);
     if(((port>=0xfd18 && port<=0xfd1d && floppy_->has2d()) ||
         (port>=0xfd30 && port<=0xfd35 && floppy_->has2hd()))) {
-        if(port==0xfd18 || port==0xfd30)return floppyStatus_;
+        if(port==0xfd18 || port==0xfd30)return floppy_->transferStatus();
         if(port==0xfd1b || port==0xfd33)
             return const_cast<Main8088Bus*>(this)->floppyReadData();
         return floppyRegisters_[port&0xff];
