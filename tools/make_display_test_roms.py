@@ -266,7 +266,10 @@ print(out/"ank_text_attributes.bin")
 # Main turns on both layers (FDA0=$0F); sub paints a blue striped
 # background through GVU, then a yellow glyph and reverse-video cell.
 overlay_main=bytearray(0x1000)
-overlay_main[:7]=bytes.fromhex("86 0f b7 fd a0 20 fe")
+# The physical blue plane is RGB index 4. The original 16-color
+# table uses palette value 1 for blue, so program FD9C explicitly.
+overlay_main_code=bytes.fromhex("86 01 b7 fd 9c 86 0f b7 fd a0 20 fe")
+overlay_main[:len(overlay_main_code)]=overlay_main_code
 overlay_main[-2:]=bytes.fromhex("50 00")
 overlay_sub=bytearray(0x5000)
 oc=bytearray()
