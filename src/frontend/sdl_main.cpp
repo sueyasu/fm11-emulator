@@ -53,7 +53,7 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE]\n"
+    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE]\n"
              <<"  ROM defaults to external/roms/display6809.bin\n"
              <<"  ESC quit; SPACE pause/resume; F1 switch 200/400-line view\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
@@ -63,7 +63,7 @@ int main(int argc,char** argv) {
     try {
         std::string romPath="external/roms/display6809.bin", mainRomPath, ankPath, floppyPath;
         bool floppyD88=false;
-        bool high=false, testPattern=false, traceBoot=false;
+        bool high=false, testPattern=false, traceBoot=false, diagnostics=false;
         std::uint64_t instructions=10000;
         for(int i=1;i<argc;++i) {
             const std::string arg=argv[i];
@@ -71,6 +71,7 @@ int main(int argc,char** argv) {
             if(arg=="--high"){high=true;continue;}
             if(arg=="--test-pattern"){testPattern=true;continue;}
             if(arg=="--trace-boot"){traceBoot=true;continue;}
+            if(arg=="--diagnostics"){diagnostics=true;continue;}
             if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--ank-rom" || arg=="--floppy2d" || arg=="--floppy-d88") && i+1<argc) {
                 if(arg=="--rom")romPath=argv[++i];
                 else if(arg=="--main-rom")mainRomPath=argv[++i];
@@ -125,7 +126,8 @@ int main(int argc,char** argv) {
         bool running=true,paused=false;
         std::uint64_t executed=0,lastReported=0;
         std::uint64_t ioWrites=0;
-        machine.setDisplayIoWriteObserver([&](DisplaySubsystem::IoWriteTrace){++ioWrites;});
+        if(diagnostics)
+            machine.setDisplayIoWriteObserver([&](DisplaySubsystem::IoWriteTrace){++ioWrites;});
         auto lastLog=std::chrono::steady_clock::now();
         auto lastFrame=lastLog-std::chrono::milliseconds(17);
         while(running) {
@@ -206,7 +208,7 @@ int main(int argc,char** argv) {
                             static_cast<unsigned>((x/80+y/50)%8));
             }
             const auto now=std::chrono::steady_clock::now();
-            if(now-lastLog>=std::chrono::seconds(2)) {
+            if(diagnostics && now-lastLog>=std::chrono::seconds(2)) {
                 std::cerr<<"display PC="<<std::hex<<machine.displayCpuPc()
                          <<std::dec<<" steps="<<executed
                          <<" delta="<<(executed-lastReported)
