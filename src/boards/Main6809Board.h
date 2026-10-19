@@ -2,6 +2,7 @@
 
 #include "CpuBoard.h"
 #include "Sim09.h"
+#include "FloppyDevice.h"
 
 #include <array>
 #include <cstddef>
@@ -26,9 +27,9 @@ public:
     void loadFloppy2d(const std::vector<BYTE>& raw);
     void loadFloppyD88(const std::vector<BYTE>& d88);
     std::array<BYTE,256> floppyBootSector(unsigned sector) const;
-    bool floppyDirty() const { return floppyDirty_; }
+    bool floppyDirty() const { return floppy_.dirty2d(); }
     std::vector<BYTE> floppyImage() const;
-    void clearFloppyDirty() { floppyDirty_ = false; }
+    void clearFloppyDirty() { floppy_.clearDirty2d(); }
 
     // Board-local event inputs used by the main-system control registers.
     // Device boards can use these without reaching into the CPU core.
@@ -120,10 +121,7 @@ private:
     std::array<BYTE, 256> ioRegisters_{};
     std::array<BYTE, 256> ioOutputLatch_{};
     std::array<BYTE, 256> ioStatusLatch_{};
-    std::vector<BYTE> floppy2d_;
-    std::vector<BYTE> floppyD88_;
-    std::array<std::size_t,40*2*16> floppyD88Offsets_{};
-    bool floppyDirty_ = false;
+    FloppyDevice floppy_;
     bool floppyWritePio_ = false;
     std::size_t floppyWriteOffset_ = 0;
     std::array<BYTE,256> floppySector_{};
