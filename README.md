@@ -107,6 +107,24 @@ This validates bidirectional shared memory and CPU scheduling, **not**
 the original FM-11 interrupt/attention protocol; a hardware notification
 register is not inferred from this test.
 
+### Display-generated ATTENTION (original I/O semantics)
+
+Original `Fm11/SubCpu.cpp`, `CSubCpu::GetIoByte`, case
+`$AFE7`, raises main-CPU ATTENTION when the display CPU **reads**
+that address. This is distinct from the earlier host-injected event
+tests. The implementation now connects that read to the existing main
+`$FD04` event latch.
+
+A pair of tiny 6809 binaries verifies that the display CPU's `LDA
+$AFE7` triggers an event that the main CPU receives with `LDA
+$FD04` and then acknowledges by reading `$FD04` again:
+
+```sh
+ctest --test-dir build -R display_binary_afe7 --output-on-failure
+python3 tools/make_display_test_roms.py build/test-roms
+./build/display_binary_afe7 build/test-roms/main_afe7.bin build/test-roms/display_afe7.bin
+```
+
 ### HALT and BUSY binary regression
 
 ```sh
