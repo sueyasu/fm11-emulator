@@ -6,6 +6,8 @@ int main() {
  const std::size_t off=((1*2+0)*16+0)*256;
  for(int i=0;i<256;++i)image[off+i]=static_cast<BYTE>(i^0x5a);
  b.loadFloppy2d(image);
+ // A 2D disk does not make the separate 2HD controller ready.
+ if((b.readCpu(0xfd30)&0x80)==0)return 11;
  { const auto ipl=b.floppyBootSector(1);
    for(unsigned i=0;i<256;++i)if(ipl[i]!=image[i])return 7; }
 
