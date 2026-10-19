@@ -79,7 +79,8 @@ int main()
     reversed.setActiveBoard(1);
     if(reversed.fd05SelectionEnabled() ||
        reversed.activeBoard()!=reverse09Ptr)return 13;
-    reversed.executeOne();
+    // FD05 can change while a manual selection remains in force.
+    reverse86Ptr->bus().writeIo(0xfd05,0x01);
     if(reversed.activeBoard()!=reverse09Ptr)return 14;
     reversed.enableFd05Selection(true);
     if(reversed.activeBoard()!=reverse86Ptr)return 15;
