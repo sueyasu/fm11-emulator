@@ -161,6 +161,46 @@ public:
         return frame;
     }
 
+    // CPU version of the character stage in the original fm11.hlsl.
+    // Character/attribute pairs reside at SubRam $8000-$8FFF, with a
+    // 2-byte CRTC start-address offset. ANK rows use LSB-first pixel order.
+    // This entry point is explicit to preserve graphics-only regression
+    // frames and to allow comparing text scanout separately.
+    static void compositeText(Frame& frame,const DisplaySubsystem& display) {
+        const unsigned columns=unsigned(display.crtcRegister(1))*2u;
+        const unsigned rows=unsigned(display.crtcRegister(6));
+        if(columns==0 || rows==0 || columns>160 || rows>100)return;
+        const unsigned charW=640u/columns;
+        const unsigned charH=400u/rows;
+        if(charW==0 || charH==0)return;
+        const unsigned start=((unsigned(display.crtcRegister(12))<<9) |
+                              (unsigned(display.crtcRegister(13))<<1))&0x7ffu;
+        for(unsigned y=0;y<frame.height;++y) {
+            const unsigned scanY=unsigned(y)*400u/unsigned(frame.height);
+            const unsigned cy=scanY/charH,sy=scanY%charH;
+            if(cy>=rows)continue;
+            for(unsigned x=0;x<640;++x) {
+                const unsigned cx=x/charW,sx=x%charW;
+                if(cx>=columns)continue;
+                const unsigned off=(start+(cx+cy*columns)*2u)&0xfffu;
+                const BYTE character=display.textByte(off);
+                const BYTE attribute=display.textByte((off+1)&0xfffu);
+                unsigned glyphX=sx;
+                if(charW>8)glyphX/=2;
+                bool lit=false;
+                if(character!=0 && character!=0x20 && sy<16 && glyphX<8)
+                    lit=(display.ankGlyphRow(character,sy)&(1u<<glyphX))!=0;
+                if(attribute&0x08)lit=!lit;
+                if(lit) {
+                    const unsigned color=(attribute&0x07);
+                    // Original renderer uses a 16-entry color table;
+                    // start with the documented low RGB bits.
+                    frame.argb[y*640+x]=colorArgb(color);
+                }
+            }
+        }
+    }
+
     // Composite a single 8x16 ANK glyph into an indexed 640x200 frame.
     // This primitive makes no assumptions about text VRAM or cursor I/O.
     static void drawAnk(Pixels& pixels,const DisplaySubsystem& display,
