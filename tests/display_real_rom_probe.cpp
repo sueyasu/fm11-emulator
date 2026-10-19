@@ -30,7 +30,7 @@ int main(int argc,char** argv) {
         std::array<unsigned,65536> pcCounts{};
         std::uint64_t afe0Writes=0,readyWrites=0,busyWrites=0;
         unsigned logged=0;
-        m.displaySubsystem().setIoWriteObserver(
+        m.setDisplayIoWriteObserver(
             [&](DisplaySubsystem::IoWriteTrace w) {
                 if(!w.fromCpu)return;
                 if(w.address==0xafe0) {
