@@ -106,7 +106,7 @@ void Main6809Board::refreshSerialIrq()
 
 void Main6809Board::loadFloppy2d(const std::vector<BYTE>& raw)
 {
-    floppy_.load2d(raw);
+    floppy_->load2d(raw);
     floppyWritePio_=false;
     floppyOffset_=256;
     floppyStatus_=0;
@@ -114,7 +114,7 @@ void Main6809Board::loadFloppy2d(const std::vector<BYTE>& raw)
 
 void Main6809Board::loadFloppyD88(const std::vector<BYTE>& d88)
 {
-    floppy_.loadD88(d88);
+    floppy_->loadD88(d88);
     floppyWritePio_=false;
     floppyOffset_=256;
     floppyStatus_=0;
@@ -122,16 +122,16 @@ void Main6809Board::loadFloppyD88(const std::vector<BYTE>& d88)
 
 std::array<BYTE,256> Main6809Board::floppyBootSector(unsigned sector) const
 {
-    if(!floppy_.has2d() || sector<1 || sector>16)
+    if(!floppy_->has2d() || sector<1 || sector>16)
         throw std::invalid_argument("invalid IPL floppy sector");
     std::array<BYTE,256> bytes{};
-    for(unsigned i=0;i<256;++i)bytes[i]=floppy_.read(0,(sector-1)*256+i);
+    for(unsigned i=0;i<256;++i)bytes[i]=floppy_->read(0,(sector-1)*256+i);
     return bytes;
 }
 
 std::vector<BYTE> Main6809Board::floppyImage() const
 {
-    return floppy_.image2d();
+    return floppy_->image2d();
 }
 
 bool Main6809Board::floppySectorOffset(std::size_t& offset)
@@ -140,7 +140,7 @@ bool Main6809Board::floppySectorOffset(std::size_t& offset)
     const unsigned side=ioRegisters_[0x1c]&1;
     const unsigned sector=ioRegisters_[0x1a];
     const unsigned drive=ioRegisters_[0x1d]&3;
-    if(!floppy_.sectorOffset(0,track,side,sector,drive,offset)) {
+    if(!floppy_->sectorOffset(0,track,side,sector,drive,offset)) {
         floppyStatus_=0x10;
         floppyOffset_=256;
         ioRegisters_[0x50]|=0x40;
@@ -183,7 +183,7 @@ void Main6809Board::writeFloppySector()
     }
     for(unsigned i=0;i<256;++i) {
         const WORD address=WORD(startAddress+(down?-int(i):int(i)));
-        floppy_.write(0,offset+i,readPhysical(dmaBank|address));
+        floppy_->write(0,offset+i,readPhysical(dmaBank|address));
     }
     // The completed 256-byte transfer advances the channel address and
     // exhausts the byte count, as a DMA engine would do.
@@ -204,7 +204,7 @@ void Main6809Board::readFloppySector()
 {
     std::size_t offset=0;
     if(!floppySectorOffset(offset))return;
-    for(unsigned i=0;i<256;++i)floppySector_[i]=floppy_.read(0,offset+i);
+    for(unsigned i=0;i<256;++i)floppySector_[i]=floppy_->read(0,offset+i);
     floppyOffset_=0;
     floppyStatus_=0x02; // DRQ for programmed I/O
     const bool dma=(ioRegisters_[0x50]&0x04)!=0;
@@ -667,7 +667,7 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         break;
     case 0x1b:
         if(floppyWritePio_ && floppyOffset_<256) {
-            floppy_.write(0,floppyWriteOffset_+floppyOffset_++,value);
+            floppy_->write(0,floppyWriteOffset_+floppyOffset_++,value);
             if(floppyOffset_==256) {
                 floppyWritePio_=false;
                 floppyStatus_=0;
