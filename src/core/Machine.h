@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CpuBoard.h"
+#include "FloppyDevice.h"
 
 #include <cstddef>
 #include <memory>
@@ -23,6 +24,7 @@ public:
     void executeOne();
 
 private:
+    std::shared_ptr<FloppyDevice> floppy_=std::make_shared<FloppyDevice>();
     std::vector<std::unique_ptr<CpuBoard>> boards_;
     std::size_t active_board_ = 0;
 };
