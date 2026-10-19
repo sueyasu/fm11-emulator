@@ -3,6 +3,7 @@
 #include "DisplayBitmap.h"
 #include "RomFiles.h"
 #include <SDL.h>
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <iostream>
@@ -89,6 +90,7 @@ int main(int argc,char** argv) {
         if(!ui.renderer)
             ui.renderer=SDL_CreateRenderer(ui.window,-1,SDL_RENDERER_SOFTWARE);
         if(!ui.renderer)throw std::runtime_error(SDL_GetError());
+        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"0");
         ui.setMode(high);
         bool running=true,paused=false;
         std::uint64_t executed=0,lastReported=0;
@@ -143,8 +145,25 @@ int main(int argc,char** argv) {
             if(SDL_UpdateTexture(ui.texture,nullptr,frame.argb.data(),
                                  640*static_cast<int>(sizeof(std::uint32_t)))!=0)
                 throw std::runtime_error(SDL_GetError());
-            SDL_RenderClear(ui.renderer);
-            if(SDL_RenderCopy(ui.renderer,ui.texture,nullptr,nullptr)!=0)
+            // Integer-only pixel scaling: avoid uneven 1/2-pixel stripes
+            // when a 640-wide frame is stretched to a 960-wide window.
+            // For windows smaller than the native image, use a centered
+            // clipped 1:1 image instead of fractional downscaling.
+            int outputW=0,outputH=0;
+            if(SDL_GetRendererOutputSize(ui.renderer,&outputW,&outputH)!=0)
+                throw std::runtime_error(SDL_GetError());
+            const int nativeW=static_cast<int>(frame.width);
+            const int nativeH=static_cast<int>(frame.height);
+            const int scale=std::max(1,std::min(outputW/nativeW,outputH/nativeH));
+            const SDL_Rect destination{
+                (outputW-nativeW*scale)/2,
+                (outputH-nativeH*scale)/2,
+                nativeW*scale,nativeH*scale
+            };
+            SDL_SetRenderDrawColor(ui.renderer,0,0,0,255);
+            if(SDL_RenderClear(ui.renderer)!=0)
+                throw std::runtime_error(SDL_GetError());
+            if(SDL_RenderCopy(ui.renderer,ui.texture,nullptr,&destination)!=0)
                 throw std::runtime_error(SDL_GetError());
             SDL_RenderPresent(ui.renderer);
             SDL_Delay(1);
