@@ -303,3 +303,41 @@ overlay_ank[ord("T")*16]=1
 overlay_ank[ord("R")*16]=1
 (out/"ank_text_overlay.bin").write_bytes(overlay_ank)
 print(out/"ank_text_overlay.bin")
+
+# Stage 5: explicit FDA0 layer gating with a visible blue stripe field
+# and yellow text. Three main ROM variants differ ONLY in FDA0.
+for name,enable in (("text",0x03),("graphics",0x0c),("both",0x0f)):
+    m=bytearray(0x1000)
+    # palette index 4 => blue (reference color index 1)
+    body=bytes((0x86,1,0xb7,0xfd,0x9c,0x86,enable,0xb7,0xfd,0xa0,0x20,0xfe))
+    m[:len(body)]=body
+    m[-2:]=bytes.fromhex("50 00")
+    (out/f"main_layers_{name}.bin").write_bytes(m)
+    print(out/f"main_layers_{name}.bin")
+layers=bytearray(0x5000)
+lc=bytearray()
+def lw(address,value):
+    lc.extend((0x86,value,0xb7,(address>>8)&255,address&255))
+for reg,value in ((1,40),(6,25),(12,0),(13,0)):
+    lw(0xafee,reg)
+    lw(0xafef,value)
+for i,ch in enumerate(b"LAYER TEST"):
+    lw(0x8000+2*i,ch)
+    lw(0x8001+2*i,6)  # yellow text
+# Paint 200 scanlines of high-contrast blue stripes in a broad 80-pixel
+# region: first 10 packed bytes of each scanline, with 0xAA pattern.
+# 6809 uses an indexed fill loop to keep the test ROM small.
+lw(0xafe1,4)  # write blue plane, clear red/green
+lc.extend(bytes.fromhex(
+    "86 aa "       # LDA #$AA
+    "8e 00 00 "    # LDX #0
+    "a7 80 "       # STA ,X+
+    "8c 3e 80 "    # CMPX #16000
+    "26 f9 "       # BNE preceding STA
+))
+lw(0x9f80,0x66)
+lc.extend((0x20,0xfe))
+layers[:len(lc)]=lc
+layers[-2:]=bytes.fromhex("b0 00")
+(out/"display_layers.bin").write_bytes(layers)
+print(out/"display_layers.bin")
