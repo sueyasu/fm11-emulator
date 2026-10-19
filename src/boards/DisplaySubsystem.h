@@ -17,6 +17,8 @@ public:
     static constexpr std::size_t kRamSize=0x2000;
     static constexpr std::size_t kRomSize=0x5000;
     using RomImage=std::array<BYTE,kRomSize>;
+    using AnkRomImage=std::array<BYTE,0x1000>;
+    using KanjiRomImage=std::array<BYTE,0x20000>;
     struct IoWriteTrace {std::uint16_t address; BYTE value; std::uint16_t pc=0; bool fromCpu=false;};
     using IoWriteObserver=std::function<void(IoWriteTrace)>;
     struct VideoSnapshot {
@@ -44,6 +46,12 @@ public:
     bool haltRequested() const {return haltRequested_;}
 
     void loadRom(const RomImage& image) {rom_=image;}
+    void loadAnkRom(const AnkRomImage& image) {ankRom_=image;markVideoChanged();}
+    void loadKanjiRom(const KanjiRomImage& image) {kanjiRom_=image;markVideoChanged();}
+    BYTE ankGlyphRow(BYTE character,unsigned row) const {
+        return ankRom_.at(std::size_t(character)*16+row);
+    }
+    BYTE kanjiRomByte(std::size_t offset) const {return kanjiRom_.at(offset);}
     // Diagnostic observer for sub-CPU writes to the undecoded A000-BFFF
     // aperture and known sub-I/O latches. Observation is non-invasive:
     // attaching an observer never changes readback or register side effects.
@@ -204,4 +212,6 @@ private:
     std::array<BYTE,kPhysicalVramSize> vram_{};
     std::array<BYTE,kRamSize> ram_{};
     RomImage rom_{};
+    AnkRomImage ankRom_{};
+    KanjiRomImage kanjiRom_{};
 };
