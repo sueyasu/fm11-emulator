@@ -162,9 +162,9 @@ int main()
     // AFE6 is display-side video control, not generic unmapped I/O.
     DisplaySubsystem::RomImage videoRom{};
     // LDA #$5A; STA $AFE6
-    videoRom[0]=0x86;videoRom[1]=0x5a;
-    videoRom[2]=0xb7;videoRom[3]=0xaf;videoRom[4]=0xe6;
-    videoRom[0x3ffe]=0xc0;videoRom[0x3fff]=0x00;
+    videoRom[0x1000]=0x86;videoRom[0x1001]=0x5a;
+    videoRom[0x1002]=0xb7;videoRom[0x1003]=0xaf;videoRom[0x1004]=0xe6;
+    videoRom[0x4ffe]=0xc0;videoRom[0x4fff]=0x00;
     board.displaySubsystem().loadRom(videoRom);
     board.reset();
     if(board.displaySubsystem().videoFlags()!=0)return 37;
