@@ -152,5 +152,18 @@ int main()
     if((timerBoard->irqLines()&0x01)==0)return 29;
     (void)timerCard.readCpu(0xfd39);
     if((timerBoard->irqLines()&0x01)!=0)return 30;
+    // PTM execution no longer requires a 6809 CPU-card method call.
+    auto standalone=std::make_shared<MainBoard>();
+    auto timer=standalone->ptmDevice();
+    timer->write(0x39,0x01);
+    timer->write(0x38,0x50);
+    timer->write(0x3a,0);
+    timer->write(0x3b,4);
+    if(timer->nextEventNanoseconds()==UINT64_MAX)return 31;
+    timer->advance(4);
+    if(!timer->irqRequest() || (timer->read(0x39)&0x81)!=0x81)return 32;
+    if(timer->irqRequest())return 33;
+    (void)timer->read(0x3a);
+    if(timer->read(0x39)!=0)return 34;
     return 0;
 }
