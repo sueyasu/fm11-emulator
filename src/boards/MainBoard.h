@@ -30,16 +30,29 @@ public:
     bool optionalCpuRequested() const {return (subCpuControl_&0x01)!=0;}
     void resetSubCpuControl() {subCpuStatus_=subCpuControl_=0;}
 
-    // The PTM is clocked at 9700 Hz independently of the active CPU.
-    // A shared Q32 fixed-point phase preserves sub-tick time across
-    // changes between 6809, 8088 and wall-clock stepping.
+    // One common fractional phase, in billionths of a PTM tick.
+    // Nanosecond slices accumulate exactly, without Q32 rounding loss.
     void advanceTimeNanoseconds(std::uint64_t nanoseconds) {
-        advancePtmTime(nanoseconds,1000000000ULL);
+        constexpr std::uint64_t second=1000000000ULL, ptmHz=9700;
+        const auto whole=nanoseconds/second;
+        if(whole>std::numeric_limits<std::uint64_t>::max()/ptmHz)
+            throw std::overflow_error("PTM time interval too large");
+        advancePtmFraction(whole*ptmHz,(nanoseconds%second)*ptmHz);
     }
     void advanceCpuCycles(std::uint64_t cycles,std::uint64_t hz) {
         if(hz==0 || hz>1000000000ULL)
             throw std::invalid_argument("invalid main CPU clock frequency");
-        advancePtmTime(cycles,hz);
+        constexpr std::uint64_t ptmHz=9700, phaseUnit=1000000000ULL;
+        const auto whole=cycles/hz;
+        if(whole>std::numeric_limits<std::uint64_t>::max()/ptmHz)
+            throw std::overflow_error("PTM CPU interval too large");
+        const auto scaled=(cycles%hz)*ptmHz;
+        const auto integer=scaled/hz;
+        // (scaled % hz)*phaseUnit is below 1e18, within uint64_t.
+        const auto fraction=((scaled%hz)*phaseUnit)/hz;
+        if(whole*ptmHz>std::numeric_limits<std::uint64_t>::max()-integer)
+            throw std::overflow_error("PTM CPU interval too large");
+        advancePtmFraction(whole*ptmHz+integer,fraction);
     }
     void resetTimebase() {ptmPhase_=0;}
 
@@ -115,29 +128,17 @@ private:
     BYTE eventStatus_=0;
     BYTE eventControl_=0;
     BYTE externalIrqLines_=0;
-    void advancePtmTime(std::uint64_t amount,std::uint64_t unitsPerSecond) {
-        constexpr std::uint64_t ptmHz=9700;
-        const std::uint64_t whole=amount/unitsPerSecond;
-        const std::uint64_t remainder=amount%unitsPerSecond;
-        if(whole>std::numeric_limits<std::uint64_t>::max()/ptmHz)
+    void advancePtmFraction(std::uint64_t ticks,std::uint64_t fraction) {
+        constexpr std::uint64_t phaseUnit=1000000000ULL;
+        // fraction may exceed one tick for nanosecond intervals.
+        const auto extra=fraction/phaseUnit;
+        const auto phase=ptmPhase_+(fraction%phaseUnit);
+        const auto carry=phase/phaseUnit;
+        if(ticks>std::numeric_limits<std::uint64_t>::max()-extra ||
+           ticks+extra>std::numeric_limits<std::uint64_t>::max()-carry)
             throw std::overflow_error("PTM time interval too large");
-        // Q32 fractional PTM ticks; 9700 * (unitsPerSecond - 1)
-        // fits in uint64_t for the supported <= 1 GHz input clocks.
-        // Split integer/fraction before shifting to avoid __int128.
-        constexpr unsigned fractionBits=32;
-        constexpr std::uint64_t fractionUnit=std::uint64_t{1}<<fractionBits;
-        const std::uint64_t scaled=remainder*ptmHz;
-        const std::uint64_t integerPart=scaled/unitsPerSecond;
-        const std::uint64_t fractionalPart=
-            ((scaled%unitsPerSecond)<<fractionBits)/unitsPerSecond;
-        const std::uint64_t combined=ptmPhase_+fractionalPart;
-        const std::uint64_t carry=combined/fractionUnit;
-        const std::uint64_t additional=integerPart+carry;
-        const std::uint64_t base=whole*ptmHz;
-        if(base>std::numeric_limits<std::uint64_t>::max()-additional)
-            throw std::overflow_error("PTM time interval too large");
-        ptmPhase_=combined%fractionUnit;
-        ptm_->advance(base+additional);
+        ptmPhase_=phase%phaseUnit;
+        ptm_->advance(ticks+extra+carry);
         setIrqLine(IrqLine::Timer,ptm_->irqRequest());
     }
     std::uint64_t ptmPhase_=0;
