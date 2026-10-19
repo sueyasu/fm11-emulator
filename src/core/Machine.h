@@ -50,6 +50,7 @@ private:
     std::uint64_t clock8088Hz_ = 0;
     std::uint64_t displayCpuClockHz_ = 0;
     std::uint64_t displayCycleFraction_ = 0;
+    std::uint64_t displayCpuInputHz_ = 0;
     std::uint64_t displayNanosecondFraction_ = 0;
     std::int64_t displayCycleCredit_ = 0;
 };
