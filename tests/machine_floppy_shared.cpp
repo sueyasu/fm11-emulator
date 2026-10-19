@@ -81,5 +81,14 @@ int main()
     BYTE value=0;
     if(main.readIo(0xfd55,value) || main.writeIo(0xfd55,0x7f))
         return 11;
+    // Main-board USART is shared across the two main CPU cards.
+    p6809->queueSerialInput(0x41);
+    if((bus.readIo(0xfd07)&0x02)==0 || bus.readIo(0xfd06)!=0x41)return 12;
+    if((p6809->readCpu(0xfd07)&0x02)!=0)return 13;
+    bus.writeIo(0xfd06,0x42);
+    BYTE sent=0;
+    if(!p6809->takeSerialOutput(sent) || sent!=0x42)return 14;
+    p6809->writeCpu(0xfd06,0x43);
+    if(!p6809->takeSerialOutput(sent) || sent!=0x43)return 15;
     return 0;
 }
