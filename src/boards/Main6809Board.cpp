@@ -556,6 +556,13 @@ BYTE Main6809Board::readIo(WORD address)
         // Reference 2HD drive-sense register: C0 | RDY0..RDY3.
         // The shared device currently supports drive zero only.
         return static_cast<BYTE>(0xc0 | (floppy_->has2hd()?0x01:0));
+    case 0x37: {
+        // Reference MainCpu::GetIoByte: reading FDC IRQ status
+        // acknowledges the extended FDC interrupt source.
+        const BYTE result=ioRegisters_[0x37];
+        setExtendedIrqSource(0x40,false);
+        return result;
+    }
     case 0x1f:
         // Reading the MiniFDC IRQ latch acknowledges its IRQ request.
         mainIrqSources_&=static_cast<BYTE>(~0x08);
@@ -642,6 +649,12 @@ void Main6809Board::writeIo(WORD address, BYTE value)
     case 0x2c:
         ioOutputLatch_[0x2c] = value;
         mainIrqStatus();
+        break;
+    case 0x34: case 0x35:
+        // Reference MainCpu::SetIoByte: switching 2HD side/drive
+        // clears both the controller status and its DRQ latch.
+        ioRegisters_[0x30]=0;
+        ioRegisters_[reg]=value;
         break;
     case 0x19: case 0x1a: case 0x1d:
         if(!mainBoard_ || !mainBoard_->writeIo(address,value))
