@@ -29,6 +29,7 @@ public:
     void setMainBoard(std::shared_ptr<MainBoard> board) {
         mainBoard_=std::move(board);
         setFloppyDevice(mainBoard_->floppyDevice());
+        usart_=mainBoard_->usartDevice();
     }
     void setFloppyDevice(std::shared_ptr<FloppyDevice> device) { floppy_=std::move(device); }
     void loadFloppy2d(const std::vector<BYTE>& raw);
@@ -135,10 +136,7 @@ private:
     std::array<BYTE,256> floppySector_{};
     unsigned floppyOffset_ = 256;
     BYTE floppyStatus_ = 0;
-    BYTE serialCommand_ = 0;
-    bool txIrqEnabled_ = true;
-    std::deque<BYTE> serialInput_;
-    std::deque<BYTE> serialOutput_;
+    std::shared_ptr<Usart8251> usart_=std::make_shared<Usart8251>();
     BYTE mainIrqSources_ = 0;
     BYTE extendedIrqSources_ = 0;
     BYTE mainIrqResult_ = 0;
