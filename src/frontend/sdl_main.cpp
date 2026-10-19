@@ -8,6 +8,9 @@
 #include <iomanip>
 #include <cstdint>
 #include <iostream>
+#include <fstream>
+#include <iterator>
+#include <vector>
 #include <stdexcept>
 #include <string>
 
@@ -37,6 +40,12 @@ struct Window {
         SDL_SetWindowSize(window,960,height*3/2);
     }
 };
+std::vector<BYTE> readDiskImage(const std::string& path) {
+    std::ifstream file(path,std::ios::binary);
+    if(!file)throw std::runtime_error("cannot open floppy image: "+path);
+    return std::vector<BYTE>(std::istreambuf_iterator<char>(file),
+                             std::istreambuf_iterator<char>());
+}
 std::uint64_t parseCount(const std::string& text) {
     std::size_t end=0;
     const auto value=std::stoull(text,&end,0);
@@ -44,7 +53,7 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--ank-rom FILE]\n"
+    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE]\n"
              <<"  ROM defaults to external/roms/display6809.bin\n"
              <<"  ESC quit; SPACE pause/resume; F1 switch 200/400-line view\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
@@ -52,7 +61,8 @@ void usage() {
 }
 int main(int argc,char** argv) {
     try {
-        std::string romPath="external/roms/display6809.bin", mainRomPath, ankPath;
+        std::string romPath="external/roms/display6809.bin", mainRomPath, ankPath, floppyPath;
+        bool floppyD88=false;
         bool high=false, testPattern=false, traceBoot=false;
         std::uint64_t instructions=10000;
         for(int i=1;i<argc;++i) {
@@ -61,10 +71,15 @@ int main(int argc,char** argv) {
             if(arg=="--high"){high=true;continue;}
             if(arg=="--test-pattern"){testPattern=true;continue;}
             if(arg=="--trace-boot"){traceBoot=true;continue;}
-            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--ank-rom") && i+1<argc) {
+            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--ank-rom" || arg=="--floppy2d" || arg=="--floppy-d88") && i+1<argc) {
                 if(arg=="--rom")romPath=argv[++i];
                 else if(arg=="--main-rom")mainRomPath=argv[++i];
                 else if(arg=="--ank-rom")ankPath=argv[++i];
+                else if(arg=="--floppy2d" || arg=="--floppy-d88") {
+                    if(!floppyPath.empty())throw std::invalid_argument("only one floppy image may be mounted");
+                    floppyD88=(arg=="--floppy-d88");
+                    floppyPath=argv[++i];
+                }
                 else instructions=parseCount(argv[++i]);
             } else {usage();return 2;}
         }
@@ -80,9 +95,16 @@ int main(int argc,char** argv) {
                 mainCpu->loadBootRomFile(mainRomPath);
                 mainBoard=mainCpu.get();
                 mainCpu->setCpuClockHz(2000000);
+                if(!floppyPath.empty()) {
+                    auto image=readDiskImage(floppyPath);
+                    if(floppyD88)mainCpu->loadFloppyD88(image);
+                    else mainCpu->loadFloppy2d(image);
+                }
                 machine.addBoard(std::move(mainCpu));
             }
         }
+        if(!floppyPath.empty() && mainBoard==nullptr)
+            throw std::invalid_argument("floppy image requires --main-rom");
         machine.setDisplayCpuClockHz(testPattern?0:2000000);
         machine.reset();
         Sdl sdl;
