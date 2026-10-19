@@ -151,6 +151,30 @@ branch loops. This fixes the status semantics tested here but does
 not yet port the original character-display composition or every
 sub-CPU peripheral behavior.
 
+### Reference ANK text composition (first implementation)
+
+The original `Fm11/fm11.hlsl` composites two-byte character/attribute
+cells from the sub-CPU text RAM, with the CRTC start address and 8x16
+ANK glyphs. That operation is now available in the SDL frontend, including
+text reverse video, color attributes, and the 640x200/400 output sizes.
+The software scanout matches the shader's LSB-first glyph bit ordering.
+
+The reference archive includes `Fm11/CharRom.h`; convert its embedded
+4096-byte ANK array without committing those font bytes:
+
+```sh
+python3 tools/extract_ank_rom.py /path/to/Fm11/CharRom.h external/roms/ank.bin
+./build/fm11-sdl --main-rom external/roms/boot6809.bin \\
+    --rom external/roms/display6809.bin --ank-rom external/roms/ank.bin
+ctest --test-dir build -R display_text_composition --output-on-failure
+```
+
+Loading `--ank-rom` explicitly enables the text-composition stage.
+The original `Fm11Ram[0xDA0]` hardware character/graphics enable
+controls and complete color/palette logic are not yet implemented.
+Without `--ank-rom`, the established graphics-only regression frames
+remain unchanged.
+
 ### Full-frame binary display test and SDL preview
 
 To check the complete raster path without original firmware, generate
