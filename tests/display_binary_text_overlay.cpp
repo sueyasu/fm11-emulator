@@ -20,7 +20,8 @@ int main(int argc,char** argv) {
         for(int i=0;i<200000 && machine.displaySharedByte(0)!=0x66;++i)
             machine.executeOne();
         if(machine.displaySharedByte(0)!=0x66 ||
-           machine.mainDisplayControl()!=0x0f)return 10;
+           machine.mainDisplayControl()!=0x0f ||
+           machine.mainDisplayPalette(4)!=1)return 10;
         const auto& display=machine.displaySubsystem();
         if(display.textByte(0)!='T' || display.textByte(1)!=6 ||
            display.textByte(2)!='R' || display.textByte(3)!=0x0a)
