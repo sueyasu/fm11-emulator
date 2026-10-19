@@ -25,6 +25,9 @@ public:
     // The actual sub-CPU execution/arbitration is not implemented here.
     BYTE subCpuStatus() const {return subCpuStatus_;}
     BYTE subCpuControl() const {return subCpuControl_;}
+    // FD05 bit 0 selects the optional CPU-card bus-master request.
+    // Arbitration/CPU suspension remains in the individual CPU cards.
+    bool optionalCpuRequested() const {return (subCpuControl_&0x01)!=0;}
     void resetSubCpuControl() {subCpuStatus_=subCpuControl_=0;}
 
     // PTM input clock is 9700 Hz. The fractional remainder makes elapsed
