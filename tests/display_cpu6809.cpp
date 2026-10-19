@@ -89,14 +89,14 @@ int main()
     if(mainCard->readCpu(0xfc80)!=0x61)return 16;
     if(mainCard->readCpu(0xfc7f)!=0)return 17;
     // Sub-system I/O: AFE0-AFE3 scratch and AFF0 busy latch.
-    // Adjacent undocumented registers must remain unmapped.
+    // Unimplemented neighbors remain unmapped; AFEF is now CRTC data.
     auto& io=board.displaySubsystem();
     io.writeMemory(0xafe0,0x12);
     io.writeMemory(0xafe3,0x34);
     if(io.readMemory(0xafe0)!=0x12 ||
        io.readMemory(0xafe3)!=0x34)return 18;
     if(io.readMemory(0xafe4)!=0xff ||
-       io.readMemory(0xafef)!=0xff ||
+       io.readMemory(0xafed)!=0xff ||
        io.readMemory(0xaff1)!=0xff)return 19;
     io.writeMemory(0xaff0,0x00);
     if(io.busyStatus()!=0 || io.readMemory(0xaff0)!=0)return 20;
