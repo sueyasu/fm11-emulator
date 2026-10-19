@@ -170,10 +170,10 @@ void Main8088Bus::refreshSystemIrq()
 {
     if(!mainBoard_)return;
     const bool asserted=mainBoard_->usartDevice()->irqRequest();
-    // The current 8088 adapter presents main-board interrupts on PIC IRQ0.
-    // Only the rising edge is latched; EOI must not cause a fresh request
-    // while the USART source stays asserted.
-    if(asserted && !usartIrqPrevious_)requestIrq(0);
+    // Original Sim86::SimONE maps FD03 bit 7 (RS-232C) to 8259 IR4.
+    // Latch the rising edge only; EOI must not cause a repeated IRQ
+    // while the USART source remains asserted.
+    if(asserted && !usartIrqPrevious_)requestIrq(4);
     usartIrqPrevious_=asserted;
 }
 
