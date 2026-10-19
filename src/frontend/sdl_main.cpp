@@ -96,12 +96,15 @@ int main(int argc,char** argv) {
                 mainCpu->loadBootRomFile(mainRomPath);
                 mainBoard=mainCpu.get();
                 mainCpu->setCpuClockHz(2000000);
+                machine.addBoard(std::move(mainCpu));
+                // addBoard() attaches the CPU to the machine's shared
+                // FloppyDevice. Mount only afterwards: mounting on the
+                // CPU's initial private device would lose the image.
                 if(!floppyPath.empty()) {
                     auto image=readDiskImage(floppyPath);
-                    if(floppyD88)mainCpu->loadFloppyD88(image);
-                    else mainCpu->loadFloppy2d(image);
+                    if(floppyD88)mainBoard->loadFloppyD88(image);
+                    else mainBoard->loadFloppy2d(image);
                 }
-                machine.addBoard(std::move(mainCpu));
             }
         }
         if(!floppyPath.empty() && mainBoard==nullptr)
