@@ -172,6 +172,29 @@ branch loops. This fixes the status semantics tested here but does
 not yet port the original character-display composition or every
 sub-CPU peripheral behavior.
 
+### Stage 9: audit actual ROM display-command dispatch (preparation)
+
+Do **not** treat the stage-8 `CAA0` byte-receive routine as proof of the
+real firmware's text *command* semantics. The reference `SubRom.h`
+begins with `B000: JMP B018`, and the ROM contains eight handler
+addresses at `B07C-B08B`. Those are actual firmware entry/dispatch
+structures, unlike the synthetic byte `A5` used in stage 7.
+
+The first step is a reproducible, read-only audit of the operator's
+original display ROM:
+
+```sh
+python3 tools/inspect_display_rom.py external/roms/display6809.bin
+```
+
+The tool validates the ROM size and startup signature, prints the eight
+handler targets and the genuine `CAA0` bytes, and **does not infer**
+unknown display command codes. Next, trace the original main-ROM sender
+and the `B018/B08C` command decoding and identify the actual character
+output handler before producing the stage-9 synthetic-ROM test.
+No new communication behavior or firmware-specific display test is
+claimed by this inspection-only commit.
+
 ### Original SubRom receive handshake: stage 8
 
 This stage does **not invent a new receive protocol**. The generated
