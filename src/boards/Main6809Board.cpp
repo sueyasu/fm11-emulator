@@ -545,6 +545,12 @@ BYTE Main6809Board::readIo(WORD address)
         refreshDmaCompletion();
         return status;
     }
+    case 0x30:
+        // 2HD FDC status. A system with only a 2D image must not
+        // report a ready 2HD drive simply because FD30's backing
+        // register was cleared on reset.
+        if(!floppy_->has2hd())return 0x80; // WD Type-I NOT READY
+        return ioRegisters_[reg];
     case 0x18: {
         if(!floppyTypeIStatus_)return floppyStatus_;
         // The index hole produces a short pulse once per revolution.
