@@ -89,3 +89,27 @@ events_main[:len(events_code)]=events_code
 events_main[-2:]=bytes.fromhex("50 00")
 (out/"main_events.bin").write_bytes(events_main)
 print(out/"main_events.bin")
+
+# Original hardware ATTENTION path: display CPU reads $AFE7.
+# Main ROM polls $FD04 (read-to-clear) and stores the observed event.
+afe7_main=bytearray(0x1000)
+afe7_main_code=bytes.fromhex(
+    "b6 fd 04 "          # $5000 LDA $FD04
+    "85 01 "             #       BITA #$01
+    "27 f9 "             #       BEQ $5000
+    "b7 fc 80 "          #       STA $FC80
+    "b6 fd 04 "          #       LDA $FD04 again
+    "b7 fc 81 "          #       STA $FC81
+    "20 fe")            #       BRA *
+afe7_main[:len(afe7_main_code)]=afe7_main_code
+afe7_main[-2:]=bytes.fromhex("50 00")
+afe7_display=bytearray(0x5000)
+afe7_display_code=bytes.fromhex(
+    "b6 af e7 "          # $B000 LDA $AFE7 => ATTENTION
+    "20 fe")            #       BRA *
+afe7_display[:len(afe7_display_code)]=afe7_display_code
+afe7_display[-2:]=bytes.fromhex("b0 00")
+(out/"main_afe7.bin").write_bytes(afe7_main)
+(out/"display_afe7.bin").write_bytes(afe7_display)
+print(out/"main_afe7.bin")
+print(out/"display_afe7.bin")
