@@ -545,12 +545,22 @@ BYTE Main6809Board::readIo(WORD address)
         refreshDmaCompletion();
         return status;
     }
-    case 0x30:
-        // 2HD FDC status. A system with only a 2D image must not
-        // report a ready 2HD drive simply because FD30's backing
-        // register was cleared on reset.
-        if(!floppy_->has2hd())return 0x80; // WD Type-I NOT READY
-        return ioRegisters_[reg];
+    case 0x30: {
+        // Reference MainCpu::GetIoByte: return the status, acknowledge
+        // INTRQ (bit 0), then merge the one-shot DRQ latch.
+        const BYTE status=ioRegisters_[reg];
+        ioRegisters_[reg]=static_cast<BYTE>(status&~0x01);
+        return status;
+    }
+    case 0x36:
+        // Reference 2HD drive-sense register: C0 | RDY0..RDY3.
+        // The shared device currently supports drive zero only.
+        return static_cast<BYTE>(0xc0 | (floppy_->has2hd()?0x01:0));
+    case 0x1f:
+        // Reading the MiniFDC IRQ latch acknowledges its IRQ request.
+        mainIrqSources_&=static_cast<BYTE>(~0x08);
+        mainIrqStatus();
+        return floppy_->registerValue(0x1f);
     case 0x18: {
         if(!floppyTypeIStatus_)return floppyStatus_;
         // The index hole produces a short pulse once per revolution.
@@ -636,6 +646,18 @@ void Main6809Board::writeIo(WORD address, BYTE value)
     case 0x19: case 0x1a: case 0x1c: case 0x1d:
         if(!mainBoard_ || !mainBoard_->writeIo(address,value))
             floppy_->writeRegister(reg,value);
+        break;
+    case 0x30:
+        // Source Fm11FDC: a force-interrupt command terminates
+        // immediately with status zero and the IRQ completion latch.
+        if((value&0xf0)==0xd0) {
+            ioRegisters_[0x30]=0;
+            ioRegisters_[0x37]=0x40;
+            break;
+        }
+        // A missing 2HD disk reports Not Ready for data commands.
+        ioRegisters_[0x30]=floppy_->has2hd()?0:0x80;
+        ioRegisters_[0x37]=0x40;
         break;
     case 0x18:
         floppyTypeIStatus_=(value&0x80)==0;
