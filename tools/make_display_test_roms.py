@@ -203,3 +203,28 @@ for ch in b"HELLO FM-11":
     text_ank[ch*16+1]=0x02
 (out/"ank_text_stage1.bin").write_bytes(text_ank)
 print(out/"ank_text_stage1.bin")
+
+# Stage 2: same character/CRTC/ANK pipeline at 40 and 80 columns.
+# Both variants use the same main CPU ROM; CRTC R1 controls width.
+for columns in (40,80):
+    rom=bytearray(0x5000)
+    code=bytearray()
+    def wr(addr,val):
+        code.extend((0x86,val,0xb7,(addr>>8)&255,addr&255))
+    wr(0xafee,1)
+    wr(0xafef,columns//2)
+    wr(0xafee,6)
+    wr(0xafef,25)
+    wr(0xafee,12)
+    wr(0xafef,0)
+    wr(0xafee,13)
+    wr(0xafef,0)
+    for i,ch in enumerate(b"40/80 COL TEST"):
+        wr(0x8000+2*i,ch)
+        wr(0x8001+2*i,7)
+    wr(0x9f80,0x66)
+    code.extend((0x20,0xfe))
+    rom[:len(code)]=code
+    rom[-2:]=bytes.fromhex("b0 00")
+    (out/f"display_text_{columns}col.bin").write_bytes(rom)
+    print(out/f"display_text_{columns}col.bin")
