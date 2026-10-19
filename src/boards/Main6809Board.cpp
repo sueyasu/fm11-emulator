@@ -557,7 +557,7 @@ BYTE Main6809Board::readIo(WORD address)
     case 0x36:
         // Reference 2HD drive-sense register: C0 | RDY0..RDY3.
         // The shared device currently supports drive zero only.
-        return static_cast<BYTE>(0xc0 | ((floppy_->has2hd()||floppy_->has2d()) ? (1u<<floppy_->mountedDrive()) : 0));
+        return static_cast<BYTE>(0xc0 | (floppy_->has2hd() ? (1u<<floppy_->mountedDrive()) : 0));
     case 0x37: {
         // Reference MainCpu::GetIoByte: reading FDC IRQ status
         // acknowledges the extended FDC interrupt source.
@@ -696,7 +696,7 @@ void Main6809Board::writeIo(WORD address, BYTE value)
                 ++hdFailuresByDrive_[ioRegisters_[0x35]&3];
                 status=0x80;
             } else {
-                // A 2D D88 image may be in the physical 2HD drive.
+                // Only 2HD media can be accessed through this controller.
                 // Unlike the MiniFDC, this controller uses DMA channel 1.
                 const unsigned track=ioRegisters_[0x31];
                 const unsigned sector=ioRegisters_[0x32];
