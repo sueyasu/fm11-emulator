@@ -15,6 +15,22 @@ public:
     static constexpr std::size_t kBytesPerLine=kWidth/8;
     using Pixels=std::array<std::uint8_t,kWidth*kHeight>;
 
+    // Diagnostic two-plane combination: each bit from the first 16000
+    // bytes contributes bit 0, and each corresponding bit at +0x4000
+    // contributes bit 1. This is not yet a confirmed FM-11 color mode.
+    static Pixels decodeTwoPlanes(const DisplaySubsystem::VideoSnapshot& frame) {
+        Pixels output{};
+        for(std::size_t y=0;y<kHeight;++y)
+            for(std::size_t x=0;x<kWidth;++x) {
+                const auto pos=y*kBytesPerLine+x/8;
+                const auto shift=7-(x%8);
+                const auto low=(frame.vram[pos]>>shift)&1u;
+                const auto high=(frame.vram[0x4000+pos]>>shift)&1u;
+                output[y*kWidth+x]=static_cast<std::uint8_t>(low|(high<<1));
+            }
+        return output;
+    }
+
     static Pixels decodeMonochrome(const DisplaySubsystem::VideoSnapshot& frame,
                                    std::size_t offset=0) {
         Pixels output{};
