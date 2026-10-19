@@ -77,6 +77,25 @@ int main() {
  if((b.readCpu(0xfd50)&0x80)==0)return 4;
  for(int i=0;i<256;++i)
    if(b.readCpu(0x2000+i)!=static_cast<BYTE>(i^0x5a))return 5;
+ // ROM loads sectors 1-4 from physical 2HD drive 3, but the IPL
+ // subsequently selects MiniFDC drive 0 to read sector 5 onward.
+ b.setFloppyDrive(3);
+ b.writeCpu(0xfd35,3); b.writeCpu(0xfd34,0);
+ b.writeCpu(0xfd31,1); b.writeCpu(0xfd32,1);
+ b.writeCpu(0xfd44,0x31); b.writeCpu(0xfd45,0);
+ b.writeCpu(0xfd46,1); b.writeCpu(0xfd47,0);
+ b.writeCpu(0xfd51,0x04); b.writeCpu(0xfd30,0x80);
+ if((b.readCpu(0xfd51)&0x80)==0)return 24;
+ for(int i=0;i<256;++i)
+   if(b.readCpu(0x3100+i)!=static_cast<BYTE>(i^0x5a))return 25;
+ b.writeCpu(0xfd19,1); b.writeCpu(0xfd1a,1);
+ b.writeCpu(0xfd1c,0); b.writeCpu(0xfd1d,0);
+ b.writeCpu(0xfd50,0);
+ b.writeCpu(0xfd18,0x80);
+ if((b.readCpu(0xfd18)&0x10)!=0)return 26;
+ for(int i=0;i<256;++i)
+   if(b.readCpu(0xfd1b)!=static_cast<BYTE>(i^0x5a))return 27;
+ b.setFloppyDrive(0);
  b.writeCpu(0xfd1a,17);b.writeCpu(0xfd18,0x80);
  if((b.readCpu(0xfd18)&0x10)==0)return 6;
  return 0;
