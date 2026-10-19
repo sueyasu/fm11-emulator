@@ -50,6 +50,8 @@ public:
     DisplayBitmap::Frame captureDisplayFrame(bool highResolution=false) const {
         return DisplayBitmap::captureFrame(mainBoard_->displaySubsystem(),highResolution);
     }
+    // Diagnostic external stimulus; does not imply a mapped sub-CPU I/O port.
+    void injectDisplayAttention() {mainBoard_->displaySubsystem().notifyMainAttention();}
     BYTE displayBusyStatus() const {return mainBoard_->displayBusyStatus();}
     BYTE displaySharedByte(std::size_t offset) const {
         return mainBoard_->displaySubsystem().readShared(offset);
