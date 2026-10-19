@@ -4,6 +4,7 @@
 #include "MainBoard.h"
 
 #include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <vector>
 
@@ -22,6 +23,10 @@ public:
 
     void reset();
     void executeOne();
+    // Advance the common main-board timebase regardless of active CPU.
+    // Do not also advance the same interval through board.advanceCpuCycles().
+    void advanceTimeNanoseconds(std::uint64_t nanoseconds);
+
 
 private:
     std::shared_ptr<MainBoard> mainBoard_=std::make_shared<MainBoard>();
