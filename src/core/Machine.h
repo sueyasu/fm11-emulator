@@ -56,6 +56,8 @@ public:
     void injectBreakEvent() {mainBoard_->signalBreak();}
     BYTE displayBusyStatus() const {return mainBoard_->displayBusyStatus();}
     BYTE mainSubCpuControl() const {return mainBoard_->subCpuControl();}
+    BYTE mainDisplayControl() const {return mainBoard_->displayControl();}
+    BYTE mainDisplayPalette(unsigned index) const {return mainBoard_->displayPalette(index);}
     BYTE mainEventStatus() const {return mainBoard_->eventStatus();}
     std::uint64_t displaySharedWriteRevision() const {
         return mainBoard_->displaySubsystem().sharedWriteRevision();
