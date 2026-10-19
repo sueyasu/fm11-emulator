@@ -46,6 +46,7 @@ public:
             RomFiles::load<DisplaySubsystem::kKanjiRomSize>(path));
     }
     BYTE displayMemory(std::uint16_t address) const {return mainBoard_->displaySubsystem().readMemory(address);}
+    const DisplaySubsystem& displaySubsystem() const {return mainBoard_->displaySubsystem();}
     DisplaySubsystem::VideoSnapshot captureDisplayVideo() const {return mainBoard_->displaySubsystem().captureVideo();}
     DisplayBitmap::Frame captureDisplayFrame(bool highResolution=false) const {
         return DisplayBitmap::captureFrame(mainBoard_->displaySubsystem(),highResolution);
