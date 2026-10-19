@@ -18,6 +18,7 @@ public:
     // FD04 main-board event latch: ATENT bit 0, BREAK bit 1.
     void signalAttention() {eventStatus_|=0x01;}
     void signalBreak() {eventStatus_|=0x02;}
+    void resetEvents() {eventStatus_=0;eventControl_=0;}
     BYTE eventStatus() const {return eventStatus_;}
     BYTE eventControl() const {return eventControl_;}
 
