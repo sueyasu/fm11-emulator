@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <stdexcept>
+#include <functional>
 
 // Main-board display/sub-CPU memory. I/O and display scanout are deliberately
 // not decoded yet: the reference map still labels those regions tentative.
@@ -26,6 +27,10 @@ public:
 
     void loadRom(const RomImage& image) {rom_=image;}
     BYTE busyStatus() const {return busy_;}
+    // Handshake output to the main board. The physical sub-I/O trigger
+    // remains unassigned until its register decode is confirmed.
+    void setAttentionSink(std::function<void()> sink) {attentionSink_=std::move(sink);}
+    void notifyMainAttention() {if(attentionSink_)attentionSink_();}
     // The top 128 bytes of sub RAM also appear at main $FC80-$FCFF.
     BYTE readShared(std::size_t offset) const {return ram_[0x1f80+offset];}
     void writeShared(std::size_t offset,BYTE value) {ram_[0x1f80+offset]=value;}
@@ -47,6 +52,7 @@ public:
     const std::array<BYTE,kVramSize>& vram() const {return vram_;}
 
 private:
+    std::function<void()> attentionSink_;
     bool haltRequested_=false;
     BYTE busy_=0x80;
     std::array<BYTE,4> subIoRam_{};
