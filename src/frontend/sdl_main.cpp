@@ -115,7 +115,7 @@ int main(int argc,char** argv) {
                         // The original keyboard queue carries 8-bit codes;
                         // UTF-8 multibyte input needs a separate keymap.
                         if(*p>=0x20 && *p<0x7f)
-                            machine.displaySubsystem().enqueueKeyCode(*p);
+                            machine.enqueueDisplayKeyCode(*p);
                     }
                 }
                 if(event.type==SDL_KEYDOWN && !event.key.repeat) {
