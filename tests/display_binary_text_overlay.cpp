@@ -35,7 +35,7 @@ int main(int argc,char** argv) {
                 pixel=DisplayBitmap::referenceColor(machine.mainDisplayPalette(index));
             }
             // Verify that graphics is present before text is composited.
-            if(frame.argb[0]!=0xff00c000u && frame.argb[0]!=0xff0000c0u)return 12;
+            if(frame.argb[0]!=0xff0000c0u)return 12;
             if(frame.argb[8]!=0xff0000c0u)return 13;
             DisplayBitmap::compositeText(frame,display);
             if(frame.argb[0]!=0xffc0c000u || // yellow glyph replaces blue
