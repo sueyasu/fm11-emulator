@@ -690,7 +690,9 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             }
             if((value&0x04) && !hasDisk)status=0x80;
         } else if((value&0xc0)==0x80) {
+            ++hdReadAttempts_;
             if(!hasDisk) {
+                ++hdReadFailures_;
                 status=0x80;
             } else {
                 // A 2D D88 image may be in the physical 2HD drive.
@@ -701,11 +703,13 @@ void Main6809Board::writeIo(WORD address, BYTE value)
                 const unsigned drive=ioRegisters_[0x35]&3;
                 std::size_t offset=0;
                 if(!floppy_->sectorOffset(1,track,side,sector,drive,offset)) {
+                    ++hdReadFailures_;
                     status=0x10; // Record Not Found
                 } else {
                     const unsigned length=static_cast<unsigned>(floppy_->sectorLength(1));
                     const bool dma=(ioRegisters_[0x51]&0x04)!=0;
                     if(!dma) {
+                        ++hdReadSuccesses_;
                         floppy_->beginSector(1,track,side,sector,drive,(value&0x20)!=0);
                         status=0x03;
                     } else {
@@ -714,6 +718,8 @@ void Main6809Board::writeIo(WORD address, BYTE value)
                             // The reference DMA transfers min(count,sector size).
                             // Count exhaustion is a successful DMA end, not RNF.
                             const unsigned transfer=std::min(count,length);
+                            if(transfer)++hdReadSuccesses_;
+                            else ++hdReadFailures_;
                             const bool down=(ioRegisters_[0x51]&0x08)!=0;
                             const WORD start=WORD((ioRegisters_[0x44]<<8)|ioRegisters_[0x45]);
                             const std::uint32_t bank=std::uint32_t(ioRegisters_[0x95]&15)<<16;
