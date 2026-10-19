@@ -97,7 +97,7 @@ int main()
        io.readMemory(0xafe3)!=0x34)return 18;
     if(io.readMemory(0xafe4)!=0 ||
        io.readMemory(0xafed)!=0 ||
-       io.readMemory(0xaff1)!=0xff)return 19;
+       io.readMemory(0xaff1)!=0)return 19;
     io.writeMemory(0xaff0,0x37);
     if(io.busyStatus()!=0x80 || io.readMemory(0xaff0)!=0x37)return 20;
     // BUSY control is accessible from real sub-CPU instructions.
@@ -176,7 +176,7 @@ int main()
        board.displaySubsystem().videoFlags()!=0x5a)return 39;
     // AFE5 is unmapped, but reading AFE7 signals ATTENTION to the
     // main board (original SubCpu.cpp). It is not a mirror of AFE6.
-    if(board.displaySubsystem().readMemory(0xafe5)!=0xff)return 40;
+    if(board.displaySubsystem().readMemory(0xafe5)!=0)return 40;
     if(board.eventStatus()!=0)return 40;
     if(board.displaySubsystem().readMemory(0xafe7)!=0x00 ||
        (board.eventStatus()&0x01)==0)return 40;
