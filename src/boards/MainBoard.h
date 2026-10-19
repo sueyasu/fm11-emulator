@@ -30,52 +30,18 @@ public:
     bool optionalCpuRequested() const {return (subCpuControl_&0x01)!=0;}
     void resetSubCpuControl() {subCpuStatus_=subCpuControl_=0;}
 
-    // PTM input clock is 9700 Hz. The fractional remainder makes elapsed
-    // time independent of how the scheduler divides its time slices.
-    // This clock is owned by the main board, not by the active CPU card.
+    // The PTM is clocked at 9700 Hz independently of the active CPU.
+    // A shared 64-bit fixed-point phase preserves sub-tick time across
+    // changes between 6809, 8088 and wall-clock stepping.
     void advanceTimeNanoseconds(std::uint64_t nanoseconds) {
-        constexpr std::uint64_t second=1000000000ULL;
-        constexpr std::uint64_t ptmHz=9700;
-        const auto seconds=nanoseconds/second;
-        const auto remainder=nanoseconds%second;
-        if(seconds>std::numeric_limits<std::uint64_t>::max()/ptmHz)
-            throw std::overflow_error("main-board PTM time interval too large");
-        const std::uint64_t baseTicks=seconds*ptmHz;
-        const std::uint64_t numerator=remainder*ptmHz+ptmTimeRemainder_;
-        const std::uint64_t extraTicks=numerator/second;
-        if(baseTicks>std::numeric_limits<std::uint64_t>::max()-extraTicks)
-            throw std::overflow_error("main-board PTM time interval too large");
-        ptmTimeRemainder_=numerator%second;
-        ptm_->advance(baseTicks+extraTicks);
-        setIrqLine(IrqLine::Timer,ptm_->irqRequest());
+        advancePtmTime(nanoseconds,1000000000ULL);
     }
-    // Consume exact CPU cycles without nanosecond quantization.
-    // Rate changes reset phase; only one scheduler must advance a period.
     void advanceCpuCycles(std::uint64_t cycles,std::uint64_t hz) {
         if(hz==0 || hz>1000000000ULL)
             throw std::invalid_argument("invalid main CPU clock frequency");
-        if(ptmCycleClockHz_!=hz) {
-            ptmCycleClockHz_=hz;
-            ptmCycleRemainder_=0;
-        }
-        constexpr std::uint64_t ptmHz=9700;
-        const auto whole=cycles/hz;
-        const auto part=cycles%hz;
-        if(whole>std::numeric_limits<std::uint64_t>::max()/ptmHz)
-            throw std::overflow_error("PTM CPU interval too large");
-        const auto fractional=part*ptmHz+ptmCycleRemainder_;
-        const auto extra=fractional/hz;
-        if(whole*ptmHz>std::numeric_limits<std::uint64_t>::max()-extra)
-            throw std::overflow_error("PTM CPU interval too large");
-        ptmCycleRemainder_=fractional%hz;
-        ptm_->advance(whole*ptmHz+extra);
-        setIrqLine(IrqLine::Timer,ptm_->irqRequest());
+        advancePtmTime(cycles,hz);
     }
-    void resetTimebase() {
-        ptmTimeRemainder_=0;
-        ptmCycleRemainder_=0;
-        ptmCycleClockHz_=0;
-    }
+    void resetTimebase() {ptmPhase_=0;}
 
     // Main-board sources presented to the 8088 card's 8259 inputs.
     // Corresponds to the original Sim86 interrupt wiring. Each group may
@@ -149,8 +115,26 @@ private:
     BYTE eventStatus_=0;
     BYTE eventControl_=0;
     BYTE externalIrqLines_=0;
-    std::uint64_t ptmTimeRemainder_=0;
-    std::uint64_t ptmCycleRemainder_=0,ptmCycleClockHz_=0;
+    void advancePtmTime(std::uint64_t amount,std::uint64_t unitsPerSecond) {
+        constexpr std::uint64_t ptmHz=9700;
+        const std::uint64_t whole=amount/unitsPerSecond;
+        const std::uint64_t remainder=amount%unitsPerSecond;
+        if(whole>std::numeric_limits<std::uint64_t>::max()/ptmHz)
+            throw std::overflow_error("PTM time interval too large");
+        // 64.64 fixed-point conversion. All intermediates fit in 128 bits
+        // for the supported clock-rate range and a uint64 input amount.
+        using Wide=unsigned __int128;
+        const Wide fractional=(Wide(remainder)*ptmHz<<64)/unitsPerSecond;
+        const Wide combined=fractional+ptmPhase_;
+        const std::uint64_t additional=static_cast<std::uint64_t>(combined>>64);
+        const std::uint64_t base=whole*ptmHz;
+        if(base>std::numeric_limits<std::uint64_t>::max()-additional)
+            throw std::overflow_error("PTM time interval too large");
+        ptmPhase_=static_cast<std::uint64_t>(combined);
+        ptm_->advance(base+additional);
+        setIrqLine(IrqLine::Timer,ptm_->irqRequest());
+    }
+    std::uint64_t ptmPhase_=0;
     std::shared_ptr<FloppyDevice> floppy_=std::make_shared<FloppyDevice>();
     std::shared_ptr<Usart8251> usart_=std::make_shared<Usart8251>();
     std::shared_ptr<Ptm6840> ptm_=std::make_shared<Ptm6840>();
