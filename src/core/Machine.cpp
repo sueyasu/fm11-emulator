@@ -117,6 +117,9 @@ void Machine::setDisplayCpuClockHz(std::uint64_t hz)
 {
     if(hz>1000000000ULL)
         throw std::invalid_argument("display CPU clock must not exceed 1 GHz");
+    // Reapplying the same configuration must not discard fractional
+    // elapsed time or an instruction's outstanding cycle debt.
+    if(displayCpuClockHz_==hz)return;
     displayCpuClockHz_=hz;
     displayCycleCredit_=0;
     displayCycleFraction_=0;
