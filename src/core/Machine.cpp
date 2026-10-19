@@ -10,8 +10,10 @@ std::size_t Machine::addBoard(std::unique_ptr<CpuBoard> board)
         throw std::invalid_argument("board must not be null");
 
     // The physical FDC/media belongs to the system bus, not either CPU card.
-    if(auto* cpu6809=dynamic_cast<Main6809Board*>(board.get()))
+    if(auto* cpu6809=dynamic_cast<Main6809Board*>(board.get())) {
         cpu6809->setMainBoard(mainBoard_);
+        cpu6809->setExternalClocking(true);
+    }
     if(auto* cpu8088=dynamic_cast<Main8088Board*>(board.get()))
         cpu8088->bus().setMainBoard(mainBoard_);
     boards_.push_back(std::move(board));
@@ -56,6 +58,7 @@ void Machine::reset()
     for (auto& board : boards_)
         board->reset();
     lastExecutionCycles_=0;
+    mainBoard_->resetTimebase();
 }
 
 void Machine::advanceTimeNanoseconds(std::uint64_t nanoseconds)
@@ -77,5 +80,13 @@ void Machine::executeOne()
             cpu8088->bus().refreshSystemIrq();
         board->cpu().executeOne();
         lastExecutionCycles_=board->cpu().lastExecutionCycles();
+        if(auto* cpu6809=dynamic_cast<Main6809Board*>(board)) {
+            // The CPU core supplies exact cycles; the machine owns PTM time.
+            // An unconfigured CPU clock never implies a guessed frequency.
+            if(lastExecutionCycles_ && cpu6809->cpuClockHz()) {
+                mainBoard_->advanceCpuCycles(lastExecutionCycles_,cpu6809->cpuClockHz());
+                cpu6809->syncPtmIrq();
+            }
+        }
     }
 }
