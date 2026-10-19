@@ -231,14 +231,22 @@ void Main6809Board::writeFloppySector()
     const unsigned count=(ioRegisters_[0x42]<<8)|ioRegisters_[0x43];
     const std::uint32_t src=((ioRegisters_[0x94]&0x0f)<<16)|
         (ioRegisters_[0x40]<<8)|ioRegisters_[0x41];
-    if((ioRegisters_[0x50]&0x01)==0 || count!=256 || src>memory_.size()-256) {
+    if((ioRegisters_[0x50]&0x01)==0 || count!=256) {
         floppyStatus_=0x10;
         ioRegisters_[0x50]|=0x40;
         return;
     }
     const bool down=(ioRegisters_[0x50]&0x08)!=0;
-        const WORD startAddress=WORD((ioRegisters_[0x40]<<8)|ioRegisters_[0x41]);
-        const std::uint32_t dmaBank=std::uint32_t(ioRegisters_[0x94]&0x0f)<<16;
+    const WORD startAddress=WORD((ioRegisters_[0x40]<<8)|ioRegisters_[0x41]);
+    const std::uint32_t dmaBank=std::uint32_t(ioRegisters_[0x94]&0x0f)<<16;
+    for(unsigned i=0;i<256;++i) {
+        const WORD address=WORD(startAddress+(down?-int(i):int(i)));
+        if((dmaBank|address)>=memory_.size()) {
+            floppyStatus_=0x10;
+            ioRegisters_[0x50]|=0x40;
+            return;
+        }
+    }
     for(unsigned i=0;i<256;++i) {
         const WORD address=WORD(startAddress+(down?-int(i):int(i)));
         floppy2d_[offset+i]=readPhysical(dmaBank|address);
@@ -278,14 +286,22 @@ void Main6809Board::readFloppySector()
         const std::uint32_t dest=((ioRegisters_[0x94]&0x0f)<<16)|
             (ioRegisters_[0x40]<<8)|ioRegisters_[0x41];
         const unsigned count=(ioRegisters_[0x42]<<8)|ioRegisters_[0x43];
-        if(count!=256 || dest>memory_.size()-256) {
+        if(count!=256) {
             floppyStatus_=0x10;
             ioRegisters_[0x50]|=0x40;
             return;
         }
         const bool down=(ioRegisters_[0x50]&0x08)!=0;
-            const WORD startAddress=WORD((ioRegisters_[0x40]<<8)|ioRegisters_[0x41]);
-            const std::uint32_t dmaBank=std::uint32_t(ioRegisters_[0x94]&0x0f)<<16;
+        const WORD startAddress=WORD((ioRegisters_[0x40]<<8)|ioRegisters_[0x41]);
+        const std::uint32_t dmaBank=std::uint32_t(ioRegisters_[0x94]&0x0f)<<16;
+        for(unsigned i=0;i<256;++i) {
+            const WORD address=WORD(startAddress+(down?-int(i):int(i)));
+            if((dmaBank|address)>=memory_.size()) {
+                floppyStatus_=0x10;
+                ioRegisters_[0x50]|=0x40;
+                return;
+            }
+        }
         for(unsigned i=0;i<256;++i) {
             const WORD address=WORD(startAddress+(down?-int(i):int(i)));
             writePhysical(dmaBank|address,floppySector_[i]);
