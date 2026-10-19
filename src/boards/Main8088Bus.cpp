@@ -13,7 +13,8 @@ void Main8088Bus::reset()
     picVectorBase_=8;picReadIsr_=0;picInitStep_=0;
     picNeedsIcw4_=false;picSingle_=false;picAutoEoi_=false;
     resetDma();
-    floppy_->finishTransfer();
+    // Shared FDC transfer state survives an individual CPU-card reset.
+    if(!mainBoard_)floppy_->finishTransfer();
 }
 
 void Main8088Bus::loadFloppy2d(const std::vector<BYTE>& image)
