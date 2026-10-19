@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <deque>
 #include <vector>
+#include <memory>
 
 class Main6809Board final : public CpuBoard
 {
@@ -24,12 +25,13 @@ public:
     void reset() override;
 
     void loadBootRom(const BootRomImage& image);
+    void setFloppyDevice(std::shared_ptr<FloppyDevice> device) { floppy_=std::move(device); }
     void loadFloppy2d(const std::vector<BYTE>& raw);
     void loadFloppyD88(const std::vector<BYTE>& d88);
     std::array<BYTE,256> floppyBootSector(unsigned sector) const;
-    bool floppyDirty() const { return floppy_.dirty2d(); }
+    bool floppyDirty() const { return floppy_->dirty2d(); }
     std::vector<BYTE> floppyImage() const;
-    void clearFloppyDirty() { floppy_.clearDirty2d(); }
+    void clearFloppyDirty() { floppy_->clearDirty2d(); }
 
     // Board-local event inputs used by the main-system control registers.
     // Device boards can use these without reaching into the CPU core.
@@ -121,7 +123,7 @@ private:
     std::array<BYTE, 256> ioRegisters_{};
     std::array<BYTE, 256> ioOutputLatch_{};
     std::array<BYTE, 256> ioStatusLatch_{};
-    FloppyDevice floppy_;
+    std::shared_ptr<FloppyDevice> floppy_=std::make_shared<FloppyDevice>();
     bool floppyWritePio_ = false;
     std::size_t floppyWriteOffset_ = 0;
     std::array<BYTE,256> floppySector_{};
