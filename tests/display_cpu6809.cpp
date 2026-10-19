@@ -125,5 +125,19 @@ int main()
     board.reset();
     if(board.displayBusyStatus()!=0x80)return 27;
     if(!board.readIo(0xfd04,event) || (event&0x01)!=0)return 28;
+    // A main CPU clock change must retain sub-nanosecond elapsed time:
+    // two cycles at 3 MHz (666 2/3 ns) plus two at 4 MHz (500 ns)
+    // exceed one display CPU cycle at 1 MHz.
+    timed.loadDisplayRom(timedRom);
+    timed.reset();
+    timed.setDisplayCpuClockHz(1000000);
+    mainCard->writePhysical(0,0x12);
+    mainCard->writePhysical(1,0x12);
+    mainCard->setCpuClockHz(3000000);
+    timed.executeOne();
+    if(timed.displayCpuPc()!=0xc000)return 31;
+    mainCard->setCpuClockHz(4000000);
+    timed.executeOne();
+    if(timed.displayCpuPc()!=0xc002)return 32;
     return 0;
 }
