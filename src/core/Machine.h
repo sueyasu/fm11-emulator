@@ -50,6 +50,7 @@ public:
     DisplayBitmap::Frame captureDisplayFrame(bool highResolution=false) const {
         return DisplayBitmap::captureFrame(mainBoard_->displaySubsystem(),highResolution);
     }
+    BYTE displayBusyStatus() const {return mainBoard_->displayBusyStatus();}
     BYTE displaySharedByte(std::size_t offset) const {
         return mainBoard_->displaySubsystem().readShared(offset);
     }
