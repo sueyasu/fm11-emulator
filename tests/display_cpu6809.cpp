@@ -247,5 +247,39 @@ int main()
     planes.writeMemory(0,0);
     planes.writeMemory(0x4000,0);
     if(indexes[1]!=1 || indexes[2]!=2 || indexes[3]!=3)return 60;
+    // Physical FM-11 VRAM is 192 KiB behind a 32 KiB CPU aperture.
+    // Window selection here is an internal diagnostic mechanism; no
+    // unverified hardware bank-select port is exposed yet.
+    DisplaySubsystem banked;
+    if(DisplaySubsystem::kPhysicalVramSize!=0x30000 ||
+       DisplaySubsystem::kVramWindows!=6)return 61;
+    banked.writeMemory(0,0x11);
+    banked.writeMemory(0x7fff,0x12);
+    const auto firstBank=banked.captureVideo();
+    for(std::size_t window=1;window<DisplaySubsystem::kVramWindows;++window) {
+        const auto previous=banked.videoRevision();
+        banked.selectVramWindow(window);
+        if(banked.videoRevision()!=previous+1 ||
+           banked.readMemory(0)!=0)return 62;
+        banked.writeMemory(0,static_cast<BYTE>(0x20+window));
+        banked.writeMemory(0x7fff,static_cast<BYTE>(0x30+window));
+        if(banked.readPhysicalVram(window*0x8000)!=0x20+window)
+            return 63;
+    }
+    const auto finalBank=banked.captureVideo();
+    if(finalBank.vram[0]!=0x25 || finalBank.vram[0x7fff]!=0x35)
+        return 64;
+    banked.selectVramWindow(0);
+    if(banked.readMemory(0)!=0x11 || banked.readMemory(0x7fff)!=0x12)
+        return 65;
+    if(firstBank.vram[0]!=0x11 || firstBank.vram[0x7fff]!=0x12)
+        return 66;
+    const auto unchanged=banked.videoRevision();
+    banked.selectVramWindow(0);
+    if(banked.videoRevision()!=unchanged)return 67;
+    bool invalidBank=false;
+    try {banked.selectVramWindow(6);}
+    catch(const std::out_of_range&) {invalidBank=true;}
+    if(!invalidBank || banked.vramWindow()!=0)return 68;
     return 0;
 }
