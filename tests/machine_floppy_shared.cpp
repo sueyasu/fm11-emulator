@@ -270,5 +270,31 @@ int main()
     displayOwner.reset();
     if(displayOwner.displaySubsystem().haltRequested() ||
        displayOwner.subCpuStatus()!=0)return 66;
+    // Basic sub-CPU map: VRAM 0000-7FFF, RAM 8000-9FFF,
+    // unmapped A000-BFFF, and ROM C000-FFFF.
+    auto& display=displayOwner.displaySubsystem();
+    DisplaySubsystem::RomImage displayRom{};
+    displayRom[0]=0x91;
+    displayRom[0x3fff]=0x42;
+    display.loadRom(displayRom);
+    display.writeMemory(0x0000,0x12);
+    display.writeMemory(0x7fff,0x34);
+    display.writeMemory(0x8000,0x56);
+    display.writeMemory(0x9fff,0x78);
+    if(display.readMemory(0)!=0x12 ||
+       display.readMemory(0x7fff)!=0x34 ||
+       display.readMemory(0x8000)!=0x56 ||
+       display.readMemory(0x9fff)!=0x78)return 67;
+    display.writeMemory(0xc000,0);
+    display.writeMemory(0xffff,0);
+    if(display.readMemory(0xc000)!=0x91 ||
+       display.readMemory(0xffff)!=0x42)return 68;
+    display.writeMemory(0xa000,0x55);
+    if(display.readMemory(0xa000)!=0xff ||
+       display.readMemory(0xbfff)!=0xff)return 69;
+    displayOwner.reset();
+    if(display.readMemory(0x7fff)!=0x34 ||
+       display.readMemory(0x9fff)!=0x78 ||
+       display.readMemory(0xc000)!=0x91)return 70;
     return 0;
 }
