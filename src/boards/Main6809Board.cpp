@@ -244,6 +244,11 @@ void Main6809Board::writeFloppySector()
     }
     floppyDirty_=true;
     ioRegisters_[0x50]=static_cast<BYTE>((ioRegisters_[0x50]|0x80)&~0x40);
+    // Completion is visible both in the per-channel status and in the
+    // DMA common completion latch, until the channel status is read.
+    ioRegisters_[0x55]|=0x80;
+    mainIrqSources_|=0x10;
+    mainIrqStatus();
 }
 
 
@@ -268,6 +273,11 @@ void Main6809Board::readFloppySector()
         floppyOffset_=256;
         floppyStatus_=0;
         ioRegisters_[0x50]=static_cast<BYTE>((ioRegisters_[0x50]|0x80)&~0x40);
+    // Completion is visible both in the per-channel status and in the
+    // DMA common completion latch, until the channel status is read.
+    ioRegisters_[0x55]|=0x80;
+    mainIrqSources_|=0x10;
+    mainIrqStatus();
     }
 }
 
