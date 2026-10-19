@@ -221,5 +221,25 @@ int main()
         return 50;
     selector.resetSubCpuControl();
     if(selector.optionalCpuRequested() || selector.subCpuStatus()!=0)return 51;
+    // FD05 selection is opt-in; manual board selection remains supported.
+    Machine selectorMachine;
+    auto primary=std::make_unique<Main6809Board>(CpuType::MC6809);
+    auto secondary=std::make_unique<Main8088Board>(CpuType::I8088);
+    auto* secondaryCard=secondary.get();
+    selectorMachine.addBoard(std::move(primary));
+    selectorMachine.addBoard(std::move(secondary));
+    selectorMachine.setActiveBoard(1);
+    secondaryCard->bus().writeIo(0xfd05,0x00);
+    if(selectorMachine.activeBoard()!=secondaryCard)return 52;
+    selectorMachine.enableFd05Selection(true);
+    if(selectorMachine.activeBoard()!=&selectorMachine.board(0))return 53;
+    secondaryCard->bus().writeIo(0xfd05,0x01);
+    selectorMachine.enableFd05Selection(true);
+    if(selectorMachine.activeBoard()!=secondaryCard)return 54;
+    selectorMachine.enableFd05Selection(false);
+    secondaryCard->bus().writeIo(0xfd05,0x00);
+    if(selectorMachine.activeBoard()!=secondaryCard)return 55;
+    selectorMachine.enableFd05Selection(true);
+    if(selectorMachine.activeBoard()!=&selectorMachine.board(0))return 56;
     return 0;
 }
