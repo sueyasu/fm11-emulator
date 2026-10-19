@@ -1,4 +1,6 @@
 #include "Machine.h"
+#include "Main6809Board.h"
+#include "Main8088Board.h"
 
 #include <stdexcept>
 
@@ -7,6 +9,11 @@ std::size_t Machine::addBoard(std::unique_ptr<CpuBoard> board)
     if (!board)
         throw std::invalid_argument("board must not be null");
 
+    // The physical FDC/media belongs to the system bus, not either CPU card.
+    if(auto* cpu6809=dynamic_cast<Main6809Board*>(board.get()))
+        cpu6809->setFloppyDevice(floppy_);
+    if(auto* cpu8088=dynamic_cast<Main8088Board*>(board.get()))
+        cpu8088->bus().setFloppyDevice(floppy_);
     boards_.push_back(std::move(board));
     return boards_.size() - 1;
 }
