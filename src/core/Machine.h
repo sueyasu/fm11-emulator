@@ -35,6 +35,14 @@ public:
     void loadDisplayRomFile(const std::string& path) {
         loadDisplayRom(RomFiles::load<DisplaySubsystem::kRomSize>(path));
     }
+    void loadAnkRomFile(const std::string& path) {
+        mainBoard_->displaySubsystem().loadAnkRom(
+            RomFiles::load<DisplaySubsystem::AnkRomImage{}.size()>(path));
+    }
+    void loadKanjiRomFile(const std::string& path) {
+        mainBoard_->displaySubsystem().loadKanjiRom(
+            RomFiles::load<DisplaySubsystem::KanjiRomImage{}.size()>(path));
+    }
     BYTE displayMemory(std::uint16_t address) const {return mainBoard_->displaySubsystem().readMemory(address);}
     DisplaySubsystem::VideoSnapshot captureDisplayVideo() const {return mainBoard_->displaySubsystem().captureVideo();}
     std::uint16_t displayCpuPc() const {return mainBoard_->displayCpu().pc();}
