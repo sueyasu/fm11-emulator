@@ -198,5 +198,15 @@ int main()
     bus.writeIo(0xfd04,0x80); // ATTENTION ACK does not clear BREAK
     if((p6809->readCpu(0xfd04)&0x03)!=0x02)return 41;
     if((bus.readIo(0xfd04)&0x03)!=0)return 42;
+    // FD05 control/status is common; HALT request latches bit 7.
+    p6809->writeCpu(0xfd05,0x80);
+    if((bus.readIo(0xfd05)&0x80)==0)return 43;
+    bus.writeIo(0xfd05,0x00);
+    if((p6809->readCpu(0xfd05)&0x80)==0)return 44;
+    // Writing a zero does not clear the existing latched HALT flag.
+    machine.reset();
+    if(bus.readIo(0xfd05)!=0)return 45;
+    bus.writeIo(0xfd05,0x80);
+    if((p6809->readCpu(0xfd05)&0x80)==0)return 46;
     return 0;
 }
