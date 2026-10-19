@@ -1,4 +1,5 @@
 #include "MainBoard.h"
+#include "RomFiles.h"
 #include <cstdlib>
 #include <fstream>
 #include <iomanip>
@@ -10,8 +11,8 @@
 
 namespace {
 void usage() {
-    std::cerr << "Usage: fm11-display-romtrace --rom SUBROM.bin [--instructions N] [--trace]\n"
-              << "SUBROM.bin must contain exactly 20480 bytes (mapped B000-FFFF).\n";
+    std::cerr << "Usage: fm11-display-romtrace [--rom SUBROM.bin] [--instructions N] [--trace]\n"
+              << "Default: external/roms/display6809.bin (20480 bytes, mapped B000-FFFF).\n";
 }
 unsigned long long count(const char* text) {
     std::size_t used=0;
@@ -22,7 +23,7 @@ unsigned long long count(const char* text) {
 }
 int main(int argc,char** argv) {
     try {
-        std::string path;
+        std::string path="external/roms/display6809.bin";
         unsigned long long limit=100000;
         bool trace=false;
         for(int i=1;i<argc;++i) {
@@ -32,16 +33,7 @@ int main(int argc,char** argv) {
             else if(arg=="--trace")trace=true;
             else {usage();return 2;}
         }
-        if(path.empty()) {usage();return 2;}
-        std::ifstream input(path,std::ios::binary);
-        if(!input)throw std::runtime_error("cannot open ROM: "+path);
-        const std::vector<char> bytes((std::istreambuf_iterator<char>(input)),
-                                       std::istreambuf_iterator<char>());
-        if(bytes.size()!=DisplaySubsystem::kRomSize)
-            throw std::runtime_error("display ROM must contain exactly 20480 bytes");
-        DisplaySubsystem::RomImage rom{};
-        for(std::size_t i=0;i<rom.size();++i)
-            rom[i]=static_cast<BYTE>(bytes[i]);
+        const auto rom=RomFiles::load<DisplaySubsystem::kRomSize>(path);
         MainBoard board;
         board.displaySubsystem().loadRom(rom);
         board.displaySubsystem().setIoWriteObserver([](DisplaySubsystem::IoWriteTrace entry) {
