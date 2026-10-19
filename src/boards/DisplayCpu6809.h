@@ -16,9 +16,22 @@ public:
     void SetMemByte(WORD address,BYTE value) override {
         display_.writeMemory(address,value);
     }
-    void resetCpu() {SimRESET();}
+    void resetCpu() {
+        SimRESET();
+        nmiCycles_=0;
+        display_.resetInterruptClock();
+    }
     bool executeOne() {
         if(display_.haltRequested())return false;
+        // Reference SubCpu::SimONE: interrupt priority IRQ, FIRQ, NMI.
+        // The original clock threshold is 60000 at reset, recalibrated
+        // dynamically by the Windows event loop. Use CPU cycles here.
+        if(display_.subIrqPending())SimIRQ();
+        if(display_.subFirqPending())SimFIRQ();
+        if(!display_.nmiMask() && nmiCycles_>=display_.nmiClockCycles()) {
+            SimNMI();
+            nmiCycles_=0;
+        }
         if(waitState()!=WaitState::Running)return false;
         display_.beginCpuInstruction(regs.r.w.PC);
         try {
@@ -28,9 +41,11 @@ public:
             throw;
         }
         display_.endCpuInstruction();
+        nmiCycles_+=LastInstructionCycles();
         return true;
     }
     std::uint16_t pc() const {return regs.r.w.PC;}
 private:
+    std::uint64_t nmiCycles_=0;
     DisplaySubsystem& display_;
 };
