@@ -56,5 +56,30 @@ int main() {
     // implicit or duplicate CPU-card time source.
     timed.executeOne();
     if(timed.lastExecutionCycles()!=5)return 14;
+    // Timing adjustments are based on instruction classes, not individual
+    // instruction tests: register versus memory ModR/M, and taken Jcc.
+    Machine classify;
+    auto c8088=std::make_unique<Main8088Board>(CpuType::I8088);
+    Main8088Bus::Rom classRom{};
+    classRom.fill(0x90);
+    const BYTE program[]={0xbb,0x00,0x20, // MOV BX,2000h
+                          0xb8,0x34,0x12, // MOV AX,1234h
+                          0x89,0xd8,      // MOV AX,BX (register)
+                          0x89,0x07,      // MOV [BX],AX (memory)
+                          0xf9,           // STC
+                          0x72,0x00};     // JC +0 (taken)
+    for(unsigned i=0;i<sizeof(program);++i)classRom[0xff0+i]=program[i];
+    c8088->bus().loadBootRom(classRom);
+    classify.addBoard(std::move(c8088));
+    classify.reset();
+    classify.executeOne();
+    classify.executeOne();
+    classify.executeOne();
+    if(classify.lastExecutionCycles()!=3)return 15;
+    classify.executeOne();
+    if(classify.lastExecutionCycles()!=11)return 16;
+    classify.executeOne();
+    classify.executeOne();
+    if(classify.lastExecutionCycles()!=16)return 17;
     return 0;
 }
