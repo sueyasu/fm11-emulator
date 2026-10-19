@@ -235,12 +235,14 @@ void Main6809Board::readFloppySector()
 
 void Main6809Board::signalAttention()
 {
-    ioRegisters_[0x04] |= 0x01;
+    if(mainBoard_)mainBoard_->signalAttention();
+    else ioRegisters_[0x04] |= 0x01;
 }
 
 void Main6809Board::signalBreak()
 {
-    ioRegisters_[0x04] |= 0x02;
+    if(mainBoard_)mainBoard_->signalBreak();
+    else ioRegisters_[0x04] |= 0x02;
 }
 
 void Main6809Board::setMainIrqSource(BYTE sourceBit, bool asserted)
@@ -554,9 +556,12 @@ BYTE Main6809Board::readIo(WORD address)
         return value;
     }
     case 0x04: {
-        // Reading the main event register acknowledges BREAK and ATENT.
-        const BYTE value = ioRegisters_[reg];
-        ioRegisters_[reg] &= static_cast<BYTE>(~0x03);
+        BYTE value=0;
+        if(mainBoard_ && mainBoard_->readIo(address,value))
+            return value;
+        // Standalone CPU-card fallback.
+        value=ioRegisters_[reg];
+        ioRegisters_[reg]&=static_cast<BYTE>(~0x03);
         return value;
     }
     case 0x05:
@@ -640,10 +645,10 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         // FD03 is a read-only IRQ status register (write controls beep).
         break;
     case 0x04:
-        // The original ATENT ACK write clears ATENT and records an 0x80
-        // control latch. BREAK is only acknowledged by reading FD04.
-        ioRegisters_[reg] &= static_cast<BYTE>(~0x01);
-        ioOutputLatch_[reg] = 0x80;
+        if(!mainBoard_ || !mainBoard_->writeIo(address,value))
+            ioRegisters_[reg]&=static_cast<BYTE>(~0x01);
+        // Preserve the card-side output latch used by existing callers.
+        ioOutputLatch_[reg]=0x80;
         break;
     case 0x05:
         // FD05 writes go to the output/control latch. A HALT request sets the
