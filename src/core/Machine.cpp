@@ -88,8 +88,44 @@ void Machine::reset()
     for (auto& board : boards_)
         board->reset();
     lastExecutionCycles_=0;
+    measuredMainClockHz_=2000000;
+    measuredMainAccesses_=0;
+    measuredElapsedMs_=0;
+    timerElapsedMs_=0;
+    serialTimerTicks_=0;
     displayVsyncElapsedNs_=0;
     synchronizeFd05Selection();
+}
+
+void Machine::signalReferenceTimer(std::uint64_t elapsedMs)
+{
+    // ChildView::OnTimer notifies both CPUs. The original MainCpu::SimONE
+    // recalibrates CpuClock from reference memory accesses every ~2 seconds
+    // and processes serial terminal IRQ requests on each fourth timer tick.
+    signalDisplayVsync(elapsedMs);
+    timerElapsedMs_+=elapsedMs;
+    measuredElapsedMs_+=elapsedMs;
+    for(auto& board:boards_) {
+        if(auto* cpu6809=dynamic_cast<Main6809Board*>(board.get())) {
+            const auto accesses=cpu6809->memoryAccessCount();
+            if(accesses>=measuredMainAccesses_ &&
+                (timerElapsedMs_>=2000 || accesses-measuredMainAccesses_>1000000)) {
+                const auto delta=accesses-measuredMainAccesses_;
+                if(measuredElapsedMs_ && delta)
+                    measuredMainClockHz_=std::max<std::uint64_t>(
+                        1,delta*1000/measuredElapsedMs_);
+                measuredMainAccesses_=accesses;
+                measuredElapsedMs_=0;
+                timerElapsedMs_=0;
+            }
+        }
+    }
+    if(++serialTimerTicks_>=4) {
+        serialTimerTicks_=0;
+        for(auto& board:boards_)
+            if(auto* cpu6809=dynamic_cast<Main6809Board*>(board.get()))
+                cpu6809->refreshSerialIrq();
+    }
 }
 
 void Machine::advanceTimeNanoseconds(std::uint64_t nanoseconds)
