@@ -41,10 +41,13 @@ public:
     bool executeOne() {
         // Reference SubCpu::SimONE: VSync/GetKeyCode, HALT, IRQ,
         // FIRQ, NMI, Fm11Ram[105] wait gate, then one instruction.
-        if(display_.consumeVsyncEvent()) {
+        const bool vsync=display_.consumeVsyncEvent();
+        if(vsync) {
             display_.processKeyCode();
             vsyncCalibrationMs_+=16;
-            if(vsyncCalibrationMs_>=2000 || totalAccesses_>1000000) {
+        }
+        // The access-count trigger is independent of the 16 ms notification.
+        if(vsyncCalibrationMs_>=2000 || totalAccesses_>1000000) {
                 const auto now=std::chrono::steady_clock::now();
                 const auto elapsed=std::chrono::duration_cast<std::chrono::milliseconds>(
                     now-lastNmiCalibration_).count();
@@ -54,7 +57,6 @@ public:
                 totalAccesses_=0;
                 vsyncCalibrationMs_=0;
                 lastNmiCalibration_=now;
-            }
         }
         display_.tickSubInstruction();
         regs.HD=0;
