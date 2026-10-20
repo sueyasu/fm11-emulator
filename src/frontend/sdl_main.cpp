@@ -223,6 +223,7 @@ int main(int argc,char** argv) {
             machine.setDisplayIoWriteObserver([&](DisplaySubsystem::IoWriteTrace){++ioWrites;});
         auto lastLog=std::chrono::steady_clock::now();
         auto lastFrame=lastLog-std::chrono::milliseconds(17);
+        auto lastWaitTick=std::chrono::steady_clock::now();
         auto monitorCommand=[&](const std::string& line) {
             if(!mainBoard)return;
             std::istringstream stream(line);
@@ -339,6 +340,20 @@ int main(int argc,char** argv) {
                 }
             }
             if(!paused && !testPattern) {
+                // Headless advances the independent PTM clock from host
+                // time while the 6809 is suspended in SYNC/CWAI.
+                // Machine::executeOne() otherwise sees zero instruction
+                // cycles and cannot advance the clock to the next IRQ.
+                const auto tickNow=std::chrono::steady_clock::now();
+                const auto waitElapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    tickNow-lastWaitTick).count();
+                lastWaitTick=tickNow;
+                if(mainBoard &&
+                   mainBoard->cpuWaitState()!=CSim09::WaitState::Running &&
+                   waitElapsed>0) {
+                    machine.advanceTimeNanoseconds(static_cast<std::uint64_t>(
+                        std::min<std::int64_t>(waitElapsed,50000000)));
+                }
                 if(machine.boardCount()) {
                     for(std::uint64_t i=0;i<instructions;++i) {
                         // Only inspect the PC before execution: reading memory
