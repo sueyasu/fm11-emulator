@@ -6,6 +6,7 @@
 #include "DisplayBitmap.h"
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
@@ -113,6 +114,7 @@ private:
     void synchronizeFd05Selection();
     void advanceDisplayTime(std::uint64_t ns);
     void advanceDisplayCpuCycles(std::uint64_t cycles,std::uint64_t cpuHz);
+    void serviceReferenceMainTimer();
     bool fd05SelectionEnabled_=false;
     std::shared_ptr<MainBoard> mainBoard_=std::make_shared<MainBoard>();
     std::vector<std::unique_ptr<CpuBoard>> boards_;
@@ -131,4 +133,6 @@ private:
     long double mainTotalClockMs_=0;
     long double mainTotalAccesses_=0;
     unsigned serialTimerTicks_=0;
+    bool referenceTimerPending_=false;
+    std::chrono::steady_clock::time_point lastClockCalibration_{};
 };
