@@ -7,20 +7,20 @@ PORT    equ     $fd05
 MAIL    equ     $fc80
 CMDOUT  equ     $12
 CMDKEY  equ     $2d
-        ; FC90: last request command
-        ; FC91: last FD05 read value
-        ; FC92: last response FC83
-        ; FC93: last response FC84
-        ; FC94: completed keyboard polls (low byte)
-        ; FC95: count of responses with nonzero FC84
-        ; FC96: last failure stage, zero if no failure
-        ; FC97: next trace slot 0..15
-        ; FCA0..FCDF: ring of 16 [FC83,FC84,FD05,FC94] records
+        ; $0700: last request command
+        ; $0701: last FD05 read value
+        ; $0702: last response FC83
+        ; $0703: last response FC84
+        ; $0704: completed keyboard polls (low byte)
+        ; $0705: count of responses with nonzero FC84
+        ; $0706: last failure stage, zero if no failure
+        ; $0707: next trace slot 0..15
+        ; $0710..$074F: ring of 16 [FC83,FC84,FD05,poll-count] records
 start   orcc    #$50
         lds     #$07f0
-        ldx     #$fc90
+        ldx     #$0700
 init    clr     ,x+
-        cmpx    #$fce0
+        cmpx    #$0750
         bne     init
         lda     #$03
         sta     $fda0
@@ -30,45 +30,45 @@ init    clr     ,x+
         jsr     puts
 mainloop
         lda     #$10
-        sta     $fc9a       ; stage: begin INKEY2
+        sta     $070a       ; stage: begin INKEY2
         lda     #CMDKEY
-        sta     $fc90
+        sta     $0700
         jsr     transact
         lbcs    failed
         lda     #$11
-        sta     $fc9a       ; stage: INKEY2 returned
+        sta     $070a       ; stage: INKEY2 returned
         lda     $fc83
-        sta     $fc92
+        sta     $0702
         lda     $fc84
-        sta     $fc93
-        inc     $fc94
+        sta     $0703
+        inc     $0704
         ; Store each result separately from displayed text.
         pshs    a,b,x
-        ldb     $fc97
+        ldb     $0707
         lslb
         lslb
-        ldx     #$fca0
+        ldx     #$0710
         abx
-        lda     $fc92
+        lda     $0702
         sta     ,x+
-        lda     $fc93
+        lda     $0703
         sta     ,x+
-        lda     $fc91
+        lda     $0701
         sta     ,x+
-        lda     $fc94
+        lda     $0704
         sta     ,x
-        inc     $fc97
-        lda     $fc97
+        inc     $0707
+        lda     $0707
         anda    #$0f
-        sta     $fc97
+        sta     $0707
         puls    a,b,x
         ; Same KPAscii result selection as the OS driver:
         ; FC83==0 -> FC84 is ASCII; nonzero is extended status.
-        tst     $fc92
+        tst     $0702
         lbne    mainloop
-        lda     $fc93
+        lda     $0703
         beq     mainloop  ; Diagnostic guards no-key; trace still logs it.
-        inc     $fc95
+        inc     $0705
         cmpa    #$0d
         beq     enter
         cmpa    #$08
@@ -101,11 +101,11 @@ putsret rts
 
 ; A=character; command 12 via exactly the same HALT/READY transport.
 putchar pshs    a,b
-        sta     $fc98
+        sta     $0708
         lda     #CMDOUT
-        sta     $fc90
-        lda     $fc98
-        sta     $fc99
+        sta     $0700
+        lda     $0708
+        sta     $0709
         jsr     transact
         puls    a,b,pc
 
@@ -115,9 +115,9 @@ transact
         pshs    a,b,x
         ldx     #$ffff
 readylp lda     #$21
-        sta     $fc9a
+        sta     $070a
         lda     PORT
-        sta     $fc91
+        sta     $0701
         bpl     haltit
         leax    -1,x
         bne     readylp
@@ -127,9 +127,9 @@ haltit  lda     #$80
         sta     PORT
         ldx     #$ffff
 haltlp  lda     #$22
-        sta     $fc9a
+        sta     $070a
         lda     PORT
-        sta     $fc91
+        sta     $0701
         bmi     install
         leax    -1,x
         bne     haltlp
@@ -138,11 +138,11 @@ haltlp  lda     #$22
         bra     fail
 install clr     MAIL
         clr     MAIL+1
-        lda     $fc90
+        lda     $0700
         sta     MAIL+2
         cmpa    #CMDOUT
         bne     inputinit
-        lda     $fc99
+        lda     $0709
         sta     MAIL+3
         bra     release
 inputinit
@@ -151,19 +151,19 @@ inputinit
 release clr     PORT
         ldx     #$ffff
 donelp  lda     #$23
-        sta     $fc9a
+        sta     $070a
         lda     PORT
-        sta     $fc91
+        sta     $0701
         bpl     done
         leax    -1,x
         bne     donelp
         lda     #3
         bra     fail
 done    clra
-        sta     $fc96
+        sta     $0706
         andcc   #$fe
         puls    a,b,x,pc
-fail    sta     $fc96
+fail    sta     $0706
         orcc    #1
         puls    a,b,x,pc
 
