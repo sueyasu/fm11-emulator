@@ -42,37 +42,32 @@ public:
         }
     }
     bool executeOne() {
-        // Windows SubCpu::SimONE handles pending timer/VSync first,
-        // then GetKeyCode, independently of the periodic CPU NMI.
+        // Reference SubCpu::SimONE: VSync/GetKeyCode, HALT, IRQ,
+        // FIRQ, NMI, Fm11Ram[105] wait gate, then one instruction.
         if(display_.consumeVsyncEvent())display_.processKeyCode();
+        regs.HD=0;
         if(display_.haltRequested()) {
-            // Original SubCpu::SimONE performs a dummy memory access
-            // during SUB HALT, advancing CpuClock and TotClock.
-            GetMemByte(regs.r.w.PC);
+            regs.HD|=010;
+            GetMemByte(regs.r.w.PC); // original HALT dummy read
             return false;
         }
-        // Reference SubCpu::SimONE: interrupt priority IRQ, FIRQ, NMI.
-        const bool interruptRequest=display_.subIrqPending() ||
-            display_.subFirqPending() ||
-            (!display_.nmiMask() && nmiCycles_>=nmiThreshold_);
-        // The original clock threshold is 60000 at reset, recalibrated
-        // dynamically by the Windows event loop. Count memory accesses here.
-        if(display_.subIrqPending())SimIRQ();
-        if(display_.subFirqPending())SimFIRQ();
+        if(display_.subIrqPending()) {
+            regs.HD|=001;
+            SimIRQ();
+        }
+        if(display_.subFirqPending()) {
+            regs.HD|=002;
+            SimFIRQ();
+        }
         if(!display_.nmiMask() && nmiCycles_>=nmiThreshold_) {
-            // Original timed keyboard/vsync event calls GetKeyCode before
-            // dispatching the periodic NMI. Without this, the initial
-            // AFE0-generated key and queued host input remain dormant
-            // until firmware happens to read AFED.
+            regs.HD|=004;
             SimNMI();
             nmiCycles_=0;
         }
-        // Original Fm11Ram[0x105] suspends the sub CPU until an
-        // IRQ, FIRQ or NMI request is observed, even without SYNC/CWAI.
         if(display_.subWaitForInterrupt()) {
-            const bool wake=interruptRequest;
-            if(!wake) {
-                GetMemByte(regs.r.w.PC);
+            if((regs.HD&007)==0) {
+                regs.HD|=010;
+                GetMemByte(regs.r.w.PC); // original wait dummy read
                 return false;
             }
             display_.clearSubWaitForInterrupt();
