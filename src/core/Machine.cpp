@@ -134,10 +134,12 @@ void Machine::advanceDisplayTime(std::uint64_t ns)
     // ChildView::OnTimer sets VSyncInte every INTERVALTIME (16 ms).
     // This is a wall-clock hardware event, NOT a CPU NMI event.
     constexpr std::uint64_t kVsyncPeriodNs=16000000;
-    displayVsyncElapsedNs_+=ns;
-    if(displayVsyncElapsedNs_>=kVsyncPeriodNs) {
-        displayVsyncElapsedNs_%=kVsyncPeriodNs;
-        mainBoard_->displaySubsystem().signalVsyncEvent();
+    if(!externalDisplayVsync_) {
+        displayVsyncElapsedNs_+=ns;
+        if(displayVsyncElapsedNs_>=kVsyncPeriodNs) {
+            displayVsyncElapsedNs_%=kVsyncPeriodNs;
+            mainBoard_->displaySubsystem().signalVsyncEvent();
+        }
     }
     auto& sub=mainBoard_->displayCpu();
     if(mainBoard_->displaySubsystem().haltRequested()) {
