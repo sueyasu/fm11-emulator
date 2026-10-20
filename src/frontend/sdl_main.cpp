@@ -419,6 +419,11 @@ int main(int argc,char** argv) {
                     // must be sent on KEYDOWN to reach OS-9 /Term.
                     if(!paused && !testPattern && !noKeyboard) {
                         switch(event.key.keysym.sym) {
+                        // Original ChildView::OnKeyDown sends NUL for Ctrl+@.
+                        case SDLK_AT: case SDLK_BACKQUOTE:
+                            if((event.key.keysym.mod & KMOD_CTRL)!=0)
+                                machine.enqueueDisplayKeyCode(0);
+                            break;
                         case SDLK_RETURN: case SDLK_KP_ENTER:
                             machine.enqueueDisplayKeyCode(0x0d); break;
                         case SDLK_BACKSPACE:
