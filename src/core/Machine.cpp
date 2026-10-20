@@ -130,47 +130,14 @@ void Machine::setDisplayCpuClockHz(std::uint64_t hz)
 
 void Machine::advanceDisplayTime(std::uint64_t ns)
 {
-    if(!displayCpuClockHz_)return;
-    // ChildView::OnTimer sets VSyncInte every INTERVALTIME (16 ms).
-    // This is a wall-clock hardware event, NOT a CPU NMI event.
-    constexpr std::uint64_t kVsyncPeriodNs=16000000;
-    if(!externalDisplayVsync_) {
-        displayVsyncElapsedNs_+=ns;
-        if(displayVsyncElapsedNs_>=kVsyncPeriodNs) {
-            displayVsyncElapsedNs_%=kVsyncPeriodNs;
-            mainBoard_->displaySubsystem().signalVsyncEvent();
-        }
-    }
-    auto& sub=mainBoard_->displayCpu();
-    if(mainBoard_->displaySubsystem().haltRequested()) {
-        displayCycleCredit_=0;
-        displayNanosecondFraction_=0;
-        return;
-    }
-    constexpr std::uint64_t second=1000000000ULL;
-    const auto seconds=ns/second;
-    const auto remainder=ns%second;
-    if(seconds>static_cast<std::uint64_t>(
-            std::numeric_limits<std::int64_t>::max())/displayCpuClockHz_)
-        throw std::overflow_error("display CPU time interval too large");
-    const auto fractional=remainder*displayCpuClockHz_+displayNanosecondFraction_;
-    const auto cycles=seconds*displayCpuClockHz_+fractional/second;
-    if(cycles>static_cast<std::uint64_t>(
-            std::numeric_limits<std::int64_t>::max()-displayCycleCredit_))
-        throw std::overflow_error("display CPU cycle budget too large");
-    displayNanosecondFraction_=fractional%second;
-    displayCycleCredit_+=static_cast<std::int64_t>(cycles);
-    while(displayCycleCredit_>0) {
-        if(!sub.executeOne()) {
-            // The NMI timer continues while the display CPU waits in
-            // SYNC/CWAI, but not while the main CPU asserts HALT.
-            if(!mainBoard_->displaySubsystem().haltRequested())
-                sub.advanceIdleCycles(static_cast<std::uint64_t>(displayCycleCredit_));
-            displayCycleCredit_=0;
-            break;
-        }
-        const auto used=sub.LastInstructionCycles();
-        displayCycleCredit_-=static_cast<std::int64_t>(used?used:1);
+    // Only the legacy virtual timer remains for deterministic consumers.
+    // Reference-mode SDL delivers the host's 16ms timer independently.
+    if(!displayCpuClockHz_ || externalDisplayVsync_)return;
+    constexpr std::uint64_t period=16000000;
+    displayVsyncElapsedNs_+=ns;
+    if(displayVsyncElapsedNs_>=period) {
+        displayVsyncElapsedNs_%=period;
+        mainBoard_->displayCpu().timerTick(16);
     }
 }
 
@@ -178,21 +145,9 @@ void Machine::advanceDisplayCpuCycles(std::uint64_t cycles,std::uint64_t cpuHz)
 {
     if(!displayCpuClockHz_ || !cycles || !cpuHz)return;
     constexpr std::uint64_t second=1000000000ULL;
-    // The remainder is represented as nanosecond fractions in units of
-    // 1/cpuHz. On a CPU-card clock switch, preserve the elapsed fraction
-    // instead of discarding it (which otherwise slows the display CPU).
-    if(displayCpuInputHz_!=cpuHz) {
-        if(displayCpuInputHz_!=0)
-            displayCycleFraction_=(displayCycleFraction_*cpuHz)/displayCpuInputHz_;
-        displayCpuInputHz_=cpuHz;
-    }
     const auto whole=cycles/cpuHz;
     const auto rem=cycles%cpuHz;
-    if(whole>std::numeric_limits<std::uint64_t>::max()/second)
-        throw std::overflow_error("CPU time interval too large");
-    const auto numerator=rem*second+displayCycleFraction_;
-    const auto ns=whole*second+numerator/cpuHz;
-    displayCycleFraction_=numerator%cpuHz;
+    const auto ns=whole*second+(rem*second)/cpuHz;
     advanceDisplayTime(ns);
 }
 
@@ -220,6 +175,9 @@ void Machine::executeOne()
                 if(auto* cpu6809=dynamic_cast<Main6809Board*>(attached.get()))
                     cpu6809->syncPtmIrq();
         }
+        // Reference ChildView::SimProc: one main and one sub instruction
+        // per scheduling turn, regardless of the main CPU cycle count.
+        if(displayCpuClockHz_)mainBoard_->displayCpu().executeOne();
         // The instruction may have written FD05. Perform the next
         // instruction on the newly selected CPU card.
         synchronizeFd05Selection();
