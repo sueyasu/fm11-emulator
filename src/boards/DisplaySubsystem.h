@@ -82,7 +82,8 @@ public:
     // attaching an observer never changes readback or register side effects.
     void setIoWriteObserver(IoWriteObserver observer) {ioWriteObserver_=std::move(observer);}
     void clearIoWriteObserver() {ioWriteObserver_={};}
-    void beginCpuInstruction(std::uint16_t pc) {tracePc_=pc;traceCpu_=true; if(vsyncCount_>0)--vsyncCount_;}
+    void tickSubInstruction() {if(vsyncCount_>0)--vsyncCount_;}
+    void beginCpuInstruction(std::uint16_t pc) {tracePc_=pc;traceCpu_=true;}
     void endCpuInstruction() {traceCpu_=false;}
     // Hardware-produced latches; CPU writes to these addresses do not set them.
     void signalSubFirq(BYTE status) {subFirqLatch_=keyboardEnabled_?status:static_cast<BYTE>(status&~1u);}
