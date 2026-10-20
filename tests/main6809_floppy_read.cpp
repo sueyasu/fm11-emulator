@@ -66,6 +66,7 @@ int main() {
  b.writeCpu(0xfd40,0x20);b.writeCpu(0xfd41,0);
  b.writeCpu(0xfd42,1);b.writeCpu(0xfd43,0);
  b.writeCpu(0xfd50,0x04);b.writeCpu(0xfd18,0x80);
+ if((b.readCpu(0xfd1f)&0x40)==0)return 31;
  if((b.readCpu(0xfd50)&0x80)==0)return 4;
  for(int i=0;i<256;++i)
    if(b.readCpu(0x2000+i)!=static_cast<BYTE>(i^0x5a))return 5;
@@ -84,6 +85,16 @@ int main() {
    if(b.readCpu(0xfd1b)!=static_cast<BYTE>(i^0x5a))return 27;
  b.setFloppyDrive(0);
  b.writeCpu(0xfd1a,17);b.writeCpu(0xfd18,0x80);
+ if((b.readCpu(0xfd1f)&0x40)==0)return 32;
  if((b.readCpu(0xfd18)&0x10)==0)return 6;
+ // Short DMA requests do not raise the FDC record-not-found error.
+ b.writeCpu(0xfd1a,1);b.writeCpu(0xfd19,1);
+ b.writeCpu(0xfd40,0x30);b.writeCpu(0xfd41,0);
+ b.writeCpu(0xfd42,0);b.writeCpu(0xfd43,128);
+ b.writeCpu(0xfd50,0x04);b.writeCpu(0xfd18,0x80);
+ if(b.readCpu(0xfd18)&0x10)return 33;
+ if((b.readCpu(0xfd50)&0x80)==0)return 34;
+ for(unsigned i=0;i<128;++i)
+   if(b.readCpu(0x3000+i)!=static_cast<BYTE>(i^0x5a))return 35;
  return 0;
 }
