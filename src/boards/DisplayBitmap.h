@@ -186,7 +186,7 @@ public:
         const unsigned charH=400u/rows;
         if(charW==0 || charH==0)return;
         const unsigned start=((unsigned(display.crtcRegister(12))<<9) |
-                              (unsigned(display.crtcRegister(13))<<1))&0x7ffu;
+                              (unsigned(display.crtcRegister(13))<<1))&0x7ffu)*2u;
         for(unsigned y=0;y<frame.height;++y) {
             const unsigned scanY=unsigned(y)*400u/unsigned(frame.height);
             const unsigned cy=scanY/charH,sy=scanY%charH;
