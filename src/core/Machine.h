@@ -95,6 +95,10 @@ public:
     // Advance the common main-board timebase regardless of active CPU.
     // Do not also advance the same interval through board.advanceCpuCycles().
     void advanceTimeNanoseconds(std::uint64_t nanoseconds);
+    // Reference GUI clock: the frontend advances peripherals from the
+    // monotonic host clock, never a second time from guest CPU cycles.
+    void setReferenceWallClock(bool enabled) {referenceWallClock_=enabled;}
+    bool referenceWallClock() const {return referenceWallClock_;}
     // SDL may drive the 16 ms display VSync from host monotonic time.
     // Default stays emulated time for headless and deterministic tests.
     void setExternalDisplayVsync(bool enabled) {externalDisplayVsync_=enabled; displayVsyncElapsedNs_=0;}
@@ -119,5 +123,6 @@ private:
     std::uint64_t displayNanosecondFraction_ = 0;
     std::uint64_t displayVsyncElapsedNs_ = 0;
     bool externalDisplayVsync_ = false;
+    bool referenceWallClock_ = false;
     std::int64_t displayCycleCredit_ = 0;
 };
