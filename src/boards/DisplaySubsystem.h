@@ -63,8 +63,12 @@ public:
         // Original SubCpu::SimRESET starts in 80x25, 8x16 text mode.
         crtcColumns_=80;crtcRows_=25;charWidth_=8;charHeight_=16;
         crtcStart_=cursorX_=cursorY_=cursorStart_=cursorEnd_=cursorDisplay_=0;
-        // ROM contents and display memory survive a CPU reset. Hardware
-        // power-on clearing is a separate future operation.
+        // CSubCpu::SimRESET clears both SubRam (including character RAM)
+        // and all three planes of SubVram before the boot ROM runs.
+        ram_.fill(0);
+        ioRam_.fill(0);
+        vram_.fill(0);
+        markVideoChanged();
     }
     void requestHalt() {haltRequested_=true;}
     void releaseHalt() {haltRequested_=false;}
