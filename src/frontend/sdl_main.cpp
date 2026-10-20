@@ -58,7 +58,7 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE]\n"
+    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE]\n"
              <<"  ROM defaults to external/roms/display6809.bin\n"
              <<"  ESC quit; SPACE pause/resume; F1 switch 200/400-line view\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
@@ -70,7 +70,7 @@ int main(int argc,char** argv) {
         bool floppyD88=false;
         unsigned floppyDrive=0;
         unsigned bootDip=0x9f;
-        bool high=false, testPattern=false, traceBoot=false, diagnostics=false;
+        bool high=false, testPattern=false, traceBoot=false, traceInkey=false, diagnostics=false;
         std::uint64_t instructions=10000;
         for(int i=1;i<argc;++i) {
             const std::string arg=argv[i];
@@ -78,6 +78,7 @@ int main(int argc,char** argv) {
             if(arg=="--high"){high=true;continue;}
             if(arg=="--test-pattern"){testPattern=true;continue;}
             if(arg=="--trace-boot"){traceBoot=true;continue;}
+            if(arg=="--trace-inkey"){traceInkey=true;continue;}
             if(arg=="--diagnostics"){diagnostics=true;continue;}
             if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--ank-rom" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive" || arg=="--boot-dip") && i+1<argc) {
                 if(arg=="--rom")romPath=argv[++i];
@@ -182,6 +183,30 @@ int main(int argc,char** argv) {
                 else break;
             }
         };
+        // Trace real shared-RAM bus transactions, not guessed values from
+        // periodic snapshots. Limit completed requests to keep logs bounded.
+        if(traceInkey && mainBoard) {
+            auto active=std::make_shared<bool>(false);
+            auto count=std::make_shared<unsigned>(0);
+            machine.displaySubsystem().setSharedTraceObserver(
+                [active,count](DisplaySubsystem::SharedTrace e) {
+                    if(e.mainCpu && e.write && e.offset==2 && e.value==0x2d) {
+                        if(*count>=64)return;
+                        *active=true;
+                        ++*count;
+                        std::cerr<<"INKEY2 #"<<*count<<" request FC82=2D\n";
+                    }
+                    if(!*active)return;
+                    if(e.offset==3 || e.offset==4) {
+                        std::cerr<<"INKEY2 #"<<*count<<" "<<(e.mainCpu?"MAIN":"SUB")
+                                 <<(e.write?" W":" R")<<" FC8"<<unsigned(e.offset)
+                                 <<"=$"<<std::uppercase<<std::hex
+                                 <<std::setw(2)<<std::setfill('0')<<unsigned(e.value)
+                                 <<std::dec<<std::setfill(' ')<<"\n";
+                        if(e.mainCpu && !e.write && e.offset==4)*active=false;
+                    }
+                });
+        }
         // Host printable keys enter the original sub-CPU keyboard queue.
         SDL_StartTextInput();
         bool running=true,paused=false;

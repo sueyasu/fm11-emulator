@@ -150,8 +150,18 @@ public:
     void setAttentionSink(std::function<void()> sink) {attentionSink_=std::move(sink);}
     void notifyMainAttention() {if(attentionSink_)attentionSink_();}
     // The top 128 bytes of sub RAM also appear at main $FC80-$FCFF.
-    BYTE readShared(std::size_t offset) const {return ram_[0x1f80+offset];}
+    struct SharedTrace {bool mainCpu; bool write; BYTE offset; BYTE value;};
+    using SharedTraceObserver=std::function<void(SharedTrace)>;
+    void setSharedTraceObserver(SharedTraceObserver cb) {sharedTraceObserver_=std::move(cb);}
+    BYTE readShared(std::size_t offset) const {
+        const BYTE value=ram_[0x1f80+offset];
+        if(sharedTraceObserver_ && offset>=2 && offset<=4)
+            sharedTraceObserver_({true,false,static_cast<BYTE>(offset),value});
+        return value;
+    }
     void writeShared(std::size_t offset,BYTE value) {
+        if(sharedTraceObserver_ && offset>=2 && offset<=4)
+            sharedTraceObserver_({true,true,static_cast<BYTE>(offset),value});
         if(ram_.at(0x1f80+offset)!=value) {
             ram_[0x1f80+offset]=value;
             ++sharedWriteRevision_;
@@ -163,7 +173,12 @@ public:
             if(!gvuEnabled_)return vram_[vramWindow_*kVramSize+address];
             return vram_[gvuPlane_*0x10000+graphicsAddress(address)];
         }
-        if(address<0xa000)return ram_[address-0x8000];
+        if(address<0xa000) {
+            const BYTE value=ram_[address-0x8000];
+            if(sharedTraceObserver_ && address>=0x9f82 && address<=0x9f84)
+                sharedTraceObserver_({false,false,static_cast<BYTE>(address-0x9f80),value});
+            return value;
+        }
         // Reference SubCpu.cpp: these I/O latches clear on read.
         if(address==0xafe4)return std::exchange(subFirqLatch_,BYTE{0});
         if(address==0xafec)return std::exchange(keyboardStatusLatch_,BYTE{0});
@@ -220,7 +235,11 @@ public:
                 }
             }
         }
-        else if(address<0xa000)ram_[address-0x8000]=value;
+        else if(address<0xa000) {
+            ram_[address-0x8000]=value;
+            if(sharedTraceObserver_ && address>=0x9f82 && address<=0x9f84)
+                sharedTraceObserver_({false,true,static_cast<BYTE>(address-0x9f80),value});
+        }
         else if(address>=0xafe0 && address<=0xafe3) {
             subIoRam_[address-0xafe0]=value;
             if(address==0xafe0) {
@@ -287,6 +306,7 @@ private:
     std::uint64_t videoRevision_=0;
     std::uint64_t sharedWriteRevision_=0;
     IoWriteObserver ioWriteObserver_;
+    SharedTraceObserver sharedTraceObserver_;
     std::uint16_t tracePc_=0;
     bool traceCpu_=false;
     std::function<void()> attentionSink_;
