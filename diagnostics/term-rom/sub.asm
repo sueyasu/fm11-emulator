@@ -35,13 +35,41 @@ poll    lda     $9f80
         lda     $9f81
         cmpa    #13
         beq     newline
+        cmpa    #8
+        beq     backspace
         ldx     $9f10
         sta     ,x+
         lda     #$07
         sta     ,x+
         stx     $9f10
         bra     done
-newline ldx     #$80a0
+newline ldx     $9f10
+        ; Advance to the start of the next 80-column row.
+        ; 80 cells = 160 bytes. Compute row by repeated subtraction.
+        tfr     x,d
+        subd    #$8000
+        ldx     #$8000
+rowfind cmpd    #$00a0
+        blo     rowfound
+        subd    #$00a0
+        leax    $00a0,x
+        bra     rowfind
+rowfound
+        leax    $00a0,x
+        cmpx    #$8fa0
+        blo     storepos
+        ldx     #$8000
+storepos stx    $9f10
+        bra     done
+backspace
+        ldx     $9f10
+        cmpx    #$8000
+        beq     done
+        leax    -2,x
+        lda     #$20
+        sta     ,x
+        lda     #$07
+        sta     1,x
         stx     $9f10
 done    clr     $9f80       ; acknowledge
         bra     poll
