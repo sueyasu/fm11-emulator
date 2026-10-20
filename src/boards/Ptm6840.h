@@ -46,7 +46,10 @@ public:
     void advanceReferenceAccesses(std::uint64_t accesses,std::uint64_t cpuClock) {
         if(cpuClock)cpuClock_=cpuClock;
         sysClock_+=accesses;
-        // Equivalent of the SimONE pre-instruction PtmFast/SysClock test.
+    }
+    // Original MainCpu::SimONE checks PTM immediately before dispatching
+    // the IRQ and executing the next main CPU instruction.
+    void checkInstructionBoundary() {
         if(ptmFast_!=0 &&
            (ptmFast_<0 || static_cast<std::uint64_t>(ptmFast_)<sysClock_))
             interval();
