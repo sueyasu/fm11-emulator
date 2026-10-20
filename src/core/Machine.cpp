@@ -91,6 +91,7 @@ void Machine::reset()
     displayCycleCredit_=0;
     displayCycleFraction_=0;
     displayNanosecondFraction_=0;
+    displayVsyncElapsedNs_=0;
     displayCpuInputHz_=0;
     synchronizeFd05Selection();
 }
@@ -130,6 +131,14 @@ void Machine::setDisplayCpuClockHz(std::uint64_t hz)
 void Machine::advanceDisplayTime(std::uint64_t ns)
 {
     if(!displayCpuClockHz_)return;
+    // ChildView::OnTimer sets VSyncInte every INTERVALTIME (16 ms).
+    // This is a wall-clock hardware event, NOT a CPU NMI event.
+    constexpr std::uint64_t kVsyncPeriodNs=16000000;
+    displayVsyncElapsedNs_+=ns;
+    if(displayVsyncElapsedNs_>=kVsyncPeriodNs) {
+        displayVsyncElapsedNs_%=kVsyncPeriodNs;
+        mainBoard_->displaySubsystem().signalVsyncEvent();
+    }
     auto& sub=mainBoard_->displayCpu();
     if(mainBoard_->displaySubsystem().haltRequested()) {
         displayCycleCredit_=0;
