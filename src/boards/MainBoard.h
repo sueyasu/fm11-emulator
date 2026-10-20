@@ -79,20 +79,12 @@ public:
             throw std::overflow_error("PTM time interval too large");
         advancePtmFraction(whole*ptmHz,(nanoseconds%second)*ptmHz);
     }
-    // MainCpu::SysClock is a memory-access counter. Convert that count
-    // directly to PTMCLOCK/2 ticks at the currently measured CpuClock.
-    // Avoid an intermediate integral-nanosecond rounding step.
+    // Reference MainCpu: SysClock and PtmClock are measured in memory
+    // accesses. PTM converts its own latch intervals using CpuClock.
     void advanceReferenceAccesses(std::uint64_t accesses,std::uint64_t clockHz) {
         if(!accesses || !clockHz)return;
-        constexpr std::uint64_t ptmHz=9700;
-        constexpr std::uint64_t phaseUnit=1000000000ULL;
-        const unsigned __int128 scaled=
-            static_cast<unsigned __int128>(accesses)*ptmHz*phaseUnit/clockHz;
-        const auto whole=scaled/phaseUnit;
-        if(whole>std::numeric_limits<std::uint64_t>::max())
-            throw std::overflow_error("reference PTM access interval too large");
-        advancePtmFraction(static_cast<std::uint64_t>(whole),
-                           static_cast<std::uint64_t>(scaled%phaseUnit));
+        ptm_->advanceReferenceAccesses(accesses,clockHz);
+        setIrqLine(IrqLine::Timer,ptm_->irqRequest());
     }
     void advanceCpuCycles(std::uint64_t cycles,std::uint64_t hz) {
         if(hz==0 || hz>1000000000ULL)
