@@ -7,7 +7,8 @@ if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build configuration" FORCE)
 endif()
 
-option(FM11_BUILD_TESTS "Build portable-core smoke tests" ON)
+# Diagnostics and regression tests are opt-in, never part of the normal build.
+option(FM11_BUILD_TESTS "Build portable-core smoke tests" OFF)
 
 add_library(fm11_core STATIC
     src/core/Machine.cpp
