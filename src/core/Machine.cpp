@@ -208,7 +208,16 @@ void Machine::executeOne()
             cpu8088->bus().refreshSystemIrq();
         const auto* refCpu=dynamic_cast<Main6809Board*>(board);
         const auto beforeAccesses=refCpu?refCpu->memoryAccessCount():0;
-        if(referenceWallClock_)serviceReferenceMainTimer();
+        if(referenceWallClock_) {
+            serviceReferenceMainTimer();
+            if(refCpu) {
+                // MainCpu::SimONE: Fm11PTM(2) then Fm11IRQ() before IRQ
+                // delivery. The accesses of this instruction are applied
+                // only after the instruction has finished.
+                mainBoard_->ptmDevice()->checkInstructionBoundary();
+                const_cast<Main6809Board*>(refCpu)->syncPtmIrq();
+            }
+        }
         board->cpu().executeOne();
         lastExecutionCycles_=board->cpu().lastExecutionCycles();
         if(referenceWallClock_ && refCpu && measuredMainClockHz_) {
