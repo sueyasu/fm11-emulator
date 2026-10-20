@@ -238,7 +238,7 @@ int main(int argc,char** argv) {
             stream>>cmd;
             if(cmd=="h"||cmd=="help"||cmd=="?") {
                 std::cout<<"c/continue, stop, s/step, r/regs, m/mem HEXADDR [LEN], "
-                            "mp HEXADDR [LEN], keyboard on/off/status, serial, reset, q/quit, help\n";
+                            "mp HEXADDR [LEN], ms HEXADDR [LEN] (sub CPU), keyboard on/off/status, serial, reset, q/quit, help\n";
             } else if(cmd=="c"||cmd=="continue") {
                 paused=false;
                 std::cout<<"CPU running. Type stop to pause.\n";
@@ -287,7 +287,7 @@ int main(int argc,char** argv) {
                     lastVsyncTick=std::chrono::steady_clock::now();
                     std::cout<<"CPU reset.\n";showRegisters();
                 }
-            } else if(cmd=="m"||cmd=="mem"||cmd=="mp") {
+            } else if(cmd=="m"||cmd=="mem"||cmd=="mp"||cmd=="ms") {
                 stream>>addrText>>lenText;
                 try {
                     if(addrText.empty())throw std::invalid_argument("missing address");
@@ -300,12 +300,14 @@ int main(int argc,char** argv) {
                         if(i%16==0)std::cout<<hex(unsigned(addr+i),cmd=="mp"?5:4)<<":";
                         const BYTE value=cmd=="mp"
                             ?mainBoard->readPhysical(std::uint32_t(addr+i))
-                            :mainBoard->readCpu(WORD(addr+i));
+                            :cmd=="ms"
+                                ?machine.displaySubsystem().readMemory(WORD(addr+i))
+                                :mainBoard->readCpu(WORD(addr+i));
                         std::cout<<" "<<hex(value,2);
                         if(i%16==15 || i+1==len)std::cout<<"\n";
                     }
                 }catch(const std::exception&) {
-                    std::cout<<"usage: m/mp HEXADDR [LEN, up to 256]\n";
+                    std::cout<<"usage: m/mp/ms HEXADDR [LEN, up to 256]\n";
                 }
             } else if(!cmd.empty())std::cout<<"Unknown command. Type help.\n";
             if(running&&paused)std::cout<<"fm11> "<<std::flush;
