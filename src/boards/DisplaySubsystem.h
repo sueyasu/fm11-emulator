@@ -236,7 +236,8 @@ public:
     void setMainEventControlReader(std::function<BYTE()> reader) {mainEventControlReader_=std::move(reader);}
     void notifyMainAttention() {if(attentionSink_)attentionSink_();}
     // The top 128 bytes of sub RAM also appear at main $FC80-$FCFF.
-    BYTE readShared(std::size_t offset) const {return ram_[0x1f80+offset];}
+    // Main FC80-FCFF and sub 9F80-9FFF are the same 128 bytes.
+    BYTE readShared(std::size_t offset) const {return ram_.at(0x1f80+offset);}
     void writeShared(std::size_t offset,BYTE value) {
         if(ram_.at(0x1f80+offset)!=value) {
             ram_[0x1f80+offset]=value;
@@ -249,6 +250,8 @@ public:
             if(!gvuEnabled_)return vram_[vramWindow_*kVramSize+address];
             return vram_[gvuPlane_*0x10000+graphicsAddress(address)];
         }
+        if(address>=0x9f80 && address<=0x9fff)
+            return readShared(address-0x9f80);
         if(address<0xa000)return ram_[address-0x8000];
         // Reference SubCpu.cpp: these I/O latches clear on read.
         if(address==0xafe4)return std::exchange(subFirqLatch_,BYTE{0});
@@ -328,6 +331,8 @@ public:
                 }
             }
         }
+        else if(address>=0x9f80 && address<=0x9fff)
+            writeShared(address-0x9f80,value);
         else if(address<0xa000)ram_[address-0x8000]=value;
         else if(address>=0xafe0 && address<=0xafe3) {
             subIoRam_[address-0xafe0]=value;
