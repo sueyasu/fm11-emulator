@@ -24,6 +24,7 @@ public:
     using KanjiRomImage=std::array<BYTE,kKanjiRomSize>;
     struct IoWriteTrace {std::uint16_t address; BYTE value; std::uint16_t pc=0; bool fromCpu=false;};
     using IoWriteObserver=std::function<void(IoWriteTrace)>;
+    using Afe0ReadObserver=std::function<void(BYTE,std::uint16_t)>;
     struct VideoSnapshot {
         std::array<BYTE,kVramSize> vram;
         BYTE flags;
@@ -72,6 +73,7 @@ public:
     // attaching an observer never changes readback or register side effects.
     void setIoWriteObserver(IoWriteObserver observer) {ioWriteObserver_=std::move(observer);}
     void clearIoWriteObserver() {ioWriteObserver_={};}
+    void setAfe0ReadObserver(Afe0ReadObserver fn) {afe0ReadObserver_=std::move(fn);}
     void beginCpuInstruction(std::uint16_t pc) {tracePc_=pc;traceCpu_=true; if(vsyncCount_>0)--vsyncCount_;}
     void endCpuInstruction() {traceCpu_=false;}
     // Hardware-produced latches; CPU writes to these addresses do not set them.
@@ -195,7 +197,11 @@ public:
             subIrq_=false; // Original GetIoByte: clear sub-IRQ request on read.
             return 0;
         }
-        if(address==0xafe0)return readSubControl();
+        if(address==0xafe0) {
+            const BYTE value=readSubControl();
+            if(afe0ReadObserver_)afe0ReadObserver_(value,tracePc_);
+            return value;
+        }
         if(address>=0xafe1 && address<=0xafe3)return subIoRam_[address-0xafe0];
         if(address==0xafe8)return gvuAddressHigh_;
         if(address==0xafe9)return static_cast<BYTE>(gvuOffset_);
@@ -311,6 +317,7 @@ private:
     std::uint64_t videoRevision_=0;
     std::uint64_t sharedWriteRevision_=0;
     IoWriteObserver ioWriteObserver_;
+    Afe0ReadObserver afe0ReadObserver_;
     SharedTraceObserver sharedTraceObserver_;
     std::uint16_t tracePc_=0;
     bool traceCpu_=false;

@@ -78,6 +78,14 @@ public:
         return mainBoard_->displaySubsystem().readPhysicalVram(offset);
     }
     std::uint16_t displayCpuPc() const {return mainBoard_->displayCpu().pc();}
+    BYTE mainFd05Status() const {return mainBoard_->subCpuStatus();}
+    BYTE subAfe0Status() const {return mainBoard_->displaySubsystem().readSubControl();}
+    void setSubInstructionObserver(std::function<void(std::uint16_t)> fn) {
+        mainBoard_->displayCpu().setInstructionObserver(std::move(fn));
+    }
+    void setSubAfe0ReadObserver(DisplaySubsystem::Afe0ReadObserver fn) {
+        mainBoard_->displaySubsystem().setAfe0ReadObserver(std::move(fn));
+    }
     void setDisplaySharedTraceObserver(DisplaySubsystem::SharedTraceObserver observer) {
         mainBoard_->displaySubsystem().setSharedTraceObserver(std::move(observer));
     }

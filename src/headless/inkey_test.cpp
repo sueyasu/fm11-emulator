@@ -79,7 +79,7 @@ std::vector<BYTE> readFile(const std::string& path) {
 }
 void usage() {
     std::cout<<"fm11-inkey-test --main-rom FILE --floppy-d88 FILE [--rom FILE]"
-               " [--boot-dip HEX] [--no-trace]\n"
+               " [--boot-dip HEX] [--no-trace] [--trace-sub-after-fd05 N]\n"
                "SDL-free real sub-ROM INKEY2 probe. Host stdin -> sub keyboard queue.\n"
                "Use a terminal for raw input (Enter, Backspace and ASCII).\n"
                "Ctrl-] exits; /T1 serial is available through a separate PTY.\n";
@@ -90,10 +90,16 @@ int main(int argc,char** argv) {
         std::string mainRom,floppy,rom="external/roms/display6809.bin";
         unsigned bootDip=0x9f;
         bool trace=true;
+        unsigned subTraceLimit=0;
         for(int i=1;i<argc;++i) {
             const std::string arg=argv[i];
             if(arg=="--help"){usage();return 0;}
             if(arg=="--no-trace"){trace=false;continue;}
+            if(arg=="--trace-sub-after-fd05" && i+1<argc) {
+                subTraceLimit=static_cast<unsigned>(std::stoul(argv[++i]));
+                if(subTraceLimit>100000)throw std::invalid_argument("sub trace limit too large");
+                continue;
+            }
             if(i+1>=argc)throw std::invalid_argument("missing value for "+arg);
             const std::string value=argv[++i];
             if(arg=="--main-rom")mainRom=value;
@@ -117,7 +123,9 @@ int main(int argc,char** argv) {
         board->setBootDip(static_cast<BYTE>(bootDip));
         machine.setDisplayCpuClockHz(2000000);
         machine.reset();
-        if(trace) {
+        if(trace || subTraceLimit) {
+            auto remaining=std::make_shared<unsigned>(0);
+            auto releaseCount=std::make_shared<unsigned>(0);
             // One ordered log for main FD05, sub AFE0 and shared RAM accesses.
             auto seq=std::make_shared<std::uint64_t>(0);
             auto logState=[&machine,seq](const char* event) {
@@ -133,8 +141,39 @@ int main(int argc,char** argv) {
                          <<" FC84=$"<<std::setw(2)<<unsigned(machine.displaySharedByte(4))
                          <<std::dec<<"\n";
             };
+            if(subTraceLimit) {
+                machine.setSubInstructionObserver([&machine,seq,remaining](std::uint16_t pc) {
+                    if(!*remaining)return;
+                    std::cerr<<"EV "<<++*seq<<" SUB STEP PC=$"<<std::hex<<std::uppercase
+                             <<std::setw(4)<<std::setfill('0')<<pc
+                             <<" AFE0=$"<<std::setw(2)<<unsigned(machine.subAfe0Status())
+                             <<" FD05=$"<<std::setw(2)<<unsigned(machine.mainFd05Status())
+                             <<" FC82=$"<<std::setw(2)<<unsigned(machine.displaySharedByte(2))
+                             <<std::dec<<"\n";
+                    --*remaining;
+                });
+                machine.setSubAfe0ReadObserver([seq,remaining](BYTE value,std::uint16_t pc) {
+                    if(!*remaining)return;
+                    std::cerr<<"EV "<<++*seq<<" SUB AFE0 R=$"<<std::hex<<std::uppercase
+                             <<std::setw(2)<<std::setfill('0')<<unsigned(value)
+                             <<" PC=$"<<std::setw(4)<<pc<<std::dec<<"\n";
+                });
+            }
             auto fd05Count=std::make_shared<unsigned>(0);
-            machine.setFd05WriteObserver([&machine,seq,fd05Count](BYTE value) {
+            machine.setFd05WriteObserver([&machine,seq,fd05Count,remaining,releaseCount,subTraceLimit](BYTE value) {
+                if(subTraceLimit && (value&0x80)==0 && *releaseCount<4) {
+                    ++*releaseCount;
+                    *remaining=subTraceLimit;
+                    std::cerr<<"EV "<<++*seq<<" FD05 RELEASE #"<<*releaseCount
+                             <<" subPC=$"<<std::hex<<std::uppercase
+                             <<std::setw(4)<<std::setfill('0')<<machine.displayCpuPc()
+                             <<" FD05=$"<<std::setw(2)<<unsigned(machine.mainFd05Status())
+                             <<" AFE0=$"<<std::setw(2)<<unsigned(machine.subAfe0Status())
+                             <<" FC82=$"<<std::setw(2)<<unsigned(machine.displaySharedByte(2))
+                             <<" FC83=$"<<std::setw(2)<<unsigned(machine.displaySharedByte(3))
+                             <<" FC84=$"<<std::setw(2)<<unsigned(machine.displaySharedByte(4))
+                             <<std::dec<<"\n";
+                }
                 if(++*fd05Count>256)return;
                 std::cerr<<"EV "<<++*seq<<" MAIN FD05 W=$"
                          <<std::hex<<std::uppercase<<std::setw(2)<<std::setfill('0')

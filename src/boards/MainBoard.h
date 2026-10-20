@@ -158,7 +158,6 @@ public:
         }
         if(reg==0x05) {
             subCpuControl_=value;
-            if(fd05WriteObserver_)fd05WriteObserver_(value);
             // Reference main-side FD05 bit 6 (CANCEL) requests the
             // display sub-CPU IRQ. The request remains pending until
             // the sub CPU acknowledges it by reading AFE5.
@@ -182,6 +181,7 @@ public:
                 forceInkey2Active_=false;
                 display_.releaseHalt();
             }
+            if(fd05WriteObserver_)fd05WriteObserver_(value);
             return true;
         }
         if(reg==0x04) {

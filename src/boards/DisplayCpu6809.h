@@ -2,6 +2,8 @@
 #include "DisplaySubsystem.h"
 #include "Sim09.h"
 #include <cstdint>
+#include <functional>
+#include <utility>
 
 // The display CPU is a separate MC6809 with its own address space, not
 // another main CPU card. All memory cycles reach the display subsystem.
@@ -21,6 +23,7 @@ public:
         nmiCycles_=0;
         display_.resetInterruptClock();
     }
+    void setInstructionObserver(std::function<void(std::uint16_t)> fn) {instructionObserver_=std::move(fn);}
     bool executeOne() {
         if(display_.haltRequested())return false;
         // Reference SubCpu::SimONE: interrupt priority IRQ, FIRQ, NMI.
@@ -38,6 +41,7 @@ public:
             nmiCycles_=0;
         }
         if(waitState()!=WaitState::Running)return false;
+        if(instructionObserver_)instructionObserver_(regs.r.w.PC);
         display_.beginCpuInstruction(regs.r.w.PC);
         try {
             SimONE();
@@ -53,4 +57,5 @@ public:
 private:
     std::uint64_t nmiCycles_=0;
     DisplaySubsystem& display_;
+    std::function<void(std::uint16_t)> instructionObserver_;
 };
