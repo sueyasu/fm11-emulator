@@ -330,6 +330,45 @@ int main(int argc,char** argv) {
                             machine.enqueueDisplayKeyCode(0x09); break;
                         case SDLK_ESCAPE:
                             machine.enqueueDisplayKeyCode(0x1b); break;
+                        // Source FM-11 KeyCode.h / ChildView::OnKeyDown.
+                        // Modifier flags are encoded in the 16-bit key code,
+                        // not delivered as separate key events.
+                        case SDLK_UP: case SDLK_DOWN:
+                        case SDLK_LEFT: case SDLK_RIGHT:
+                        case SDLK_INSERT: case SDLK_DELETE:
+                        case SDLK_HOME: case SDLK_PAGEUP:
+                        case SDLK_END: case SDLK_PAGEDOWN:
+                        case SDLK_F2: case SDLK_F3: case SDLK_F4:
+                        case SDLK_F5: case SDLK_F6: case SDLK_F7:
+                        case SDLK_F8: case SDLK_F9:
+                        case SDLK_PAUSE: {
+                            std::uint16_t code=0;
+                            switch(event.key.keysym.sym) {
+                            case SDLK_UP: code=0x0116; break;
+                            case SDLK_DOWN: code=0x0117; break;
+                            case SDLK_LEFT: code=0x0118; break;
+                            case SDLK_RIGHT: code=0x0119; break;
+                            case SDLK_INSERT: code=0x0110; break;
+                            case SDLK_PAGEUP: code=0x0111; break;
+                            case SDLK_END: code=0x0112; break;
+                            case SDLK_PAGEDOWN: code=0x0113; break;
+                            case SDLK_DELETE: code=0x0114; break;
+                            case SDLK_HOME: code=0x0115; break;
+                            case SDLK_PAUSE: code=0x0201; break;
+                            default:
+                                code=static_cast<std::uint16_t>(
+                                    0x0101+event.key.keysym.sym-SDLK_F1);
+                                break;
+                            }
+                            if(code!=0x0201) {
+                                if((event.key.keysym.mod & KMOD_SHIFT)!=0)
+                                    code|=0x0020;
+                                if((event.key.keysym.mod & KMOD_CTRL)!=0)
+                                    code|=0x0040;
+                            }
+                            machine.enqueueDisplayKeyCode(code);
+                            break;
+                        }
                         default: break;
                         }
                     }
