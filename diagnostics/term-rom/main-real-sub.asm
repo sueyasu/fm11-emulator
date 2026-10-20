@@ -29,10 +29,14 @@ init    clr     ,x+
         ldx     #prompt
         jsr     puts
 mainloop
+        lda     #$10
+        sta     $fc9a       ; stage: begin INKEY2
         lda     #CMDKEY
         sta     $fc90
         jsr     transact
         lbcs    failed
+        lda     #$11
+        sta     $fc9a       ; stage: INKEY2 returned
         lda     $fc83
         sta     $fc92
         lda     $fc84
@@ -76,6 +80,8 @@ mainloop
         jsr     putchar
         lbra    mainloop
 enter   jsr     putchar
+        lda     #$0a
+        jsr     putchar
         ldx     #prompt
         jsr     puts
         lbra    mainloop
@@ -108,7 +114,9 @@ putchar pshs    a,b
 transact
         pshs    a,b,x
         ldx     #$ffff
-readylp lda     PORT
+readylp lda     #$21
+        sta     $fc9a
+        lda     PORT
         sta     $fc91
         bpl     haltit
         leax    -1,x
@@ -118,7 +126,9 @@ readylp lda     PORT
 haltit  lda     #$80
         sta     PORT
         ldx     #$ffff
-haltlp  lda     PORT
+haltlp  lda     #$22
+        sta     $fc9a
+        lda     PORT
         sta     $fc91
         bmi     install
         leax    -1,x
@@ -140,7 +150,9 @@ inputinit
         clr     MAIL+4
 release clr     PORT
         ldx     #$ffff
-donelp  lda     PORT
+donelp  lda     #$23
+        sta     $fc9a
+        lda     PORT
         sta     $fc91
         bpl     done
         leax    -1,x
@@ -156,7 +168,7 @@ fail    sta     $fc96
         puls    a,b,x,pc
 
 greeting fcc    "FM11 ORIGINAL SUB ROM TEST"
-        fcb     $0d,0
+        fcb     $0d,$0a,0
 prompt  fcc     "TEST> "
         fcb     0
         fill    $00,$5ffe-*
