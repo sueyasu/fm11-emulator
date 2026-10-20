@@ -231,7 +231,6 @@ int main(int argc,char** argv) {
         auto lastFrame=lastLog-std::chrono::milliseconds(17);
         auto lastWaitTick=std::chrono::steady_clock::now();
         auto lastVsyncTick=lastWaitTick;
-        auto lastPeripheralTick=lastWaitTick;
         auto monitorCommand=[&](const std::string& line) {
             if(!mainBoard)return;
             std::istringstream stream(line);
@@ -286,7 +285,6 @@ int main(int argc,char** argv) {
                 else {
                     machine.reset();executed=0;serialPending.clear();
                     lastVsyncTick=std::chrono::steady_clock::now();
-                    lastPeripheralTick=lastVsyncTick;
                     std::cout<<"CPU reset.\n";showRegisters();
                 }
             } else if(cmd=="m"||cmd=="mem"||cmd=="mp") {
