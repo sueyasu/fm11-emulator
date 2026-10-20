@@ -590,7 +590,9 @@ BYTE Main6809Board::readIo(WORD address)
         return floppy_->registerValue(reg);
     }
     case 0x1b: {
-        if(floppyOffset_==256)return 0;
+        // Reference Fm11MiniFDCData returns the FD1B data latch when
+        // DRQ is clear. ROM checks this latch before issuing READ SECTOR.
+        if(floppyOffset_==256)return floppy_->registerValue(0x1b);
         const BYTE value=floppy_->transferRead();
         ++floppyOffset_;
         if(floppyOffset_==256)floppyStatus_=0;
