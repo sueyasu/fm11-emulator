@@ -73,6 +73,9 @@ public:
         return mainBoard_->displaySubsystem().readPhysicalVram(offset);
     }
     std::uint16_t displayCpuPc() const {return mainBoard_->displayCpu().pc();}
+    void setDisplaySharedTraceObserver(DisplaySubsystem::SharedTraceObserver observer) {
+        mainBoard_->displaySubsystem().setSharedTraceObserver(std::move(observer));
+    }
     void setDisplayIoWriteObserver(DisplaySubsystem::IoWriteObserver observer) {
         mainBoard_->displaySubsystem().setIoWriteObserver(std::move(observer));
     }

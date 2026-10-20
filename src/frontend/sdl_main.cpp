@@ -189,7 +189,7 @@ int main(int argc,char** argv) {
         if(traceInkey && mainBoard) {
             auto active=std::make_shared<bool>(false);
             auto count=std::make_shared<unsigned>(0);
-            machine.displaySubsystem().setSharedTraceObserver(
+            machine.setDisplaySharedTraceObserver(
                 [active,count](DisplaySubsystem::SharedTrace e) {
                     if(e.mainCpu && e.write && e.offset==2 && e.value==0x2d) {
                         if(*count>=64)return;
