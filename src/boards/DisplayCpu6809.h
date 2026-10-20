@@ -29,17 +29,6 @@ public:
         // Reference SubCpu::SimONE: interrupt priority IRQ, FIRQ, NMI.
         // The original clock threshold is 60000 at reset, recalibrated
         // dynamically by the Windows event loop. Use CPU cycles here.
-        // Reference SubCpu::SimONE: after AFE0 announces READY, the
-        // display CPU stays idle until IRQ, FIRQ or NMI is serviced.
-        if(display_.readyWait()) {
-            const bool interruptPresent=
-                display_.subIrqPending() || display_.subFirqPending();
-            const bool periodicNmi=
-                !display_.nmiMask() &&
-                nmiCycles_>=display_.nmiClockCycles();
-            if(!interruptPresent && !periodicNmi)return false;
-            display_.clearReadyWait();
-        }
         if(display_.subIrqPending())SimIRQ();
         if(display_.subFirqPending())SimFIRQ();
         if(!display_.nmiMask() && nmiCycles_>=display_.nmiClockCycles()) {
