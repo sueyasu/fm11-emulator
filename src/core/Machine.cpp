@@ -90,6 +90,7 @@ void Machine::reset()
     lastExecutionCycles_=0;
     measuredMainClockHz_=2000000;
     measuredMainAccesses_=0;
+    mainAccessClockFraction_=0;
     measuredElapsedMs_=0;
     timerElapsedMs_=0;
     serialTimerTicks_=0;
@@ -185,8 +186,21 @@ void Machine::executeOne()
         // No CPU-card bus conversion or interrupt controller is moved here.
         if (auto* cpu8088=dynamic_cast<Main8088Board*>(board))
             cpu8088->bus().refreshSystemIrq();
+        const auto* refCpu=dynamic_cast<Main6809Board*>(board);
+        const auto beforeAccesses=refCpu?refCpu->memoryAccessCount():0;
         board->cpu().executeOne();
         lastExecutionCycles_=board->cpu().lastExecutionCycles();
+        if(referenceWallClock_ && refCpu && measuredMainClockHz_) {
+            const auto elapsedAccesses=refCpu->memoryAccessCount()-beforeAccesses;
+            // Original MainCpu::SysClock counts memory reads and writes.
+            // Derive peripheral time from those accesses at the measured
+            // main CPU rate, preserving fractional nanoseconds.
+            constexpr std::uint64_t second=1000000000ULL;
+            const auto numerator=elapsedAccesses*second+mainAccessClockFraction_;
+            const auto ns=numerator/measuredMainClockHz_;
+            mainAccessClockFraction_=numerator%measuredMainClockHz_;
+            if(ns)mainBoard_->advanceTimeNanoseconds(ns);
+        }
         if(auto* cpu6809=dynamic_cast<Main6809Board*>(board)) {
             if(lastExecutionCycles_ && cpu6809->cpuClockHz()) {
                 if(!referenceWallClock_)
