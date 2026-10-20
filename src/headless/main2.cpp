@@ -134,16 +134,9 @@ int main(int argc,char** argv) {
                      <<" instructions="<<executed<<"\n";
         };
         while(!stopRequested) {
-            // Same reference timebase as fm11-sdl: PTM runs from memory
-            // accesses while the main CPU runs, and from steady_clock
-            // during SYNC/CWAI (or without a 6809 main CPU).
+            // Reference PTM uses the main CPU SysClock access counter;
+            // host elapsed time only drives the 16 ms notification.
             const auto now=std::chrono::steady_clock::now();
-            const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
-                now-lastClock).count();
-            lastClock=now;
-            if(running && main->cpuWaitState()!=CSim09::WaitState::Running &&
-               elapsed>0)
-                machine.advanceTimeNanoseconds(static_cast<std::uint64_t>(elapsed));
             if(running && now-lastVsync>=std::chrono::milliseconds(16)) {
                 const auto delta=now-lastVsync;
                 lastVsync+=std::chrono::milliseconds(16)*
