@@ -46,8 +46,8 @@ public:
             display_.processKeyCode();
             vsyncCalibrationMs_+=16;
         }
-        // The access-count trigger is independent of the 16 ms notification.
-        if(vsyncCalibrationMs_>=2000 || totalAccesses_>1000000) {
+        // Source SubCpu::SimONE checks both thresholds only on VSync.
+        if(vsync && (vsyncCalibrationMs_>=2000 || totalAccesses_>1000000)) {
                 const auto now=std::chrono::steady_clock::now();
                 const auto elapsed=std::chrono::duration_cast<std::chrono::milliseconds>(
                     now-lastNmiCalibration_).count();
