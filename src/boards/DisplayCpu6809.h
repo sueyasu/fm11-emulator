@@ -52,6 +52,9 @@ public:
             return false;
         }
         // Reference SubCpu::SimONE: interrupt priority IRQ, FIRQ, NMI.
+        const bool interruptRequest=display_.subIrqPending() ||
+            display_.subFirqPending() ||
+            (!display_.nmiMask() && nmiCycles_>=nmiThreshold_);
         // The original clock threshold is 60000 at reset, recalibrated
         // dynamically by the Windows event loop. Count memory accesses here.
         if(display_.subIrqPending())SimIRQ();
@@ -63,6 +66,16 @@ public:
             // until firmware happens to read AFED.
             SimNMI();
             nmiCycles_=0;
+        }
+        // Original Fm11Ram[0x105] suspends the sub CPU until an
+        // IRQ, FIRQ or NMI request is observed, even without SYNC/CWAI.
+        if(display_.subWaitForInterrupt()) {
+            const bool wake=interruptRequest;
+            if(!wake) {
+                GetMemByte(regs.r.w.PC);
+                return false;
+            }
+            display_.clearSubWaitForInterrupt();
         }
         if(waitState()!=WaitState::Running)return false;
         display_.beginCpuInstruction(regs.r.w.PC);
