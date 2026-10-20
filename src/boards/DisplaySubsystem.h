@@ -81,9 +81,23 @@ public:
     void beginCpuInstruction(std::uint16_t pc) {tracePc_=pc;traceCpu_=true; if(vsyncCount_>0)--vsyncCount_;}
     void endCpuInstruction() {traceCpu_=false;}
     // Hardware-produced latches; CPU writes to these addresses do not set them.
-    void signalSubFirq(BYTE status) {subFirqLatch_=status;}
+    void signalSubFirq(BYTE status) {subFirqLatch_=keyboardEnabled_?status:static_cast<BYTE>(status&~1u);}
     void setKeyboardLatches(BYTE status,BYTE data) {
+        if(!keyboardEnabled_)return;
         keyboardStatusLatch_=status;keyboardDataLatch_=data;
+    }
+    // Diagnostic switch: make the emulated keyboard physically absent.
+    // This suppresses startup codes as well as SDL input, without disabling
+    // unrelated sub CPU interrupts.
+    void setKeyboardEnabled(bool enabled) {
+        keyboardEnabled_=enabled;
+        if(!enabled) {
+            keyHead_=keyTail_=0;
+            keyboardStatusLatch_=keyboardDataLatch_=0;
+            subFirqLatch_&=static_cast<BYTE>(~1u);
+            mainKeyboardPending_=false;
+            mainKeyboardCode_=0;
+        }
     }
     // Source SubCpu.cpp SetKeyCode/GetKeyCode: interrupt-mode key queue.
     void setKeyboardMainMode(bool enabled) {
@@ -93,12 +107,14 @@ public:
     // transfers codes to FD00/FD01 and asserts FD03 bit 6. The CPU
     // acknowledges one code by reading FD01.
     bool takeMainKeyboardCode(std::uint16_t& code) {
+        if(!keyboardEnabled_)return false;
         if(!mainKeyboardPending_)return false;
         code=mainKeyboardCode_;
         mainKeyboardPending_=false;
         return true;
     }
     void enqueueKeyCode(std::uint16_t code) {
+        if(!keyboardEnabled_)return;
         const auto next=(keyTail_+1)%keyQueue_.size();
         if(next!=keyHead_) {keyQueue_[keyTail_]=code;keyTail_=next;}
     }
@@ -110,6 +126,7 @@ public:
         return pending;
     }
     void processKeyCode() const {
+        if(!keyboardEnabled_)return;
         if(keyHead_==keyTail_)return;
         const auto code=keyQueue_[keyHead_];
         // Reference GetKeyCode checks the destination's interrupt latch
@@ -134,7 +151,7 @@ public:
     void setSubIrq(bool pending) {subIrq_=pending;}
     bool subIrqPending() const {return subIrq_;}
     void requestSubIrq() {subIrq_=true;}
-    bool subFirqPending() const {return subFirqLatch_!=0;}
+    bool subFirqPending() const {return (subFirqLatch_ & (keyboardEnabled_?0xff:0xfe))!=0;}
     BYTE busyStatus() const {return busy_?0x80:0;}
     // Reference GetIoByte(AFE0) derives READY from the main FD05 bit 7,
     // rather than treating the last AFE0 write as an independent latch.
@@ -213,8 +230,9 @@ public:
         if(address<0xa000)return ram_[address-0x8000];
         // Reference SubCpu.cpp: these I/O latches clear on read.
         if(address==0xafe4)return std::exchange(subFirqLatch_,BYTE{0});
-        if(address==0xafec)return std::exchange(keyboardStatusLatch_,BYTE{0});
+        if(address==0xafec)return keyboardEnabled_?std::exchange(keyboardStatusLatch_,BYTE{0}):BYTE{0};
         if(address==0xafed) {
+            if(!keyboardEnabled_)return 0;
             const BYTE result=std::exchange(keyboardDataLatch_,BYTE{0});
             processKeyCode();
             return result;
@@ -391,6 +409,7 @@ private:
     BYTE dmaChannel0_=0;
     bool nmiMask_=true;
     bool keyboardMainMode_=false;
+    bool keyboardEnabled_=true;
     mutable bool mainKeyboardPending_=false;
     mutable std::uint16_t mainKeyboardCode_=0;
     mutable bool subIrq_=false;
