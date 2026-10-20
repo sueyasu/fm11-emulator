@@ -74,7 +74,7 @@ int main(int argc,char** argv) {
         unsigned bootDip=0x9f;
         bool high=false, testPattern=false, traceBoot=false, diagnostics=false;
         bool noKeyboard=false,keyboardOffAfterInit=false;
-        std::uint64_t instructions=10000;
+        std::uint64_t instructions=2000;
         for(int i=1;i<argc;++i) {
             const std::string arg=argv[i];
             if(arg=="--help"){usage();return 0;}
@@ -318,8 +318,10 @@ int main(int argc,char** argv) {
                 lastVsyncTick=vsyncNow;
             } else if(vsyncNow-lastVsyncTick>=std::chrono::milliseconds(16)) {
                 const auto elapsed=vsyncNow-lastVsyncTick;
-                lastVsyncTick+=std::chrono::milliseconds(16)*
-                    (elapsed/std::chrono::milliseconds(16));
+                const auto ticks=elapsed/std::chrono::milliseconds(16);
+                lastVsyncTick+=std::chrono::milliseconds(16)*ticks;
+                // Windows WM_TIMER is coalesced; one notification is
+                // dispatched, even if multiple intervals elapsed.
                 machine.signalDisplayVsync();
             }
             if(monitorInputOpen) {
