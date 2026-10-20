@@ -151,6 +151,10 @@ void Machine::advanceDisplayTime(std::uint64_t ns)
     displayCycleCredit_+=static_cast<std::int64_t>(cycles);
     while(displayCycleCredit_>0) {
         if(!sub.executeOne()) {
+            // The NMI timer continues while the display CPU waits in
+            // SYNC/CWAI, but not while the main CPU asserts HALT.
+            if(!mainBoard_->displaySubsystem().haltRequested())
+                sub.advanceIdleCycles(static_cast<std::uint64_t>(displayCycleCredit_));
             displayCycleCredit_=0;
             break;
         }
