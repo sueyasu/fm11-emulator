@@ -65,7 +65,6 @@ int main(int argc,char** argv) {
         bool floppyD88=false;
         unsigned floppyDrive=0;
         unsigned bootDip=0x9f;
-        bool bootDipExplicit=false;
         bool high=false, testPattern=false, traceBoot=false, diagnostics=false;
         std::uint64_t instructions=10000;
         for(int i=1;i<argc;++i) {
@@ -83,7 +82,6 @@ int main(int argc,char** argv) {
                     const auto v=parseCount(argv[++i]);
                     if(v>255)throw std::invalid_argument("--boot-dip must be a byte");
                     bootDip=static_cast<unsigned>(v);
-                    bootDipExplicit=true;
                 }
                 else if(arg=="--floppy-drive") {
                     const auto d=parseCount(argv[++i]);
@@ -119,12 +117,10 @@ int main(int argc,char** argv) {
                     if(floppyD88)mainBoard->loadFloppyD88(image);
                     else mainBoard->loadFloppy2d(image);
                     mainBoard->setFloppyDrive(floppyDrive);
-                    // Do not try an empty 2HD controller before the 2D boot.
-                    if(!bootDipExplicit)bootDip=0xdf;
-                    mainBoard->setBootDip(static_cast<BYTE>(bootDip));
                 }
             }
         }
+        if(mainBoard)mainBoard->setBootDip(static_cast<BYTE>(bootDip));
         if(!floppyPath.empty() && mainBoard==nullptr)
             throw std::invalid_argument("floppy image requires --main-rom");
         machine.setDisplayCpuClockHz(testPattern?0:2000000);
