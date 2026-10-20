@@ -4,11 +4,11 @@
 
 // Verify both processors see precisely one 128-byte shared command buffer.
 int main() {
-    Machine machine;
-    auto cpu=std::make_unique<Main6809Board>(CpuType::MC6809);
-    auto* main=cpu.get();
-    machine.addBoard(std::move(cpu));
-    auto& sub=machine.mainBoard().displaySubsystem();
+    auto shared=std::make_shared<MainBoard>();
+    Main6809Board cpu(CpuType::MC6809);
+    cpu.setMainBoard(shared);
+    auto* main=&cpu;
+    auto& sub=shared->displaySubsystem();
     for(unsigned i=0;i<128;++i) {
         const BYTE first=static_cast<BYTE>(i^0x5a);
         main->writeCpu(static_cast<WORD>(0xfc80+i),first);
