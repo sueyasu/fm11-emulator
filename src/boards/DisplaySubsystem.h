@@ -47,6 +47,7 @@ public:
         mainKeyboardPending_=false;
         mainKeyboardCode_=0;
         startupKeyInLatch_=false;
+        startupKeyDelivered_=false;
         nmiMask_=true;
         nmiClockCycles_=60000;
         subIrq_=false;
@@ -102,6 +103,14 @@ public:
         }
     }
     void disableKeyboardAfterStartupKey(bool enabled) {disableAfterStartupKey_=enabled;}
+    bool keyboardEnabled() const {return keyboardEnabled_;}
+    bool keyboardAutoDisableArmed() const {return disableAfterStartupKey_;}
+    bool keyboardStartupDelivered() const {return startupKeyDelivered_;}
+    std::size_t keyboardQueueDepth() const {
+        return (keyTail_+keyQueue_.size()-keyHead_)%keyQueue_.size();
+    }
+    BYTE keyboardFirqLatch() const {return subFirqLatch_&1u;}
+
     // Source SubCpu.cpp SetKeyCode/GetKeyCode: interrupt-mode key queue.
     void setKeyboardMainMode(bool enabled) {
         keyboardMainMode_=enabled;
@@ -143,6 +152,7 @@ public:
         keyboardStatusLatch_=static_cast<BYTE>(code>>8);
         keyboardDataLatch_=static_cast<BYTE>(code);
         startupKeyInLatch_=(code==0x0050);
+        if(startupKeyInLatch_)startupKeyDelivered_=true;
         if(keyboardMainMode_) {
             mainKeyboardCode_=code;
             mainKeyboardPending_=true;
@@ -421,6 +431,7 @@ private:
     bool keyboardEnabled_=true;
     bool disableAfterStartupKey_=false;
     mutable bool startupKeyInLatch_=false;
+    mutable bool startupKeyDelivered_=false;
     mutable bool mainKeyboardPending_=false;
     mutable std::uint16_t mainKeyboardCode_=0;
     mutable bool subIrq_=false;
