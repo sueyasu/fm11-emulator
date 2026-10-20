@@ -34,6 +34,7 @@ public:
     void reset() {
         haltRequested_=false;
         busy_=true;
+        readyWait_=false;
         if(videoFlags_!=0)markVideoChanged();
         videoFlags_=0;
         vsyncCount_=0;
@@ -62,6 +63,8 @@ public:
     void requestHalt() {haltRequested_=true;}
     void releaseHalt() {haltRequested_=false;}
     bool haltRequested() const {return haltRequested_;}
+    bool readyWait() const {return readyWait_;}
+    void clearReadyWait() {readyWait_=false;}
 
     void loadRom(const RomImage& image) {rom_=image;}
     void loadAnkRom(const AnkRomImage& image) {ankRom_=image;markVideoChanged();}
@@ -197,8 +200,12 @@ public:
         if(address<0xa000)return ram_[address-0x8000];
         // Reference SubCpu.cpp: these I/O latches clear on read.
         if(address==0xafe4)return std::exchange(subFirqLatch_,BYTE{0});
-        if(address==0xafec)return keyboardStatusLatch_;
-        if(address==0xafed)return keyboardDataLatch_;
+        if(address==0xafec)return std::exchange(keyboardStatusLatch_,BYTE{0});
+        if(address==0xafed) {
+            const BYTE result=std::exchange(keyboardDataLatch_,BYTE{0});
+            processKeyCode();
+            return result;
+        }
         if(address==0xafe5) {
             subIrq_=false; // Original GetIoByte: clear sub-IRQ request on read.
             return 0;
@@ -274,6 +281,7 @@ public:
                     nmiMask_=false;
                 }
                 busy_=(value&1u)==0;
+                if(!busy_)readyWait_=true;
             }
             if(address==0xafe1) {
                 gvuControl_=value;
@@ -367,6 +375,7 @@ private:
     std::function<void()> attentionSink_;
     bool haltRequested_=false;
     bool busy_=true;
+    bool readyWait_=false;
     std::array<BYTE,0x1000> ioRam_{};
     BYTE dmaChannel0_=0;
     bool nmiMask_=true;
