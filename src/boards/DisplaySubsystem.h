@@ -60,7 +60,8 @@ public:
         gvuControl_=gvuAddressHigh_=0;
         displayAddress_=0;displayAddressHigh_=0;crtcIndex_=0;
         crtcRegisters_.fill(0);
-        crtcColumns_=crtcRows_=charWidth_=charHeight_=0;
+        // Original SubCpu::SimRESET starts in 80x25, 8x16 text mode.
+        crtcColumns_=80;crtcRows_=25;charWidth_=8;charHeight_=16;
         crtcStart_=cursorX_=cursorY_=cursorStart_=cursorEnd_=cursorDisplay_=0;
         // ROM contents and display memory survive a CPU reset. Hardware
         // power-on clearing is a separate future operation.
@@ -494,9 +495,10 @@ private:
             }
             break;
         case 13:
-            crtcStart_=((unsigned(crtcRegisters_[12])<<9)|
-                        (unsigned(crtcRegisters_[13])<<1))&0x7ff;
-            vsyncCount_=100;
+            // SubCRTC computes DumStaAdr; OnDraw converts it to a byte offset.
+            crtcStart_=((((unsigned(crtcRegisters_[12])<<9)|
+                           (unsigned(crtcRegisters_[13])<<1))&0x7ff)*2);
+            vsyncCount_=1000;
             break;
         case 15:
             if(crtcColumns_) {
