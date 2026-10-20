@@ -37,9 +37,9 @@ void usage() {
     std::cout<<"usage: fm11-headless2 --main-rom FILE [--rom FILE]"
                 " [--floppy-d88 FILE | --floppy2d FILE] [--floppy-drive 0..3]"
                 " [--boot-dip BYTE] [--cycles N] [--instructions LIMIT]"
-                " [--no-keyboard] [--ank-rom FILE] [--high] [--trace-boot] [--diagnostics]\\n"
-                "  Same Machine CPU interleave, 16ms timer and PTM clocking as fm11-sdl.\\n"
-                "  Monitor on stdin; guest UART on a separate /dev/pts/N.\\n";
+                " [--no-keyboard] [--ank-rom FILE] [--high] [--trace-boot] [--diagnostics]\n"
+                "  Same Machine CPU interleave, 16ms timer and PTM clocking as fm11-sdl.\n"
+                "  Monitor on stdin; guest UART on a separate /dev/pts/N.\n";
 }
 }
 int main(int argc,char** argv) {
@@ -105,8 +105,8 @@ int main(int argc,char** argv) {
             cfmakeraw(&settings);
             tcsetattr(slave,TCSANOW,&settings);
         }
-        std::cout<<"Guest serial: "<<path<<"\\n"
-                 <<"Monitor: c/continue, stop, s/step, r/regs, q/quit\\n";
+        std::cout<<"Guest serial: "<<path<<"\n"
+                 <<"Monitor: c/continue, stop, s/step, r/regs, q/quit\n";
         std::signal(SIGINT,stop);
         std::signal(SIGTERM,stop);
         bool running=true,inputOpen=true;
@@ -129,7 +129,7 @@ int main(int argc,char** argv) {
                      <<main->cpu().pc()<<" sub PC=$"<<std::setw(4)
                      <<machine.displayCpuPc()<<std::dec<<std::setfill(' ')
                      <<" FD05="<<unsigned(machine.mainSubCpuControl())
-                     <<" instructions="<<executed<<"\\n";
+                     <<" instructions="<<executed<<"\n";
         };
         while(!stopRequested) {
             // Same reference timebase as fm11-sdl: PTM runs from memory
@@ -159,7 +159,7 @@ int main(int argc,char** argv) {
                 const ssize_t n=read(STDIN_FILENO,buf,sizeof(buf));
                 if(n<=0)inputOpen=false;
                 else for(ssize_t i=0;i<n;++i) {
-                    if(buf[i]=='\\n'||buf[i]=='\\r') {
+                    if(buf[i]=='\n'||buf[i]=='\r') {
                         std::istringstream cmd(line);
                         std::string action;cmd>>action;line.clear();
                         if(action=="q"||action=="quit")stopRequested=1;
@@ -168,8 +168,8 @@ int main(int argc,char** argv) {
                         else if(action=="s"||action=="step") {
                             running=false;machine.executeOne();++executed;regs();
                         } else if(action=="r"||action=="regs")regs();
-                        else if(!action.empty())std::cout<<"unknown command\\n";
-                    } else if(buf[i]==127||buf[i]=='\\b') {
+                        else if(!action.empty())std::cout<<"unknown command\n";
+                    } else if(buf[i]==127||buf[i]=='\b') {
                         if(!line.empty())line.pop_back();
                     } else if(line.size()<1024)line+=buf[i];
                 }
@@ -185,7 +185,7 @@ int main(int argc,char** argv) {
                     if(limit && executed>=limit){running=false;break;}
                     if(trace && executed<64)
                         std::cerr<<"main step="<<executed<<" PC=$"<<std::hex
-                                 <<main->cpu().pc()<<std::dec<<"\\n";
+                                 <<main->cpu().pc()<<std::dec<<"\n";
                     machine.executeOne();
                     ++executed;
                 }
@@ -199,7 +199,7 @@ int main(int argc,char** argv) {
         close(master);
         return 0;
     } catch(const std::exception& ex) {
-        std::cerr<<"fm11-headless2: "<<ex.what()<<'\\n';
+        std::cerr<<"fm11-headless2: "<<ex.what()<<'\n';
         return 1;
     }
 }
