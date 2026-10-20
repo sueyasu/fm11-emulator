@@ -94,6 +94,7 @@ void Machine::reset()
     mainTotalAccesses_=0;
     serialTimerTicks_=0;
     referenceTimerPending_=false;
+    referenceVsyncClockMs_=0;
     lastClockCalibration_=std::chrono::steady_clock::time_point{};
     displayVsyncElapsedNs_=0;
     synchronizeFd05Selection();
@@ -111,6 +112,7 @@ void Machine::serviceReferenceMainTimer()
 {
     if(!referenceTimerPending_)return;
     referenceTimerPending_=false;
+    referenceVsyncClockMs_+=16;
     const auto now=std::chrono::steady_clock::now();
     if(lastClockCalibration_==std::chrono::steady_clock::time_point{})
         lastClockCalibration_=now;
@@ -120,7 +122,7 @@ void Machine::serviceReferenceMainTimer()
         if(auto* cpu6809=dynamic_cast<Main6809Board*>(board.get())) {
             const auto accesses=cpu6809->memoryAccessCount();
             if(accesses>=measuredMainAccesses_ &&
-               (elapsed>=2000 || accesses-measuredMainAccesses_>1000000)) {
+               (referenceVsyncClockMs_>2000 || accesses-measuredMainAccesses_>1000000)) {
                 const auto delta=accesses-measuredMainAccesses_;
                 if(elapsed>0 && delta) {
                     mainTotalClockMs_+=static_cast<long double>(elapsed);
@@ -134,6 +136,7 @@ void Machine::serviceReferenceMainTimer()
                     }
                 }
                 measuredMainAccesses_=accesses;
+                referenceVsyncClockMs_=0;
                 lastClockCalibration_=now;
             }
         }
