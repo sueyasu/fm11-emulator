@@ -108,6 +108,8 @@ public:
         return pending;
     }
     void processKeyCode() const {
+        if(keyHead_!=keyTail_ && keyQueue_[keyHead_]==0x0201 && breakSink_)
+            breakSink_();
         if(keyboardMainMode_ || keyHead_==keyTail_ || (subFirqLatch_&1))return;
         const auto code=keyQueue_[keyHead_];
         keyboardStatusLatch_=static_cast<BYTE>(code>>8);
@@ -172,6 +174,7 @@ public:
     // Handshake output to the main board. The physical sub-I/O trigger
     // remains unassigned until its register decode is confirmed.
     void setAttentionSink(std::function<void()> sink) {attentionSink_=std::move(sink);}
+    void setBreakSink(std::function<void()> sink) {breakSink_=std::move(sink);}
     void setMainEventControlReader(std::function<BYTE()> reader) {mainEventControlReader_=std::move(reader);}
     void notifyMainAttention() {if(attentionSink_)attentionSink_();}
     // The top 128 bytes of sub RAM also appear at main $FC80-$FCFF.
@@ -385,6 +388,7 @@ private:
     std::uint16_t displayAddress_=0;
     std::array<BYTE,17> crtcRegisters_{};
     std::function<BYTE()> mainEventControlReader_;
+    std::function<void()> breakSink_;
     std::size_t kanjiBase_=0;
     mutable unsigned kanjiLeft_=32,kanjiRight_=32;
     std::array<BYTE,16> rtcDigits_{};
