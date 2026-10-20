@@ -20,6 +20,9 @@ public:
         display_.setBreakSink([this](){signalBreak();});
         display_.setMainEventControlReader([this](){return eventControl_;});
         display_.setMainEventControlClearer([this](){eventControl_=0;});
+        display_.setSubDmaRegisterWriter([this](unsigned offset,BYTE value) {
+            if(offset<subSharedIo_.size())subSharedIo_[offset]=value;
+        });
     }
     MainBoard(const MainBoard&)=delete;
     MainBoard& operator=(const MainBoard&)=delete;
@@ -64,6 +67,7 @@ public:
         displayControl_=0;
         for(unsigned i=0;i<8;++i)displayPalette_[i]=static_cast<BYTE>(i);
         display_.reset();
+        subSharedIo_.fill(0);
     }
 
     // One common fractional phase, in billionths of a PTM tick.
@@ -115,6 +119,7 @@ public:
     // The physical PTM, USART and FDC parameter registers live here.
     bool readIo(std::uint16_t address, BYTE& value) {
         const unsigned reg=address&0xff;
+        if(reg>=0x20 && reg<=0x22) {value=subSharedIo_[reg-0x20];return true;}
         if(reg==0x05) {value=subCpuStatus();return true;}
         if(reg==0x04) {
             value=eventStatus_;
@@ -137,6 +142,10 @@ public:
     }
     bool writeIo(std::uint16_t address,BYTE value) {
         const unsigned reg=address&0xff;
+        if(reg>=0x20 && reg<=0x22) {
+            subSharedIo_[reg-0x20]=value;
+            return true;
+        }
         if(reg==0xa0) {
             displayControl_=value;
             return true;
@@ -178,6 +187,7 @@ private:
     BYTE subCpuControl_=0;
     BYTE displayControl_=0;
     std::array<BYTE,8> displayPalette_{{0,1,2,3,4,5,6,7}};
+    std::array<BYTE,3> subSharedIo_{}; // Fm11Ram[D20-D22], also sub AFF0-AFF2 writes
     BYTE eventStatus_=0;
     BYTE eventControl_=0;
     BYTE externalIrqLines_=0;
