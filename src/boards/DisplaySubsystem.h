@@ -36,6 +36,7 @@ public:
         if(videoFlags_!=0)markVideoChanged();
         videoFlags_=0;
         vsyncCount_=0;
+        vsyncEventPending_=false;
         vsyncMode_=0;
         vsyncStatus_=0x40;
         subIoRam_.fill(0);
@@ -95,6 +96,13 @@ public:
     void enqueueKeyCode(std::uint16_t code) {
         const auto next=(keyTail_+1)%keyQueue_.size();
         if(next!=keyHead_) {keyQueue_[keyTail_]=code;keyTail_=next;}
+    }
+    void signalVsyncEvent() {vsyncEventPending_=true;}
+    bool consumeVsyncEvent() {
+        const bool pending=vsyncEventPending_;
+        vsyncEventPending_=false;
+        if(pending)vsyncCount_=1000;
+        return pending;
     }
     void processKeyCode() const {
         if(keyboardMainMode_ || keyHead_==keyTail_ || (subFirqLatch_&1))return;
@@ -315,6 +323,7 @@ private:
     mutable std::size_t keyHead_=0,keyTail_=0;
     mutable BYTE subFirqLatch_=0,keyboardStatusLatch_=0,keyboardDataLatch_=0;
     BYTE videoFlags_=0;
+    bool vsyncEventPending_=false;
     unsigned vsyncCount_=0;
     BYTE vsyncMode_=0,vsyncStatus_=0x40;
     std::array<BYTE,4> subIoRam_{};
