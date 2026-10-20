@@ -45,6 +45,7 @@ public:
         // Reference SubCpu::SimONE: VSync/GetKeyCode, HALT, IRQ,
         // FIRQ, NMI, Fm11Ram[105] wait gate, then one instruction.
         if(display_.consumeVsyncEvent())display_.processKeyCode();
+        display_.tickSubInstruction();
         regs.HD=0;
         if(display_.haltRequested()) {
             regs.HD|=010;
