@@ -651,6 +651,10 @@ BYTE Main6809Board::readIo(WORD address)
         return ioRegisters_[reg];
     }
     default:
+        if(reg>=0x20 && reg<=0x22 && mainBoard_) {
+            BYTE value=0;
+            if(mainBoard_->readIo(address,value))return value;
+        }
         // Device-specific side effects are introduced with each device. Until
         // then, retain a side-effect-free register backing for the FDxx aperture.
         return ioRegisters_[reg];
@@ -926,6 +930,8 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         } else {
             ioRegisters_[reg] = value;
         }
+        if (reg>=0x20 && reg<=0x22 && mainBoard_)
+            mainBoard_->writeIo(address,value);
         if (reg == 0x55 || reg == 0xc2)
             mainIrqStatus();
         break;
