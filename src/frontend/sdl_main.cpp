@@ -314,23 +314,9 @@ int main(int argc,char** argv) {
         };
         if(mainBoard)std::cout<<"fm11> "<<std::flush;
         while(running) {
-            const auto peripheralNow=std::chrono::steady_clock::now();
-            if(paused) {
-                lastPeripheralTick=peripheralNow;
-            } else {
-                const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    peripheralNow-lastPeripheralTick).count();
-                lastPeripheralTick=peripheralNow;
-                // Main CPU running: SysClock memory accesses clock the PTM.
-                // In SYNC/CWAI the reference counter cannot advance, so
-                // host time must advance the independent timer until IRQ.
-                const bool cpuWaiting=mainBoard &&
-                    mainBoard->cpuWaitState()!=CSim09::WaitState::Running;
-                const bool no6809Active=
-                    dynamic_cast<Main6809Board*>(machine.activeBoard())==nullptr;
-                if(elapsed>0 && (cpuWaiting || no6809Active))
-                    machine.advanceTimeNanoseconds(static_cast<std::uint64_t>(elapsed));
-            }
+            // In reference mode the main SimONE memory accesses, including
+            // wait-state dummy reads, advance SysClock. Host time only
+            // drives the 16 ms VSync notification.
             // Display VSync is sourced from real elapsed time in SDL only.
             // Do not feed the same event from guest-time advancement.
             const auto vsyncNow=std::chrono::steady_clock::now();
