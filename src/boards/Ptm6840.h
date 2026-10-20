@@ -32,11 +32,13 @@ public:
         cpuClock_=2000000;
         status=0;
         irqAcknowledged=false;
+        irqLatch_=false;
         channels.fill(Channel{});
         latchHigh.fill(0);
         counterLowLatch.fill(0);
     }
-    bool irqRequest() const {return (status&0x80)!=0 && !irqAcknowledged;}
+    // FY($03) bit 0 is separate from FD($39) status bit 7.
+    bool irqRequest() const {return irqLatch_;}
     void refreshIrq() {syncChannels();}
 
     // MainCpu::GetMemByte/SetMemByte increment SysClock; MainCpu::SimONE
@@ -44,7 +46,9 @@ public:
     void advanceReferenceAccesses(std::uint64_t accesses,std::uint64_t cpuClock) {
         if(cpuClock)cpuClock_=cpuClock;
         sysClock_+=accesses;
-        if(ptmFast_!=0 && ptmFast_<sysClock_)interval();
+        if(ptmFast_!=0 &&
+           (ptmFast_<0 || static_cast<std::uint64_t>(ptmFast_)<sysClock_))
+            interval();
     }
     // Compatibility for the other board-timebase users. They do not use
     // the reference SysClock path but can still drive the counters.
@@ -55,7 +59,8 @@ public:
         if(port==0x39) {
             interval(); // Fm11PTM(2) before sampling the status register
             const BYTE result=status;
-            irqAcknowledged=true; // FY03/FD03 acknowledgement
+            irqAcknowledged=true;
+            irqLatch_=false; // FY03/FD03 acknowledgement
             return result;
         }
         if(port<0x3a || port>0x3f)return 0xff;
@@ -89,12 +94,14 @@ public:
                 sysClock_=0;
                 status=0;
                 irqAcknowledged=false;
+                irqLatch_=false;
             } else {
                 status=static_cast<BYTE>((status&~(1u<<no))&0x7f);
                 bool irq=false;
                 for(unsigned n=0;n<3;++n)
                     irq|=(status&(1u<<n)) && (ptmReg_[n]&0x40);
                 if(irq)status|=0x80;
+                else irqLatch_=false;
                 switch(ptmReg_[no]&0x38) {
                 case 0x10: case 0x30:
                     start(no);
@@ -134,7 +141,9 @@ public:
     }
     std::uint64_t nextEventNanoseconds() const {
         if(!ptmFast_)return UINT64_MAX;
-        const auto remaining=ptmFast_>=sysClock_?ptmFast_-sysClock_+1:1;
+        const std::uint64_t remaining=(ptmFast_>0 &&
+            static_cast<std::uint64_t>(ptmFast_)>=sysClock_)
+            ?static_cast<std::uint64_t>(ptmFast_)-sysClock_+1:1;
         const auto clock=cpuClock_?cpuClock_:2000000ULL;
         const auto seconds=remaining/clock;
         const auto frac=remaining%clock;
@@ -152,6 +161,7 @@ private:
     std::uint64_t sysClock_=0;
     std::int64_t ptmFast_=0;
     std::uint64_t cpuClock_=2000000;
+    bool irqLatch_=false;
     std::int64_t period(unsigned no) const {
         const auto divisor=(ptmReg_[no]&0x02)?ptmHz*200:ptmHz;
         return static_cast<std::int64_t>(
@@ -174,6 +184,7 @@ private:
     }
     void interval() {
         ptmFast_=0;
+        irqLatch_=false; // Fm11PTM(2) first clears FY($03) bit 0
         // Preserve the source's loop bounds and (no & 3) status routing.
         for(unsigned no=1;no<6;++no) {
             if((ptmReg_[no]&0x100)==0)continue;
@@ -181,7 +192,10 @@ private:
             if(ptmClock_[no]<0) {
                 status|=static_cast<BYTE>(1u<<(no&3));
                 irqAcknowledged=false;
-                if(ptmReg_[no&3]&0xc0)status|=0x80;
+                if(ptmReg_[no&3]&0xc0) {
+                    status|=0x80;
+                    irqLatch_=true;
+                }
                 if((ptmReg_[no&3]&0x28)==0) {
                     ptmInit_[no]=period(no);
                     ptmClock_[no]+=ptmInit_[no];
