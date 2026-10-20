@@ -56,8 +56,8 @@ public:
         if(forceInkey2Active_)return 0; // synthetic INKEY 2 completed
         return (display_.haltRequested() || display_.busyStatus()!=0)?0x80:0;
     }
-    void setForceInkey2Empty(bool enabled) {
-        forceInkey2Empty_=enabled;
+    void setHleInkey2(bool enabled) {
+        hleInkey2_=enabled;
         forceInkey2Active_=false;
         inkey2HostQueue_.clear();
     }
@@ -163,7 +163,7 @@ public:
             if(value&0x80) {
                 forceInkey2Active_=false;
                 display_.requestHalt();
-            } else if(forceInkey2Empty_ && display_.haltRequested() &&
+            } else if(hleInkey2_ && display_.haltRequested() &&
                       display_.readShared(2)==0x2d) {
                 // Diagnostic trap: deliver one SDL key, or $8000 when empty.
                 // Leave the sub-CPU halted and report FD05 READY as before.
@@ -202,7 +202,7 @@ private:
     DisplaySubsystem display_;
     DisplayCpu6809 displayCpu_{display_};
     BYTE subCpuControl_=0;
-    bool forceInkey2Empty_=false;
+    bool hleInkey2_=false;
     bool forceInkey2Active_=false;
     std::deque<std::uint16_t> inkey2HostQueue_;
     BYTE displayControl_=0;
