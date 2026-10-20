@@ -55,7 +55,7 @@ std::uint64_t parseCount(const std::string& text) {
 void usage() {
     std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE]\n"
              <<"  ROM defaults to external/roms/display6809.bin\n"
-             <<"  ESC quit; SPACE pause/resume; F1 switch 200/400-line view\n"
+             <<"  F12 quit; F10 pause/resume; F1 switch 200/400-line view\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
 }
 }
@@ -161,8 +161,24 @@ int main(int argc,char** argv) {
                     }
                 }
                 if(event.type==SDL_KEYDOWN && !event.key.repeat) {
-                    if(event.key.keysym.sym==SDLK_ESCAPE)running=false;
-                    if(event.key.keysym.sym==SDLK_SPACE)paused=!paused;
+                    if(event.key.keysym.sym==SDLK_F12)running=false;
+                    if(event.key.keysym.sym==SDLK_F10)paused=!paused;
+                    // SDL_TEXTINPUT provides printable keys (including Space).
+                    // Control characters do not generate SDL_TEXTINPUT and
+                    // must be sent on KEYDOWN to reach OS-9 /Term.
+                    if(!paused && !testPattern) {
+                        switch(event.key.keysym.sym) {
+                        case SDLK_RETURN: case SDLK_KP_ENTER:
+                            machine.enqueueDisplayKeyCode(0x0d); break;
+                        case SDLK_BACKSPACE:
+                            machine.enqueueDisplayKeyCode(0x08); break;
+                        case SDLK_TAB:
+                            machine.enqueueDisplayKeyCode(0x09); break;
+                        case SDLK_ESCAPE:
+                            machine.enqueueDisplayKeyCode(0x1b); break;
+                        default: break;
+                        }
+                    }
                     if(event.key.keysym.sym==SDLK_F1) {
                         high=!high;
                         ui.setMode(high);
