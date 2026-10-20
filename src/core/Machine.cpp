@@ -110,7 +110,8 @@ void Machine::signalReferenceTimer(std::uint64_t elapsedMs)
 
 void Machine::serviceReferenceMainTimer()
 {
-    const bool vsync=referenceTimerPending_;
+    if(!referenceTimerPending_)return;
+    const bool vsync=true;
     if(vsync) {
         referenceTimerPending_=false;
         referenceVsyncClockMs_+=16;
