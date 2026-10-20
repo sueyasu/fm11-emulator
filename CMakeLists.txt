@@ -297,6 +297,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(machine_ptm_time PRIVATE fm11_core)
     add_test(NAME machine_ptm_time COMMAND machine_ptm_time)
 
+    add_executable(display_sub_control_handshake tests/display_sub_control_handshake.cpp)
+    target_link_libraries(display_sub_control_handshake PRIVATE fm11_core)
+    add_test(NAME display_sub_control_handshake COMMAND display_sub_control_handshake)
+
     add_executable(machine_display_shared_ram tests/machine_display_shared_ram.cpp)
     target_link_libraries(machine_display_shared_ram PRIVATE fm11_core)
     add_test(NAME machine_display_shared_ram COMMAND machine_display_shared_ram)
