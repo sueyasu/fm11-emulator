@@ -46,6 +46,7 @@ public:
     void advanceReferenceAccesses(std::uint64_t accesses,std::uint64_t cpuClock) {
         if(cpuClock)cpuClock_=cpuClock;
         sysClock_+=accesses;
+        // Equivalent of the SimONE pre-instruction PtmFast/SysClock test.
         if(ptmFast_!=0 &&
            (ptmFast_<0 || static_cast<std::uint64_t>(ptmFast_)<sysClock_))
             interval();
@@ -124,7 +125,7 @@ public:
             std::uint32_t count=(std::uint32_t(registers_[port-1-0x38])<<8)|value;
             if(count==0)count=0x10000;
             if(no==2 && (ptmReg_[no]&1))count*=8;
-            ptmCtr_[no]=count;
+            ptmCtr_[no]=static_cast<WORD>(count);
             ptmClock_[no]=ptmInit_[no]=period(no);
             if((ptmReg_[no]&0x18)==0 || (ptmReg_[no]&0x100))
                 start(no);
@@ -132,7 +133,7 @@ public:
             const unsigned slot=no+(port&1)*3;
             std::uint32_t count=value?value:0x100;
             if(no==2 && (ptmReg_[no]&1))count*=8;
-            ptmCtr_[slot]=count;
+            ptmCtr_[slot]=static_cast<WORD>(count);
             ptmClock_[slot]=ptmInit_[slot]=period(slot);
             if((ptmReg_[no]&0x18)==0 || (ptmReg_[slot]&0x100))
                 start(slot);
