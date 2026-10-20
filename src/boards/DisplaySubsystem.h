@@ -258,7 +258,8 @@ public:
     std::uint64_t sharedWriteRevision() const {return sharedWriteRevision_;}
     BYTE readMemory(std::uint16_t address) const {
         if(address<0x8000) {
-            if(!gvuEnabled_)return vram_[vramWindow_*kVramSize+address];
+            // Reference SubCpu::GetMemByte always uses GVUpg/GVUad/GVUct,
+            // including before the first AFE1 register write.
             return vram_[gvuPlane_*0x10000+graphicsAddress(address)];
         }
         if(address>=0x9f80 && address<=0x9fff)
@@ -323,7 +324,7 @@ public:
     }
     void writeMemory(std::uint16_t address,BYTE value) {
         if(address<0x8000) {
-            if(gvuEnabled_) {
+            {
                 const auto offset=graphicsAddress(address);
                 for(unsigned plane=0;plane<3;++plane) {
                     const unsigned writeMask=1u<<plane;
@@ -335,12 +336,6 @@ public:
                         vram_[plane*0x10000+offset]=next;
                         markVideoChanged();
                     }
-                }
-            } else {
-                const auto offset=vramWindow_*kVramSize+address;
-                if(vram_[offset]!=value) {
-                    vram_[offset]=value;
-                    markVideoChanged();
                 }
             }
         }
@@ -360,7 +355,6 @@ public:
             if(address==0xafe1) {
                 gvuControl_=value;
                 gvuPlane_=std::min<unsigned>(value>>6,2);
-                gvuEnabled_=true;
             } else if(address==0xafe2) {
                 const unsigned page=(value>>3)&3u;
                 if(gvdPage_!=page) {
