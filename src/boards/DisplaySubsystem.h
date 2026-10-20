@@ -173,7 +173,7 @@ public:
     // Reference GetIoByte(AFE0) derives READY from the main FD05 bit 7,
     // rather than treating the last AFE0 write as an independent latch.
     BYTE readSubControl() const {
-        const bool busy=haltRequested_ || busy_;
+        const bool busy=haltRequested_;
         if(!busy)subWaitForInterrupt_=true; // Original Fm11Ram[0x105] bit 7
         return static_cast<BYTE>((subIoRam_[0]&0xfeu)|(busy?0u:1u));
     }
