@@ -83,6 +83,9 @@ public:
     void setSubInstructionObserver(std::function<void(std::uint16_t)> fn) {
         mainBoard_->displayCpu().setInstructionObserver(std::move(fn));
     }
+    void setSubKeyboardReadObserver(DisplaySubsystem::KeyboardReadObserver fn) {
+        mainBoard_->displaySubsystem().setKeyboardReadObserver(std::move(fn));
+    }
     void setSubAfe0ReadObserver(DisplaySubsystem::Afe0ReadObserver fn) {
         mainBoard_->displaySubsystem().setAfe0ReadObserver(std::move(fn));
     }

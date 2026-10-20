@@ -25,6 +25,7 @@ public:
     struct IoWriteTrace {std::uint16_t address; BYTE value; std::uint16_t pc=0; bool fromCpu=false;};
     using IoWriteObserver=std::function<void(IoWriteTrace)>;
     using Afe0ReadObserver=std::function<void(BYTE,std::uint16_t)>;
+    using KeyboardReadObserver=std::function<void(std::uint16_t,BYTE,std::uint16_t)>;
     struct VideoSnapshot {
         std::array<BYTE,kVramSize> vram;
         BYTE flags;
@@ -74,6 +75,7 @@ public:
     void setIoWriteObserver(IoWriteObserver observer) {ioWriteObserver_=std::move(observer);}
     void clearIoWriteObserver() {ioWriteObserver_={};}
     void setAfe0ReadObserver(Afe0ReadObserver fn) {afe0ReadObserver_=std::move(fn);}
+    void setKeyboardReadObserver(KeyboardReadObserver fn) {keyboardReadObserver_=std::move(fn);}
     void beginCpuInstruction(std::uint16_t pc) {tracePc_=pc;traceCpu_=true; if(vsyncCount_>0)--vsyncCount_;}
     void endCpuInstruction() {traceCpu_=false;}
     // Hardware-produced latches; CPU writes to these addresses do not set them.
@@ -187,10 +189,15 @@ public:
         }
         // Reference SubCpu.cpp: these I/O latches clear on read.
         if(address==0xafe4)return std::exchange(subFirqLatch_,BYTE{0});
-        if(address==0xafec)return std::exchange(keyboardStatusLatch_,BYTE{0});
+        if(address==0xafec) {
+            const BYTE value=std::exchange(keyboardStatusLatch_,BYTE{0});
+            if(keyboardReadObserver_)keyboardReadObserver_(address,value,tracePc_);
+            return value;
+        }
         if(address==0xafed) {
             const BYTE result=std::exchange(keyboardDataLatch_,BYTE{0});
             processKeyCode();
+            if(keyboardReadObserver_)keyboardReadObserver_(address,result,tracePc_);
             return result;
         }
         if(address==0xafe5) {
@@ -318,6 +325,7 @@ private:
     std::uint64_t sharedWriteRevision_=0;
     IoWriteObserver ioWriteObserver_;
     Afe0ReadObserver afe0ReadObserver_;
+    KeyboardReadObserver keyboardReadObserver_;
     SharedTraceObserver sharedTraceObserver_;
     std::uint16_t tracePc_=0;
     bool traceCpu_=false;

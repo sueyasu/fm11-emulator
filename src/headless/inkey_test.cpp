@@ -82,6 +82,7 @@ void usage() {
                " [--boot-dip HEX] [--no-trace] [--trace-sub-after-fd05 N]\n"
                "SDL-free real sub-ROM INKEY2 probe. Host stdin -> sub keyboard queue.\n"
                "Use a terminal for raw input (Enter, Backspace and ASCII).\n"
+               "After host input, up to 1024 additional INKEY2/AFEC/AFED events are logged.\n"
                "Ctrl-] exits; /T1 serial is available through a separate PTY.\n";
 }
 }
@@ -123,11 +124,25 @@ int main(int argc,char** argv) {
         board->setBootDip(static_cast<BYTE>(bootDip));
         machine.setDisplayCpuClockHz(2000000);
         machine.reset();
+        auto hostInputSeen=std::make_shared<bool>(false);
         if(trace || subTraceLimit) {
             auto remaining=std::make_shared<unsigned>(0);
             auto releaseCount=std::make_shared<unsigned>(0);
             // One ordered log for main FD05, sub AFE0 and shared RAM accesses.
             auto seq=std::make_shared<std::uint64_t>(0);
+            auto postCount=std::make_shared<unsigned>(0);
+            auto tracePost=[hostInputSeen,postCount]() {
+                return *hostInputSeen && *postCount<1024;
+            };
+            machine.setSubKeyboardReadObserver(
+                [seq,tracePost,postCount](std::uint16_t address,BYTE value,std::uint16_t pc) {
+                    if(!tracePost())return;
+                    ++*postCount;
+                    std::cerr<<"EV "<<++*seq<<" SUB R $"<<std::hex<<std::uppercase
+                             <<std::setw(4)<<std::setfill('0')<<address
+                             <<"=$"<<std::setw(2)<<unsigned(value)
+                             <<" PC=$"<<std::setw(4)<<pc<<std::dec<<"\n";
+                });
             auto logState=[&machine,seq](const char* event) {
                 std::cerr<<"EV "<<++*seq<<" "<<event
                          <<" subPC=$"<<std::hex<<std::uppercase
@@ -194,21 +209,26 @@ int main(int argc,char** argv) {
             auto active=std::make_shared<bool>(false);
             auto n=std::make_shared<unsigned>(0);
             machine.setDisplaySharedTraceObserver(
-                [active,n,seq,&machine](DisplaySubsystem::SharedTrace e) {
+                [active,n,seq,&machine,tracePost,postCount](DisplaySubsystem::SharedTrace e) {
                     if(e.mainCpu && e.write && e.offset==2 && e.value==0x2d) {
                         *active=true;
                         ++*n;
-                        if(*n<=128)std::cerr<<"EV "<<++*seq<<" INKEY2 #"<<*n
+                        if(*n<=128 || tracePost()) {
+                            if(*n>128)++*postCount;
+                            std::cerr<<"EV "<<++*seq<<" INKEY2 #"<<*n
                             <<" request subPC=$"<<std::hex<<std::uppercase
                             <<std::setw(4)<<std::setfill('0')<<machine.displayCpuPc()
                             <<std::dec<<"\n";
+                        }
                     }
                     if(!*active)return;
-                    if((e.offset==3 || e.offset==4) && *n<=128)
+                    if((e.offset==3 || e.offset==4) && (*n<=128 || tracePost())) {
+                        if(*n>128)++*postCount;
                         std::cerr<<"EV "<<++*seq<<" INKEY2 #"<<*n<<" "<<(e.mainCpu?"MAIN":"SUB")
                                  <<(e.write?" W":" R")<<" FC8"<<unsigned(e.offset)
                                  <<"=$"<<std::hex<<std::uppercase<<std::setw(2)
                                  <<std::setfill('0')<<unsigned(e.value)<<std::dec<<"\n";
+                    }
                     if(e.mainCpu && !e.write && e.offset==4)*active=false;
                 });
         }
@@ -231,6 +251,7 @@ int main(int argc,char** argv) {
                     if(ch==0x1d){running=false;break;}
                     const BYTE key=ch==0x7f?0x08:ch==0x0a?0x0d:ch;
                     machine.enqueueDisplayKeyCode(key);
+                    *hostInputSeen=true;
                     std::cerr<<"host key $"<<std::hex<<std::uppercase
                              <<std::setw(2)<<std::setfill('0')<<unsigned(key)
                              <<std::dec<<"\n";
