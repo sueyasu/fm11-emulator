@@ -163,13 +163,15 @@ void Machine::executeOne()
         lastExecutionCycles_=board->cpu().lastExecutionCycles();
         if(auto* cpu6809=dynamic_cast<Main6809Board*>(board)) {
             if(lastExecutionCycles_ && cpu6809->cpuClockHz()) {
-                mainBoard_->advanceCpuCycles(lastExecutionCycles_,cpu6809->cpuClockHz());
+                if(!referenceWallClock_)
+                    mainBoard_->advanceCpuCycles(lastExecutionCycles_,cpu6809->cpuClockHz());
                 advanceDisplayCpuCycles(lastExecutionCycles_,cpu6809->cpuClockHz());
                 cpu6809->syncPtmIrq();
             }
         } else if(dynamic_cast<Main8088Board*>(board) &&
                   lastExecutionCycles_ && clock8088Hz_) {
-            mainBoard_->advanceCpuCycles(lastExecutionCycles_,clock8088Hz_);
+            if(!referenceWallClock_)
+                mainBoard_->advanceCpuCycles(lastExecutionCycles_,clock8088Hz_);
             advanceDisplayCpuCycles(lastExecutionCycles_,clock8088Hz_);
             for(auto& attached:boards_)
                 if(auto* cpu6809=dynamic_cast<Main6809Board*>(attached.get()))
