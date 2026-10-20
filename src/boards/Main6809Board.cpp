@@ -35,7 +35,7 @@ void Main6809Board::reset()
     // Reference CMainCpu::SimRESET: FD23 is the active-low boot-device
     // DIP switch (BootDrv), not a zero-initialized generic I/O latch.
     // Original emulator default: HDD off, 2HD/2D enabled, drive 0.
-    ioRegisters_[0x23]=0x9f;
+    ioRegisters_[0x23]=bootDip_;
     ioReadCounts_.fill(0);
     ioWriteCounts_.fill(0);
     lastIoWrites_.fill(0);
