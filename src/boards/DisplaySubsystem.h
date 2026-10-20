@@ -105,7 +105,7 @@ public:
     // Original FD05 ($D05) is a latched status, not HALT || AFE0 BUSY.
     // HALT release does not clear it; sub-CPU AFE0 writes do.
     BYTE fd05Status() const {return fd05BusyLatch_?0x80:0;}
-    BYTE readSubControl() const {return static_cast<BYTE>((subIoRam_[0]&0xfeu)|(busy_?0u:1u));}
+    BYTE readSubControl() const {return static_cast<BYTE>((subIoRam_[0]&0xfeu)|(fd05BusyLatch_?0u:1u));}
     std::size_t graphicsAccessPage() const {return gvuPage_;}
     std::size_t graphicsDisplayPage() const {return gvdPage_;}
     std::uint16_t graphicsOffset() const {return gvuOffset_;}
