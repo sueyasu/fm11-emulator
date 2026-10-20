@@ -22,6 +22,9 @@ public:
         display_.resetInterruptClock();
     }
     bool executeOne() {
+        // Windows SubCpu::SimONE handles pending timer/VSync first,
+        // then GetKeyCode, independently of the periodic CPU NMI.
+        if(display_.consumeVsyncEvent())display_.processKeyCode();
         if(display_.haltRequested())return false;
         // Reference SubCpu::SimONE: interrupt priority IRQ, FIRQ, NMI.
         // The original clock threshold is 60000 at reset, recalibrated
@@ -33,7 +36,6 @@ public:
             // dispatching the periodic NMI. Without this, the initial
             // AFE0-generated key and queued host input remain dormant
             // until firmware happens to read AFED.
-            display_.processKeyCode();
             SimNMI();
             nmiCycles_=0;
         }
