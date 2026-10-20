@@ -210,7 +210,8 @@ int main(int argc,char** argv) {
                     }
                 });
         }
-        // Host printable keys enter the original sub-CPU keyboard queue.
+        // In the opt-in trap mode, use a separate host queue for INKEY 2.
+        // The real sub-ROM keyboard path is left untouched otherwise.
         SDL_StartTextInput();
         bool running=true,paused=false;
         std::uint64_t executed=0,lastReported=0;
@@ -229,13 +230,26 @@ int main(int argc,char** argv) {
                         *p;++p) {
                         // The original keyboard queue carries 8-bit codes;
                         // UTF-8 multibyte input needs a separate keymap.
-                        if(*p>=0x20 && *p<0x7f)
-                            machine.enqueueDisplayKeyCode(*p);
+                        if(*p>=0x20 && *p<0x7f) {
+                            if(forceInkey2Empty)machine.enqueueInkey2HostKey(*p);
+                            else machine.enqueueDisplayKeyCode(*p);
+                        }
                     }
                 }
                 if(event.type==SDL_KEYDOWN && !event.key.repeat) {
-                    if(event.key.keysym.sym==SDLK_ESCAPE)running=false;
-                    if(event.key.keysym.sym==SDLK_SPACE)paused=!paused;
+                    if(forceInkey2Empty && !paused && !testPattern) {
+                        const auto sym=event.key.keysym.sym;
+                        if(sym==SDLK_RETURN || sym==SDLK_KP_ENTER)
+                            machine.enqueueInkey2HostKey(0x0d);
+                        else if(sym==SDLK_BACKSPACE)
+                            machine.enqueueInkey2HostKey(0x08);
+                        else if(sym==SDLK_TAB)
+                            machine.enqueueInkey2HostKey(0x09);
+                        else if(sym==SDLK_DELETE)
+                            machine.enqueueInkey2HostKey(0x0114);
+                    }
+                    if(!forceInkey2Empty && event.key.keysym.sym==SDLK_ESCAPE)running=false;
+                    if(!forceInkey2Empty && event.key.keysym.sym==SDLK_SPACE)paused=!paused;
                     if(event.key.keysym.sym==SDLK_F1) {
                         high=!high;
                         ui.setMode(high);

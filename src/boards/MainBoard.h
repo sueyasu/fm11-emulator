@@ -6,6 +6,7 @@
 #include "DisplayCpu6809.h"
 #include <cstdint>
 #include <array>
+#include <deque>
 #include <memory>
 #include <limits>
 #include <stdexcept>
@@ -35,6 +36,7 @@ public:
         resetEvents();
         resetSubCpuControl();
         forceInkey2Active_=false;
+        inkey2HostQueue_.clear();
         displayCpu_.resetCpu();
         resetTimebase();
         externalIrqLines_=0;
@@ -57,6 +59,10 @@ public:
     void setForceInkey2Empty(bool enabled) {
         forceInkey2Empty_=enabled;
         forceInkey2Active_=false;
+        inkey2HostQueue_.clear();
+    }
+    void enqueueInkey2HostKey(std::uint16_t code) {
+        if(inkey2HostQueue_.size()<256)inkey2HostQueue_.push_back(code);
     }
     BYTE subCpuControl() const {return subCpuControl_;}
     // FD05 bit 0 selects the optional CPU-card bus-master request.
@@ -159,10 +165,15 @@ public:
                 display_.requestHalt();
             } else if(forceInkey2Empty_ && display_.haltRequested() &&
                       display_.readShared(2)==0x2d) {
-                // Diagnostic trap: do not run the ROM for INKEY 2.
-                // Its no-key response is $8000; report completion on FD05.
-                display_.writeShared(3,0x80);
-                display_.writeShared(4,0x00);
+                // Diagnostic trap: deliver one SDL key, or $8000 when empty.
+                // Leave the sub-CPU halted and report FD05 READY as before.
+                std::uint16_t code=0x8000;
+                if(!inkey2HostQueue_.empty()) {
+                    code=inkey2HostQueue_.front();
+                    inkey2HostQueue_.pop_front();
+                }
+                display_.writeShared(3,static_cast<BYTE>(code>>8));
+                display_.writeShared(4,static_cast<BYTE>(code));
                 forceInkey2Active_=true;
             } else {
                 forceInkey2Active_=false;
@@ -193,6 +204,7 @@ private:
     BYTE subCpuControl_=0;
     bool forceInkey2Empty_=false;
     bool forceInkey2Active_=false;
+    std::deque<std::uint16_t> inkey2HostQueue_;
     BYTE displayControl_=0;
     std::array<BYTE,8> displayPalette_{{0,1,2,3,4,5,6,7}};
     BYTE eventStatus_=0;
