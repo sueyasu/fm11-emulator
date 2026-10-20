@@ -93,6 +93,8 @@ void Machine::reset()
     mainAccessClockFraction_=0;
     measuredElapsedMs_=0;
     timerElapsedMs_=0;
+    mainTotalClockMs_=0;
+    mainTotalAccesses_=0;
     serialTimerTicks_=0;
     displayVsyncElapsedNs_=0;
     synchronizeFd05Selection();
@@ -112,9 +114,19 @@ void Machine::signalReferenceTimer(std::uint64_t elapsedMs)
             if(accesses>=measuredMainAccesses_ &&
                 (timerElapsedMs_>=2000 || accesses-measuredMainAccesses_>1000000)) {
                 const auto delta=accesses-measuredMainAccesses_;
-                if(measuredElapsedMs_ && delta)
+                if(measuredElapsedMs_ && delta) {
+                    // MainCpu::SimONE accumulates TotalTicks/TotalClock
+                    // rather than replacing CpuClock with each interval.
+                    mainTotalClockMs_+=static_cast<long double>(measuredElapsedMs_);
+                    mainTotalAccesses_+=static_cast<long double>(delta);
+                    const auto hz=mainTotalAccesses_*1000.0L/mainTotalClockMs_;
                     measuredMainClockHz_=std::max<std::uint64_t>(
-                        1,delta*1000/measuredElapsedMs_);
+                        1,static_cast<std::uint64_t>(hz));
+                    if(mainTotalClockMs_>180000.0L) {
+                        mainTotalClockMs_/=10.0L;
+                        mainTotalAccesses_/=10.0L;
+                    }
+                }
                 measuredMainAccesses_=accesses;
                 measuredElapsedMs_=0;
                 timerElapsedMs_=0;
