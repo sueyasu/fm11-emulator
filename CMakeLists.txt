@@ -297,6 +297,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(machine_ptm_time PRIVATE fm11_core)
     add_test(NAME machine_ptm_time COMMAND machine_ptm_time)
 
+    add_executable(display_gvu_reference_mapping tests/display_gvu_reference_mapping.cpp)
+    target_link_libraries(display_gvu_reference_mapping PRIVATE fm11_core)
+    add_test(NAME display_gvu_reference_mapping COMMAND display_gvu_reference_mapping)
+
     add_executable(display_sub_shared_io tests/display_sub_shared_io.cpp)
     target_link_libraries(display_sub_shared_io PRIVATE fm11_core)
     add_test(NAME display_sub_shared_io COMMAND display_sub_shared_io)
