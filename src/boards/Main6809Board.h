@@ -33,11 +33,6 @@ public:
         setFloppyDevice(mainBoard_->floppyDevice());
         usart_=mainBoard_->usartDevice();
         ptm_=mainBoard_->ptmDevice();
-        // Reference SubCpu::SetIoByte(AFF0-AFF2) writes Fm11Ram[D20-D22].
-        mainBoard_->displaySubsystem().setSubDmaRegisterWriter(
-            [this](unsigned offset,BYTE value) {
-                writeCpu(static_cast<WORD>(0xfd20+offset),value);
-            });
     }
     void setFloppyDevice(std::shared_ptr<FloppyDevice> device) { floppy_=std::move(device); }
     void loadFloppy2d(const std::vector<BYTE>& raw);
