@@ -110,9 +110,11 @@ void Machine::signalReferenceTimer(std::uint64_t elapsedMs)
 
 void Machine::serviceReferenceMainTimer()
 {
-    if(!referenceTimerPending_)return;
-    referenceTimerPending_=false;
-    referenceVsyncClockMs_+=16;
+    const bool vsync=referenceTimerPending_;
+    if(vsync) {
+        referenceTimerPending_=false;
+        referenceVsyncClockMs_+=16;
+    }
     const auto now=std::chrono::steady_clock::now();
     if(lastClockCalibration_==std::chrono::steady_clock::time_point{})
         lastClockCalibration_=now;
@@ -141,7 +143,7 @@ void Machine::serviceReferenceMainTimer()
             }
         }
     }
-    if(++serialTimerTicks_>=4) {
+    if(vsync && ++serialTimerTicks_>=4) {
         serialTimerTicks_=0;
         for(auto& board:boards_)
             if(auto* cpu6809=dynamic_cast<Main6809Board*>(board.get()))
