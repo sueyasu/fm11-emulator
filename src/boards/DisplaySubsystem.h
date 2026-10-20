@@ -82,7 +82,6 @@ public:
     // Source SubCpu.cpp SetKeyCode/GetKeyCode: interrupt-mode key queue.
     void setKeyboardMainMode(bool enabled) {
         keyboardMainMode_=enabled;
-        if(!enabled)processKeyCode();
     }
     // Main CPU keyboard mode (FD02 bit 7): the original GetKeyCode
     // transfers codes to FD00/FD01 and asserts FD03 bit 6. The CPU
@@ -96,7 +95,6 @@ public:
     void enqueueKeyCode(std::uint16_t code) {
         const auto next=(keyTail_+1)%keyQueue_.size();
         if(next!=keyHead_) {keyQueue_[keyTail_]=code;keyTail_=next;}
-        if(!keyboardMainMode_)processKeyCode();
     }
     void processKeyCode() const {
         if(keyboardMainMode_ || keyHead_==keyTail_ || (subFirqLatch_&1))return;
