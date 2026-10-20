@@ -44,6 +44,10 @@ int main() {
  if(!sawIndex || !sawGap)return 10;
  b.writeCpu(0xfd18,0xd0);
  if(b.readCpu(0xfd18)!=0 || (b.readCpu(0xfd1f)&0x40)==0)return 15;
+ // With DRQ inactive the original controller returns its data latch.
+ // ROM uses this write/readback to probe the Mini FDC.
+ b.writeCpu(0xfd1b,0xff);
+ if(b.readCpu(0xfd1b)!=0xff)return 30;
  b.writeCpu(0xfd1b,1);
  b.writeCpu(0xfd18,0x10);
  if(b.readCpu(0xfd19)!=1 || (b.readCpu(0xfd18)&0x04)!=0)return 9;
