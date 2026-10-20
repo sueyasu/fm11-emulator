@@ -12,6 +12,8 @@ public:
         WORD latch=0;
         std::uint32_t counter=0;
         bool running=false;
+        // Source Fm11PTM uses PTMCLOCK/2 or PTMCLOCK*100.
+        // The shared scheduler supplies PTMCLOCK/2 ticks.
     };
     void reset() {
         channels.fill(Channel{});
@@ -37,11 +39,13 @@ public:
         for(unsigned i=0;i<channels.size();++i) {
             auto& ch=channels[i];
             if(!ch.running || ticks==0)continue;
-            if(ticks<ch.counter) {
-                ch.counter-=static_cast<std::uint32_t>(ticks);
+            const auto rate=(ch.control&0x02)?200ULL:1ULL;
+            const auto elapsed=ticks*rate;
+            if(elapsed<ch.counter) {
+                ch.counter-=static_cast<std::uint32_t>(elapsed);
                 continue;
             }
-            const auto remaining=ticks-ch.counter;
+            const auto remaining=elapsed-ch.counter;
             status|=static_cast<BYTE>(1u<<i);
             irqAcknowledged=false;
             const bool continuous=(ch.control&0x28)==0;
@@ -106,7 +110,11 @@ public:
     std::uint64_t nextEventNanoseconds() const {
         std::uint64_t soonest=UINT64_MAX;
         for(const auto& ch:channels)
-            if(ch.running && ch.counter && ch.counter<soonest)soonest=ch.counter;
+            if(ch.running && ch.counter) {
+                const auto rate=(ch.control&0x02)?200ULL:1ULL;
+                const auto remaining=(ch.counter+rate-1)/rate;
+                if(remaining<soonest)soonest=remaining;
+            }
         if(soonest==UINT64_MAX)return soonest;
         return (soonest*1000000000ULL+9699)/9700;
     }
