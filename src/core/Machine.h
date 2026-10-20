@@ -98,7 +98,7 @@ public:
     // SDL may drive the 16 ms display VSync from host monotonic time.
     // Default stays emulated time for headless and deterministic tests.
     void setExternalDisplayVsync(bool enabled) {externalDisplayVsync_=enabled; displayVsyncElapsedNs_=0;}
-    void signalDisplayVsync() {if(displayCpuClockHz_)mainBoard_->displaySubsystem().signalVsyncEvent();}
+    void signalDisplayVsync() {if(displayCpuClockHz_)mainBoard_->displayCpu().timerTick(16);}
 
 
 private:
