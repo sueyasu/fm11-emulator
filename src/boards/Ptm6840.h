@@ -1,6 +1,7 @@
 #pragma once
 #include "portable_types.h"
 #include <array>
+#include <algorithm>
 #include <cstdint>
 #include <limits>
 
