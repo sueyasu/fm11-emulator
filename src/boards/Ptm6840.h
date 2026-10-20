@@ -29,6 +29,7 @@ public:
         counterLowLatch.fill(0);
         status=0;
         irqAcknowledged=false;
+        referenceClockHz_=2000000;
     }
     bool irqRequest() const {
         return (status & 0x80) != 0 && !irqAcknowledged;
@@ -42,6 +43,11 @@ public:
                 asserted=true;
         if(asserted)status|=0x80;
         else status&=0x7f;
+    }
+    // SysClock is counted in main-CPU memory accesses, like Fm11PTM.
+    void advanceReferenceAccesses(std::uint64_t accesses,std::uint64_t clockHz) {
+        referenceClockHz_=clockHz;
+        advance(accesses);
     }
     void advance(std::uint64_t ticks) {
         if(ticks==0)return;
@@ -183,9 +189,21 @@ public:
     bool irqAcknowledged=false;
 private:
     std::int64_t periodFor(unsigned slot) const {
-        const auto divisor=(mode_[slot%3]&0x02)?200u:1u;
-        return static_cast<std::int64_t>(
-            std::max<std::uint32_t>(1,count_[slot]/divisor));
+        // Fm11PTM: (PtmCtr * CpuClock) / selected PTM input Hz.
+        constexpr std::uint64_t ptmHz=9700;
+        const std::uint64_t divisor=(mode_[slot%3]&0x02)
+            ?ptmHz*200:ptmHz;
+        const auto count=count_[slot];
+        const auto clock=referenceClockHz_;
+        if(!clock || !count)return 0;
+        // Reorder arithmetic into quotient/remainder to avoid __int128
+        // and prevent multiplication overflow for normal CPU frequencies.
+        const auto whole=clock/divisor;
+        const auto rem=clock%divisor;
+        const auto value=static_cast<std::uint64_t>(count)*whole+
+            (static_cast<std::uint64_t>(count)*rem)/divisor;
+        return static_cast<std::int64_t>(std::min<std::uint64_t>(
+            value,static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())));
     }
     void enable(unsigned slot) {
         if(init_[slot]>0)enabled_[slot]=true;
@@ -205,6 +223,7 @@ private:
             channels[n].control=static_cast<BYTE>(mode_[n]);
         }
     }
+    std::uint64_t referenceClockHz_=2000000;
     std::array<BYTE,8> reg_{};
     std::array<BYTE,3> mode_{};
     std::array<std::uint32_t,6> count_{};
