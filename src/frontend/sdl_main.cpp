@@ -191,6 +191,12 @@ int main(int argc,char** argv) {
                      <<" A="<<hex(r.r.b.A,2)<<" B="<<hex(r.r.b.B,2)
                      <<" DP="<<hex(r.DP,2)<<" CC="<<hex(r.CC,2)
                      <<" MD="<<hex(r.MD,2)<<"\n";
+            const auto& display=machine.displaySubsystem();
+            std::cout<<"CRTC R12="<<hex(display.crtcRegister(12),2)
+                     <<" R13="<<hex(display.crtcRegister(13),2)
+                     <<" start=$"<<hex(display.crtcStart(),4)
+                     <<" columns="<<display.crtcColumns()
+                     <<" rows="<<display.crtcRows()<<"\n";
         };
         auto drainSerial=[&]() {
             if(serialMaster<0)return;
