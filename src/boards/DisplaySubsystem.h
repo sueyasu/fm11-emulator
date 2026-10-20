@@ -46,6 +46,7 @@ public:
         keyboardMainMode_=false;
         mainKeyboardPending_=false;
         mainKeyboardCode_=0;
+        startupKeyInLatch_=false;
         nmiMask_=true;
         nmiClockCycles_=60000;
         subIrq_=false;
@@ -97,8 +98,10 @@ public:
             subFirqLatch_&=static_cast<BYTE>(~1u);
             mainKeyboardPending_=false;
             mainKeyboardCode_=0;
+            startupKeyInLatch_=false;
         }
     }
+    void disableKeyboardAfterStartupKey(bool enabled) {disableAfterStartupKey_=enabled;}
     // Source SubCpu.cpp SetKeyCode/GetKeyCode: interrupt-mode key queue.
     void setKeyboardMainMode(bool enabled) {
         keyboardMainMode_=enabled;
@@ -111,6 +114,8 @@ public:
         if(!mainKeyboardPending_)return false;
         code=mainKeyboardCode_;
         mainKeyboardPending_=false;
+        if(disableAfterStartupKey_ && code==0x0050)
+            const_cast<DisplaySubsystem*>(this)->setKeyboardEnabled(false);
         return true;
     }
     void enqueueKeyCode(std::uint16_t code) {
@@ -137,6 +142,7 @@ public:
         if(code==0x0201 && breakSink_)breakSink_();
         keyboardStatusLatch_=static_cast<BYTE>(code>>8);
         keyboardDataLatch_=static_cast<BYTE>(code);
+        startupKeyInLatch_=(code==0x0050);
         if(keyboardMainMode_) {
             mainKeyboardCode_=code;
             mainKeyboardPending_=true;
@@ -234,6 +240,9 @@ public:
         if(address==0xafed) {
             if(!keyboardEnabled_)return 0;
             const BYTE result=std::exchange(keyboardDataLatch_,BYTE{0});
+            if(disableAfterStartupKey_ && startupKeyInLatch_)
+                const_cast<DisplaySubsystem*>(this)->setKeyboardEnabled(false);
+            startupKeyInLatch_=false;
             processKeyCode();
             return result;
         }
@@ -410,6 +419,8 @@ private:
     bool nmiMask_=true;
     bool keyboardMainMode_=false;
     bool keyboardEnabled_=true;
+    bool disableAfterStartupKey_=false;
+    mutable bool startupKeyInLatch_=false;
     mutable bool mainKeyboardPending_=false;
     mutable std::uint16_t mainKeyboardCode_=0;
     mutable bool subIrq_=false;
