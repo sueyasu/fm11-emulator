@@ -125,7 +125,7 @@ void Machine::signalReferenceTimer(std::uint64_t elapsedMs)
         serialTimerTicks_=0;
         for(auto& board:boards_)
             if(auto* cpu6809=dynamic_cast<Main6809Board*>(board.get()))
-                cpu6809->refreshSerialIrq();
+                cpu6809->serviceSerialTimer();
     }
 }
 
