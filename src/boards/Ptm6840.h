@@ -26,6 +26,7 @@ public:
         registers_.fill(0);
         ptmReg_.fill(0);
         ptmCtr_.fill(0);
+        ptmReloadCount_.fill(0);
         ptmClock_.fill(0);
         ptmInit_.fill(0);
         sysClock_=ptmFast_=0;
@@ -94,6 +95,7 @@ public:
                 ptmReg_[0]=1;ptmReg_[1]=ptmReg_[2]=0;
                 ptmClock_.fill(0);
                 ptmInit_.fill(0);
+                ptmReloadCount_.fill(0);
                 // Reference reset clears the counters and FD39, not SysClock/PtmFast.
                 status=0;
                 // Source PTM reset leaves FY03 unchanged until a PTM
@@ -128,6 +130,7 @@ public:
             if(count==0)count=0x10000;
             if(no==2 && (ptmReg_[no]&1))count*=8;
             ptmCtr_[no]=static_cast<WORD>(count);
+            ptmReloadCount_[no]=count;
             ptmClock_[no]=ptmInit_[no]=periodFromCount(no,count);
             if((ptmReg_[no]&0x18)==0 || (ptmReg_[no]&0x100))
                 start(no);
@@ -136,6 +139,7 @@ public:
             std::uint32_t count=value?value:0x100;
             if(no==2 && (ptmReg_[no]&1))count*=8;
             ptmCtr_[slot]=static_cast<WORD>(count);
+            ptmReloadCount_[slot]=count;
             ptmClock_[slot]=ptmInit_[slot]=periodFromCount(slot,count);
             if((ptmReg_[no]&0x18)==0 || (ptmReg_[slot]&0x100))
                 start(slot);
@@ -159,6 +163,9 @@ private:
     std::array<BYTE,8> registers_{};
     std::array<unsigned,6> ptmReg_{};
     std::array<std::uint32_t,6> ptmCtr_{};
+    // The original load interval uses the full temporary count before
+    // narrowing the readable PTM register to WORD.
+    std::array<std::uint32_t,6> ptmReloadCount_{};
     std::array<std::int64_t,6> ptmClock_{};
     std::array<std::int64_t,6> ptmInit_{};
     std::uint64_t sysClock_=0;
@@ -170,7 +177,7 @@ private:
         return static_cast<std::int64_t>(count*cpuClock_/divisor);
     }
     std::int64_t period(unsigned no) const {
-        return periodFromCount(no,ptmCtr_[no]);
+        return periodFromCount(no,ptmReloadCount_[no]);
     }
     void start(unsigned no) {
         ptmReg_[no]|=0x100;
