@@ -169,6 +169,8 @@ int main(int argc,char** argv) {
         bool monitorInputOpen=mainBoard!=nullptr;
         std::string monitorLine;
         std::vector<BYTE> serialPending;
+        std::uint64_t serialRxBytes=0,serialTxBytes=0;
+        BYTE serialLastRx=0;
         auto hex=[](unsigned value,unsigned width) {
             std::ostringstream o;
             o<<std::uppercase<<std::hex<<std::setw(width)<<std::setfill('0')<<value;
@@ -190,7 +192,10 @@ int main(int argc,char** argv) {
             while(mainBoard->takeSerialOutput(ch))serialPending.push_back(ch);
             if(!serialPending.empty()) {
                 const ssize_t n=write(serialMaster,serialPending.data(),serialPending.size());
-                if(n>0)serialPending.erase(serialPending.begin(),serialPending.begin()+n);
+                if(n>0) {
+                    serialTxBytes+=static_cast<std::uint64_t>(n);
+                    serialPending.erase(serialPending.begin(),serialPending.begin()+n);
+                }
                 else if(n<0 && errno!=EAGAIN && errno!=EWOULDBLOCK && errno!=EIO)
                     throw std::runtime_error("serial PTY write failed");
             }
@@ -198,7 +203,11 @@ int main(int argc,char** argv) {
             for(;;) {
                 const ssize_t n=read(serialMaster,input,sizeof(input));
                 if(n>0) {
-                    for(ssize_t i=0;i<n;++i)mainBoard->queueSerialInput(input[i]);
+                    for(ssize_t i=0;i<n;++i) {
+                        serialLastRx=input[i];
+                        ++serialRxBytes;
+                        mainBoard->queueSerialInput(input[i]);
+                    }
                 } else if(n<0 && errno==EINTR)continue;
                 else if(n<0 && errno!=EAGAIN && errno!=EWOULDBLOCK && errno!=EIO)
                     throw std::runtime_error("serial PTY read failed");
@@ -221,7 +230,7 @@ int main(int argc,char** argv) {
             stream>>cmd;
             if(cmd=="h"||cmd=="help"||cmd=="?") {
                 std::cout<<"c/continue, stop, s/step, r/regs, m/mem HEXADDR [LEN], "
-                            "mp HEXADDR [LEN], reset, q/quit, help\n";
+                            "mp HEXADDR [LEN], serial, reset, q/quit, help\n";
             } else if(cmd=="c"||cmd=="continue") {
                 paused=false;
                 std::cout<<"CPU running. Type stop to pause.\n";
@@ -230,6 +239,15 @@ int main(int argc,char** argv) {
                 std::cout<<"CPU halted.\n";
             } else if(cmd=="q"||cmd=="quit")running=false;
             else if(cmd=="r"||cmd=="regs")showRegisters();
+            else if(cmd=="serial"||cmd=="uart") {
+                std::cout<<"PTY rx="<<serialRxBytes<<" tx="<<serialTxBytes
+                         <<" lastRx=$"<<hex(serialLastRx,2)
+                         <<" USART status=$"<<hex(mainBoard->serialStatus(),2)
+                         <<" FD02=$"<<hex(mainBoard->readCpu(0xfd02),2)
+                         <<" FD03=$"<<hex(mainBoard->readCpu(0xfd03),2)
+                         <<" CPU IRQ="<<(mainBoard->irqPending()?"yes":"no")
+                         <<"\\n";
+            }
             else if(cmd=="s"||cmd=="step") {
                 if(!paused)std::cout<<"Stop CPU first.\n";
                 else {machine.executeOne();++executed;drainSerial();showRegisters();}
