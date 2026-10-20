@@ -134,7 +134,6 @@ int main(int argc,char** argv) {
             throw std::invalid_argument("floppy image requires --main-rom");
         machine.setDisplayCpuClockHz(testPattern?0:2000000);
         machine.reset();
-        if(noKeyboard)machine.setDisplayKeyboardEnabled(false);
         Sdl sdl;
         Window ui;
         ui.window=SDL_CreateWindow("FM-11 display subsystem",
@@ -308,7 +307,7 @@ int main(int argc,char** argv) {
             SDL_Event event;
             while(SDL_PollEvent(&event)) {
                 if(event.type==SDL_QUIT)running=false;
-                if(event.type==SDL_TEXTINPUT && !paused && !testPattern) {
+                if(event.type==SDL_TEXTINPUT && !paused && !testPattern && !noKeyboard) {
                     for(const unsigned char* p=reinterpret_cast<const unsigned char*>(event.text.text);
                         *p;++p) {
                         // The original keyboard queue carries 8-bit codes;
@@ -323,7 +322,7 @@ int main(int argc,char** argv) {
                     // SDL_TEXTINPUT provides printable keys (including Space).
                     // Control characters do not generate SDL_TEXTINPUT and
                     // must be sent on KEYDOWN to reach OS-9 /Term.
-                    if(!paused && !testPattern) {
+                    if(!paused && !testPattern && !noKeyboard) {
                         switch(event.key.keysym.sym) {
                         case SDLK_RETURN: case SDLK_KP_ENTER:
                             machine.enqueueDisplayKeyCode(0x0d); break;
