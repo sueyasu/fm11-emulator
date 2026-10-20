@@ -49,6 +49,7 @@ public:
         nmiCycles_+=LastInstructionCycles();
         return true;
     }
+    void advanceIdleCycles(std::uint64_t cycles) {nmiCycles_+=cycles;}
     std::uint16_t pc() const {return regs.r.w.PC;}
 private:
     std::uint64_t nmiCycles_=0;
