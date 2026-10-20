@@ -241,6 +241,7 @@ public:
     // Handshake output to the main board. The physical sub-I/O trigger
     // remains unassigned until its register decode is confirmed.
     void setAttentionSink(std::function<void()> sink) {attentionSink_=std::move(sink);}
+    void setNmiEnableSink(std::function<void()> sink) {nmiEnableSink_=std::move(sink);}
     void setBreakSink(std::function<void()> sink) {breakSink_=std::move(sink);}
     void setSubDmaRegisterWriter(std::function<void(unsigned,BYTE)> writer) {
         subDmaRegisterWriter_=std::move(writer);
@@ -352,6 +353,7 @@ public:
                 if(nmiMask_) {
                     enqueueKeyCode(0x0050);
                     nmiMask_=false;
+                    if(nmiEnableSink_)nmiEnableSink_();
                 }
                 busy_=(value&1u)==0;
                 if(value&1u)subWaitForInterrupt_=true;
@@ -444,6 +446,7 @@ private:
     std::uint16_t tracePc_=0;
     bool traceCpu_=false;
     std::function<void()> attentionSink_;
+    std::function<void()> nmiEnableSink_;
     bool haltRequested_=false;
     bool busy_=true;
     std::array<BYTE,0x1000> ioRam_{};
