@@ -17,6 +17,7 @@ class MainBoard {
 public:
     MainBoard() {
         display_.setAttentionSink([this](){signalAttention();});
+        display_.setBreakSink([this](){signalBreak();});
         display_.setMainEventControlReader([this](){return eventControl_;});
     }
     MainBoard(const MainBoard&)=delete;
