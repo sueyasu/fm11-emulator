@@ -109,5 +109,6 @@ private:
     std::uint64_t displayCycleFraction_ = 0;
     std::uint64_t displayCpuInputHz_ = 0;
     std::uint64_t displayNanosecondFraction_ = 0;
+    std::uint64_t displayVsyncElapsedNs_ = 0;
     std::int64_t displayCycleCredit_ = 0;
 };
