@@ -145,6 +145,9 @@ int main(int argc, char** argv) {
         board.loadBootRom(rom);
         board.reset();
         board.setCpuClockHz(hz);
+        // The reference scheduler clocks peripherals from host elapsed
+        // time, not a second time from emulated CPU instruction cycles.
+        board.setExternalClocking(true);
         board.setTxIrqEnabled(!disableTxIrq);
         if (!floppy.empty()) {
             std::ifstream disk(floppy,std::ios::binary|std::ios::ate);
@@ -298,6 +301,7 @@ int main(int argc, char** argv) {
             if(!running && !quitting)prompt();
         };
         prompt();
+        auto lastPeripheralClock=std::chrono::steady_clock::now();
         while(!stopping && !quitting) {
             pollfd fds[2]={{inputOpen?STDIN_FILENO:-1,POLLIN,0},
                            {master,POLLIN,0}};
@@ -317,11 +321,16 @@ int main(int argc, char** argv) {
             }
             const auto waitStart=std::chrono::steady_clock::now();
             const int ready=poll(fds,2,timeout);
+            const auto peripheralNow=std::chrono::steady_clock::now();
+            const auto peripheralElapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
+                peripheralNow-lastPeripheralClock).count();
+            lastPeripheralClock=peripheralNow;
+            if(running && peripheralElapsed>0)
+                board.advanceWaitTime(static_cast<std::uint64_t>(peripheralElapsed));
             if (sleeping) {
                 const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    std::chrono::steady_clock::now()-waitStart).count();
-                if (elapsed>0) {
-                    board.advanceWaitTime(static_cast<std::uint64_t>(elapsed));
+                    peripheralNow-waitStart).count();
+                if(elapsed>0) {
                     if(board.cpuWaitState()==CSim09::WaitState::Sync) syncWaitNs+=elapsed;
                     else cwaiWaitNs+=elapsed;
                 }
