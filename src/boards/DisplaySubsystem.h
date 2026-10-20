@@ -53,7 +53,6 @@ public:
         nmiClockCycles_=60000;
         subIrq_=false;
         ioRam_.fill(0);
-        dmaChannel0_=0;
         kanjiBase_=0;kanjiLeft_=kanjiRight_=32;
         rtcDigits_.fill(0);
         gvuEnabled_=false;
@@ -305,7 +304,8 @@ public:
             }
             return 1;
         }
-        if(address==0xaff0)return dmaChannel0_; // original write target is DMA channel 0
+        // Original AFF0-AFF2 reads use the sub-I/O RAM fallback; their
+        // writes instead target the main-side D20-D22 shared registers.
         if(address>=0xb000)return rom_[address-0xb000];
         if(address>=0xa000)return ioRam_[address-0xa000];
         return 0xff; // unmapped space, including unimplemented sub I/O
@@ -413,7 +413,6 @@ public:
         else if(address==0xaff7 && (ioRam_[0xff4]&0x80)!=0)
             rtcDigits_[ioRam_[0xff4]&15]=value;
         else if(address>=0xaff0 && address<=0xaff2) {
-            if(address==0xaff0)dmaChannel0_=value;
             if(subDmaRegisterWriter_)subDmaRegisterWriter_(address&3,value);
         }
         else if(address>=0xa000 && address<0xb000)ioRam_[address-0xa000]=value; // original maps to DMA channel 0
@@ -439,7 +438,6 @@ private:
     bool haltRequested_=false;
     bool busy_=true;
     std::array<BYTE,0x1000> ioRam_{};
-    BYTE dmaChannel0_=0;
     bool nmiMask_=true;
     bool keyboardMainMode_=false;
     bool keyboardEnabled_=true;
