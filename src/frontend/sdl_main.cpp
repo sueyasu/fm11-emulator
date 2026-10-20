@@ -135,6 +135,7 @@ int main(int argc,char** argv) {
             throw std::invalid_argument("floppy image requires --main-rom");
         machine.setDisplayCpuClockHz(testPattern?0:2000000);
         machine.reset();
+        machine.setExternalDisplayVsync(true);
         if(keyboardOffAfterInit)machine.disableDisplayKeyboardAfterStartupKey(true);
         Sdl sdl;
         Window ui;
@@ -228,6 +229,7 @@ int main(int argc,char** argv) {
         auto lastLog=std::chrono::steady_clock::now();
         auto lastFrame=lastLog-std::chrono::milliseconds(17);
         auto lastWaitTick=std::chrono::steady_clock::now();
+        auto lastVsyncTick=lastWaitTick;
         auto monitorCommand=[&](const std::string& line) {
             if(!mainBoard)return;
             std::istringstream stream(line);
@@ -281,6 +283,7 @@ int main(int argc,char** argv) {
                 if(!paused)std::cout<<"Stop CPU first.\n";
                 else {
                     machine.reset();executed=0;serialPending.clear();
+                    lastVsyncTick=std::chrono::steady_clock::now();
                     std::cout<<"CPU reset.\n";showRegisters();
                 }
             } else if(cmd=="m"||cmd=="mem"||cmd=="mp") {
@@ -308,6 +311,17 @@ int main(int argc,char** argv) {
         };
         if(mainBoard)std::cout<<"fm11> "<<std::flush;
         while(running) {
+            // Display VSync is sourced from real elapsed time in SDL only.
+            // Do not feed the same event from guest-time advancement.
+            const auto vsyncNow=std::chrono::steady_clock::now();
+            if(paused) {
+                lastVsyncTick=vsyncNow;
+            } else if(vsyncNow-lastVsyncTick>=std::chrono::milliseconds(16)) {
+                const auto elapsed=vsyncNow-lastVsyncTick;
+                lastVsyncTick+=std::chrono::milliseconds(16)*
+                    (elapsed/std::chrono::milliseconds(16));
+                machine.signalDisplayVsync();
+            }
             if(monitorInputOpen) {
                 pollfd fd{STDIN_FILENO,POLLIN,0};
                 if(poll(&fd,1,0)>0 && (fd.revents&(POLLIN|POLLHUP))) {
