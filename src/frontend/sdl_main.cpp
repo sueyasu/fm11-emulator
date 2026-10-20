@@ -60,7 +60,7 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE]\n"
+    std::cout<<"usage: fm11-sdl [--no-keyboard] [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE]\n"
              <<"  ROM defaults to external/roms/display6809.bin\n"
              <<"  F12 quit; F10 pause/resume; F1 switch 200/400-line view\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
@@ -73,11 +73,13 @@ int main(int argc,char** argv) {
         unsigned floppyDrive=0;
         unsigned bootDip=0x9f;
         bool high=false, testPattern=false, traceBoot=false, diagnostics=false;
+        bool noKeyboard=false;
         std::uint64_t instructions=10000;
         for(int i=1;i<argc;++i) {
             const std::string arg=argv[i];
             if(arg=="--help"){usage();return 0;}
             if(arg=="--high"){high=true;continue;}
+            if(arg=="--no-keyboard"){noKeyboard=true;continue;}
             if(arg=="--test-pattern"){testPattern=true;continue;}
             if(arg=="--trace-boot"){traceBoot=true;continue;}
             if(arg=="--diagnostics"){diagnostics=true;continue;}
@@ -132,6 +134,7 @@ int main(int argc,char** argv) {
             throw std::invalid_argument("floppy image requires --main-rom");
         machine.setDisplayCpuClockHz(testPattern?0:2000000);
         machine.reset();
+        if(noKeyboard)machine.setDisplayKeyboardEnabled(false);
         Sdl sdl;
         Window ui;
         ui.window=SDL_CreateWindow("FM-11 display subsystem",
