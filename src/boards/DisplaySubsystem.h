@@ -192,6 +192,7 @@ public:
     void clearSubWaitForInterrupt() {subWaitForInterrupt_=false;}
     std::size_t graphicsAccessPage() const {return gvuPage_;}
     std::size_t graphicsDisplayPage() const {return gvdPage_;}
+    BYTE graphicsDisplayOptions() const {return subIoRam_[2];}
     std::uint16_t graphicsOffset() const {return gvuOffset_;}
     std::size_t graphicsReadPlane() const {return gvuPlane_;}
     std::uint16_t graphicsDisplayAddress() const {return displayAddress_;}
