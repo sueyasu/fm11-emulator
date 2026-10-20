@@ -42,6 +42,7 @@ public:
         vsyncStatus_=0x40;
         subIoRam_.fill(0);
         subFirqLatch_=keyboardStatusLatch_=keyboardDataLatch_=0;
+        subWaitForInterrupt_=false;
         keyHead_=keyTail_=0;
         keyboardMainMode_=false;
         mainKeyboardPending_=false;
@@ -173,8 +174,11 @@ public:
     // rather than treating the last AFE0 write as an independent latch.
     BYTE readSubControl() const {
         const bool busy=haltRequested_ || busy_;
+        if(!busy)subWaitForInterrupt_=true; // Original Fm11Ram[0x105] bit 7
         return static_cast<BYTE>((subIoRam_[0]&0xfeu)|(busy?0u:1u));
     }
+    bool subWaitForInterrupt() const {return subWaitForInterrupt_;}
+    void clearSubWaitForInterrupt() {subWaitForInterrupt_=false;}
     std::size_t graphicsAccessPage() const {return gvuPage_;}
     std::size_t graphicsDisplayPage() const {return gvdPage_;}
     std::uint16_t graphicsOffset() const {return gvuOffset_;}
@@ -331,6 +335,7 @@ public:
                     nmiMask_=false;
                 }
                 busy_=(value&1u)==0;
+                if(value&1u)subWaitForInterrupt_=true;
             }
             if(address==0xafe1) {
                 gvuControl_=value;
@@ -435,6 +440,7 @@ private:
     mutable bool mainKeyboardPending_=false;
     mutable std::uint16_t mainKeyboardCode_=0;
     mutable bool subIrq_=false;
+    mutable bool subWaitForInterrupt_=false;
     std::uint64_t nmiClockCycles_=60000;
     std::array<std::uint16_t,256> keyQueue_{};
     mutable std::size_t keyHead_=0,keyTail_=0;
