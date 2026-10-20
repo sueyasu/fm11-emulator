@@ -18,7 +18,7 @@ public:
     MainBoard() {
         display_.setAttentionSink([this](){signalAttention();});
         display_.setBreakSink([this](){signalBreak();});
-        display_.setMainEventControlReader([this](){return eventControl_;});
+        display_.setMainEventControlReader([this](){return readSubEventControl();});
         display_.setMainEventControlClearer([this](){eventControl_=0;});
         display_.setSubDmaRegisterWriter([this](unsigned offset,BYTE value) {
             if(offset<subSharedIo_.size())subSharedIo_[offset]=value;
@@ -50,6 +50,17 @@ public:
         floppy_->finishTransfer();
     }
     // FD04 main-board event latch: ATENT bit 0, BREAK bit 1.
+    // SubCpu::GetIoByte(AFF3) reads Fm11Ram[004], acknowledges bit 7,
+    // and raises ATTENTION when the main CPU is not already servicing one.
+    BYTE readSubEventControl() {
+        const BYTE result=eventControl_;
+        eventControl_&=static_cast<BYTE>(~0x80u);
+        if((result&0x80u)==0 && (eventStatus_&0x01u)==0) {
+            signalAttention();
+            eventControl_=0;
+        }
+        return result;
+    }
     void signalAttention() {eventStatus_|=0x01;}
     void signalBreak() {eventStatus_|=0x02;}
     void resetEvents() {eventStatus_=0;eventControl_=0;}
