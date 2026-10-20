@@ -128,5 +128,7 @@ private:
     std::uint64_t mainAccessClockFraction_=0;
     std::uint64_t measuredElapsedMs_=0;
     std::uint64_t timerElapsedMs_=0;
+    long double mainTotalClockMs_=0;
+    long double mainTotalAccesses_=0;
     unsigned serialTimerTicks_=0;
 };
