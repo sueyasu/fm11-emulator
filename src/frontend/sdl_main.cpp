@@ -470,6 +470,9 @@ int main(int argc,char** argv) {
                         if(pixel&0x00ff0000u)index|=1;
                         if(pixel&0x0000ff00u)index|=2;
                         if(pixel&0x000000ffu)index|=4;
+                        // fm11.hlsl masks the three VRAM planes with
+                        // AFE2 bits 0-2 before applying FD98-FD9F.
+                        index&=machine.displaySubsystem().graphicsDisplayOptions()&7u;
                         pixel=DisplayBitmap::referenceColor(
                             machine.mainDisplayPalette(index));
                     }
