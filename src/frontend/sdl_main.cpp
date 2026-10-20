@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <chrono>
 #include <iomanip>
+#include <memory>
 #include <cerrno>
 #include <cstdlib>
 #include <fcntl.h>
