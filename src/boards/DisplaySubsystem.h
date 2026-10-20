@@ -136,7 +136,12 @@ public:
     void requestSubIrq() {subIrq_=true;}
     bool subFirqPending() const {return subFirqLatch_!=0;}
     BYTE busyStatus() const {return busy_?0x80:0;}
-    BYTE readSubControl() const {return static_cast<BYTE>((subIoRam_[0]&0xfeu)|(busy_?0u:1u));}
+    // Reference GetIoByte(AFE0) derives READY from the main FD05 bit 7,
+    // rather than treating the last AFE0 write as an independent latch.
+    BYTE readSubControl() const {
+        const bool busy=haltRequested_ || busy_;
+        return static_cast<BYTE>((subIoRam_[0]&0xfeu)|(busy?0u:1u));
+    }
     std::size_t graphicsAccessPage() const {return gvuPage_;}
     std::size_t graphicsDisplayPage() const {return gvdPage_;}
     std::uint16_t graphicsOffset() const {return gvuOffset_;}
