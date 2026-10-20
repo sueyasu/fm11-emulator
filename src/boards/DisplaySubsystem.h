@@ -172,6 +172,7 @@ public:
     // Handshake output to the main board. The physical sub-I/O trigger
     // remains unassigned until its register decode is confirmed.
     void setAttentionSink(std::function<void()> sink) {attentionSink_=std::move(sink);}
+    void setMainEventControlReader(std::function<BYTE()> reader) {mainEventControlReader_=std::move(reader);}
     void notifyMainAttention() {if(attentionSink_)attentionSink_();}
     // The top 128 bytes of sub RAM also appear at main $FC80-$FCFF.
     BYTE readShared(std::size_t offset) const {return ram_[0x1f80+offset];}
@@ -216,6 +217,7 @@ public:
             return 0;
         }
         if(address==0xafe6)return const_cast<DisplaySubsystem*>(this)->readVsyncStatus();
+        if(address==0xaff3)return mainEventControlReader_?mainEventControlReader_():0;
         if(address==0xaff6) {
             if((ioRam_[0xff4]&0x80)==0 && kanjiLeft_<32) {
                 const BYTE result=kanjiRom_[kanjiBase_+kanjiLeft_];
@@ -382,6 +384,7 @@ private:
     BYTE displayAddressHigh_=0,crtcIndex_=0;
     std::uint16_t displayAddress_=0;
     std::array<BYTE,17> crtcRegisters_{};
+    std::function<BYTE()> mainEventControlReader_;
     std::size_t kanjiBase_=0;
     unsigned kanjiLeft_=32,kanjiRight_=32;
     std::array<BYTE,16> rtcDigits_{};
