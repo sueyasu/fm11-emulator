@@ -125,6 +125,7 @@ private:
     bool referenceWallClock_ = false;
     std::uint64_t measuredMainClockHz_=2000000;
     std::uint64_t measuredMainAccesses_=0;
+    std::uint64_t mainAccessClockFraction_=0;
     std::uint64_t measuredElapsedMs_=0;
     std::uint64_t timerElapsedMs_=0;
     unsigned serialTimerTicks_=0;
