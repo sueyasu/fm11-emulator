@@ -347,13 +347,13 @@ BYTE Main6809Board::mainIrqStatus()
 {
     const BYTE mask = ioOutputLatch_[0x02];
     BYTE value = 0;
-    // Serial input in the original Fm11IRQ uses mask bits 1/2, rather
-    // than a direct one-to-one mask with the FD03 status bit.
-    if ((mainIrqSources_ & 0x80) != 0 && (mask & 0x06) != 0)
+    // Source Fm11IRQ: RS232C uses FD02 bits 1, 2 and 3 (0x0E).
+    if ((mainIrqSources_ & 0x80) != 0 && (mask & 0x0e) != 0)
         value |= 0x80;
     if ((mainIrqSources_ & 0x40) != 0 && (mask & 0x80) != 0)
         value |= 0x40;
-    if ((mainIrqSources_ & 0x10) != 0)
+    // Source Fm11IRQ masks the DMA source by Fm11Ram[D55] bits 0-3.
+    if ((mainIrqSources_ & 0x10) != 0 && (ioRegisters_[0x55] & 0x0f) != 0)
         value |= 0x10;
     if ((mainIrqSources_ & 0x08) != 0 && (mask & 0x20) != 0)
         value |= 0x08;
