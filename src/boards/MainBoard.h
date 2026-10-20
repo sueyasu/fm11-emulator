@@ -19,6 +19,7 @@ public:
         display_.setAttentionSink([this](){signalAttention();});
         display_.setBreakSink([this](){signalBreak();});
         display_.setMainEventControlReader([this](){return eventControl_;});
+        display_.setMainEventControlClearer([this](){eventControl_=0;});
     }
     MainBoard(const MainBoard&)=delete;
     MainBoard& operator=(const MainBoard&)=delete;
