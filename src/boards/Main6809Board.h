@@ -101,6 +101,7 @@ public:
     // internal clock select 0). CPU cycles are supplied by the scheduler.
     void setCpuClockHz(std::uint64_t hz);
     std::uint64_t cpuClockHz() const {return cpuClockHz_;}
+    std::uint64_t memoryAccessCount() const {return memoryAccessCount_;}
     void setExternalClocking(bool enabled) {externalClocking_=enabled;}
     void advanceCpuCycles(std::uint64_t cycles);
 
@@ -111,6 +112,7 @@ public:
     void writePhysical(std::uint32_t address, BYTE value);
 
 private:
+    std::uint64_t memoryAccessCount_=0;
     BYTE bootDip_=0x9f;
     static constexpr std::size_t kPhysicalMemorySize = 1u << 20;
     static constexpr std::size_t kOnboardRamSize = 0x1000;
