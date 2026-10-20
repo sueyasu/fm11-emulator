@@ -65,9 +65,9 @@ mainloop
         ; Same KPAscii result selection as the OS driver:
         ; FC83==0 -> FC84 is ASCII; nonzero is extended status.
         tst     $0702
-        lbne    mainloop
+        bne     idlepoll
         lda     $0703
-        beq     mainloop  ; Diagnostic guards no-key; trace still logs it.
+        beq     idlepoll  ; No key: back off before next INKEY2 request.
         inc     $0705
         cmpa    #$0d
         beq     enter
@@ -87,6 +87,22 @@ enter   jsr     putchar
         lbra    mainloop
 backspace
         jsr     putchar
+        lbra    mainloop
+
+; Standalone ROM has no OS-9 F$Sleep. Limit empty polling to roughly
+; a few 60 Hz ticks by spending simulated main-CPU cycles without
+; HALTing the sub CPU. This is a busy delay, not a host OS sleep.
+idlepoll
+        pshs    x,b
+        ldb     #3
+idleouter
+        ldx     #$1000
+idleinner
+        leax    -1,x
+        bne     idleinner
+        decb
+        bne     idleouter
+        puls    x,b
         lbra    mainloop
 failed  lda     #$21
         ; Stop rather than silently repeating an invalid command.
