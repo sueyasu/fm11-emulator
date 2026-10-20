@@ -89,7 +89,7 @@ public:
     }
     void write(BYTE port,BYTE value) {
         if(port==0x38 || port==0x39) {
-            const unsigned no=port==0x39?1:((ptmReg_[2]&1)?0:2);
+            const unsigned no=port==0x39?1:((ptmReg_[1]&1)?0:2);
             ptmReg_[no]=(ptmReg_[no]&0x100)|value;
             if(no==0 && (value&1)) {
                 ptmReg_[0]=1;ptmReg_[1]=ptmReg_[2]=0;
@@ -209,7 +209,7 @@ private:
                     irqLatch_=true;
                 }
                 if((ptmReg_[no&3]&0x28)==0) {
-                    ptmInit_[no]=period(no);
+                    ptmInit_[no]=periodFromCount(no,ptmCtr_[no]);
                     ptmClock_[no]+=ptmInit_[no];
                     if(ptmFast_==0 || ptmFast_>ptmClock_[no])
                         ptmFast_=ptmClock_[no];
