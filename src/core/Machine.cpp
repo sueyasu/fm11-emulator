@@ -151,6 +151,11 @@ void Machine::advanceDisplayTime(std::uint64_t ns)
     displayCycleCredit_+=static_cast<std::int64_t>(cycles);
     while(displayCycleCredit_>0) {
         if(!sub.executeOne()) {
+            // SYNC/CWAI consumes real clock time even with no completed
+            // instructions. Keep the periodic keyboard/vsync NMI clock
+            // running so it can wake the display CPU on the next tick.
+            if(!mainBoard_->displaySubsystem().haltRequested())
+                sub.advanceIdleCycles(static_cast<std::uint64_t>(displayCycleCredit_));
             displayCycleCredit_=0;
             break;
         }
