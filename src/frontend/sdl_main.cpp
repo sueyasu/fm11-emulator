@@ -215,6 +215,10 @@ int main(int argc,char** argv) {
                 }
             }
             if(!paused && !testPattern) {
+                // Let the host idle while the guest waits for an interrupt.
+                // The elapsed interval is fed into the PTM below on wake.
+                if(mainBoard && mainBoard->cpuWaitState()!=CSim09::WaitState::Running)
+                    SDL_Delay(1);
                 // While the 6809 waits in SYNC/CWAI, instruction-cycle
                 // advancement stops. Keep the independent PTM clock moving.
                 const auto tickNow=std::chrono::steady_clock::now();
@@ -242,13 +246,16 @@ int main(int argc,char** argv) {
                         }
                         machine.executeOne();
                         serviceSerial();
+                        ++executed;
+                        if(mainBoard && mainBoard->cpuWaitState()!=CSim09::WaitState::Running)
+                            break;
                     }
                 } else {
                     // 2 MHz display CPU: advance elapsed time without a main
                     // CPU. The Machine scheduler also handles HALT and waits.
                     machine.advanceTimeNanoseconds(instructions*500);
                 }
-                executed+=instructions;
+                if(!machine.boardCount())executed+=instructions;
             }
             serviceSerial();
             const auto frameTime=std::chrono::steady_clock::now();
