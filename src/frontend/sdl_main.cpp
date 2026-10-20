@@ -322,7 +322,8 @@ int main(int argc,char** argv) {
                 lastVsyncTick+=std::chrono::milliseconds(16)*ticks;
                 // Windows WM_TIMER is coalesced; one notification is
                 // dispatched, even if multiple intervals elapsed.
-                machine.signalDisplayVsync();
+                machine.signalDisplayVsync(static_cast<std::uint64_t>(
+                    std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count()));
             }
             if(monitorInputOpen) {
                 pollfd fd{STDIN_FILENO,POLLIN,0};
