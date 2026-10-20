@@ -173,8 +173,10 @@ public:
     // Reference GetIoByte(AFE0) derives READY from the main FD05 bit 7,
     // rather than treating the last AFE0 write as an independent latch.
     BYTE readSubControl() const {
-        const bool busy=haltRequested_;
-        if(!busy)subWaitForInterrupt_=true; // Original Fm11Ram[0x105] bit 7
+        // SubCpu::GetIoByte(AFE0) tests Fm11Ram[D05] bit 7,
+        // not the main CPU's HALT request (Fm11Ram[005] bit 7).
+        const bool busy=busy_;
+        if(!busy)subWaitForInterrupt_=true; // Fm11Ram[105] bit 7
         return static_cast<BYTE>((subIoRam_[0]&0xfeu)|(busy?0u:1u));
     }
     bool subWaitForInterrupt() const {return subWaitForInterrupt_;}
