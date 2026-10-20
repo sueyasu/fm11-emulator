@@ -95,6 +95,10 @@ public:
     // Advance the common main-board timebase regardless of active CPU.
     // Do not also advance the same interval through board.advanceCpuCycles().
     void advanceTimeNanoseconds(std::uint64_t nanoseconds);
+    // SDL may drive the 16 ms display VSync from host monotonic time.
+    // Default stays emulated time for headless and deterministic tests.
+    void setExternalDisplayVsync(bool enabled) {externalDisplayVsync_=enabled; displayVsyncElapsedNs_=0;}
+    void signalDisplayVsync() {if(displayCpuClockHz_)mainBoard_->displaySubsystem().signalVsyncEvent();}
 
 
 private:
@@ -112,5 +116,6 @@ private:
     std::uint64_t displayCpuInputHz_ = 0;
     std::uint64_t displayNanosecondFraction_ = 0;
     std::uint64_t displayVsyncElapsedNs_ = 0;
+    bool externalDisplayVsync_ = false;
     std::int64_t displayCycleCredit_ = 0;
 };
