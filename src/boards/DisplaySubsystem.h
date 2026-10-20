@@ -386,7 +386,7 @@ private:
     std::array<BYTE,17> crtcRegisters_{};
     std::function<BYTE()> mainEventControlReader_;
     std::size_t kanjiBase_=0;
-    unsigned kanjiLeft_=32,kanjiRight_=32;
+    mutable unsigned kanjiLeft_=32,kanjiRight_=32;
     std::array<BYTE,16> rtcDigits_{};
     std::array<BYTE,kPhysicalVramSize> vram_{};
     std::array<BYTE,kRamSize> ram_{};
