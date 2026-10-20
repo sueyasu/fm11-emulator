@@ -180,6 +180,7 @@ int main(int argc,char** argv) {
                         } else if(action=="c"||action=="continue") {
                             running=true;
                             std::cout<<"CPU running (type stop to pause).\n";
+                            prompt();
                         } else if(action=="s"||action=="step") {
                             if(running)std::cout<<"Stop CPU first.\n";
                             else {machine.executeOne();++executed;drain();regs();}
