@@ -60,6 +60,8 @@ public:
         gvuControl_=gvuAddressHigh_=0;
         displayAddress_=0;displayAddressHigh_=0;crtcIndex_=0;
         crtcRegisters_.fill(0);
+        crtcColumns_=crtcRows_=charWidth_=charHeight_=0;
+        crtcStart_=cursorX_=cursorY_=cursorStart_=cursorEnd_=cursorDisplay_=0;
         // ROM contents and display memory survive a CPU reset. Hardware
         // power-on clearing is a separate future operation.
     }
@@ -186,6 +188,14 @@ public:
     std::size_t graphicsReadPlane() const {return gvuPlane_;}
     std::uint16_t graphicsDisplayAddress() const {return displayAddress_;}
     BYTE crtcRegister(unsigned index) const {return crtcRegisters_.at(index);}
+    unsigned crtcColumns() const {return crtcColumns_;}
+    unsigned crtcRows() const {return crtcRows_;}
+    unsigned crtcStart() const {return crtcStart_;}
+    unsigned cursorX() const {return cursorX_;}
+    unsigned cursorY() const {return cursorY_;}
+    unsigned cursorStart() const {return cursorStart_;}
+    unsigned cursorEnd() const {return cursorEnd_;}
+    unsigned cursorDisplay() const {return cursorDisplay_;}
     // AFE6 video-control flags. Individual bits are not yet mapped to
     // display modes until their FM-11 semantics have been verified.
     BYTE videoFlags() const {return videoFlags_;}
@@ -371,10 +381,9 @@ public:
         }
         else if(address==0xafee)crtcIndex_=value&0x1f;
         else if(address==0xafef) {
-            if(crtcIndex_<crtcRegisters_.size() &&
-               crtcRegisters_[crtcIndex_]!=value) {
+            if(crtcIndex_<crtcRegisters_.size()) {
                 crtcRegisters_[crtcIndex_]=value;
-                if(crtcIndex_==13)vsyncCount_=100;
+                updateCrtc(); // Original SubCRTC is called even for unchanged writes.
                 markVideoChanged();
             }
         }
@@ -462,6 +471,47 @@ private:
     BYTE gvuControl_=0,gvuAddressHigh_=0;
     unsigned gvuPage_=0,gvuPlane_=0,gvdPage_=0;
     std::uint16_t gvuOffset_=0;
+    // SubCpu::SubCRTC recalculates these fields on each AFEF write.
+    void updateCrtc() {
+        switch(crtcIndex_&0x1f) {
+        case 1:
+            crtcColumns_=unsigned(crtcRegisters_[1])*2;
+            if(crtcColumns_)charWidth_=640/crtcColumns_;
+            break;
+        case 6:
+            crtcRows_=crtcRegisters_[6];
+            if(crtcRows_)charHeight_=400/crtcRows_;
+            [[fallthrough]];
+        case 10: case 11:
+            cursorDisplay_=(crtcRegisters_[10]&0x60)>>5;
+            cursorStart_=crtcRegisters_[10]&0x1f;
+            cursorEnd_=crtcRegisters_[11]&0x1f;
+            if(charHeight_) {
+                if(cursorStart_>=charHeight_)cursorStart_=charHeight_-1;
+                if(cursorEnd_>=charHeight_)cursorEnd_=charHeight_-1;
+            }
+            break;
+        case 13:
+            crtcStart_=((unsigned(crtcRegisters_[12])<<9)|
+                        (unsigned(crtcRegisters_[13])<<1))&0x7ff;
+            vsyncCount_=100;
+            break;
+        case 15:
+            if(crtcColumns_) {
+                unsigned n=((unsigned(crtcRegisters_[14])<<8)|crtcRegisters_[15])-
+                           ((unsigned(crtcRegisters_[12])<<8)|crtcRegisters_[13]);
+                n&=0xfff;
+                n=(n<<1)|((subIoRam_[0]&0x20)?1u:0u);
+                cursorX_=n%crtcColumns_;
+                cursorY_=n/crtcColumns_;
+            }
+            break;
+        default:break;
+        }
+    }
+    unsigned crtcColumns_=0,crtcRows_=0,charWidth_=0,charHeight_=0;
+    unsigned crtcStart_=0,cursorX_=0,cursorY_=0;
+    unsigned cursorStart_=0,cursorEnd_=0,cursorDisplay_=0;
     BYTE displayAddressHigh_=0,crtcIndex_=0;
     std::uint16_t displayAddress_=0;
     std::array<BYTE,17> crtcRegisters_{};
