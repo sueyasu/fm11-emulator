@@ -94,8 +94,7 @@ public:
                 ptmReg_[0]=1;ptmReg_[1]=ptmReg_[2]=0;
                 ptmClock_.fill(0);
                 ptmInit_.fill(0);
-                ptmFast_=0;
-                sysClock_=0;
+                // Reference reset clears the counters and FD39, not SysClock/PtmFast.
                 status=0;
                 irqAcknowledged=false;
                 irqLatch_=false;
@@ -105,7 +104,7 @@ public:
                 for(unsigned n=0;n<3;++n)
                     irq|=(status&(1u<<n)) && (ptmReg_[n]&0x40);
                 if(irq)status|=0x80;
-                else irqLatch_=false;
+                if((status&7)==0)irqLatch_=false;
                 switch(ptmReg_[no]&0x38) {
                 case 0x10: case 0x30:
                     start(no);
@@ -129,7 +128,7 @@ public:
             if(count==0)count=0x10000;
             if(no==2 && (ptmReg_[no]&1))count*=8;
             ptmCtr_[no]=static_cast<WORD>(count);
-            ptmClock_[no]=ptmInit_[no]=period(no);
+            ptmClock_[no]=ptmInit_[no]=periodFromCount(no,count);
             if((ptmReg_[no]&0x18)==0 || (ptmReg_[no]&0x100))
                 start(no);
         } else {
@@ -137,7 +136,7 @@ public:
             std::uint32_t count=value?value:0x100;
             if(no==2 && (ptmReg_[no]&1))count*=8;
             ptmCtr_[slot]=static_cast<WORD>(count);
-            ptmClock_[slot]=ptmInit_[slot]=period(slot);
+            ptmClock_[slot]=ptmInit_[slot]=periodFromCount(slot,count);
             if((ptmReg_[no]&0x18)==0 || (ptmReg_[slot]&0x100))
                 start(slot);
         }
@@ -166,10 +165,12 @@ private:
     std::int64_t ptmFast_=0;
     std::uint64_t cpuClock_=2000000;
     bool irqLatch_=false;
-    std::int64_t period(unsigned no) const {
+    std::int64_t periodFromCount(unsigned no,std::uint64_t count) const {
         const auto divisor=(ptmReg_[no]&0x02)?ptmHz*200:ptmHz;
-        return static_cast<std::int64_t>(
-            static_cast<std::uint64_t>(ptmCtr_[no])*cpuClock_/divisor);
+        return static_cast<std::int64_t>(count*cpuClock_/divisor);
+    }
+    std::int64_t period(unsigned no) const {
+        return periodFromCount(no,ptmCtr_[no]);
     }
     void start(unsigned no) {
         ptmReg_[no]|=0x100;
