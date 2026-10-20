@@ -96,40 +96,48 @@ void Machine::reset()
     mainTotalClockMs_=0;
     mainTotalAccesses_=0;
     serialTimerTicks_=0;
+    referenceTimerPending_=false;
+    lastClockCalibration_=std::chrono::steady_clock::time_point{};
     displayVsyncElapsedNs_=0;
     synchronizeFd05Selection();
 }
 
 void Machine::signalReferenceTimer(std::uint64_t elapsedMs)
 {
-    // ChildView::OnTimer notifies both CPUs. The original MainCpu::SimONE
-    // recalibrates CpuClock from reference memory accesses every ~2 seconds
-    // and processes serial terminal IRQ requests on each fourth timer tick.
+    // ChildView::OnTimer latches one event; main SimONE consumes it.
+    // A slow host must not dispatch a burst of synthetic timer interrupts.
     signalDisplayVsync(elapsedMs);
-    timerElapsedMs_+=elapsedMs;
-    measuredElapsedMs_+=elapsedMs;
+    referenceTimerPending_=true;
+}
+
+void Machine::serviceReferenceMainTimer()
+{
+    if(!referenceTimerPending_)return;
+    referenceTimerPending_=false;
+    const auto now=std::chrono::steady_clock::now();
+    if(lastClockCalibration_==std::chrono::steady_clock::time_point{})
+        lastClockCalibration_=now;
+    const auto elapsed=std::chrono::duration_cast<std::chrono::milliseconds>(
+        now-lastClockCalibration_).count();
     for(auto& board:boards_) {
         if(auto* cpu6809=dynamic_cast<Main6809Board*>(board.get())) {
             const auto accesses=cpu6809->memoryAccessCount();
             if(accesses>=measuredMainAccesses_ &&
-                (timerElapsedMs_>=2000 || accesses-measuredMainAccesses_>1000000)) {
+               (elapsed>=2000 || accesses-measuredMainAccesses_>1000000)) {
                 const auto delta=accesses-measuredMainAccesses_;
-                if(measuredElapsedMs_ && delta) {
-                    // MainCpu::SimONE accumulates TotalTicks/TotalClock
-                    // rather than replacing CpuClock with each interval.
-                    mainTotalClockMs_+=static_cast<long double>(measuredElapsedMs_);
+                if(elapsed>0 && delta) {
+                    mainTotalClockMs_+=static_cast<long double>(elapsed);
                     mainTotalAccesses_+=static_cast<long double>(delta);
-                    const auto hz=mainTotalAccesses_*1000.0L/mainTotalClockMs_;
                     measuredMainClockHz_=std::max<std::uint64_t>(
-                        1,static_cast<std::uint64_t>(hz));
+                        1,static_cast<std::uint64_t>(
+                            mainTotalAccesses_*1000.0L/mainTotalClockMs_));
                     if(mainTotalClockMs_>180000.0L) {
                         mainTotalClockMs_/=10.0L;
                         mainTotalAccesses_/=10.0L;
                     }
                 }
                 measuredMainAccesses_=accesses;
-                measuredElapsedMs_=0;
-                timerElapsedMs_=0;
+                lastClockCalibration_=now;
             }
         }
     }
@@ -200,6 +208,7 @@ void Machine::executeOne()
             cpu8088->bus().refreshSystemIrq();
         const auto* refCpu=dynamic_cast<Main6809Board*>(board);
         const auto beforeAccesses=refCpu?refCpu->memoryAccessCount():0;
+        if(referenceWallClock_)serviceReferenceMainTimer();
         board->cpu().executeOne();
         lastExecutionCycles_=board->cpu().lastExecutionCycles();
         if(referenceWallClock_ && refCpu && measuredMainClockHz_) {
