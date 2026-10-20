@@ -39,6 +39,17 @@ public:
             SimNMI();
             nmiCycles_=0;
         }
+        // Reference SubCpu::SimONE: after AFE0 announces READY, the
+        // display CPU stays idle until IRQ, FIRQ or NMI is serviced.
+        if(display_.readyWait()) {
+            const bool interruptPresent=
+                display_.subIrqPending() || display_.subFirqPending();
+            const bool periodicNmi=
+                !display_.nmiMask() &&
+                nmiCycles_>=display_.nmiClockCycles();
+            if(!interruptPresent && !periodicNmi)return false;
+            display_.clearReadyWait();
+        }
         if(waitState()!=WaitState::Running)return false;
         display_.beginCpuInstruction(regs.r.w.PC);
         try {
