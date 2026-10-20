@@ -34,7 +34,6 @@ public:
     void reset() {
         haltRequested_=false;
         busy_=true;
-        readyWait_=false;
         if(videoFlags_!=0)markVideoChanged();
         videoFlags_=0;
         vsyncCount_=0;
@@ -63,8 +62,6 @@ public:
     void requestHalt() {haltRequested_=true;}
     void releaseHalt() {haltRequested_=false;}
     bool haltRequested() const {return haltRequested_;}
-    bool readyWait() const {return readyWait_;}
-    void clearReadyWait() {readyWait_=false;}
 
     void loadRom(const RomImage& image) {rom_=image;}
     void loadAnkRom(const AnkRomImage& image) {ankRom_=image;markVideoChanged();}
@@ -281,7 +278,6 @@ public:
                     nmiMask_=false;
                 }
                 busy_=(value&1u)==0;
-                if(!busy_)readyWait_=true;
             }
             if(address==0xafe1) {
                 gvuControl_=value;
@@ -375,7 +371,6 @@ private:
     std::function<void()> attentionSink_;
     bool haltRequested_=false;
     bool busy_=true;
-    bool readyWait_=false;
     std::array<BYTE,0x1000> ioRam_{};
     BYTE dmaChannel0_=0;
     bool nmiMask_=true;
