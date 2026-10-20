@@ -245,12 +245,12 @@ int main(int argc,char** argv) {
                 stream>>state;
                 if(state=="off") {
                     machine.setDisplayKeyboardEnabled(false);
-                    std::cout<<"Guest keyboard disabled (queues and key latches cleared).\\n";
+                    std::cout<<"Guest keyboard disabled (queues and key latches cleared).\n";
                 } else if(state=="on") {
                     machine.setDisplayKeyboardEnabled(true);
-                    std::cout<<"Guest keyboard enabled.\\n";
+                    std::cout<<"Guest keyboard enabled.\n";
                 } else {
-                    std::cout<<"usage: keyboard on|off\\n";
+                    std::cout<<"usage: keyboard on|off\n";
                 }
             } else if(cmd=="q"||cmd=="quit")running=false;
             else if(cmd=="r"||cmd=="regs")showRegisters();
