@@ -180,7 +180,12 @@ public:
                 nearest=std::min<std::uint64_t>(nearest,ticks);
             }
         if(nearest==UINT64_MAX)return nearest;
-        return (nearest*1000000000ULL+9699)/9700;
+        const auto hz=referenceClockHz_?referenceClockHz_:2000000ULL;
+        const auto seconds=nearest/hz;
+        const auto remainder=nearest%hz;
+        if(seconds>UINT64_MAX/1000000000ULL)return UINT64_MAX;
+        return seconds*1000000000ULL+
+            (remainder*1000000000ULL+hz-1)/hz;
     }
     std::array<Channel,3> channels{};
     std::array<BYTE,3> latchHigh{};
