@@ -130,9 +130,12 @@ void Machine::serviceReferenceMainTimer()
                 if(elapsed>0 && delta) {
                     mainTotalClockMs_+=static_cast<long double>(elapsed);
                     mainTotalAccesses_+=static_cast<long double>(delta);
-                    measuredMainClockHz_=std::max<std::uint64_t>(
-                        1,static_cast<std::uint64_t>(
-                            mainTotalAccesses_*1000.0L/mainTotalClockMs_));
+                    // MainCpu::SimONE updates CpuClock only after the
+                    // accumulated host interval exceeds one second.
+                    if(mainTotalClockMs_>1000.0L)
+                        measuredMainClockHz_=std::max<std::uint64_t>(
+                            1,static_cast<std::uint64_t>(
+                                mainTotalAccesses_*1000.0L/mainTotalClockMs_));
                     if(mainTotalClockMs_>180000.0L) {
                         mainTotalClockMs_/=10.0L;
                         mainTotalAccesses_/=10.0L;
