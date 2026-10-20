@@ -118,6 +118,7 @@ private:
     BYTE readPtm(BYTE port);
     void writePtm(BYTE port, BYTE value);
     void refreshPtmIrq();
+    void refreshKeyboardIrq();
     BYTE mainIrqStatus();
     void refreshDmaCompletion();
     BYTE extendedIrqStatus();
