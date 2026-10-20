@@ -96,8 +96,8 @@ public:
                 ptmInit_.fill(0);
                 // Reference reset clears the counters and FD39, not SysClock/PtmFast.
                 status=0;
-                irqAcknowledged=false;
-                irqLatch_=false;
+                // Source PTM reset leaves FY03 unchanged until a PTM
+                // acknowledgement/interval or a later Fm11IRQ update.
             } else {
                 status=static_cast<BYTE>((status&~(1u<<no))&0x7f);
                 bool irq=false;
