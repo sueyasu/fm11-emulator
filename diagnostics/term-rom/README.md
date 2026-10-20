@@ -39,10 +39,10 @@ event count before/after typing a short string. With no keyboard activity
 the raw count should not continuously rise. The trace deliberately retains
 nonprintable and internal event codes before input filtering.
 
-The startup token 0050 and host 'P' share the same simple 16-bit code in
-this minimal pipeline; this ROM currently filters 0050 from display and
-the accepted count, so uppercase P will not echo. This is a diagnostic
-limitation to resolve when integrating the actual /Term input routine.
+The boot-time keyboard initialization token 0050 is normally delivered
+before the main-CPU keyboard mode is activated. Ordinary uppercase P is
+therefore preserved in the shell echo. If the raw trace contains a
+spurious 0050 after initialization, report it as a separate bug.
 
 Important: current ROM tests the main-CPU FD02/FD03/FD00/FD01 keyboard
 notification path, and a deterministic shared RAM display mailbox. It
