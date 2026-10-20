@@ -105,13 +105,15 @@ int main(int argc,char** argv) {
             cfmakeraw(&settings);
             tcsetattr(slave,TCSANOW,&settings);
         }
-        std::cout<<"Guest serial: "<<path<<"\n"
-                 <<"Monitor: c/continue, stop, s/step, r/regs, q/quit\n";
+        std::cout<<"FM-11 headless monitor\nSerial: "<<path
+                 <<"\nCPU halted. Type help for commands.\n"<<std::flush;
         std::signal(SIGINT,stop);
         std::signal(SIGTERM,stop);
-        bool running=true,inputOpen=true;
+        bool running=false,inputOpen=true;
         std::string line;
         std::uint64_t executed=0;
+        auto prompt=[&](){std::cout<<"fm11> "<<std::flush;};
+        prompt();
         auto lastClock=std::chrono::steady_clock::now();
         auto lastVsync=lastClock;
         auto lastStats=lastClock;
@@ -170,12 +172,20 @@ int main(int argc,char** argv) {
                         std::istringstream cmd(line);
                         std::string action;cmd>>action;line.clear();
                         if(action=="q"||action=="quit")stopRequested=1;
-                        else if(action=="stop")running=false;
-                        else if(action=="c"||action=="continue")running=true;
-                        else if(action=="s"||action=="step") {
-                            running=false;machine.executeOne();++executed;regs();
+                        else if(action=="help"||action=="h"||action=="?") {
+                            std::cout<<"c/continue, stop, s/step, r/regs, q/quit, h/help\n";
+                        } else if(action=="stop") {
+                            running=false;
+                            std::cout<<"CPU halted.\n";
+                        } else if(action=="c"||action=="continue") {
+                            running=true;
+                            std::cout<<"CPU running (type stop to pause).\n";
+                        } else if(action=="s"||action=="step") {
+                            if(running)std::cout<<"Stop CPU first.\n";
+                            else {machine.executeOne();++executed;drain();regs();}
                         } else if(action=="r"||action=="regs")regs();
-                        else if(!action.empty())std::cout<<"unknown command\n";
+                        else if(!action.empty())std::cout<<"Unknown command. Type help.\n";
+                        if(!running && !stopRequested)prompt();
                     } else if(buf[i]==127||buf[i]=='\b') {
                         if(!line.empty())line.pop_back();
                     } else if(line.size()<1024)line+=buf[i];
@@ -189,7 +199,12 @@ int main(int argc,char** argv) {
             drain();
             if(running) {
                 for(std::uint64_t i=0;i<cycles && !stopRequested;++i) {
-                    if(limit && executed>=limit){running=false;break;}
+                    if(limit && executed>=limit){
+                        running=false;
+                        std::cout<<"Instruction limit reached.\n";
+                        prompt();
+                        break;
+                    }
                     if(trace && executed<64)
                         std::cerr<<"main step="<<executed<<" PC=$"<<std::hex
                                  <<main->cpu().pc()<<std::dec<<"\n";
