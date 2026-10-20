@@ -29,16 +29,6 @@ public:
         // Reference SubCpu::SimONE: interrupt priority IRQ, FIRQ, NMI.
         // The original clock threshold is 60000 at reset, recalibrated
         // dynamically by the Windows event loop. Use CPU cycles here.
-        if(display_.subIrqPending())SimIRQ();
-        if(display_.subFirqPending())SimFIRQ();
-        if(!display_.nmiMask() && nmiCycles_>=display_.nmiClockCycles()) {
-            // Original timed keyboard/vsync event calls GetKeyCode before
-            // dispatching the periodic NMI. Without this, the initial
-            // AFE0-generated key and queued host input remain dormant
-            // until firmware happens to read AFED.
-            SimNMI();
-            nmiCycles_=0;
-        }
         // Reference SubCpu::SimONE: after AFE0 announces READY, the
         // display CPU stays idle until IRQ, FIRQ or NMI is serviced.
         if(display_.readyWait()) {
@@ -49,6 +39,16 @@ public:
                 nmiCycles_>=display_.nmiClockCycles();
             if(!interruptPresent && !periodicNmi)return false;
             display_.clearReadyWait();
+        }
+        if(display_.subIrqPending())SimIRQ();
+        if(display_.subFirqPending())SimFIRQ();
+        if(!display_.nmiMask() && nmiCycles_>=display_.nmiClockCycles()) {
+            // Original timed keyboard/vsync event calls GetKeyCode before
+            // dispatching the periodic NMI. Without this, the initial
+            // AFE0-generated key and queued host input remain dormant
+            // until firmware happens to read AFED.
+            SimNMI();
+            nmiCycles_=0;
         }
         if(waitState()!=WaitState::Running)return false;
         display_.beginCpuInstruction(regs.r.w.PC);
