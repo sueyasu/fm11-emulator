@@ -209,16 +209,14 @@ void Main6809Board::readFloppySector()
                                  floppy_->registerValue(0x1a),floppy_->registerValue(0x1d)&3,false);
     if(dma) {
         const unsigned count=(ioRegisters_[0x42]<<8)|ioRegisters_[0x43];
-        if(count!=256) {
-            ++fdcReadFailures_;
-            floppyStatus_=0x10;
-            ioRegisters_[0x50]|=0x40;
-            return;
-        }
+        // Fm11DMA transfers up to the remaining DMA count. A count
+        // shorter than a sector ends DMA successfully; a longer one
+        // reports not-ended (B/R), not a WD179x record-not-found.
+        const unsigned transfer=std::min(count,256u);
         const bool down=(ioRegisters_[0x50]&0x08)!=0;
         const WORD startAddress=WORD((ioRegisters_[0x40]<<8)|ioRegisters_[0x41]);
         const std::uint32_t dmaBank=std::uint32_t(ioRegisters_[0x94]&0x0f)<<16;
-        for(unsigned i=0;i<256;++i) {
+        for(unsigned i=0;i<transfer;++i) {
             const WORD address=WORD(startAddress+(down?-int(i):int(i)));
             if((dmaBank|address)>=memory_.size()) {
                 ++fdcReadFailures_;
@@ -227,20 +225,22 @@ void Main6809Board::readFloppySector()
                 return;
             }
         }
-        for(unsigned i=0;i<256;++i) {
+        for(unsigned i=0;i<transfer;++i) {
             const WORD address=WORD(startAddress+(down?-int(i):int(i)));
             writePhysical(dmaBank|address,floppySector_[i]);
         }
         // The completed 256-byte transfer advances the channel address and
         // exhausts the byte count, as a DMA engine would do.
-        const WORD advanced=WORD(startAddress+(down?-256:256));
+        const WORD advanced=WORD(startAddress+(down?-int(transfer):int(transfer)));
         ioRegisters_[0x40]=BYTE(advanced>>8);
         ioRegisters_[0x41]=BYTE(advanced);
-        ioRegisters_[0x42]=0;
-        ioRegisters_[0x43]=0;
+        const unsigned remaining=count-transfer;
+        ioRegisters_[0x42]=BYTE(remaining>>8);
+        ioRegisters_[0x43]=BYTE(remaining);
         floppyOffset_=256;
         floppyStatus_=0;
-        ioRegisters_[0x50]=static_cast<BYTE>((ioRegisters_[0x50]|0x80)&~0x40);
+        if(remaining==0)ioRegisters_[0x50]=static_cast<BYTE>((ioRegisters_[0x50]|0x80)&~0x40);
+        else ioRegisters_[0x50]|=0x40;
         // Completion is visible both in the per-channel status and in the
         // DMA common completion latch, until the channel status is read.
         refreshDmaCompletion();
@@ -826,6 +826,11 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             floppy_->writeRegister(0x1f,floppy_->registerValue(0x1c));
             break;
         }
+        // The reference Fm11MiniFDC always raises command completion,
+        // including Type-II DMA reads and errors. FD1F polls wait for
+        // this bit and cannot advance if it is left at zero.
+        floppy_->writeRegister(0x1c,static_cast<BYTE>(floppy_->registerValue(0x1c)|0x40));
+        floppy_->writeRegister(0x1f,floppy_->registerValue(0x1c));
         break;
     case 0x1b:
         // The WD179x data register is also the SEEK target and must retain
