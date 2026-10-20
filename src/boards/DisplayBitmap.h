@@ -204,9 +204,13 @@ public:
                 const bool glyph=(character!=0 && character!=0x20 &&
                     sy<16 && glyphX<8 &&
                     (display.ankGlyphRow(character,sy)&(1u<<glyphX))!=0);
+                const bool nonblank=character!=0 && character!=0x20;
                 const bool lit=glyph ^ ((attribute&0x08)!=0);
                 if(lit) {
-                    const unsigned color=(attribute&0x07)|((attribute&0x20)?8u:0u);
+                    // fm11.hlsl only applies ATT_BOLD inside the nonblank
+                    // character branch. Reversed blank cells use ATT_COLOR.
+                    const unsigned color=(attribute&0x07)|
+                        ((nonblank && (attribute&0x20))?8u:0u);
                     const auto rgb=referenceColor(color);
                     if((rgb&0x00ffffffu)!=0)frame.argb[y*640+x]=rgb;
                 }
