@@ -2,6 +2,7 @@
 #include "DisplaySubsystem.h"
 #include "Sim09.h"
 #include <cstdint>
+#include <algorithm>
 
 // The display CPU is a separate MC6809 with its own address space, not
 // another main CPU card. All memory cycles reach the display subsystem.
@@ -11,15 +12,33 @@ public:
         Set6309Enabled(false);
     }
     BYTE GetMemByte(WORD address) override {
+        ++memoryAccesses_;
         return display_.readMemory(address);
     }
     void SetMemByte(WORD address,BYTE value) override {
+        ++memoryAccesses_;
         display_.writeMemory(address,value);
     }
     void resetCpu() {
         SimRESET();
         nmiCycles_=0;
+        nmiThreshold_=60000;
+        memoryAccesses_=0;
+        totalAccesses_=0;
+        elapsedTimerMs_=0;
         display_.resetInterruptClock();
+    }
+    // Original SubCpu::GetMemByte/SetMemByte increment CpuClock and TotClock.
+    // Recalibrate its 20 ms NMI period against measured host time every ~2 s.
+    void timerTick(std::uint64_t elapsedMs) {
+        display_.signalVsyncEvent();
+        elapsedTimerMs_+=elapsedMs;
+        if(elapsedTimerMs_>=2000 || totalAccesses_>1000000) {
+            if(elapsedTimerMs_ && totalAccesses_)
+                nmiThreshold_=std::max<std::uint64_t>(1,20*totalAccesses_/elapsedTimerMs_);
+            totalAccesses_=0;
+            elapsedTimerMs_=0;
+        }
     }
     bool executeOne() {
         // Windows SubCpu::SimONE handles pending timer/VSync first,
@@ -31,7 +50,7 @@ public:
         // dynamically by the Windows event loop. Use CPU cycles here.
         if(display_.subIrqPending())SimIRQ();
         if(display_.subFirqPending())SimFIRQ();
-        if(!display_.nmiMask() && nmiCycles_>=display_.nmiClockCycles()) {
+        if(!display_.nmiMask() && nmiCycles_>=nmiThreshold_) {
             // Original timed keyboard/vsync event calls GetKeyCode before
             // dispatching the periodic NMI. Without this, the initial
             // AFE0-generated key and queued host input remain dormant
@@ -40,6 +59,7 @@ public:
             nmiCycles_=0;
         }
         if(waitState()!=WaitState::Running)return false;
+        lastInstructionAccesses_=memoryAccesses_;
         display_.beginCpuInstruction(regs.r.w.PC);
         try {
             SimONE();
@@ -48,12 +68,19 @@ public:
             throw;
         }
         display_.endCpuInstruction();
-        nmiCycles_+=LastInstructionCycles();
+        const auto delta=memoryAccesses_-lastInstructionAccesses_;
+        nmiCycles_+=delta;
+        totalAccesses_+=delta;
         return true;
     }
-    void advanceIdleCycles(std::uint64_t cycles) {nmiCycles_+=cycles;}
+    void advanceIdleCycles(std::uint64_t) {}
     std::uint16_t pc() const {return regs.r.w.PC;}
 private:
     std::uint64_t nmiCycles_=0;
+    std::uint64_t nmiThreshold_=60000;
+    std::uint64_t memoryAccesses_=0;
+    std::uint64_t lastInstructionAccesses_=0;
+    std::uint64_t totalAccesses_=0;
+    std::uint64_t elapsedTimerMs_=0;
     DisplaySubsystem& display_;
 };
