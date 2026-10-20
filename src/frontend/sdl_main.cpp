@@ -4,6 +4,7 @@
 #include "RomFiles.h"
 #include <SDL.h>
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <iomanip>
 #include <cerrno>
@@ -28,6 +29,39 @@ struct Sdl {
             throw std::runtime_error(SDL_GetError());
     }
     ~Sdl(){SDL_Quit();}
+};
+// The original SubCpu AFF8/AFF9 read/write toggles MainCpu::BeepSound.
+// SDL has no MFC sound object; render an equivalent sustained tone while on.
+struct BeepAudio {
+    std::atomic<bool> enabled{false};
+    SDL_AudioDeviceID device=0;
+    unsigned phase=0;
+    static void callback(void* userdata,Uint8* stream,int length) {
+        auto* self=static_cast<BeepAudio*>(userdata);
+        auto* samples=reinterpret_cast<Sint16*>(stream);
+        const int count=length/static_cast<int>(sizeof(Sint16));
+        const bool on=self->enabled.load(std::memory_order_relaxed);
+        for(int i=0;i<count;++i) {
+            self->phase=(self->phase+880u)%44100u;
+            samples[i]=on ? static_cast<Sint16>(self->phase<22050u?1500:-1500) : 0;
+        }
+    }
+    BeepAudio() {
+        if(SDL_InitSubSystem(SDL_INIT_AUDIO)!=0)return;
+        SDL_AudioSpec desired{};
+        desired.freq=44100;
+        desired.format=AUDIO_S16SYS;
+        desired.channels=1;
+        desired.samples=512;
+        desired.callback=callback;
+        desired.userdata=this;
+        device=SDL_OpenAudioDevice(nullptr,0,&desired,nullptr,0);
+        if(device)SDL_PauseAudioDevice(device,0);
+    }
+    ~BeepAudio() {
+        if(device)SDL_CloseAudioDevice(device);
+        SDL_QuitSubSystem(SDL_INIT_AUDIO);
+    }
 };
 struct Window {
     SDL_Window* window=nullptr;
@@ -139,6 +173,7 @@ int main(int argc,char** argv) {
         machine.setReferenceWallClock(true);
         if(keyboardOffAfterInit)machine.disableDisplayKeyboardAfterStartupKey(true);
         Sdl sdl;
+        BeepAudio beep;
         Window ui;
         ui.window=SDL_CreateWindow("FM-11 display subsystem",
              SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,960,
@@ -464,6 +499,7 @@ int main(int argc,char** argv) {
                 executed+=instructions;
             }
             drainSerial();
+            beep.enabled.store(machine.displaySubsystem().beepEnabled(),std::memory_order_relaxed);
             const auto frameTime=std::chrono::steady_clock::now();
             if(frameTime-lastFrame>=std::chrono::microseconds(16667)) {
                 lastFrame=frameTime;
