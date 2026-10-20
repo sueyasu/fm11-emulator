@@ -82,7 +82,7 @@ void usage() {
                " [--boot-dip HEX] [--no-trace] [--trace-sub-after-fd05 N]\n"
                "SDL-free real sub-ROM INKEY2 probe. Host stdin -> sub keyboard queue.\n"
                "Use a terminal for raw input (Enter, Backspace and ASCII).\n"
-               "After host input, up to 1024 additional INKEY2/AFEC/AFED events are logged.\n"
+               "After host input, polling samples are bounded but nonempty key results remain visible.\n"
                "Ctrl-] exits; /T1 serial is available through a separate PTY.\n";
 }
 }
@@ -130,14 +130,15 @@ int main(int argc,char** argv) {
             auto releaseCount=std::make_shared<unsigned>(0);
             // One ordered log for main FD05, sub AFE0 and shared RAM accesses.
             auto seq=std::make_shared<std::uint64_t>(0);
-            auto postCount=std::make_shared<unsigned>(0);
-            auto tracePost=[hostInputSeen,postCount]() {
-                return *hostInputSeen && *postCount<1024;
+            // Keep polling noise bounded, but never suppress nonempty results.
+            auto postSample=std::make_shared<unsigned>(0);
+            auto tracePost=[hostInputSeen,postSample]() {
+                return *hostInputSeen && *postSample<32;
             };
             machine.setSubKeyboardReadObserver(
-                [seq,tracePost,postCount](std::uint16_t address,BYTE value,std::uint16_t pc) {
-                    if(!tracePost())return;
-                    ++*postCount;
+                [seq,tracePost,postSample,hostInputSeen](std::uint16_t address,BYTE value,std::uint16_t pc) {
+                    if(!*hostInputSeen || (!value && !tracePost()))return;
+                    if(!value)++*postSample;
                     std::cerr<<"EV "<<++*seq<<" SUB R $"<<std::hex<<std::uppercase
                              <<std::setw(4)<<std::setfill('0')<<address
                              <<"=$"<<std::setw(2)<<unsigned(value)
@@ -209,12 +210,12 @@ int main(int argc,char** argv) {
             auto active=std::make_shared<bool>(false);
             auto n=std::make_shared<unsigned>(0);
             machine.setDisplaySharedTraceObserver(
-                [active,n,seq,&machine,tracePost,postCount](DisplaySubsystem::SharedTrace e) {
+                [active,n,seq,&machine,tracePost,postSample,hostInputSeen](DisplaySubsystem::SharedTrace e) {
                     if(e.mainCpu && e.write && e.offset==2 && e.value==0x2d) {
                         *active=true;
                         ++*n;
                         if(*n<=128 || tracePost()) {
-                            if(*n>128)++*postCount;
+                            if(*n>128)++*postSample;
                             std::cerr<<"EV "<<++*seq<<" INKEY2 #"<<*n
                             <<" request subPC=$"<<std::hex<<std::uppercase
                             <<std::setw(4)<<std::setfill('0')<<machine.displayCpuPc()
@@ -222,8 +223,12 @@ int main(int argc,char** argv) {
                         }
                     }
                     if(!*active)return;
-                    if((e.offset==3 || e.offset==4) && (*n<=128 || tracePost())) {
-                        if(*n>128)++*postCount;
+                    // After host input, always record a nonzero key response.
+                    // $80 on FC83 means no key; the following FC84 is noise.
+                    const bool keyResponse=*hostInputSeen && e.offset==3 &&
+                                           !e.write && e.value!=0x80;
+                    if((e.offset==3 || e.offset==4) && (*n<=128 || tracePost() || keyResponse)) {
+                        if(*n>128 && !keyResponse)++*postSample;
                         std::cerr<<"EV "<<++*seq<<" INKEY2 #"<<*n<<" "<<(e.mainCpu?"MAIN":"SUB")
                                  <<(e.write?" W":" R")<<" FC8"<<unsigned(e.offset)
                                  <<"=$"<<std::hex<<std::uppercase<<std::setw(2)
