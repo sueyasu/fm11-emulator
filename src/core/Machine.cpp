@@ -88,11 +88,7 @@ void Machine::reset()
     for (auto& board : boards_)
         board->reset();
     lastExecutionCycles_=0;
-    displayCycleCredit_=0;
-    displayCycleFraction_=0;
-    displayNanosecondFraction_=0;
     displayVsyncElapsedNs_=0;
-    displayCpuInputHz_=0;
     synchronizeFd05Selection();
 }
 
@@ -118,14 +114,8 @@ void Machine::setDisplayCpuClockHz(std::uint64_t hz)
 {
     if(hz>1000000000ULL)
         throw std::invalid_argument("display CPU clock must not exceed 1 GHz");
-    // Reapplying the same configuration must not discard fractional
-    // elapsed time or an instruction's outstanding cycle debt.
     if(displayCpuClockHz_==hz)return;
     displayCpuClockHz_=hz;
-    displayCycleCredit_=0;
-    displayCycleFraction_=0;
-    displayNanosecondFraction_=0;
-    displayCpuInputHz_=0;
 }
 
 void Machine::advanceDisplayTime(std::uint64_t ns)
