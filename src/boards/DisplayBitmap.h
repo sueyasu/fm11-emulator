@@ -179,8 +179,8 @@ public:
                (unsigned(rgb[1])<<8)|rgb[2];
     }
     static void compositeText(Frame& frame,const DisplaySubsystem& display) {
-        const unsigned columns=unsigned(display.crtcRegister(1))*2u;
-        const unsigned rows=unsigned(display.crtcRegister(6));
+        const unsigned columns=display.crtcColumns();
+        const unsigned rows=display.crtcRows();
         if(columns==0 || rows==0 || columns>160 || rows>100)return;
         const unsigned charW=640u/columns;
         const unsigned charH=400u/rows;
