@@ -6,6 +6,11 @@
 #include <algorithm>
 #include <chrono>
 #include <iomanip>
+#include <cerrno>
+#include <cstdlib>
+#include <fcntl.h>
+#include <termios.h>
+#include <unistd.h>
 #include <cstdint>
 #include <iostream>
 #include <fstream>
@@ -138,6 +143,45 @@ int main(int argc,char** argv) {
         if(!ui.renderer)throw std::runtime_error(SDL_GetError());
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"0");
         ui.setMode(high);
+        // Standalone raw PTY for guest serial, independent of SDL input.
+        int serialMaster=-1,serialSlave=-1;
+        if(mainBoard) {
+            serialMaster=posix_openpt(O_RDWR|O_NOCTTY|O_NONBLOCK);
+            if(serialMaster<0 || grantpt(serialMaster)!=0 || unlockpt(serialMaster)!=0)
+                throw std::runtime_error("cannot create serial PTY");
+            const char* name=ptsname(serialMaster);
+            if(!name)throw std::runtime_error("cannot resolve serial PTY");
+            serialSlave=open(name,O_RDWR|O_NOCTTY);
+            if(serialSlave<0)throw std::runtime_error("cannot open serial PTY slave");
+            termios mode{};
+            if(tcgetattr(serialSlave,&mode)==0) {
+                cfmakeraw(&mode);
+                tcsetattr(serialSlave,TCSANOW,&mode);
+            }
+            std::cout<<"Serial PTY: "<<name<<"\n"<<std::flush;
+        }
+        std::vector<BYTE> serialPending;
+        auto serviceSerial=[&]() {
+            if(serialMaster<0)return;
+            BYTE ch=0;
+            while(mainBoard->takeSerialOutput(ch))serialPending.push_back(ch);
+            if(!serialPending.empty()) {
+                const ssize_t n=write(serialMaster,serialPending.data(),serialPending.size());
+                if(n>0)serialPending.erase(serialPending.begin(),serialPending.begin()+n);
+                else if(n<0 && errno!=EAGAIN && errno!=EWOULDBLOCK && errno!=EINTR && errno!=EIO)
+                    throw std::runtime_error("serial PTY write failed");
+            }
+            BYTE input[256];
+            for(;;) {
+                const ssize_t n=read(serialMaster,input,sizeof(input));
+                if(n>0) {
+                    for(ssize_t i=0;i<n;++i)mainBoard->queueSerialInput(input[i]);
+                } else if(n<0 && errno==EINTR)continue;
+                else if(n<0 && errno!=EAGAIN && errno!=EWOULDBLOCK && errno!=EIO)
+                    throw std::runtime_error("serial PTY read failed");
+                else break;
+            }
+        };
         // Host printable keys enter the original sub-CPU keyboard queue.
         SDL_StartTextInput();
         bool running=true,paused=false;
@@ -184,6 +228,7 @@ int main(int argc,char** argv) {
                                      <<std::dec<<std::setfill(' ')<<"\n";
                         }
                         machine.executeOne();
+                        serviceSerial();
                     }
                 } else {
                     // 2 MHz display CPU: advance elapsed time without a main
@@ -192,6 +237,7 @@ int main(int argc,char** argv) {
                 }
                 executed+=instructions;
             }
+            serviceSerial();
             const auto frameTime=std::chrono::steady_clock::now();
             if(frameTime-lastFrame>=std::chrono::microseconds(16667)) {
                 lastFrame=frameTime;
