@@ -118,18 +118,55 @@ int main(int argc,char** argv) {
         machine.setDisplayCpuClockHz(2000000);
         machine.reset();
         if(trace) {
+            // One ordered log for main FD05, sub AFE0 and shared RAM accesses.
+            auto seq=std::make_shared<std::uint64_t>(0);
+            auto logState=[&machine,seq](const char* event) {
+                std::cerr<<"EV "<<++*seq<<" "<<event
+                         <<" subPC=$"<<std::hex<<std::uppercase
+                         <<std::setw(4)<<std::setfill('0')<<machine.displayCpuPc()
+                         <<" FD05=$"<<std::setw(2)<<unsigned(
+                             (machine.displayHalted() || machine.displayBusyStatus())?0x80:0)
+                         <<" HALT="<<machine.displayHalted()
+                         <<" BUSY="<<(machine.displayBusyStatus()!=0)
+                         <<" FC82=$"<<std::setw(2)<<unsigned(machine.displaySharedByte(2))
+                         <<" FC83=$"<<std::setw(2)<<unsigned(machine.displaySharedByte(3))
+                         <<" FC84=$"<<std::setw(2)<<unsigned(machine.displaySharedByte(4))
+                         <<std::dec<<"\n";
+            };
+            auto fd05Count=std::make_shared<unsigned>(0);
+            machine.setFd05WriteObserver([&machine,seq,fd05Count](BYTE value) {
+                if(++*fd05Count>256)return;
+                std::cerr<<"EV "<<++*seq<<" MAIN FD05 W=$"
+                         <<std::hex<<std::uppercase<<std::setw(2)<<std::setfill('0')
+                         <<unsigned(value)<<" subPC=$"<<std::setw(4)
+                         <<machine.displayCpuPc()<<" BUSY="
+                         <<unsigned(machine.displayBusyStatus())<<std::dec<<"\n";
+            });
+            auto afe0Count=std::make_shared<unsigned>(0);
+            machine.setDisplayIoWriteObserver([&machine,seq,afe0Count](DisplaySubsystem::IoWriteTrace e) {
+                if(e.address!=0xafe0 || ++*afe0Count>256)return;
+                std::cerr<<"EV "<<++*seq<<" SUB AFE0 W=$"
+                         <<std::hex<<std::uppercase<<std::setw(2)<<std::setfill('0')
+                         <<unsigned(e.value)<<" PC=$"<<std::setw(4)<<e.pc
+                         <<" subPC=$"<<std::setw(4)<<machine.displayCpuPc()
+                         <<std::dec<<"\n";
+            });
+            logState("START");
             auto active=std::make_shared<bool>(false);
             auto n=std::make_shared<unsigned>(0);
             machine.setDisplaySharedTraceObserver(
-                [active,n](DisplaySubsystem::SharedTrace e) {
+                [active,n,seq,&machine](DisplaySubsystem::SharedTrace e) {
                     if(e.mainCpu && e.write && e.offset==2 && e.value==0x2d) {
                         *active=true;
                         ++*n;
-                        if(*n<=128)std::cerr<<"INKEY2 #"<<*n<<" request\n";
+                        if(*n<=128)std::cerr<<"EV "<<++*seq<<" INKEY2 #"<<*n
+                            <<" request subPC=$"<<std::hex<<std::uppercase
+                            <<std::setw(4)<<std::setfill('0')<<machine.displayCpuPc()
+                            <<std::dec<<"\n";
                     }
                     if(!*active)return;
                     if((e.offset==3 || e.offset==4) && *n<=128)
-                        std::cerr<<"INKEY2 #"<<*n<<" "<<(e.mainCpu?"MAIN":"SUB")
+                        std::cerr<<"EV "<<++*seq<<" INKEY2 #"<<*n<<" "<<(e.mainCpu?"MAIN":"SUB")
                                  <<(e.write?" W":" R")<<" FC8"<<unsigned(e.offset)
                                  <<"=$"<<std::hex<<std::uppercase<<std::setw(2)
                                  <<std::setfill('0')<<unsigned(e.value)<<std::dec<<"\n";

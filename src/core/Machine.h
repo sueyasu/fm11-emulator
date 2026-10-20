@@ -59,6 +59,9 @@ public:
     void injectBreakEvent() {mainBoard_->signalBreak();}
     BYTE displayBusyStatus() const {return mainBoard_->displayBusyStatus();}
     BYTE mainSubCpuControl() const {return mainBoard_->subCpuControl();}
+    void setFd05WriteObserver(std::function<void(BYTE)> cb) {
+        mainBoard_->setFd05WriteObserver(std::move(cb));
+    }
     BYTE mainDisplayControl() const {return mainBoard_->displayControl();}
     BYTE mainDisplayPalette(unsigned index) const {return mainBoard_->displayPalette(index);}
     BYTE mainEventStatus() const {return mainBoard_->eventStatus();}

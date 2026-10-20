@@ -6,6 +6,7 @@
 #include "DisplayCpu6809.h"
 #include <cstdint>
 #include <array>
+#include <functional>
 #include <deque>
 #include <memory>
 #include <limits>
@@ -65,6 +66,7 @@ public:
         if(inkey2HostQueue_.size()<256)inkey2HostQueue_.push_back(code);
     }
     BYTE subCpuControl() const {return subCpuControl_;}
+    void setFd05WriteObserver(std::function<void(BYTE)> cb) {fd05WriteObserver_=std::move(cb);}
     // FD05 bit 0 selects the optional CPU-card bus-master request.
     // Arbitration/CPU suspension remains in the individual CPU cards.
     bool optionalCpuRequested() const {return (subCpuControl_&0x01)!=0;}
@@ -156,6 +158,7 @@ public:
         }
         if(reg==0x05) {
             subCpuControl_=value;
+            if(fd05WriteObserver_)fd05WriteObserver_(value);
             // Reference main-side FD05 bit 6 (CANCEL) requests the
             // display sub-CPU IRQ. The request remains pending until
             // the sub CPU acknowledges it by reading AFE5.
@@ -202,6 +205,7 @@ private:
     DisplaySubsystem display_;
     DisplayCpu6809 displayCpu_{display_};
     BYTE subCpuControl_=0;
+    std::function<void(BYTE)> fd05WriteObserver_;
     bool hleInkey2_=false;
     bool forceInkey2Active_=false;
     std::deque<std::uint16_t> inkey2HostQueue_;
