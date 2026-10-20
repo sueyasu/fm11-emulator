@@ -10,18 +10,18 @@ $(OUT):
 
 $(OUT)/main.bin: main.asm | $(OUT)
 	$(LWASM) --format=raw --output="$@" "$<"
-	@test "$(stat -c %s "$@")" -eq 4096 || { echo "main ROM size must be 4096 bytes" >&2; exit 1; }
+	@test "$$(stat -c %s "$@")" -eq 4096 || { echo "main ROM size must be 4096 bytes" >&2; exit 1; }
 
 $(OUT)/sub.bin: sub.asm | $(OUT)
 	$(LWASM) --format=raw --output="$@" "$<"
-	@test "$(stat -c %s "$@")" -eq 20480 || { echo "sub ROM size must be 20480 bytes" >&2; exit 1; }
+	@test "$$(stat -c %s "$@")" -eq 20480 || { echo "sub ROM size must be 20480 bytes" >&2; exit 1; }
 
 # The actual /Term-path test intentionally uses the user's genuine sub ROM.
 real-sub: $(OUT)/main-real-sub.bin
 
 $(OUT)/main-real-sub.bin: main-real-sub.asm | $(OUT)
 	$(LWASM) --format=raw --output="$@" "$<"
-	@test "$(stat -c %s "$@")" -eq 4096 || { echo "main ROM must be 4096 bytes" >&2; exit 1; }
+	@test "$$(stat -c %s "$@")" -eq 4096 || { echo "main ROM must be 4096 bytes" >&2; exit 1; }
 
 clean:
 	rm -rf "$(OUT)"
