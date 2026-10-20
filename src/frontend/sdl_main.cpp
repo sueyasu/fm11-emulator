@@ -246,7 +246,7 @@ int main(int argc,char** argv) {
                          <<" FD02=$"<<hex(mainBoard->lastIoWrite(0x02),2)
                          <<" FD03=$"<<hex(mainBoard->readCpu(0xfd03),2)
                          <<" CPU IRQ="<<(mainBoard->irqPending()?"yes":"no")
-                         <<"\\n";
+                         <<"\n";
             }
             else if(cmd=="s"||cmd=="step") {
                 if(!paused)std::cout<<"Stop CPU first.\n";
