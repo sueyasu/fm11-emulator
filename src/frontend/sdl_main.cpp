@@ -6,6 +6,13 @@
 #include <algorithm>
 #include <chrono>
 #include <iomanip>
+#include <cerrno>
+#include <cstring>
+#include <fcntl.h>
+#include <poll.h>
+#include <termios.h>
+#include <unistd.h>
+#include <sstream>
 #include <cstdint>
 #include <iostream>
 #include <fstream>
@@ -138,16 +145,144 @@ int main(int argc,char** argv) {
         if(!ui.renderer)throw std::runtime_error(SDL_GetError());
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"0");
         ui.setMode(high);
+        // Keep the host terminal for the monitor; expose the guest UART
+        // on a separate raw PTY, as in fm11-headless.
+        int serialMaster=-1,serialSlave=-1;
+        std::string serialPath;
+        if(mainBoard) {
+            serialMaster=posix_openpt(O_RDWR|O_NOCTTY|O_NONBLOCK);
+            if(serialMaster<0 || grantpt(serialMaster)!=0 || unlockpt(serialMaster)!=0)
+                throw std::runtime_error("cannot create serial PTY");
+            const char* name=ptsname(serialMaster);
+            if(!name)throw std::runtime_error("cannot resolve serial PTY");
+            serialPath=name;
+            serialSlave=open(serialPath.c_str(),O_RDWR|O_NOCTTY);
+            if(serialSlave<0)throw std::runtime_error("cannot open serial slave");
+            termios uart{};
+            if(tcgetattr(serialSlave,&uart)==0) {
+                cfmakeraw(&uart);
+                tcsetattr(serialSlave,TCSANOW,&uart);
+            }
+            std::cout<<"FM-11 SDL monitor\\nSerial: "<<serialPath
+                     <<"\\nCPU halted. Type help for commands.\\n";
+        }
+        bool monitorInputOpen=mainBoard!=nullptr;
+        std::string monitorLine;
+        std::vector<BYTE> serialPending;
+        auto hex=[](unsigned value,unsigned width) {
+            std::ostringstream o;
+            o<<std::uppercase<<std::hex<<std::setw(width)<<std::setfill('0')<<value;
+            return o.str();
+        };
+        auto showRegisters=[&]() {
+            if(!mainBoard)return;
+            const auto& r=dynamic_cast<CSim09&>(mainBoard->cpu()).regs;
+            std::cout<<"PC="<<hex(r.r.w.PC,4)
+                     <<" S="<<hex(r.r.w.S,4)<<" U="<<hex(r.r.w.U,4)
+                     <<" X="<<hex(r.r.w.X,4)<<" Y="<<hex(r.r.w.Y,4)
+                     <<" A="<<hex(r.r.b.A,2)<<" B="<<hex(r.r.b.B,2)
+                     <<" DP="<<hex(r.DP,2)<<" CC="<<hex(r.CC,2)
+                     <<" MD="<<hex(r.MD,2)<<"\\n";
+        };
+        auto drainSerial=[&]() {
+            if(serialMaster<0)return;
+            BYTE ch=0;
+            while(mainBoard->takeSerialOutput(ch))serialPending.push_back(ch);
+            if(!serialPending.empty()) {
+                const ssize_t n=write(serialMaster,serialPending.data(),serialPending.size());
+                if(n>0)serialPending.erase(serialPending.begin(),serialPending.begin()+n);
+                else if(n<0 && errno!=EAGAIN && errno!=EWOULDBLOCK && errno!=EIO)
+                    throw std::runtime_error("serial PTY write failed");
+            }
+            BYTE input[256];
+            for(;;) {
+                const ssize_t n=read(serialMaster,input,sizeof(input));
+                if(n>0) {
+                    for(ssize_t i=0;i<n;++i)mainBoard->queueSerialInput(input[i]);
+                } else if(n<0 && errno==EINTR)continue;
+                else if(n<0 && errno!=EAGAIN && errno!=EWOULDBLOCK && errno!=EIO)
+                    throw std::runtime_error("serial PTY read failed");
+                else break;
+            }
+        };
         // Host printable keys enter the original sub-CPU keyboard queue.
         SDL_StartTextInput();
-        bool running=true,paused=false;
+        bool running=true,paused=mainBoard!=nullptr;
         std::uint64_t executed=0,lastReported=0;
         std::uint64_t ioWrites=0;
         if(diagnostics)
             machine.setDisplayIoWriteObserver([&](DisplaySubsystem::IoWriteTrace){++ioWrites;});
         auto lastLog=std::chrono::steady_clock::now();
         auto lastFrame=lastLog-std::chrono::milliseconds(17);
+        auto monitorCommand=[&](const std::string& line) {
+            if(!mainBoard)return;
+            std::istringstream stream(line);
+            std::string cmd,addrText,lenText;
+            stream>>cmd;
+            if(cmd=="h"||cmd=="help"||cmd=="?") {
+                std::cout<<"c/continue, stop, s/step, r/regs, m/mem HEXADDR [LEN], "
+                            "mp HEXADDR [LEN], reset, q/quit, help\\n";
+            } else if(cmd=="c"||cmd=="continue") {
+                paused=false;
+                std::cout<<"CPU running. Type stop to pause.\\n";
+            } else if(cmd=="stop") {
+                paused=true;
+                std::cout<<"CPU halted.\\n";
+            } else if(cmd=="q"||cmd=="quit")running=false;
+            else if(cmd=="r"||cmd=="regs")showRegisters();
+            else if(cmd=="s"||cmd=="step") {
+                if(!paused)std::cout<<"Stop CPU first.\\n";
+                else {machine.executeOne();++executed;drainSerial();showRegisters();}
+            } else if(cmd=="reset") {
+                if(!paused)std::cout<<"Stop CPU first.\\n";
+                else {
+                    machine.reset();executed=0;serialPending.clear();
+                    std::cout<<"CPU reset.\\n";showRegisters();
+                }
+            } else if(cmd=="m"||cmd=="mem"||cmd=="mp") {
+                stream>>addrText>>lenText;
+                try {
+                    if(addrText.empty())throw std::invalid_argument("missing address");
+                    const auto addr=std::stoull(addrText,nullptr,16);
+                    const auto len=lenText.empty()?64:std::stoull(lenText,nullptr,0);
+                    const auto size=cmd=="mp"?0x100000ULL:0x10000ULL;
+                    if(addr>=size||len>256||len>size-addr)
+                        throw std::out_of_range("memory range");
+                    for(std::uint64_t i=0;i<len;++i) {
+                        if(i%16==0)std::cout<<hex(unsigned(addr+i),cmd=="mp"?5:4)<<":";
+                        const BYTE value=cmd=="mp"
+                            ?mainBoard->readPhysical(std::uint32_t(addr+i))
+                            :mainBoard->readCpu(WORD(addr+i));
+                        std::cout<<" "<<hex(value,2);
+                        if(i%16==15 || i+1==len)std::cout<<"\\n";
+                    }
+                }catch(const std::exception&) {
+                    std::cout<<"usage: m/mp HEXADDR [LEN, up to 256]\\n";
+                }
+            } else if(!cmd.empty())std::cout<<"Unknown command. Type help.\\n";
+            if(running&&paused)std::cout<<"fm11> "<<std::flush;
+        };
+        if(mainBoard)std::cout<<"fm11> "<<std::flush;
         while(running) {
+            if(monitorInputOpen) {
+                pollfd fd{STDIN_FILENO,POLLIN,0};
+                if(poll(&fd,1,0)>0 && (fd.revents&(POLLIN|POLLHUP))) {
+                    char data[512];
+                    const ssize_t n=read(STDIN_FILENO,data,sizeof(data));
+                    if(n<=0)monitorInputOpen=false;
+                    else for(ssize_t i=0;i<n;++i) {
+                        const char c=data[i];
+                        if(c=='\\n'||c=='\\r') {
+                            const auto command=monitorLine;
+                            monitorLine.clear();
+                            monitorCommand(command);
+                        } else if(c==0x7f||c=='\\b') {
+                            if(!monitorLine.empty())monitorLine.pop_back();
+                        } else if(monitorLine.size()<1024)monitorLine+=c;
+                    }
+                }
+            }
+            drainSerial();
             SDL_Event event;
             while(SDL_PollEvent(&event)) {
                 if(event.type==SDL_QUIT)running=false;
@@ -208,6 +343,7 @@ int main(int argc,char** argv) {
                 }
                 executed+=instructions;
             }
+            drainSerial();
             const auto frameTime=std::chrono::steady_clock::now();
             if(frameTime-lastFrame>=std::chrono::microseconds(16667)) {
                 lastFrame=frameTime;
@@ -303,6 +439,8 @@ int main(int argc,char** argv) {
             // every 10,000 guest instructions throttled ROM memory checks
             // with texture uploads, software composition and vsync waits.
         }
+        if(serialSlave>=0)close(serialSlave);
+        if(serialMaster>=0)close(serialMaster);
         return 0;
     } catch(const std::exception& e) {
         std::cerr<<"fm11-sdl: "<<e.what()<<"\n";
