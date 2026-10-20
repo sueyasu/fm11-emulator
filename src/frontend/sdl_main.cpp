@@ -326,8 +326,9 @@ int main(int argc,char** argv) {
                 // host time must advance the independent timer until IRQ.
                 const bool cpuWaiting=mainBoard &&
                     mainBoard->cpuWaitState()!=CSim09::WaitState::Running;
-                const bool noMainCpu=!machine.boardCount();
-                if(elapsed>0 && (cpuWaiting || noMainCpu))
+                const bool no6809Active=
+                    dynamic_cast<Main6809Board*>(machine.activeBoard())==nullptr;
+                if(elapsed>0 && (cpuWaiting || no6809Active))
                     machine.advanceTimeNanoseconds(static_cast<std::uint64_t>(elapsed));
             }
             // Display VSync is sourced from real elapsed time in SDL only.
