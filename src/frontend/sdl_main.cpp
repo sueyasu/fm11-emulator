@@ -163,8 +163,8 @@ int main(int argc,char** argv) {
                 cfmakeraw(&uart);
                 tcsetattr(serialSlave,TCSANOW,&uart);
             }
-            std::cout<<"FM-11 SDL monitor\\nSerial: "<<serialPath
-                     <<"\\nCPU halted. Type help for commands.\\n";
+            std::cout<<"FM-11 SDL monitor\nSerial: "<<serialPath
+                     <<"\nCPU halted. Type help for commands.\n";
         }
         bool monitorInputOpen=mainBoard!=nullptr;
         std::string monitorLine;
@@ -182,7 +182,7 @@ int main(int argc,char** argv) {
                      <<" X="<<hex(r.r.w.X,4)<<" Y="<<hex(r.r.w.Y,4)
                      <<" A="<<hex(r.r.b.A,2)<<" B="<<hex(r.r.b.B,2)
                      <<" DP="<<hex(r.DP,2)<<" CC="<<hex(r.CC,2)
-                     <<" MD="<<hex(r.MD,2)<<"\\n";
+                     <<" MD="<<hex(r.MD,2)<<"\n";
         };
         auto drainSerial=[&]() {
             if(serialMaster<0)return;
@@ -221,23 +221,23 @@ int main(int argc,char** argv) {
             stream>>cmd;
             if(cmd=="h"||cmd=="help"||cmd=="?") {
                 std::cout<<"c/continue, stop, s/step, r/regs, m/mem HEXADDR [LEN], "
-                            "mp HEXADDR [LEN], reset, q/quit, help\\n";
+                            "mp HEXADDR [LEN], reset, q/quit, help\n";
             } else if(cmd=="c"||cmd=="continue") {
                 paused=false;
-                std::cout<<"CPU running. Type stop to pause.\\n";
+                std::cout<<"CPU running. Type stop to pause.\n";
             } else if(cmd=="stop") {
                 paused=true;
-                std::cout<<"CPU halted.\\n";
+                std::cout<<"CPU halted.\n";
             } else if(cmd=="q"||cmd=="quit")running=false;
             else if(cmd=="r"||cmd=="regs")showRegisters();
             else if(cmd=="s"||cmd=="step") {
-                if(!paused)std::cout<<"Stop CPU first.\\n";
+                if(!paused)std::cout<<"Stop CPU first.\n";
                 else {machine.executeOne();++executed;drainSerial();showRegisters();}
             } else if(cmd=="reset") {
-                if(!paused)std::cout<<"Stop CPU first.\\n";
+                if(!paused)std::cout<<"Stop CPU first.\n";
                 else {
                     machine.reset();executed=0;serialPending.clear();
-                    std::cout<<"CPU reset.\\n";showRegisters();
+                    std::cout<<"CPU reset.\n";showRegisters();
                 }
             } else if(cmd=="m"||cmd=="mem"||cmd=="mp") {
                 stream>>addrText>>lenText;
@@ -254,12 +254,12 @@ int main(int argc,char** argv) {
                             ?mainBoard->readPhysical(std::uint32_t(addr+i))
                             :mainBoard->readCpu(WORD(addr+i));
                         std::cout<<" "<<hex(value,2);
-                        if(i%16==15 || i+1==len)std::cout<<"\\n";
+                        if(i%16==15 || i+1==len)std::cout<<"\n";
                     }
                 }catch(const std::exception&) {
-                    std::cout<<"usage: m/mp HEXADDR [LEN, up to 256]\\n";
+                    std::cout<<"usage: m/mp HEXADDR [LEN, up to 256]\n";
                 }
-            } else if(!cmd.empty())std::cout<<"Unknown command. Type help.\\n";
+            } else if(!cmd.empty())std::cout<<"Unknown command. Type help.\n";
             if(running&&paused)std::cout<<"fm11> "<<std::flush;
         };
         if(mainBoard)std::cout<<"fm11> "<<std::flush;
@@ -272,11 +272,11 @@ int main(int argc,char** argv) {
                     if(n<=0)monitorInputOpen=false;
                     else for(ssize_t i=0;i<n;++i) {
                         const char c=data[i];
-                        if(c=='\\n'||c=='\\r') {
+                        if(c=='\n'||c=='\r') {
                             const auto command=monitorLine;
                             monitorLine.clear();
                             monitorCommand(command);
-                        } else if(c==0x7f||c=='\\b') {
+                        } else if(c==0x7f||c=='\b') {
                             if(!monitorLine.empty())monitorLine.pop_back();
                         } else if(monitorLine.size()<1024)monitorLine+=c;
                     }
