@@ -29,20 +29,23 @@ public:
         nmiThreshold_=60000;
         totalAccesses_=0;
         lastNmiCalibration_=std::chrono::steady_clock::now();
+        vsyncCalibrationMs_=0;
         display_.resetInterruptClock();
     }
     // Original SubCpu::SimONE measures the 20 ms NMI interval against
     // host elapsed time, not against the nominal WM_TIMER arguments.
     void timerTick(std::uint64_t /*elapsedMs*/) {
         display_.signalVsyncEvent();
+        vsyncCalibrationMs_+=16;
         const auto now=std::chrono::steady_clock::now();
         const auto elapsed=std::chrono::duration_cast<std::chrono::milliseconds>(
             now-lastNmiCalibration_).count();
-        if(elapsed>=2000 || totalAccesses_>1000000) {
+        if(vsyncCalibrationMs_>=2000 || totalAccesses_>1000000) {
             if(elapsed>0 && totalAccesses_)
                 nmiThreshold_=std::max<std::uint64_t>(
                     1,20*totalAccesses_/static_cast<std::uint64_t>(elapsed));
             totalAccesses_=0;
+            vsyncCalibrationMs_=0;
             lastNmiCalibration_=now;
         }
     }
@@ -95,6 +98,7 @@ private:
     std::uint64_t nmiCycles_=0;
     std::uint64_t nmiThreshold_=60000;
     std::uint64_t totalAccesses_=0;
+    std::uint64_t vsyncCalibrationMs_=0;
     std::chrono::steady_clock::time_point lastNmiCalibration_=
         std::chrono::steady_clock::now();
     DisplaySubsystem& display_;
