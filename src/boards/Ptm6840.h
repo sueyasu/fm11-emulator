@@ -1,13 +1,14 @@
 #pragma once
 #include "portable_types.h"
 #include <array>
-#include <algorithm>
 #include <cstdint>
 #include <limits>
+#include <algorithm>
 
-// MainCpu::Fm11PTM port. The board scheduler supplies PTMCLOCK/2
-// (= 9,700 Hz) units. The reference stores six independent counters:
-// three 16-bit counters or six halves for dual-8-bit operation.
+// Port of CMainCpu::Fm11PTM(mode 0/1/2) and Fm11PTMset.
+// The scheduler supplies PTMCLOCK/2 ticks (9700 Hz). The reference
+// maintains six internal slots: three channels and three 8-bit halves.
+// All counter state and register side effects are kept together here.
 class Ptm6840 {
 public:
     struct Channel {
@@ -17,149 +18,163 @@ public:
         bool running=false;
     };
     void reset() {
+        reg_.fill(0);
+        mode_.fill(0);
+        count_.fill(0);
+        init_.fill(0);
+        clock_.fill(0);
+        enabled_.fill(false);
         channels.fill(Channel{});
-        controls_.fill(0);
-        counts_.fill(0);
-        remaining_.fill(0);
-        periods_.fill(0);
-        active_.fill(false);
-        registers_.fill(0);
         latchHigh.fill(0);
         counterLowLatch.fill(0);
         status=0;
         irqAcknowledged=false;
     }
     bool irqRequest() const {
-        return ((status&0x80)!=0) && !irqAcknowledged;
+        return (status & 0x80) != 0 && !irqAcknowledged;
     }
     void refreshIrq() {
-        BYTE pending=static_cast<BYTE>(status&0x07);
-        bool irq=false;
-        for(unsigned i=0;i<3;++i)
-            if((pending&(1u<<i)) && (controls_[i]&0x40))irq=true;
-        if(irq)status|=0x80;
+        // Original Fm11PTM computes bit 7 from outstanding enabled sources.
+        const BYTE pending=status & 7;
+        bool asserted=false;
+        for(unsigned no=0;no<3;++no)
+            if((pending&(1u<<no)) && (mode_[no]&0x40))
+                asserted=true;
+        if(asserted)status|=0x80;
         else status&=0x7f;
     }
-    // One tick is 1/9700 second, per PTMCLOCK/2 in MainCpu.cpp.
     void advance(std::uint64_t ticks) {
         if(ticks==0)return;
-        // Keep the separate halves of a dual-eight-bit channel.
+        irqAcknowledged=false;
+        // Fm11PTM interval mode: active slots are decremented by SysClock,
+        // expire on strictly negative remaining time, and are then
+        // reloaded only for continuous mode (control & 0x28 == 0).
         for(unsigned slot=0;slot<6;++slot) {
-            if(!active_[slot])continue;
-            const unsigned channel=slot%3;
-            std::uint64_t left=ticks;
-            if(remaining_[slot]>static_cast<std::int64_t>(left)) {
-                remaining_[slot]-=static_cast<std::int64_t>(left);
-                continue;
+            if(!enabled_[slot])continue;
+            const auto t=static_cast<std::int64_t>(
+                std::min<std::uint64_t>(ticks,
+                    static_cast<std::uint64_t>(std::numeric_limits<std::int64_t>::max())));
+            clock_[slot]-=t;
+            if(clock_[slot]<0) {
+                const unsigned channel=slot%3;
+                status|=static_cast<BYTE>(1u<<channel);
+                if((mode_[channel]&0xc0)!=0)status|=0x80;
+                if((mode_[channel]&0x28)==0) {
+                    const auto period=periodFor(slot);
+                    init_[slot]=period;
+                    if(period>0) {
+                        // Multiple elapsed periods are accounted for by
+                        // keeping the negative residual from this interval.
+                        const auto deficit=-clock_[slot]-1;
+                        clock_[slot]=period-1-(deficit%period);
+                    } else {
+                        clock_[slot]=0;
+                        enabled_[slot]=false;
+                    }
+                } else {
+                    enabled_[slot]=false;
+                    clock_[slot]=0;
+                }
             }
-            // The original interval routine expires when PtmClock < 0,
-            // rather than when it becomes exactly zero.
-            if(remaining_[slot]==static_cast<std::int64_t>(left)) {
-                remaining_[slot]=0;
-                continue;
-            }
-            left-=static_cast<std::uint64_t>(remaining_[slot]+1);
-            status|=static_cast<BYTE>(1u<<channel);
-            irqAcknowledged=false;
-            const bool continuous=(controls_[channel]&0x28)==0;
-            if(continuous && periods_[slot]>0) {
-                const auto period=static_cast<std::uint64_t>(periods_[slot]);
-                remaining_[slot]=static_cast<std::int64_t>(
-                    period-1-(left%period));
-            } else {
-                active_[slot]=false;
-                remaining_[slot]=0;
-            }
-            updatePublicChannel(channel);
         }
+        syncChannels();
         refreshIrq();
     }
     BYTE read(BYTE port) {
-        if(port==0x38)return 0;
-        if(port==0x39) {
-            refreshIrq();
+        switch(port) {
+        case 0x38:return 0;
+        case 0x39: {
+            // FD39 acknowledges the main IRQ latch without clearing
+            // the three per-channel timeout flags.
             const BYTE result=status;
-            // Reference FD39 read acknowledges FY03/FD03 but does not
-            // clear the individual three pending status bits.
             irqAcknowledged=true;
             return result;
         }
-        if(port<0x3a || port>0x3f)return 0xff;
-        const unsigned channel=(port-0x3a)/2;
-        status&=static_cast<BYTE>(~(1u<<channel));
-        refreshIrq();
-        const unsigned slot=(controls_[channel]&0x04)
-            ?channel+((port&1)?3:0):channel;
-        const std::uint64_t initial=periods_[slot];
-        const std::uint64_t count=counts_[slot];
-        const std::uint64_t remaining=remaining_[slot]>0
-            ?static_cast<std::uint64_t>(remaining_[slot]):0;
-        const std::uint64_t current=initial?count*remaining/initial:0;
-        if((controls_[channel]&0x04)!=0)
-            return static_cast<BYTE>(current);
-        if((port&1)==0) {
-            registers_[port-0x38]=static_cast<BYTE>(current>>8);
-            registers_[port+1-0x38]=static_cast<BYTE>(current);
+        default:break;
         }
-        return registers_[port-0x38];
+        if(port<0x3a || port>0x3f)return 0xff;
+        unsigned no=(port-0x3a)/2;
+        status&=static_cast<BYTE>(~(1u<<no));
+        // Preserve the reference's unusual (status & 3) test:
+        // channel 3 alone does not keep bit 7 set on counter read.
+        if((status&3)==0)status&=0x7f;
+        if((mode_[no]&0x04)==0) {
+            if((port&1)==0) {
+                const std::uint32_t value=current(no);
+                reg_[port-0x38]=static_cast<BYTE>(value>>8);
+                reg_[port+1-0x38]=static_cast<BYTE>(value);
+            }
+        } else {
+            no+=(port&1)*3;
+            reg_[port-0x38]=static_cast<BYTE>(current(no));
+        }
+        return reg_[port-0x38];
     }
     void write(BYTE port,BYTE value) {
         if(port==0x38 || port==0x39) {
-            // Reference: the selection bit belongs to channel 3, not 2.
-            const unsigned channel=port==0x39?1:((controls_[2]&1)?0:2);
-            controls_[channel]=value;
-            channels[channel].control=value;
-            if(channel==0 && (value&1)) {
-                reset();
-                controls_[0]=1;
+            const unsigned no=port==0x39?1:((mode_[2]&1)?0:2);
+            mode_[no]=value;
+            channels[no].control=value;
+            if(no==0 && (value&1)) {
+                // Reference channel-1 reset does not discard the entire
+                // emulated machine, only the PTM registers/counters/status.
+                reg_.fill(0);
+                mode_.fill(0);
+                count_.fill(0);
+                init_.fill(0);
+                clock_.fill(0);
+                enabled_.fill(false);
+                mode_[0]=1;
+                channels.fill(Channel{});
                 channels[0].control=1;
-                return;
+                status=0;
+            } else {
+                status&=static_cast<BYTE>(~(1u<<no));
+                status&=0x7f;
+                refreshIrq();
+                switch(value&0x38) {
+                case 0x10: case 0x30:
+                    enable(no);
+                    if(value&0x04)enable(no+3);
+                    break;
+                default:break; // latch and comparison modes do not start
+                }
             }
-            status&=static_cast<BYTE>(~(1u<<channel));
-            refreshIrq();
-            const BYTE mode=value&0x38;
-            if(mode==0x10 || mode==0x30) {
-                start(channel);
-                if(value&0x04)start(channel+3);
-            }
+            syncChannels();
             return;
         }
         if(port<0x3a || port>0x3f)return;
-        registers_[port-0x38]=value;
-        const unsigned channel=(port-0x3a)/2;
-        const bool dual=(controls_[channel]&0x04)!=0;
+        reg_[port-0x38]=value;
+        const unsigned no=(port-0x3a)/2;
+        const bool dual=(mode_[no]&0x04)!=0;
         if(!dual && !(port&1)) {
-            latchHigh[channel]=value;
+            latchHigh[no]=value;
             return;
         }
-        const unsigned slot=channel+(dual && (port&1)?3:0);
-        std::uint64_t count=dual?value:
-            (std::uint64_t(registers_[port-1-0x38])<<8)|value;
-        if(count==0)count=dual?0x100:0x10000;
-        if(channel==2 && (controls_[2]&1))count*=8;
-        counts_[slot]=count;
-        channels[channel].latch=static_cast<WORD>(count);
-        // MainCpu::Fm11PTM: PTMCLOCK/2 or PTMCLOCK*100.
-        // PTMCLOCK/2 input is the unit supplied by the scheduler.
-        const auto divisor=(controls_[slot%3]&0x02)?200u:1u;
-        periods_[slot]=std::max<std::uint64_t>(1,(count+divisor-1)/divisor);
-        remaining_[slot]=static_cast<std::int64_t>(periods_[slot]);
-        const bool shouldStart=dual
-            ?((controls_[channel]&0x18)==0 || active_[slot])
-            :((controls_[channel]&0x18)==0 || active_[slot]);
-        if(shouldStart)start(slot);
-        updatePublicChannel(channel);
+        const unsigned slot=no+(dual ? ((port&1)*3):0);
+        std::uint32_t count=dual?value:
+            ((std::uint32_t(reg_[port-1-0x38])<<8)|value);
+        if(count==0)count=dual?0x100u:0x10000u;
+        if(no==2 && (mode_[no]&1))count*=8;
+        count_[slot]=count;
+        // One scheduler tick is 1/(PTMCLOCK/2); the alternative
+        // PTMCLOCK*100 source advances 200 times as quickly.
+        init_[slot]=periodFor(slot);
+        clock_[slot]=init_[slot];
+        if((mode_[no]&0x18)==0 || enabled_[slot])enable(slot);
+        channels[no].latch=static_cast<WORD>(count);
+        syncChannels();
     }
     std::uint64_t nextEventNanoseconds() const {
-        std::uint64_t soonest=UINT64_MAX;
-        for(unsigned slot=0;slot<6;++slot)
-            if(active_[slot]) {
-                const auto ticks=remaining_[slot]<0?1u:
-                    static_cast<std::uint64_t>(remaining_[slot])+1;
-                if(ticks<soonest)soonest=ticks;
+        std::uint64_t nearest=UINT64_MAX;
+        for(unsigned i=0;i<6;++i)
+            if(enabled_[i]) {
+                const auto ticks=clock_[i]<0 ? 1ULL:
+                    static_cast<std::uint64_t>(clock_[i])+1ULL;
+                nearest=std::min(nearest,ticks);
             }
-        if(soonest==UINT64_MAX)return soonest;
-        return (soonest*1000000000ULL+9699)/9700;
+        if(nearest==UINT64_MAX)return nearest;
+        return (nearest*1000000000ULL+9699)/9700;
     }
     std::array<Channel,3> channels{};
     std::array<BYTE,3> latchHigh{};
@@ -167,23 +182,33 @@ public:
     BYTE status=0;
     bool irqAcknowledged=false;
 private:
-    void start(unsigned slot) {
-        if(!periods_[slot])return;
-        active_[slot]=true;
-        if(remaining_[slot]<=0)
-            remaining_[slot]=static_cast<std::int64_t>(periods_[slot]);
-        updatePublicChannel(slot%3);
+    std::int64_t periodFor(unsigned slot) const {
+        const auto divisor=(mode_[slot%3]&0x02)?200u:1u;
+        return static_cast<std::int64_t>(
+            std::max<std::uint32_t>(1,(count_[slot]+divisor-1)/divisor));
     }
-    void updatePublicChannel(unsigned index) {
-        auto& ch=channels[index];
-        ch.running=active_[index]||active_[index+3];
-        ch.counter=static_cast<std::uint32_t>(
-            remaining_[index]>0?remaining_[index]:0);
+    void enable(unsigned slot) {
+        if(init_[slot]>0)enabled_[slot]=true;
     }
-    std::array<WORD,6> controls_{};
-    std::array<std::uint64_t,6> counts_{};
-    std::array<std::int64_t,6> remaining_{};
-    std::array<std::uint64_t,6> periods_{};
-    std::array<bool,6> active_{};
-    std::array<BYTE,8> registers_{};
+    std::uint32_t current(unsigned slot) const {
+        if(init_[slot]<=0 || clock_[slot]<=0)return 0;
+        return static_cast<std::uint32_t>(
+            static_cast<std::uint64_t>(count_[slot])*
+            static_cast<std::uint64_t>(clock_[slot])/
+            static_cast<std::uint64_t>(init_[slot]));
+    }
+    void syncChannels() {
+        for(unsigned n=0;n<3;++n) {
+            channels[n].running=enabled_[n]||enabled_[n+3];
+            channels[n].counter=clock_[n]>0?
+                static_cast<std::uint32_t>(clock_[n]):0;
+            channels[n].control=static_cast<BYTE>(mode_[n]);
+        }
+    }
+    std::array<BYTE,8> reg_{};
+    std::array<BYTE,3> mode_{};
+    std::array<std::uint32_t,6> count_{};
+    std::array<std::int64_t,6> init_{};
+    std::array<std::int64_t,6> clock_{};
+    std::array<bool,6> enabled_{};
 };
