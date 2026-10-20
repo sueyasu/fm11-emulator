@@ -265,6 +265,7 @@ int main(int argc, char** argv) {
             } else if(cmd=="c"||cmd=="continue") {
                 running=true;
                 std::cout << "CPU running (type stop to pause).\n";
+                prompt();
             } else if(cmd=="stop") {
                 running=false;flushFloppy();std::cout << "CPU halted.\n";
             } else if(cmd=="q"||cmd=="quit") {
