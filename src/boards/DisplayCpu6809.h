@@ -3,6 +3,7 @@
 #include "Sim09.h"
 #include <cstdint>
 #include <algorithm>
+#include <chrono>
 
 // The display CPU is a separate MC6809 with its own address space, not
 // another main CPU card. All memory cycles reach the display subsystem.
@@ -10,6 +11,7 @@ class DisplayCpu6809 final : public CSim09 {
 public:
     explicit DisplayCpu6809(DisplaySubsystem& display):display_(display) {
         Set6309Enabled(false);
+        display_.setNmiEnableSink([this](){nmiCycles_=0;});
     }
     BYTE GetMemByte(WORD address) override {
         ++nmiCycles_;
@@ -26,19 +28,22 @@ public:
         nmiCycles_=0;
         nmiThreshold_=60000;
         totalAccesses_=0;
-        elapsedTimerMs_=0;
+        lastNmiCalibration_=std::chrono::steady_clock::now();
         display_.resetInterruptClock();
     }
-    // Original SubCpu::GetMemByte/SetMemByte increment CpuClock and TotClock.
-    // Recalibrate its 20 ms NMI period against measured host time every ~2 s.
-    void timerTick(std::uint64_t elapsedMs) {
+    // Original SubCpu::SimONE measures the 20 ms NMI interval against
+    // host elapsed time, not against the nominal WM_TIMER arguments.
+    void timerTick(std::uint64_t /*elapsedMs*/) {
         display_.signalVsyncEvent();
-        elapsedTimerMs_+=elapsedMs;
-        if(elapsedTimerMs_>=2000 || totalAccesses_>1000000) {
-            if(elapsedTimerMs_ && totalAccesses_)
-                nmiThreshold_=std::max<std::uint64_t>(1,20*totalAccesses_/elapsedTimerMs_);
+        const auto now=std::chrono::steady_clock::now();
+        const auto elapsed=std::chrono::duration_cast<std::chrono::milliseconds>(
+            now-lastNmiCalibration_).count();
+        if(elapsed>=2000 || totalAccesses_>1000000) {
+            if(elapsed>0 && totalAccesses_)
+                nmiThreshold_=std::max<std::uint64_t>(
+                    1,20*totalAccesses_/static_cast<std::uint64_t>(elapsed));
             totalAccesses_=0;
-            elapsedTimerMs_=0;
+            lastNmiCalibration_=now;
         }
     }
     bool executeOne() {
@@ -90,6 +95,7 @@ private:
     std::uint64_t nmiCycles_=0;
     std::uint64_t nmiThreshold_=60000;
     std::uint64_t totalAccesses_=0;
-    std::uint64_t elapsedTimerMs_=0;
+    std::chrono::steady_clock::time_point lastNmiCalibration_=
+        std::chrono::steady_clock::now();
     DisplaySubsystem& display_;
 };
