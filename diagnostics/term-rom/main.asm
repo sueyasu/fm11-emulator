@@ -101,7 +101,7 @@ subtitle fcc    "TYPE AND PRESS ENTER"
         fcb     13,0
 prompt  fcc     "TEST> "
         fcb     0
-        fill    $00,$5ff6-*
+        fill    $00,$5ff7-*
 irqret  rti
         fdb     irqret      ; $FFF8 IRQ
         fdb     irqret      ; $FFFA SWI
