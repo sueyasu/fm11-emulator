@@ -197,12 +197,8 @@ public:
         if(address<0xa000)return ram_[address-0x8000];
         // Reference SubCpu.cpp: these I/O latches clear on read.
         if(address==0xafe4)return std::exchange(subFirqLatch_,BYTE{0});
-        if(address==0xafec)return std::exchange(keyboardStatusLatch_,BYTE{0});
-        if(address==0xafed) {
-            const BYTE result=std::exchange(keyboardDataLatch_,BYTE{0});
-            processKeyCode();
-            return result;
-        }
+        if(address==0xafec)return keyboardStatusLatch_;
+        if(address==0xafed)return keyboardDataLatch_;
         if(address==0xafe5) {
             subIrq_=false; // Original GetIoByte: clear sub-IRQ request on read.
             return 0;
