@@ -237,16 +237,17 @@ int main(int argc,char** argv) {
                     }
                 }
                 if(event.type==SDL_KEYDOWN && !event.key.repeat) {
-                    if(hleInkey2 && !paused && !testPattern) {
+                    if(!paused && !testPattern) {
                         const auto sym=event.key.keysym.sym;
-                        if(sym==SDLK_RETURN || sym==SDLK_KP_ENTER)
-                            machine.enqueueInkey2HostKey(0x0d);
-                        else if(sym==SDLK_BACKSPACE)
-                            machine.enqueueInkey2HostKey(0x08);
-                        else if(sym==SDLK_TAB)
-                            machine.enqueueInkey2HostKey(0x09);
-                        else if(sym==SDLK_DELETE)
-                            machine.enqueueInkey2HostKey(0x0114);
+                        std::uint16_t code=0;
+                        if(sym==SDLK_RETURN || sym==SDLK_KP_ENTER)code=0x0d;
+                        else if(sym==SDLK_BACKSPACE)code=0x08;
+                        else if(sym==SDLK_TAB)code=0x09;
+                        else if(sym==SDLK_DELETE)code=0x0114;
+                        if(code) {
+                            if(hleInkey2)machine.enqueueInkey2HostKey(code);
+                            else machine.enqueueDisplayKeyCode(code);
+                        }
                     }
                     if(!hleInkey2 && event.key.keysym.sym==SDLK_ESCAPE)running=false;
                     if(!hleInkey2 && event.key.keysym.sym==SDLK_SPACE)paused=!paused;
