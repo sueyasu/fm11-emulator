@@ -61,7 +61,7 @@ std::uint64_t parseCount(const std::string& text) {
 void usage() {
     std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--hle-inkey2] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE]\n"
              <<"  ROM defaults to external/roms/display6809.bin\n"
-             <<"  ESC quit; SPACE pause/resume; F1 switch 200/400-line view\n"
+             <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
 }
 }
@@ -237,23 +237,45 @@ int main(int argc,char** argv) {
                     }
                 }
                 if(event.type==SDL_KEYDOWN && !event.key.repeat) {
-                    if(!paused && !testPattern) {
-                        const auto sym=event.key.keysym.sym;
+                    const auto sym=event.key.keysym.sym;
+                    const auto mod=event.key.keysym.mod;
+                    if(sym==SDLK_F2)paused=!paused;
+                    else if(sym==SDLK_F1) {
+                        high=!high;
+                        ui.setMode(high);
+                    } else if(sym==SDLK_F12 && (mod&KMOD_CTRL)) {
+                        running=false;
+                    } else if(!paused && !testPattern) {
+                        // Physical/special keys come from SDL_KEYDOWN; printable
+                        // characters (including Space) come from SDL_TEXTINPUT.
+                        // Non-ASCII FM-11 codes match the original KeyCode.h.
                         std::uint16_t code=0;
-                        if(sym==SDLK_RETURN || sym==SDLK_KP_ENTER)code=0x0d;
-                        else if(sym==SDLK_BACKSPACE)code=0x08;
-                        else if(sym==SDLK_TAB)code=0x09;
+                        if(sym==SDLK_RETURN || sym==SDLK_KP_ENTER)code=0x000d;
+                        else if(sym==SDLK_BACKSPACE)code=0x0008;
+                        else if(sym==SDLK_TAB)code=0x0009;
+                        else if(sym==SDLK_ESCAPE)code=0x001b;
+                        else if(sym==SDLK_INSERT)code=0x0110;
                         else if(sym==SDLK_DELETE)code=0x0114;
+                        else if(sym==SDLK_HOME)code=0x0115;
+                        else if(sym==SDLK_UP)code=0x0116;
+                        else if(sym==SDLK_DOWN)code=0x0117;
+                        else if(sym==SDLK_LEFT)code=0x0118;
+                        else if(sym==SDLK_RIGHT)code=0x0119;
+                        else if(sym==SDLK_PAGEUP)code=0x0136;
+                        else if(sym==SDLK_PAGEDOWN)code=0x0137;
+                        else if(sym>=SDLK_F3 && sym<=SDLK_F10)
+                            code=static_cast<std::uint16_t>(0x0100+sym-SDLK_F1);
+                        else if(sym==SDLK_F11)code=0x0121;
+                        else if(sym==SDLK_F12)code=0x0122;
+                        else if((mod&KMOD_CTRL) && sym>=SDLK_a && sym<=SDLK_z)
+                            code=static_cast<std::uint16_t>(sym-SDLK_a+1);
+                        else if((mod&KMOD_CTRL) && sym==SDLK_LEFTBRACKET)code=0x001b;
+                        else if((mod&KMOD_CTRL) && sym==SDLK_BACKSLASH)code=0x001c;
+                        else if((mod&KMOD_CTRL) && sym==SDLK_RIGHTBRACKET)code=0x001d;
                         if(code) {
                             if(hleInkey2)machine.enqueueInkey2HostKey(code);
                             else machine.enqueueDisplayKeyCode(code);
                         }
-                    }
-                    if(!hleInkey2 && event.key.keysym.sym==SDLK_ESCAPE)running=false;
-                    if(!hleInkey2 && event.key.keysym.sym==SDLK_SPACE)paused=!paused;
-                    if(event.key.keysym.sym==SDLK_F1) {
-                        high=!high;
-                        ui.setMode(high);
                     }
                 }
             }
