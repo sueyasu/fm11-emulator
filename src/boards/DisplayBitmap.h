@@ -199,16 +199,33 @@ public:
                 const BYTE attribute=display.textByte((off+1)&0xfffu);
                 unsigned glyphX=sx;
                 if(charW>8)glyphX/=2;
-                bool lit=false;
-                if(character!=0 && character!=0x20 && sy<16 && glyphX<8)
-                    lit=(display.ankGlyphRow(character,sy)&(1u<<glyphX))!=0;
-                if(attribute&0x08)lit=!lit;
+                // fm11.hlsl: glyph bit, reverse attribute (including
+                // blank characters), then foreground color. Black text
+                // pixels leave the graphics layer visible.
+                const bool glyph=(character!=0 && character!=0x20 &&
+                    sy<16 && glyphX<8 &&
+                    (display.ankGlyphRow(character,sy)&(1u<<glyphX))!=0);
+                const bool lit=glyph ^ ((attribute&0x08)!=0);
                 if(lit) {
                     const unsigned color=(attribute&0x07)|((attribute&0x20)?8u:0u);
-                    // Original renderer uses a 16-entry color table;
-                    // start with the documented low RGB bits.
-                    frame.argb[y*640+x]=referenceColor(color);
+                    const auto rgb=referenceColor(color);
+                    if((rgb&0x00ffffffu)!=0)frame.argb[y*640+x]=rgb;
                 }
+            }
+        }
+        // fm11.hlsl applies cursor XOR after both character and graphics.
+        // The reference shader receives CursolX/Y/Srs/Ers from SubCRTC.
+        if(display.cursorDisplay()!=0 &&
+           display.cursorX()<columns && display.cursorY()<rows) {
+            const unsigned x0=display.cursorX()*charW;
+            const unsigned x1=std::min<unsigned>(640,x0+charW);
+            for(unsigned y=0;y<frame.height;++y) {
+                const unsigned scanY=y*400u/static_cast<unsigned>(frame.height);
+                const unsigned y0=display.cursorY()*charH+display.cursorStart();
+                const unsigned y1=display.cursorY()*charH+display.cursorEnd();
+                if(scanY<y0 || scanY>y1)continue;
+                for(unsigned x=x0;x<x1;++x)
+                    frame.argb[y*640+x]^=0x00ffffffu;
             }
         }
     }
