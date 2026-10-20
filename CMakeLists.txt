@@ -297,6 +297,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(machine_ptm_time PRIVATE fm11_core)
     add_test(NAME machine_ptm_time COMMAND machine_ptm_time)
 
+    add_executable(machine_display_shared_ram tests/machine_display_shared_ram.cpp)
+    target_link_libraries(machine_display_shared_ram PRIVATE fm11_core)
+    add_test(NAME machine_display_shared_ram COMMAND machine_display_shared_ram)
+
     add_executable(machine_floppy_shared tests/machine_floppy_shared.cpp)
     target_link_libraries(machine_floppy_shared PRIVATE fm11_core)
     add_test(NAME machine_floppy_shared COMMAND machine_floppy_shared)
