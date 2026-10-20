@@ -102,6 +102,8 @@ public:
     // SDL may drive the 16 ms display VSync from host monotonic time.
     // Default stays emulated time for headless and deterministic tests.
     void setExternalDisplayVsync(bool enabled) {externalDisplayVsync_=enabled; displayVsyncElapsedNs_=0;}
+    void signalReferenceTimer(std::uint64_t elapsedMs=16);
+    std::uint64_t measuredMainClockHz() const {return measuredMainClockHz_;}
     void signalDisplayVsync(std::uint64_t elapsedMs=16) {
         if(displayCpuClockHz_)mainBoard_->displayCpu().timerTick(elapsedMs);
     }
@@ -121,4 +123,9 @@ private:
     std::uint64_t displayVsyncElapsedNs_ = 0;
     bool externalDisplayVsync_ = false;
     bool referenceWallClock_ = false;
+    std::uint64_t measuredMainClockHz_=2000000;
+    std::uint64_t measuredMainAccesses_=0;
+    std::uint64_t measuredElapsedMs_=0;
+    std::uint64_t timerElapsedMs_=0;
+    unsigned serialTimerTicks_=0;
 };
