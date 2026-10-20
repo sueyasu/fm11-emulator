@@ -53,7 +53,7 @@ public:
         }
         // Reference SubCpu::SimONE: interrupt priority IRQ, FIRQ, NMI.
         // The original clock threshold is 60000 at reset, recalibrated
-        // dynamically by the Windows event loop. Use CPU cycles here.
+        // dynamically by the Windows event loop. Count memory accesses here.
         if(display_.subIrqPending())SimIRQ();
         if(display_.subFirqPending())SimFIRQ();
         if(!display_.nmiMask() && nmiCycles_>=nmiThreshold_) {
