@@ -32,7 +32,7 @@ mainloop
         lda     #CMDKEY
         sta     $fc90
         jsr     transact
-        bcs     failed
+        lbcs    failed
         lda     $fc83
         sta     $fc92
         lda     $fc84
@@ -61,7 +61,7 @@ mainloop
         ; Same KPAscii result selection as the OS driver:
         ; FC83==0 -> FC84 is ASCII; nonzero is extended status.
         tst     $fc92
-        bne     mainloop
+        lbne    mainloop
         lda     $fc93
         beq     mainloop  ; Diagnostic guards no-key; trace still logs it.
         inc     $fc95
@@ -74,14 +74,14 @@ mainloop
         cmpa    #$7e
         bhi     mainloop
         jsr     putchar
-        bra     mainloop
+        lbra    mainloop
 enter   jsr     putchar
         ldx     #prompt
         jsr     puts
-        bra     mainloop
+        lbra    mainloop
 backspace
         jsr     putchar
-        bra     mainloop
+        lbra    mainloop
 failed  lda     #$21
         ; Stop rather than silently repeating an invalid command.
 failspin bra    failspin
