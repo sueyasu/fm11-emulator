@@ -242,7 +242,7 @@ int main(int argc,char** argv) {
             else if(cmd=="serial"||cmd=="uart") {
                 std::cout<<"PTY rx="<<serialRxBytes<<" tx="<<serialTxBytes
                          <<" lastRx=$"<<hex(serialLastRx,2)
-                         <<" USART status=$"<<hex(mainBoard->serialStatus(),2)
+                         <<" USART status=$"<<hex(mainBoard->readCpu(0xfd07),2)
                          <<" FD02=$"<<hex(mainBoard->lastIoWrite(0x02),2)
                          <<" FD03=$"<<hex(mainBoard->readCpu(0xfd03),2)
                          <<" CPU IRQ="<<(mainBoard->irqPending()?"yes":"no")
