@@ -235,7 +235,7 @@ int main(int argc,char** argv) {
             stream>>cmd;
             if(cmd=="h"||cmd=="help"||cmd=="?") {
                 std::cout<<"c/continue, stop, s/step, r/regs, m/mem HEXADDR [LEN], "
-                            "mp HEXADDR [LEN], keyboard on/off, serial, reset, q/quit, help\n";
+                            "mp HEXADDR [LEN], keyboard on/off/status, serial, reset, q/quit, help\n";
             } else if(cmd=="c"||cmd=="continue") {
                 paused=false;
                 std::cout<<"CPU running. Type stop to pause.\n";
@@ -245,7 +245,16 @@ int main(int argc,char** argv) {
             } else if(cmd=="keyboard") {
                 std::string state;
                 stream>>state;
-                if(state=="off") {
+                if(state=="status" || state.empty()) {
+                    const auto& kb=machine.displaySubsystem();
+                    std::cout<<"Guest keyboard="
+                             <<(kb.keyboardEnabled()?"ON":"OFF")
+                             <<" autoOff="<<(kb.keyboardAutoDisableArmed()?"armed":"no")
+                             <<" startupDelivered="<<(kb.keyboardStartupDelivered()?"yes":"no")
+                             <<" queue="<<kb.keyboardQueueDepth()
+                             <<" keyFIRQ="<<unsigned(kb.keyboardFirqLatch())
+                             <<"\\n";
+                } else if(state=="off") {
                     machine.setDisplayKeyboardEnabled(false);
                     std::cout<<"Guest keyboard disabled (queues and key latches cleared).\n";
                 } else if(state=="on") {
