@@ -42,11 +42,6 @@ mainloop
         lda     $fc84
         sta     $0703
         inc     $0704
-        ; Record only nonempty results: no-key polls must not overwrite
-        ; the last sixteen actual events.
-        lda     $0702
-        ora     $0703
-        beq     noevent
         ; Store each result separately from displayed text.
         pshs    a,b,x
         ldb     $0707
@@ -67,7 +62,7 @@ mainloop
         anda    #$0f
         sta     $0707
         puls    a,b,x
-noevent ; Same KPAscii result selection as the OS driver:
+        ; Same KPAscii result selection as the OS driver:
         ; FC83==0 -> FC84 is ASCII; nonzero is extended status.
         tst     $0702
         lbne    mainloop
@@ -118,10 +113,10 @@ putchar pshs    a,b
 ; Sequence mirrors KeyboardPoll/ScreenPutC in fm11console.asm.
 transact
         pshs    a,b,x
-        lda     #$21
-        sta     $070a
         ldx     #$ffff
-readylp lda     PORT
+readylp lda     #$21
+        sta     $070a
+        lda     PORT
         sta     $0701
         bpl     haltit
         leax    -1,x
@@ -130,10 +125,10 @@ readylp lda     PORT
         bra     fail
 haltit  lda     #$80
         sta     PORT
-        lda     #$22
-        sta     $070a
         ldx     #$ffff
-haltlp  lda     PORT
+haltlp  lda     #$22
+        sta     $070a
+        lda     PORT
         sta     $0701
         bmi     install
         leax    -1,x
@@ -154,10 +149,10 @@ inputinit
         clr     MAIL+3
         clr     MAIL+4
 release clr     PORT
-        lda     #$23
-        sta     $070a
         ldx     #$ffff
-donelp  lda     PORT
+donelp  lda     #$23
+        sta     $070a
+        lda     PORT
         sta     $0701
         bpl     done
         leax    -1,x
