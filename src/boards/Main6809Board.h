@@ -38,6 +38,8 @@ public:
     void loadFloppy2d(const std::vector<BYTE>& raw);
     void loadFloppyD88(const std::vector<BYTE>& d88);
     void setFloppyDrive(unsigned drive) {floppy_->setMountedDrive(drive);}
+    void setBootDip(BYTE value) {bootDip_=value;}
+    BYTE bootDip() const {return bootDip_;}
     std::array<BYTE,256> floppyBootSector(unsigned sector) const;
     bool floppyDirty() const { return floppy_->dirty2d(); }
     std::vector<BYTE> floppyImage() const;
@@ -104,6 +106,7 @@ public:
     void writePhysical(std::uint32_t address, BYTE value);
 
 private:
+    BYTE bootDip_=0x9f;
     static constexpr std::size_t kPhysicalMemorySize = 1u << 20;
     static constexpr std::size_t kOnboardRamSize = 0x1000;
     static constexpr WORD kMmrPageSize = 0x1000;
