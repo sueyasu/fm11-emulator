@@ -45,7 +45,6 @@ public:
     }
     void advance(std::uint64_t ticks) {
         if(ticks==0)return;
-        irqAcknowledged=false;
         // Fm11PTM interval mode: active slots are decremented by SysClock,
         // expire on strictly negative remaining time, and are then
         // reloaded only for continuous mode (control & 0x28 == 0).
@@ -58,6 +57,7 @@ public:
             if(clock_[slot]<0) {
                 const unsigned channel=slot%3;
                 status|=static_cast<BYTE>(1u<<channel);
+                irqAcknowledged=false;
                 if((mode_[channel]&0xc0)!=0)status|=0x80;
                 if((mode_[channel]&0x28)==0) {
                     const auto period=periodFor(slot);
@@ -185,7 +185,7 @@ private:
     std::int64_t periodFor(unsigned slot) const {
         const auto divisor=(mode_[slot%3]&0x02)?200u:1u;
         return static_cast<std::int64_t>(
-            std::max<std::uint32_t>(1,(count_[slot]+divisor-1)/divisor));
+            std::max<std::uint32_t>(1,count_[slot]/divisor));
     }
     void enable(unsigned slot) {
         if(init_[slot]>0)enabled_[slot]=true;
