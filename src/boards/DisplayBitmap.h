@@ -186,7 +186,8 @@ public:
         const unsigned charH=400u/rows;
         if(charW==0 || charH==0)return;
         const unsigned start=((unsigned(display.crtcRegister(12))<<9) |
-                              (unsigned(display.crtcRegister(13))<<1))&0x7ffu)*2u;
+                              (unsigned(display.crtcRegister(13))<<1))&0x7ffu;
+        const unsigned textStart=start*2u;
         for(unsigned y=0;y<frame.height;++y) {
             const unsigned scanY=unsigned(y)*400u/unsigned(frame.height);
             const unsigned cy=scanY/charH,sy=scanY%charH;
@@ -194,7 +195,7 @@ public:
             for(unsigned x=0;x<640;++x) {
                 const unsigned cx=x/charW,sx=x%charW;
                 if(cx>=columns)continue;
-                const unsigned off=(start+(cx+cy*columns)*2u)&0xfffu;
+                const unsigned off=(textStart+(cx+cy*columns)*2u)&0xfffu;
                 const BYTE character=display.textByte(off);
                 const BYTE attribute=display.textByte((off+1)&0xfffu);
                 unsigned glyphX=sx;
