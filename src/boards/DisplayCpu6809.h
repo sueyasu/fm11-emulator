@@ -86,7 +86,10 @@ public:
             }
             display_.clearSubWaitForInterrupt();
         }
-        if(waitState()!=WaitState::Running)return false;
+        // The source CSim09::SimONE performs a dummy GetMemByte(PC) when
+        // CWAI/SYNC is waiting.  Keep calling the core so that sub-CPU
+        // memory-access timing (including the NMI counter) still advances.
+        const bool running=waitState()==WaitState::Running;
         display_.beginCpuInstruction(regs.r.w.PC);
         try {
             SimONE();
@@ -95,7 +98,7 @@ public:
             throw;
         }
         display_.endCpuInstruction();
-        return true;
+        return running;
     }
     void advanceIdleCycles(std::uint64_t) {}
     std::uint16_t pc() const {return regs.r.w.PC;}
