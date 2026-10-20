@@ -292,9 +292,9 @@ public:
         if(address==0xafe0)return readSubControl();
         if(address>=0xafe1 && address<=0xafe3)return subIoRam_[address-0xafe0];
         if(address==0xafe8)return gvuAddressHigh_;
-        if(address==0xafe9)return static_cast<BYTE>(gvuOffset_);
+        if(address==0xafe9)return ioRam_[0xfe9];
         if(address==0xafea)return displayAddressHigh_;
-        if(address==0xafeb)return static_cast<BYTE>(displayAddress_);
+        if(address==0xafeb)return ioRam_[0xfeb];
         if(address==0xafee)return crtcIndex_;
         if(address==0xafef)return crtcIndex_<crtcRegisters_.size()?crtcRegisters_[crtcIndex_]:0xff;
         // Original SubCpu.cpp GetIoByte($AFE7): reading this register
@@ -376,11 +376,15 @@ public:
                 gvuPage_=(value>>3)&3;
             }
         }
-        else if(address==0xafe8)gvuAddressHigh_=value;
-        else if(address==0xafe9)gvuOffset_=static_cast<std::uint16_t>(
-            ((unsigned(gvuAddressHigh_)<<8)|value)&0x7ffe);
-        else if(address==0xafea)displayAddressHigh_=value;
+        else if(address==0xafe8) {gvuAddressHigh_=value;ioRam_[0xfe8]=value;}
+        else if(address==0xafe9) {
+            ioRam_[0xfe9]=value;
+            gvuOffset_=static_cast<std::uint16_t>(
+                ((unsigned(gvuAddressHigh_)<<8)|value)&0x7ffe);
+        }
+        else if(address==0xafea) {displayAddressHigh_=value;ioRam_[0xfea]=value;}
         else if(address==0xafeb) {
+            ioRam_[0xfeb]=value;
             const auto next=static_cast<std::uint16_t>(
                 ((unsigned(displayAddressHigh_)<<8)|value)&0x7fff);
             if(displayAddress_!=next) {displayAddress_=next;markVideoChanged();}
