@@ -44,6 +44,8 @@ public:
         subFirqLatch_=keyboardStatusLatch_=keyboardDataLatch_=0;
         keyHead_=keyTail_=0;
         keyboardMainMode_=false;
+        mainKeyboardPending_=false;
+        mainKeyboardCode_=0;
         nmiMask_=true;
         nmiClockCycles_=60000;
         subIrq_=false;
@@ -91,9 +93,9 @@ public:
     // transfers codes to FD00/FD01 and asserts FD03 bit 6. The CPU
     // acknowledges one code by reading FD01.
     bool takeMainKeyboardCode(std::uint16_t& code) {
-        if(!keyboardMainMode_ || keyHead_==keyTail_)return false;
-        code=keyQueue_[keyHead_];
-        keyHead_=(keyHead_+1)%keyQueue_.size();
+        if(!mainKeyboardPending_)return false;
+        code=mainKeyboardCode_;
+        mainKeyboardPending_=false;
         return true;
     }
     void enqueueKeyCode(std::uint16_t code) {
@@ -108,13 +110,22 @@ public:
         return pending;
     }
     void processKeyCode() const {
-        if(keyHead_!=keyTail_ && keyQueue_[keyHead_]==0x0201 && breakSink_)
-            breakSink_();
-        if(keyboardMainMode_ || keyHead_==keyTail_ || (subFirqLatch_&1))return;
+        if(keyHead_==keyTail_)return;
         const auto code=keyQueue_[keyHead_];
+        // Reference GetKeyCode checks the destination's interrupt latch
+        // before consuming the next keyboard event.
+        if(keyboardMainMode_) {
+            if(mainKeyboardPending_)return;
+        } else if((subFirqLatch_&1)!=0)return;
+        if(code==0x0201 && breakSink_)breakSink_();
         keyboardStatusLatch_=static_cast<BYTE>(code>>8);
         keyboardDataLatch_=static_cast<BYTE>(code);
-        if(!(code&0x0200))subFirqLatch_|=1;
+        if(keyboardMainMode_) {
+            mainKeyboardCode_=code;
+            mainKeyboardPending_=true;
+        } else if((code&0x0200)==0) {
+            subFirqLatch_|=1;
+        }
         keyHead_=(keyHead_+1)%keyQueue_.size();
     }
     bool nmiMask() const {return nmiMask_;}
@@ -375,6 +386,8 @@ private:
     BYTE dmaChannel0_=0;
     bool nmiMask_=true;
     bool keyboardMainMode_=false;
+    mutable bool mainKeyboardPending_=false;
+    mutable std::uint16_t mainKeyboardCode_=0;
     mutable bool subIrq_=false;
     std::uint64_t nmiClockCycles_=60000;
     std::array<std::uint16_t,256> keyQueue_{};
