@@ -51,6 +51,7 @@ void Main6809Board::reset()
         usart_->reset();
         ptm_->reset();
     }
+    memoryAccessCount_=0;
     acceptedIrqCount_ = 0;
     ptmIrqAssertCount_ = 0;
     if(!mainBoard_)ptm_->irqAcknowledged = false;
@@ -446,6 +447,7 @@ void Main6809Board::writePtm(BYTE port,BYTE value)
 
 BYTE Main6809Board::readCpu(WORD address)
 {
+    ++memoryAccessCount_;
     // 5000-5FFF is the 4 KiB boot ROM while FD93 bit 0 is clear.
     if (address >= 0x5000 && address <= 0x5fff && (mmrControl_[3] & 0x01) == 0)
         return bootRom_[address & 0x0fff];
@@ -469,6 +471,7 @@ BYTE Main6809Board::readCpu(WORD address)
 
 void Main6809Board::writeCpu(WORD address, BYTE value)
 {
+    ++memoryAccessCount_;
     // Writes are ignored while the boot ROM is visible.
     if (address >= 0x5000 && address <= 0x5fff && (mmrControl_[3] & 0x01) == 0)
         return;
