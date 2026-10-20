@@ -49,6 +49,7 @@ public:
     const DisplaySubsystem& displaySubsystem() const {return mainBoard_->displaySubsystem();}
     void enqueueDisplayKeyCode(std::uint16_t code) {mainBoard_->displaySubsystem().enqueueKeyCode(code);}
     void setDisplayKeyboardEnabled(bool enabled) {mainBoard_->displaySubsystem().setKeyboardEnabled(enabled);}
+    void disableDisplayKeyboardAfterStartupKey(bool enabled) {mainBoard_->displaySubsystem().disableKeyboardAfterStartupKey(enabled);}
     DisplaySubsystem::VideoSnapshot captureDisplayVideo() const {return mainBoard_->displaySubsystem().captureVideo();}
     DisplayBitmap::Frame captureDisplayFrame(bool highResolution=false) const {
         return DisplayBitmap::captureFrame(mainBoard_->displaySubsystem(),highResolution);
