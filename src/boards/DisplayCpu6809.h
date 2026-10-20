@@ -12,18 +12,19 @@ public:
         Set6309Enabled(false);
     }
     BYTE GetMemByte(WORD address) override {
-        ++memoryAccesses_;
+        ++nmiCycles_;
+        ++totalAccesses_;
         return display_.readMemory(address);
     }
     void SetMemByte(WORD address,BYTE value) override {
-        ++memoryAccesses_;
+        ++nmiCycles_;
+        ++totalAccesses_;
         display_.writeMemory(address,value);
     }
     void resetCpu() {
         SimRESET();
         nmiCycles_=0;
         nmiThreshold_=60000;
-        memoryAccesses_=0;
         totalAccesses_=0;
         elapsedTimerMs_=0;
         display_.resetInterruptClock();
@@ -44,7 +45,12 @@ public:
         // Windows SubCpu::SimONE handles pending timer/VSync first,
         // then GetKeyCode, independently of the periodic CPU NMI.
         if(display_.consumeVsyncEvent())display_.processKeyCode();
-        if(display_.haltRequested())return false;
+        if(display_.haltRequested()) {
+            // Original SubCpu::SimONE performs a dummy memory access
+            // during SUB HALT, advancing CpuClock and TotClock.
+            GetMemByte(regs.r.w.PC);
+            return false;
+        }
         // Reference SubCpu::SimONE: interrupt priority IRQ, FIRQ, NMI.
         // The original clock threshold is 60000 at reset, recalibrated
         // dynamically by the Windows event loop. Use CPU cycles here.
@@ -59,7 +65,6 @@ public:
             nmiCycles_=0;
         }
         if(waitState()!=WaitState::Running)return false;
-        lastInstructionAccesses_=memoryAccesses_;
         display_.beginCpuInstruction(regs.r.w.PC);
         try {
             SimONE();
@@ -68,9 +73,6 @@ public:
             throw;
         }
         display_.endCpuInstruction();
-        const auto delta=memoryAccesses_-lastInstructionAccesses_;
-        nmiCycles_+=delta;
-        totalAccesses_+=delta;
         return true;
     }
     void advanceIdleCycles(std::uint64_t) {}
@@ -78,8 +80,6 @@ public:
 private:
     std::uint64_t nmiCycles_=0;
     std::uint64_t nmiThreshold_=60000;
-    std::uint64_t memoryAccesses_=0;
-    std::uint64_t lastInstructionAccesses_=0;
     std::uint64_t totalAccesses_=0;
     std::uint64_t elapsedTimerMs_=0;
     DisplaySubsystem& display_;
