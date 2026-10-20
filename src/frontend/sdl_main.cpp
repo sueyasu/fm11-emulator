@@ -233,13 +233,25 @@ int main(int argc,char** argv) {
             stream>>cmd;
             if(cmd=="h"||cmd=="help"||cmd=="?") {
                 std::cout<<"c/continue, stop, s/step, r/regs, m/mem HEXADDR [LEN], "
-                            "mp HEXADDR [LEN], serial, reset, q/quit, help\n";
+                            "mp HEXADDR [LEN], keyboard on/off, serial, reset, q/quit, help\n";
             } else if(cmd=="c"||cmd=="continue") {
                 paused=false;
                 std::cout<<"CPU running. Type stop to pause.\n";
             } else if(cmd=="stop") {
                 paused=true;
                 std::cout<<"CPU halted.\n";
+            } else if(cmd=="keyboard") {
+                std::string state;
+                stream>>state;
+                if(state=="off") {
+                    machine.setDisplayKeyboardEnabled(false);
+                    std::cout<<"Guest keyboard disabled (queues and key latches cleared).\\n";
+                } else if(state=="on") {
+                    machine.setDisplayKeyboardEnabled(true);
+                    std::cout<<"Guest keyboard enabled.\\n";
+                } else {
+                    std::cout<<"usage: keyboard on|off\\n";
+                }
             } else if(cmd=="q"||cmd=="quit")running=false;
             else if(cmd=="r"||cmd=="regs")showRegisters();
             else if(cmd=="serial"||cmd=="uart") {
