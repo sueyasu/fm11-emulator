@@ -175,6 +175,9 @@ public:
     // remains unassigned until its register decode is confirmed.
     void setAttentionSink(std::function<void()> sink) {attentionSink_=std::move(sink);}
     void setBreakSink(std::function<void()> sink) {breakSink_=std::move(sink);}
+    void setSubDmaRegisterWriter(std::function<void(unsigned,BYTE)> writer) {
+        subDmaRegisterWriter_=std::move(writer);
+    }
     void setMainEventControlReader(std::function<BYTE()> reader) {mainEventControlReader_=std::move(reader);}
     void notifyMainAttention() {if(attentionSink_)attentionSink_();}
     // The top 128 bytes of sub RAM also appear at main $FC80-$FCFF.
@@ -342,7 +345,10 @@ public:
         }
         else if(address==0xaff7 && (ioRam_[0xff4]&0x80)!=0)
             rtcDigits_[ioRam_[0xff4]&15]=value;
-        else if(address==0xaff0)dmaChannel0_=value;
+        else if(address>=0xaff0 && address<=0xaff2) {
+            if(address==0xaff0)dmaChannel0_=value;
+            if(subDmaRegisterWriter_)subDmaRegisterWriter_(address&3,value);
+        }
         else if(address>=0xa000 && address<0xb000)ioRam_[address-0xa000]=value; // original maps to DMA channel 0
         // ROM and unmapped space are read-only. Trace even writes to
         // unimplemented I/O locations; their hardware decode is unknown.
@@ -389,6 +395,7 @@ private:
     std::array<BYTE,17> crtcRegisters_{};
     std::function<BYTE()> mainEventControlReader_;
     std::function<void()> breakSink_;
+    std::function<void(unsigned,BYTE)> subDmaRegisterWriter_;
     std::size_t kanjiBase_=0;
     mutable unsigned kanjiLeft_=32,kanjiRight_=32;
     std::array<BYTE,16> rtcDigits_{};
