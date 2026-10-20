@@ -45,5 +45,14 @@ newline ldx     #$80a0
         stx     $9f10
 done    clr     $9f80       ; acknowledge
         bra     poll
-        fill    $00,$fffe-*
-        fdb     start
+
+; Writing AFE0 enables periodic sub-CPU NMI in the emulator. All ROM
+; interrupt vectors must be valid or execution jumps into video RAM after
+; the first NMI, making the banner appear only momentarily.
+irqret  rti
+        fill    $00,$fff6-*
+        fdb     irqret      ; $FFF6 FIRQ
+        fdb     irqret      ; $FFF8 IRQ
+        fdb     irqret      ; $FFFA SWI
+        fdb     irqret      ; $FFFC NMI
+        fdb     start       ; $FFFE RESET
