@@ -171,7 +171,7 @@ public:
             if(enabled_[i]) {
                 const auto ticks=clock_[i]<0 ? 1ULL:
                     static_cast<std::uint64_t>(clock_[i])+1ULL;
-                nearest=std::min(nearest,ticks);
+                nearest=std::min<std::uint64_t>(nearest,ticks);
             }
         if(nearest==UINT64_MAX)return nearest;
         return (nearest*1000000000ULL+9699)/9700;
