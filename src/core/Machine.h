@@ -47,8 +47,6 @@ public:
     }
     BYTE displayMemory(std::uint16_t address) const {return mainBoard_->displaySubsystem().readMemory(address);}
     const DisplaySubsystem& displaySubsystem() const {return mainBoard_->displaySubsystem();}
-    void setHleInkey2(bool enabled) {mainBoard_->setHleInkey2(enabled);}
-    void enqueueInkey2HostKey(std::uint16_t code) {mainBoard_->enqueueInkey2HostKey(code);}
     void enqueueDisplayKeyCode(std::uint16_t code) {mainBoard_->displaySubsystem().enqueueKeyCode(code);}
     DisplaySubsystem::VideoSnapshot captureDisplayVideo() const {return mainBoard_->displaySubsystem().captureVideo();}
     DisplayBitmap::Frame captureDisplayFrame(bool highResolution=false) const {
