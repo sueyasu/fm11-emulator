@@ -15,7 +15,10 @@
 // The sub CPU/display subsystem will also belong to the main board.
 class MainBoard {
 public:
-    MainBoard() {display_.setAttentionSink([this](){signalAttention();});}
+    MainBoard() {
+        display_.setAttentionSink([this](){signalAttention();});
+        display_.setMainEventControlReader([this](){return eventControl_;});
+    }
     MainBoard(const MainBoard&)=delete;
     MainBoard& operator=(const MainBoard&)=delete;
     // BUSY is available separately until FD05 status bit semantics are proven.
