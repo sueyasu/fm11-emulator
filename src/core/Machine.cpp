@@ -91,8 +91,6 @@ void Machine::reset()
     measuredMainClockHz_=2000000;
     measuredMainAccesses_=0;
     mainAccessClockFraction_=0;
-    measuredElapsedMs_=0;
-    timerElapsedMs_=0;
     mainTotalClockMs_=0;
     mainTotalAccesses_=0;
     serialTimerTicks_=0;
