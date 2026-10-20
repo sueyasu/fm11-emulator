@@ -1,9 +1,7 @@
 #include "Machine.h"
 #include "Main6809Board.h"
-#include <array>
 #include <cstdint>
 #include <fstream>
-#include <iomanip>
 #include <iostream>
 #include <iterator>
 #include <memory>
@@ -41,7 +39,7 @@ int main(int argc,char** argv) {
         std::string subPath="external/roms/display6809.bin";
         std::string floppyPath;
         unsigned floppyDrive=0;
-        unsigned bootDip=0xdf; // 2D boot only, Mini FDC drive 0.
+        unsigned bootDip=0x9f; // Reference emulator's default.
         std::uint64_t limit=20000000, reportEvery=2000000;
         for(int i=1;i<argc;++i) {
             const std::string arg=argv[i];
@@ -90,25 +88,8 @@ int main(int argc,char** argv) {
                  <<" bootDip=$"<<std::hex<<bootDip<<std::dec
                  <<" mainPC=$"<<std::hex<<main->cpu().pc()
                  <<" subPC=$"<<machine.displayCpuPc()<<std::dec<<"\\n";
-        // Optional FDC access trace is at register level; unlike PC-only
-        // logging it records read commands and whether the FDC reports DRQ.
-        // No CPU bus reads are performed by diagnostics.
         std::uint64_t serialBytes=0;
-        bool sawWaitLoop=false;
         for(std::uint64_t i=0;i<limit;++i) {
-            // $5E08 is the boot-ROM wait primitive: BITA 2,Y.
-            // Capture its operands, not millions of instruction traces.
-            if(!sawWaitLoop && main->cpu().pc()==0x5e08) {
-                const auto& r=dynamic_cast<CSim09&>(main->cpu()).regs;
-                std::cerr<<"ROM wait at $5E08: Y=$"<<std::hex<<r.r.w.Y
-                         <<" A=$"<<unsigned(r.r.b.A)
-                         <<" B=$"<<unsigned(r.r.b.B)
-                         <<" U=$"<<r.r.w.U
-                         <<" X=$"<<r.r.w.X
-                         <<" CC=$"<<unsigned(r.CC)
-                         <<std::dec<<" (BITA 2,Y)\\n";
-                sawWaitLoop=true;
-            }
             machine.executeOne();
             BYTE ch=0;
             while(main->takeSerialOutput(ch)) {
@@ -123,52 +104,11 @@ int main(int argc,char** argv) {
                          <<" busy="<<unsigned(machine.displayBusyStatus())
                          <<" displayWrites="<<machine.displaySharedWriteRevision()
                          <<" halted="<<machine.displayHalted()
-                         <<" hdReads="<<main->hdReadAttempts()
-                         <<" hdOK="<<main->hdReadSuccesses()
-                         <<" hdFail="<<main->hdReadFailures()
-                         <<" fdcReads="<<main->fdcReadCommands()
                          <<" fdcOK="<<main->fdcSuccessfulReads()
-                         <<" fdcFail="<<main->fdcFailedReads()
-                         <<" fdcStatus="<<unsigned(main->fdcStatus())
-                         <<" CHS="<<unsigned(main->fdcTrack())<<":"<<unsigned(main->fdcSector())
-                         <<" drive="<<unsigned(main->fdcDrive())<<"\\n";
+                         <<" fdcFail="<<main->fdcFailedReads()<<"\\n";
             }
         }
         std::cout.flush();
-        std::cerr<<"2HD read outcomes: badCHS="<<main->hdBadChs()
-                 <<" zeroDMA="<<main->hdZeroDma()
-                 <<" lastCHS="<<unsigned(main->hdLastTrack())<<":"
-                 <<unsigned(main->hdLastSide())<<":"
-                 <<unsigned(main->hdLastSector())<<"\\n";
-        for(unsigned drive=0;drive<4;++drive)
-            std::cerr<<"  drive"<<drive<<": reads="
-                     <<main->hdReadAttemptsForDrive(drive)
-                     <<" fails="<<main->hdReadFailuresForDrive(drive)<<"\\n";
-        const auto sector=main->floppyBootSector(1);
-        unsigned mismatches=0;
-        std::cerr<<"IPL T0/H0/S1 first16:";
-        for(unsigned n=0;n<16;++n)
-            std::cerr<<" "<<std::hex<<std::setw(2)<<std::setfill('0')
-                     <<unsigned(sector[n]);
-        std::cerr<<"\\nRAM $0400 first16:";
-        for(unsigned n=0;n<16;++n)
-            std::cerr<<" "<<std::hex<<std::setw(2)<<std::setfill('0')
-                     <<unsigned(main->readPhysical(0x0400+n));
-        for(unsigned n=0;n<256;++n)
-            if(sector[n]!=main->readPhysical(0x0400+n))++mismatches;
-        std::cerr<<std::dec<<"\\nIPL sector mismatches at $0400: "<<mismatches
-                 <<" (RAM may have been modified after loading)\\n";
-        std::cerr<<"FDxx accesses (nonzero, register:read/write[last]):";
-        for(unsigned reg=0;reg<256;++reg) {
-            const auto reads=main->ioReadCount(reg);
-            const auto writes=main->ioWriteCount(reg);
-            if(!reads && !writes)continue;
-            std::cerr<<" "<<std::hex<<std::setw(2)<<std::setfill('0')
-                     <<reg<<std::dec<<":"<<reads<<"/"<<writes;
-            if(writes)std::cerr<<"[$"<<std::hex<<std::setw(2)
-                               <<unsigned(main->lastIoWrite(reg))<<std::dec<<"]";
-        }
-        std::cerr<<"\\n";
         std::cerr<<"ROM boot instruction limit reached: "<<limit
                  <<" mainPC=$"<<std::hex<<main->cpu().pc()
                  <<" subPC=$"<<machine.displayCpuPc()<<std::dec<<"\\n";
