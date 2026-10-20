@@ -7,6 +7,7 @@
 #include <functional>
 #include <algorithm>
 #include <utility>
+#include <ctime>
 
 // Main-board display/sub-CPU memory. I/O and display scanout are deliberately
 // not decoded yet: the reference map still labels those regions tentative.
@@ -48,6 +49,8 @@ public:
         subIrq_=false;
         ioRam_.fill(0);
         dmaChannel0_=0;
+        kanjiBase_=0;kanjiLeft_=kanjiRight_=32;
+        rtcDigits_.fill(0);
         gvuEnabled_=false;
         gvuPage_=gvuPlane_=gvuOffset_=gvdPage_=0;
         gvuControl_=gvuAddressHigh_=0;
@@ -213,6 +216,23 @@ public:
             return 0;
         }
         if(address==0xafe6)return const_cast<DisplaySubsystem*>(this)->readVsyncStatus();
+        if(address==0xaff6) {
+            if((ioRam_[0xff4]&0x80)==0 && kanjiLeft_<32) {
+                const BYTE result=kanjiRom_[kanjiBase_+kanjiLeft_];
+                kanjiLeft_+=2;
+                return result;
+            }
+            return 0;
+        }
+        if(address==0xaff7) {
+            if((ioRam_[0xff4]&0x80)!=0)return rtcDigits_[ioRam_[0xff4]&15];
+            if(kanjiRight_<32) {
+                const BYTE result=kanjiRom_[kanjiBase_+kanjiRight_];
+                kanjiRight_+=2;
+                return result;
+            }
+            return 1;
+        }
         if(address==0xaff0)return dmaChannel0_; // original write target is DMA channel 0
         if(address>=0xb000)return rom_[address-0xb000];
         if(address>=0xa000)return ioRam_[address-0xa000];
@@ -290,6 +310,33 @@ public:
                 markVideoChanged();
             }
         }
+        else if(address==0xaff4) {
+            ioRam_[0xff4]=value;
+            if(value==0x8d) {
+                const std::time_t now=std::time(nullptr);
+                std::tm tm{};
+                localtime_r(&now,&tm);
+                const unsigned fields[6]={
+                    unsigned(tm.tm_sec),unsigned(tm.tm_min),unsigned(tm.tm_hour),
+                    unsigned(tm.tm_mday),unsigned(tm.tm_mon+1),unsigned(tm.tm_year)
+                };
+                for(unsigned i=0;i<6;++i) {
+                    rtcDigits_[i*2]=static_cast<BYTE>(fields[i]%10);
+                    rtcDigits_[i*2+1]=static_cast<BYTE>(fields[i]/10);
+                }
+            }
+        }
+        else if(address==0xaff5) {
+            ioRam_[0xff5]=value;
+            const unsigned index=((unsigned(ioRam_[0xff4])<<8)|value)*32;
+            if(index<kanjiRom_.size()) {
+                kanjiBase_=index;
+                kanjiLeft_=0;
+                kanjiRight_=1;
+            }
+        }
+        else if(address==0xaff7 && (ioRam_[0xff4]&0x80)!=0)
+            rtcDigits_[ioRam_[0xff4]&15]=value;
         else if(address==0xaff0)dmaChannel0_=value;
         else if(address>=0xa000 && address<0xb000)ioRam_[address-0xa000]=value; // original maps to DMA channel 0
         // ROM and unmapped space are read-only. Trace even writes to
@@ -335,6 +382,9 @@ private:
     BYTE displayAddressHigh_=0,crtcIndex_=0;
     std::uint16_t displayAddress_=0;
     std::array<BYTE,17> crtcRegisters_{};
+    std::size_t kanjiBase_=0;
+    unsigned kanjiLeft_=32,kanjiRight_=32;
+    std::array<BYTE,16> rtcDigits_{};
     std::array<BYTE,kPhysicalVramSize> vram_{};
     std::array<BYTE,kRamSize> ram_{};
     RomImage rom_{};
