@@ -253,7 +253,7 @@ int main(int argc,char** argv) {
                              <<" startupDelivered="<<(kb.keyboardStartupDelivered()?"yes":"no")
                              <<" queue="<<kb.keyboardQueueDepth()
                              <<" keyFIRQ="<<unsigned(kb.keyboardFirqLatch())
-                             <<"\\n";
+                             <<"\n";
                 } else if(state=="off") {
                     machine.setDisplayKeyboardEnabled(false);
                     std::cout<<"Guest keyboard disabled (queues and key latches cleared).\n";
@@ -261,7 +261,7 @@ int main(int argc,char** argv) {
                     machine.setDisplayKeyboardEnabled(true);
                     std::cout<<"Guest keyboard enabled.\n";
                 } else {
-                    std::cout<<"usage: keyboard on|off\n";
+                    std::cout<<"usage: keyboard on|off|status\n";
                 }
             } else if(cmd=="q"||cmd=="quit")running=false;
             else if(cmd=="r"||cmd=="regs")showRegisters();
