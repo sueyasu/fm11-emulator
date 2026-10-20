@@ -131,5 +131,6 @@ private:
     long double mainTotalAccesses_=0;
     unsigned serialTimerTicks_=0;
     bool referenceTimerPending_=false;
+    std::uint64_t referenceVsyncClockMs_=0;
     std::chrono::steady_clock::time_point lastClockCalibration_{};
 };
