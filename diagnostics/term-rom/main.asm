@@ -5,6 +5,9 @@ start   orcc    #$50
         lds     #$07f0
         clr     $fc80
         clr     $fc81
+        clr     $fc90
+        clr     $fc91
+        clr     $fc92
 waitsub lda     $fd05
         bmi     waitsub
         lda     #$03
@@ -32,7 +35,12 @@ poll    lda     $fd03
         sta     $fc90
         lda     $fd01
         sta     $fc91
-        inc     $fc92
+        ; ROM startup signal $0050 is not a user keystroke.
+        cmpa    #$50
+        bne     counted
+        tst     $fc90
+        beq     poll
+counted inc     $fc92
         bra     poll
 
 ; Transmit one ASCII character in A over FC80/FC81, then wait for ACK.
