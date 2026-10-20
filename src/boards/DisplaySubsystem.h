@@ -55,6 +55,7 @@ public:
         ioRam_.fill(0);
         kanjiBase_=0;kanjiLeft_=kanjiRight_=32;
         rtcDigits_.fill(0);
+        beepEnabled_=false;
         gvuPage_=gvuPlane_=gvuOffset_=gvdPage_=0;
         gvuControl_=gvuAddressHigh_=0;
         displayAddress_=0;displayAddressHigh_=0;crtcIndex_=0;
@@ -147,10 +148,11 @@ public:
         const auto code=keyQueue_[keyHead_];
         // Reference GetKeyCode checks the destination's interrupt latch
         // before consuming the next keyboard event.
+        // Source GetKeyCode sets BREAK before testing either IRQ latch.
+        if(code==0x0201 && breakSink_)breakSink_();
         if(keyboardMainMode_) {
             if(mainKeyboardPending_)return;
         } else if((subFirqLatch_&1)!=0)return;
-        if(code==0x0201 && breakSink_)breakSink_();
         keyboardStatusLatch_=static_cast<BYTE>(code>>8);
         keyboardDataLatch_=static_cast<BYTE>(code);
         startupKeyInLatch_=(code==0x0050);
@@ -163,6 +165,7 @@ public:
         }
         keyHead_=(keyHead_+1)%keyQueue_.size();
     }
+    bool beepEnabled() const {return beepEnabled_;}
     bool nmiMask() const {return nmiMask_;}
     std::uint64_t nmiClockCycles() const {return nmiClockCycles_;}
     void resetInterruptClock() {nmiClockCycles_=60000;}
@@ -317,6 +320,10 @@ public:
         }
         // Original AFF0-AFF2 reads use the sub-I/O RAM fallback; their
         // writes instead target the main-side D20-D22 shared registers.
+        if(address==0xaff8 || address==0xaff9) {
+            const_cast<DisplaySubsystem*>(this)->beepEnabled_=true;
+            return 0;
+        }
         if(address>=0xb000)return rom_[address-0xb000];
         if(address>=0xa000)return ioRam_[address-0xa000];
         return 0xff; // unmapped space, including unimplemented sub I/O
@@ -411,6 +418,7 @@ public:
                 kanjiRight_=1;
             }
         }
+        else if(address==0xaff8 || address==0xaff9)beepEnabled_=false;
         else if(address==0xaff7 && (ioRam_[0xff4]&0x80)!=0)
             rtcDigits_[ioRam_[0xff4]&15]=value;
         else if(address>=0xaff0 && address<=0xaff2) {
@@ -513,6 +521,7 @@ private:
     std::size_t kanjiBase_=0;
     mutable unsigned kanjiLeft_=32,kanjiRight_=32;
     std::array<BYTE,16> rtcDigits_{};
+    bool beepEnabled_=false;
     std::array<BYTE,kPhysicalVramSize> vram_{};
     std::array<BYTE,kRamSize> ram_{};
     RomImage rom_{};
