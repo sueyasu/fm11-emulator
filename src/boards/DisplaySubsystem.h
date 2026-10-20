@@ -376,6 +376,9 @@ public:
                 gvuPage_=(value>>3)&3;
             }
         }
+        else if(address==0xafe4)subFirqLatch_=value;
+        // Source SetIoByte discards writes to the keyboard data/status ports.
+        else if(address==0xafec || address==0xafed || address==0xafe7) {}
         else if(address==0xafe8) {gvuAddressHigh_=value;ioRam_[0xfe8]=value;}
         else if(address==0xafe9) {
             ioRam_[0xfe9]=value;
