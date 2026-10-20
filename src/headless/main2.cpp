@@ -146,13 +146,9 @@ int main(int argc,char** argv) {
             }
             pollfd fds[2]={{inputOpen?STDIN_FILENO:-1,POLLIN,0},
                            {master,POLLIN,0}};
-            // SYNC/CWAI means the guest main CPU has no instructions to
-            // execute until an interrupt or external input arrives.
-            // Poll with a bounded timeout so the PTM and 16ms timer keep
-            // advancing on host time without burning an entire core.
-            const bool waiting=running &&
-                main->cpuWaitState()!=CSim09::WaitState::Running;
-            const int timeout=waiting?1:(running?0:10);
+            // ChildView::SimProc continues invoking both SimONE calls
+            // even when the main CPU is in SYNC/CWAI.
+            const int timeout=running?0:10;
             const int ready=poll(fds,2,timeout);
             if(ready<0 && errno!=EINTR)
                 throw std::runtime_error("poll failed");
@@ -204,8 +200,6 @@ int main(int argc,char** argv) {
                                  <<main->cpu().pc()<<std::dec<<"\n";
                     machine.executeOne();
                     ++executed;
-                    if(main->cpuWaitState()!=CSim09::WaitState::Running)
-                        break; // return to timed poll immediately on wait
                 }
             }
             drain();
