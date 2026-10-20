@@ -1,4 +1,5 @@
 #pragma once
+#include <chrono>
 #include "DisplaySubsystem.h"
 #include <array>
 #include <cstddef>
@@ -218,7 +219,17 @@ public:
         }
         // fm11.hlsl applies cursor XOR after both character and graphics.
         // The reference shader receives CursolX/Y/Srs/Ers from SubCRTC.
-        if(display.cursorDisplay()!=0 &&
+        // SubCpu::OnDraw: CUR_NOBL=0 is always visible, CUR_NON=1
+        // is hidden, CUR_FABL=2 blinks at ~300 ms and CUR_SLBL=3 at
+        // ~600 ms. The previous nonzero check reversed modes 0 and 1.
+        const unsigned cursorMode=display.cursorDisplay();
+        bool cursorVisible=cursorMode==0;
+        if(cursorMode==2 || cursorMode==3) {
+            const auto elapsed=std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::steady_clock::now().time_since_epoch()).count();
+            cursorVisible=((elapsed/(cursorMode==2?150:300))&1)==0;
+        }
+        if(cursorVisible &&
            display.cursorX()<columns && display.cursorY()<rows) {
             const unsigned x0=display.cursorX()*charW;
             const unsigned x1=std::min<unsigned>(640,x0+charW);
