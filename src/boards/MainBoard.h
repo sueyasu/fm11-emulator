@@ -51,11 +51,11 @@ public:
     void resetEvents() {eventStatus_=0;eventControl_=0;}
     BYTE eventStatus() const {return eventStatus_;}
     BYTE eventControl() const {return eventControl_;}
-    // FD05 bit 7 reflects the display sub-CPU BUSY state (original $D05).
-    // Keep an asserted main-side HALT visible until released.
+    // FD05 bit 7 is the source emulator's latched $D05 BUSY status.
+    // HALT release alone must not report READY.
     BYTE subCpuStatus() const {
         if(forceInkey2Active_)return 0; // synthetic INKEY 2 completed
-        return (display_.haltRequested() || display_.busyStatus()!=0)?0x80:0;
+        return display_.fd05Status();
     }
     void setHleInkey2(bool enabled) {
         hleInkey2_=enabled;

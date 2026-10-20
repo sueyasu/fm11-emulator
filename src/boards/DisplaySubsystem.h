@@ -33,6 +33,7 @@ public:
     void reset() {
         haltRequested_=false;
         busy_=true;
+        fd05BusyLatch_=true;
         if(videoFlags_!=0)markVideoChanged();
         videoFlags_=0;
         vsyncCount_=0;
@@ -54,7 +55,7 @@ public:
         // ROM contents and display memory survive a CPU reset. Hardware
         // power-on clearing is a separate future operation.
     }
-    void requestHalt() {haltRequested_=true;}
+    void requestHalt() {haltRequested_=true;fd05BusyLatch_=true;}
     void releaseHalt() {haltRequested_=false;}
     bool haltRequested() const {return haltRequested_;}
 
@@ -99,6 +100,9 @@ public:
     void requestSubIrq() {subIrq_=true;}
     bool subFirqPending() const {return subFirqLatch_!=0;}
     BYTE busyStatus() const {return busy_?0x80:0;}
+    // Original FD05 ($D05) is a latched status, not HALT || AFE0 BUSY.
+    // HALT release does not clear it; sub-CPU AFE0 writes do.
+    BYTE fd05Status() const {return fd05BusyLatch_?0x80:0;}
     BYTE readSubControl() const {return static_cast<BYTE>((subIoRam_[0]&0xfeu)|(busy_?0u:1u));}
     std::size_t graphicsAccessPage() const {return gvuPage_;}
     std::size_t graphicsDisplayPage() const {return gvdPage_;}
@@ -248,6 +252,7 @@ public:
                     nmiMask_=false;
                 }
                 busy_=(value&1u)==0;
+                fd05BusyLatch_=busy_;
             }
             if(address==0xafe1) {
                 gvuControl_=value;
@@ -312,6 +317,7 @@ private:
     std::function<void()> attentionSink_;
     bool haltRequested_=false;
     bool busy_=true;
+    bool fd05BusyLatch_=true;
     std::array<BYTE,0x1000> ioRam_{};
     BYTE dmaChannel0_=0;
     bool nmiMask_=true;
