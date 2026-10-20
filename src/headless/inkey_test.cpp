@@ -125,6 +125,7 @@ int main(int argc,char** argv) {
         machine.setDisplayCpuClockHz(2000000);
         machine.reset();
         auto hostInputSeen=std::make_shared<bool>(false);
+        auto inkeyRequests=std::make_shared<std::uint64_t>(0);
         if(trace || subTraceLimit) {
             auto remaining=std::make_shared<unsigned>(0);
             auto releaseCount=std::make_shared<unsigned>(0);
@@ -208,12 +209,15 @@ int main(int argc,char** argv) {
             });
             logState("START");
             auto active=std::make_shared<bool>(false);
-            auto n=std::make_shared<unsigned>(0);
+            auto n=std::make_shared<std::uint64_t>(0);
+            auto pendingAscii=std::make_shared<bool>(false);
             machine.setDisplaySharedTraceObserver(
-                [active,n,seq,&machine,tracePost,postSample,hostInputSeen](DisplaySubsystem::SharedTrace e) {
+                [active,n,seq,&machine,tracePost,postSample,hostInputSeen,inkeyRequests,pendingAscii](DisplaySubsystem::SharedTrace e) {
                     if(e.mainCpu && e.write && e.offset==2 && e.value==0x2d) {
                         *active=true;
                         ++*n;
+                        ++*inkeyRequests;
+                        *pendingAscii=false;
                         if(*n<=128 || tracePost()) {
                             if(*n>128)++*postSample;
                             std::cerr<<"EV "<<++*seq<<" INKEY2 #"<<*n
@@ -225,22 +229,30 @@ int main(int argc,char** argv) {
                     if(!*active)return;
                     // After host input, always record a nonzero key response.
                     // $80 on FC83 means no key; the following FC84 is noise.
-                    const bool keyResponse=*hostInputSeen && e.offset==3 &&
-                                           !e.write && e.value!=0x80;
-                    if((e.offset==3 || e.offset==4) && (*n<=128 || tracePost() || keyResponse)) {
-                        if(*n>128 && !keyResponse)++*postSample;
+                    const bool keyResponse=*hostInputSeen && e.mainCpu &&
+                                           !e.write && e.offset==3 && e.value!=0x80;
+                    if(keyResponse && e.value==0)*pendingAscii=true;
+                    const bool asciiByte=*hostInputSeen && *pendingAscii &&
+                                         e.mainCpu && !e.write && e.offset==4;
+                    if((e.offset==3 || e.offset==4) && (*n<=128 || tracePost() || keyResponse || asciiByte)) {
+                        if(*n>128 && !keyResponse && !asciiByte)++*postSample;
                         std::cerr<<"EV "<<++*seq<<" INKEY2 #"<<*n<<" "<<(e.mainCpu?"MAIN":"SUB")
                                  <<(e.write?" W":" R")<<" FC8"<<unsigned(e.offset)
                                  <<"=$"<<std::hex<<std::uppercase<<std::setw(2)
                                  <<std::setfill('0')<<unsigned(e.value)<<std::dec<<"\n";
                     }
-                    if(e.mainCpu && !e.write && e.offset==4)*active=false;
+                    if(e.mainCpu && !e.write && e.offset==4) {
+                        *pendingAscii=false;
+                        *active=false;
+                    }
                 });
         }
         Terminal terminal;
         Pty pty;
         std::cerr<<"Real display ROM, no INKEY2 HLE. Type into this terminal; Ctrl-] quits.\n";
         auto last=Clock::now();
+        auto lastReport=last;
+        std::uint64_t reportSeconds=0;
         bool running=true,inputOpen=true;
         while(running) {
             const bool waiting=board->cpuWaitState()!=CSim09::WaitState::Running;
@@ -266,6 +278,19 @@ int main(int argc,char** argv) {
             const auto now=Clock::now();
             const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(now-last).count();
             last=now;
+            if(now-lastReport>=std::chrono::seconds(1)) {
+                ++reportSeconds;
+                lastReport=now;
+                std::cerr<<"HEARTBEAT +"<<reportSeconds<<"s"
+                         <<" mainPC=$"<<std::hex<<std::uppercase
+                         <<std::setw(4)<<std::setfill('0')<<board->cpu().pc()
+                         <<" subPC=$"<<std::setw(4)<<machine.displayCpuPc()
+                         <<" FD05=$"<<std::setw(2)<<unsigned(machine.mainFd05Status())
+                         <<std::dec<<" wait="<<unsigned(board->cpuWaitState()!=CSim09::WaitState::Running)
+                         <<" INKEY2="<<*inkeyRequests
+                         <<" displayRevision="<<machine.displayRevision()
+                         <<"\n";
+            }
             if(waiting && elapsed>0)
                 machine.advanceTimeNanoseconds(static_cast<std::uint64_t>(
                     std::min<std::int64_t>(elapsed,50000000)));
