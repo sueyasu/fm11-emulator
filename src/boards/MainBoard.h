@@ -34,6 +34,7 @@ public:
     void reset() {
         resetEvents();
         resetSubCpuControl();
+        forceInkey2Active_=false;
         displayCpu_.resetCpu();
         resetTimebase();
         externalIrqLines_=0;
@@ -49,7 +50,14 @@ public:
     BYTE eventControl() const {return eventControl_;}
     // FD05 bit 7 reflects the display sub-CPU BUSY state (original $D05).
     // Keep an asserted main-side HALT visible until released.
-    BYTE subCpuStatus() const {return (display_.haltRequested() || display_.busyStatus()!=0)?0x80:0;}
+    BYTE subCpuStatus() const {
+        if(forceInkey2Active_)return 0; // synthetic INKEY 2 completed
+        return (display_.haltRequested() || display_.busyStatus()!=0)?0x80:0;
+    }
+    void setForceInkey2Empty(bool enabled) {
+        forceInkey2Empty_=enabled;
+        forceInkey2Active_=false;
+    }
     BYTE subCpuControl() const {return subCpuControl_;}
     // FD05 bit 0 selects the optional CPU-card bus-master request.
     // Arbitration/CPU suspension remains in the individual CPU cards.
@@ -146,8 +154,20 @@ public:
             // display sub-CPU IRQ. The request remains pending until
             // the sub CPU acknowledges it by reading AFE5.
             if(value&0x40)display_.requestSubIrq();
-            if(value&0x80)display_.requestHalt();
-            else display_.releaseHalt();
+            if(value&0x80) {
+                forceInkey2Active_=false;
+                display_.requestHalt();
+            } else if(forceInkey2Empty_ && display_.haltRequested() &&
+                      display_.readShared(2)==0x2d) {
+                // Diagnostic trap: do not run the ROM for INKEY 2.
+                // Its no-key response is $8000; report completion on FD05.
+                display_.writeShared(3,0x80);
+                display_.writeShared(4,0x00);
+                forceInkey2Active_=true;
+            } else {
+                forceInkey2Active_=false;
+                display_.releaseHalt();
+            }
             return true;
         }
         if(reg==0x04) {
@@ -171,6 +191,8 @@ private:
     DisplaySubsystem display_;
     DisplayCpu6809 displayCpu_{display_};
     BYTE subCpuControl_=0;
+    bool forceInkey2Empty_=false;
+    bool forceInkey2Active_=false;
     BYTE displayControl_=0;
     std::array<BYTE,8> displayPalette_{{0,1,2,3,4,5,6,7}};
     BYTE eventStatus_=0;

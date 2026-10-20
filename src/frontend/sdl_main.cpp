@@ -59,7 +59,7 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE]\n"
+    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--force-inkey2-empty] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE]\n"
              <<"  ROM defaults to external/roms/display6809.bin\n"
              <<"  ESC quit; SPACE pause/resume; F1 switch 200/400-line view\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
@@ -71,7 +71,7 @@ int main(int argc,char** argv) {
         bool floppyD88=false;
         unsigned floppyDrive=0;
         unsigned bootDip=0x9f;
-        bool high=false, testPattern=false, traceBoot=false, traceInkey=false, diagnostics=false;
+        bool high=false, testPattern=false, traceBoot=false, traceInkey=false, forceInkey2Empty=false, diagnostics=false;
         std::uint64_t instructions=10000;
         for(int i=1;i<argc;++i) {
             const std::string arg=argv[i];
@@ -80,6 +80,7 @@ int main(int argc,char** argv) {
             if(arg=="--test-pattern"){testPattern=true;continue;}
             if(arg=="--trace-boot"){traceBoot=true;continue;}
             if(arg=="--trace-inkey"){traceInkey=true;continue;}
+            if(arg=="--force-inkey2-empty"){forceInkey2Empty=true;continue;}
             if(arg=="--diagnostics"){diagnostics=true;continue;}
             if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--ank-rom" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive" || arg=="--boot-dip") && i+1<argc) {
                 if(arg=="--rom")romPath=argv[++i];
@@ -128,6 +129,7 @@ int main(int argc,char** argv) {
             }
         }
         if(mainBoard)mainBoard->setBootDip(static_cast<BYTE>(bootDip));
+        if(forceInkey2Empty)machine.setForceInkey2Empty(true);
         if(!floppyPath.empty() && mainBoard==nullptr)
             throw std::invalid_argument("floppy image requires --main-rom");
         machine.setDisplayCpuClockHz(testPattern?0:2000000);
