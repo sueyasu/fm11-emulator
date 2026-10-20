@@ -321,7 +321,13 @@ int main(int argc,char** argv) {
                 const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
                     peripheralNow-lastPeripheralTick).count();
                 lastPeripheralTick=peripheralNow;
-                if(elapsed>0)
+                // Main CPU running: SysClock memory accesses clock the PTM.
+                // In SYNC/CWAI the reference counter cannot advance, so
+                // host time must advance the independent timer until IRQ.
+                const bool cpuWaiting=mainBoard &&
+                    mainBoard->cpuWaitState()!=CSim09::WaitState::Running;
+                const bool noMainCpu=!machine.boardCount();
+                if(elapsed>0 && (cpuWaiting || noMainCpu))
                     machine.advanceTimeNanoseconds(static_cast<std::uint64_t>(elapsed));
             }
             // Display VSync is sourced from real elapsed time in SDL only.
