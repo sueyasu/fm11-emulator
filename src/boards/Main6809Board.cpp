@@ -407,9 +407,22 @@ void Main6809Board::refreshPtmIrq()
     if(mainBoard_)mainBoard_->setIrqLine(MainBoard::IrqLine::Timer,asserted);
 }
 
+void Main6809Board::refreshKeyboardIrq()
+{
+    if(!mainBoard_ || (ioOutputLatch_[0x02]&0x80)==0 ||
+       (mainIrqSources_&0x40)!=0)return;
+    std::uint16_t code=0;
+    if(!mainBoard_->displaySubsystem().takeMainKeyboardCode(code))return;
+    ioRegisters_[0x00]=static_cast<BYTE>(code>>8);
+    ioRegisters_[0x01]=static_cast<BYTE>(code);
+    mainIrqSources_|=0x40;
+    mainIrqStatus();
+}
+
 void Main6809Board::syncPtmIrq()
 {
     refreshPtmIrq();
+    refreshKeyboardIrq();
 }
 
 void Main6809Board::advancePtm(std::uint64_t ticks)
@@ -538,6 +551,15 @@ BYTE Main6809Board::readIo(WORD address)
         }
         return readPtm(reg);
     }
+    case 0x01: {
+        // Original CMainCpu::GetIoByte(FD01) acknowledges the keyboard
+        // interrupt and fetches the next queued key.
+        const BYTE result=ioRegisters_[0x01];
+        mainIrqSources_&=static_cast<BYTE>(~0x40);
+        mainIrqStatus();
+        refreshKeyboardIrq();
+        return result;
+    }
     case 0x03:
         return mainIrqStatus();
     case 0x50: case 0x51: case 0x52: case 0x53: {
@@ -652,7 +674,11 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         break;
     case 0x02:
         ioOutputLatch_[0x02] = value;
+        if(mainBoard_)
+            mainBoard_->displaySubsystem().setKeyboardMainMode((value&0x80)!=0);
+        if((value&0x80)==0)mainIrqSources_&=static_cast<BYTE>(~0x40);
         mainIrqStatus();
+        refreshKeyboardIrq();
         break;
     case 0x2c:
         ioOutputLatch_[0x2c] = value;
