@@ -234,6 +234,7 @@ public:
         subDmaRegisterWriter_=std::move(writer);
     }
     void setMainEventControlReader(std::function<BYTE()> reader) {mainEventControlReader_=std::move(reader);}
+    void setMainEventControlClearer(std::function<void()> clearer) {mainEventControlClearer_=std::move(clearer);}
     void notifyMainAttention() {if(attentionSink_)attentionSink_();}
     // The top 128 bytes of sub RAM also appear at main $FC80-$FCFF.
     // Main FC80-FCFF and sub 9F80-9FFF are the same 128 bytes.
@@ -282,6 +283,7 @@ public:
         // Keep the side effect on read, not write.
         if(address==0xafe7) {
             if(attentionSink_)attentionSink_();
+            if(mainEventControlClearer_)mainEventControlClearer_();
             return 0;
         }
         if(address==0xafe6)return const_cast<DisplaySubsystem*>(this)->readVsyncStatus();
@@ -466,6 +468,7 @@ private:
     std::uint16_t displayAddress_=0;
     std::array<BYTE,17> crtcRegisters_{};
     std::function<BYTE()> mainEventControlReader_;
+    std::function<void()> mainEventControlClearer_;
     std::function<void()> breakSink_;
     std::function<void(unsigned,BYTE)> subDmaRegisterWriter_;
     std::size_t kanjiBase_=0;
