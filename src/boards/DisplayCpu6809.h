@@ -49,10 +49,6 @@ public:
         nmiCycles_+=LastInstructionCycles();
         return true;
     }
-    // The hardware NMI clock continues running while the sub CPU is
-    // waiting in SYNC/CWAI. Account for scheduled time without pretending
-    // that an instruction was executed.
-    void advanceIdleCycles(std::uint64_t cycles) {nmiCycles_+=cycles;}
     std::uint16_t pc() const {return regs.r.w.PC;}
 private:
     std::uint64_t nmiCycles_=0;
