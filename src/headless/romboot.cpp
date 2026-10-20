@@ -30,7 +30,7 @@ std::uint64_t numeric(const std::string& value) {
 }
 void usage() {
     std::cerr<<"usage: fm11-romboot --floppy-d88 FILE [--main-rom FILE]"
-       <<" [--sub-rom FILE] [--floppy-drive 0..3] [--instructions N] [--report-every N]\\n"
+       <<" [--sub-rom FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--instructions N] [--report-every N]\\n"
        <<"ROM defaults: external/roms/boot6809.bin and display6809.bin\\n"
        <<"Full 6809 ROM boot, no SDL; serial TX appears on stdout.\\n";
 }
@@ -41,6 +41,7 @@ int main(int argc,char** argv) {
         std::string subPath="external/roms/display6809.bin";
         std::string floppyPath;
         unsigned floppyDrive=0;
+        unsigned bootDip=0xdf; // 2D boot only, Mini FDC drive 0.
         std::uint64_t limit=20000000, reportEvery=2000000;
         for(int i=1;i<argc;++i) {
             const std::string arg=argv[i];
@@ -52,6 +53,11 @@ int main(int argc,char** argv) {
                 const auto n=numeric(value);
                 if(n>3)throw std::invalid_argument("floppy drive must be 0..3");
                 floppyDrive=static_cast<unsigned>(n);
+            }
+            else if(arg=="--boot-dip") {
+                const auto n=numeric(value);
+                if(n>255)throw std::invalid_argument("boot DIP must be a byte");
+                bootDip=static_cast<unsigned>(n);
             }
             else if(arg=="--main-rom")mainPath=value;
             else if(arg=="--sub-rom")subPath=value;
@@ -73,6 +79,7 @@ int main(int argc,char** argv) {
         if(disk.size()==327680)main->loadFloppy2d(disk);
         else main->loadFloppyD88(disk);
         main->setFloppyDrive(floppyDrive);
+        main->setBootDip(static_cast<BYTE>(bootDip));
         machine.setDisplayCpuClockHz(2000000);
         machine.reset();
         if(!main->floppyImage().size())
@@ -80,6 +87,7 @@ int main(int argc,char** argv) {
         std::cerr<<"ROM boot: disk bytes="<<disk.size()
                  <<" image bytes="<<main->floppyImage().size()
                  <<" mountedDrive="<<floppyDrive
+                 <<" bootDip=$"<<std::hex<<bootDip<<std::dec
                  <<" mainPC=$"<<std::hex<<main->cpu().pc()
                  <<" subPC=$"<<machine.displayCpuPc()<<std::dec<<"\\n";
         // Optional FDC access trace is at register level; unlike PC-only
