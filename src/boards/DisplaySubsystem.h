@@ -55,7 +55,6 @@ public:
         ioRam_.fill(0);
         kanjiBase_=0;kanjiLeft_=kanjiRight_=32;
         rtcDigits_.fill(0);
-        gvuEnabled_=false;
         gvuPage_=gvuPlane_=gvuOffset_=gvdPage_=0;
         gvuControl_=gvuAddressHigh_=0;
         displayAddress_=0;displayAddressHigh_=0;crtcIndex_=0;
@@ -324,8 +323,7 @@ public:
     }
     void writeMemory(std::uint16_t address,BYTE value) {
         if(address<0x8000) {
-            {
-                const auto offset=graphicsAddress(address);
+            const auto offset=graphicsAddress(address);
                 for(unsigned plane=0;plane<3;++plane) {
                     const unsigned writeMask=1u<<plane;
                     const unsigned preserveMask=1u<<(plane+3);
@@ -337,7 +335,6 @@ public:
                         markVideoChanged();
                     }
                 }
-            }
         }
         else if(address>=0x9f80 && address<=0x9fff)
             writeShared(address-0x9f80,value);
@@ -462,7 +459,6 @@ private:
     BYTE vsyncMode_=0,vsyncStatus_=0x40;
     std::array<BYTE,4> subIoRam_{};
     std::size_t vramWindow_=0;
-    bool gvuEnabled_=false;
     BYTE gvuControl_=0,gvuAddressHigh_=0;
     unsigned gvuPage_=0,gvuPlane_=0,gvdPage_=0;
     std::uint16_t gvuOffset_=0;
