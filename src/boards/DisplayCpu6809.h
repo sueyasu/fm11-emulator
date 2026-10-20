@@ -23,6 +23,10 @@ public:
         ++totalAccesses_;
         display_.writeMemory(address,value);
     }
+    void setWallClockNmiTest(bool enabled) {
+        wallClockNmiTest_=enabled;
+        lastWallClockNmi_=std::chrono::steady_clock::now();
+    }
     void resetCpu() {
         SimRESET();
         nmiCycles_=0;
@@ -31,6 +35,7 @@ public:
         lastNmiCalibration_=std::chrono::steady_clock::now();
         vsyncCalibrationMs_=0;
         display_.resetInterruptClock();
+        lastWallClockNmi_=std::chrono::steady_clock::now();
     }
     // Original SubCpu::SimONE measures the 20 ms NMI interval against
     // host elapsed time, not against the nominal WM_TIMER arguments.
@@ -73,7 +78,15 @@ public:
             regs.HD|=002;
             SimFIRQ();
         }
-        if(!display_.nmiMask() && nmiCycles_>=nmiThreshold_) {
+        // Test mode: host elapsed time replaces access-count NMI threshold.
+        // Coalesce missed periods. Main CPU HALT above still blocks NMI.
+        bool nmiDue=nmiCycles_>=nmiThreshold_;
+        if(wallClockNmiTest_) {
+            const auto now=std::chrono::steady_clock::now();
+            nmiDue=now-lastWallClockNmi_>=std::chrono::milliseconds(20);
+            if(nmiDue)lastWallClockNmi_=now;
+        }
+        if(!display_.nmiMask() && nmiDue) {
             regs.HD|=004;
             SimNMI();
             nmiCycles_=0;
@@ -103,6 +116,9 @@ public:
     void advanceIdleCycles(std::uint64_t) {}
     std::uint16_t pc() const {return regs.r.w.PC;}
 private:
+    bool wallClockNmiTest_=false;
+    std::chrono::steady_clock::time_point lastWallClockNmi_=
+        std::chrono::steady_clock::now();
     std::uint64_t nmiCycles_=0;
     std::uint64_t nmiThreshold_=60000;
     std::uint64_t totalAccesses_=0;

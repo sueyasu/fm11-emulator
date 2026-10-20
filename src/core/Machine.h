@@ -75,6 +75,9 @@ public:
     BYTE displayPhysicalVramByte(std::size_t offset) const {
         return mainBoard_->displaySubsystem().readPhysicalVram(offset);
     }
+    void setDisplayWallClockNmiTest(bool enabled) {
+        mainBoard_->displayCpu().setWallClockNmiTest(enabled);
+    }
     std::uint16_t displayCpuPc() const {return mainBoard_->displayCpu().pc();}
     void setDisplayIoWriteObserver(DisplaySubsystem::IoWriteObserver observer) {
         mainBoard_->displaySubsystem().setIoWriteObserver(std::move(observer));

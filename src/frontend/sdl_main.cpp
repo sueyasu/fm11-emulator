@@ -60,7 +60,7 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--no-keyboard] [--keyboard-off-after-init] [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE]\n"
+    std::cout<<"usage: fm11-sdl [--no-keyboard] [--keyboard-off-after-init] [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--test-wallclock-nmi]\n"
              <<"  ROM defaults to external/roms/display6809.bin\n"
              <<"  F12 quit; F10 pause/resume; F1 switch 200/400-line view\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
@@ -73,7 +73,7 @@ int main(int argc,char** argv) {
         unsigned floppyDrive=0;
         unsigned bootDip=0x9f;
         bool high=false, testPattern=false, traceBoot=false, diagnostics=false;
-        bool noKeyboard=false,keyboardOffAfterInit=false;
+        bool noKeyboard=false,keyboardOffAfterInit=false,wallClockNmiTest=false;
         std::uint64_t instructions=2000;
         for(int i=1;i<argc;++i) {
             const std::string arg=argv[i];
@@ -82,6 +82,7 @@ int main(int argc,char** argv) {
             if(arg=="--no-keyboard"){noKeyboard=true;continue;}
             if(arg=="--keyboard-off-after-init"){keyboardOffAfterInit=true;continue;}
             if(arg=="--test-pattern"){testPattern=true;continue;}
+            if(arg=="--test-wallclock-nmi"){wallClockNmiTest=true;continue;}
             if(arg=="--trace-boot"){traceBoot=true;continue;}
             if(arg=="--diagnostics"){diagnostics=true;continue;}
             if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--ank-rom" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive" || arg=="--boot-dip") && i+1<argc) {
@@ -134,6 +135,7 @@ int main(int argc,char** argv) {
         if(!floppyPath.empty() && mainBoard==nullptr)
             throw std::invalid_argument("floppy image requires --main-rom");
         machine.setDisplayCpuClockHz(testPattern?0:2000000);
+        machine.setDisplayWallClockNmiTest(wallClockNmiTest);
         machine.reset();
         machine.setExternalDisplayVsync(true);
         machine.setReferenceWallClock(true);
