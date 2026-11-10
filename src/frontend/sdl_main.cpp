@@ -1,5 +1,6 @@
 #include "Machine.h"
 #include "Main6809Board.h"
+#include "MainZ80Board.h"
 #include "DisplayBitmap.h"
 #include "RomFiles.h"
 #include <SDL.h>
@@ -59,7 +60,7 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE]\n"
+    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--z80] [--z80-clock HZ]\n"
              <<"  ROM defaults to external/roms/display6809.bin\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
@@ -68,7 +69,8 @@ void usage() {
 int main(int argc,char** argv) {
     try {
         std::string romPath="external/roms/display6809.bin", mainRomPath, ankPath, floppyPath;
-        bool floppyD88=false;
+        bool floppyD88=false, z80Enabled=false;
+        std::uint64_t z80ClockHz=4000000;
         unsigned floppyDrive=0;
         unsigned bootDip=0x9f;
         bool high=false, testPattern=false, traceBoot=false, traceInkey=false, diagnostics=false;
@@ -77,12 +79,14 @@ int main(int argc,char** argv) {
             const std::string arg=argv[i];
             if(arg=="--help"){usage();return 0;}
             if(arg=="--high"){high=true;continue;}
+            if(arg=="--z80"){z80Enabled=true;continue;}
             if(arg=="--test-pattern"){testPattern=true;continue;}
             if(arg=="--trace-boot"){traceBoot=true;continue;}
             if(arg=="--trace-inkey"){traceInkey=true;continue;}
             if(arg=="--diagnostics"){diagnostics=true;continue;}
-            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--ank-rom" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive" || arg=="--boot-dip") && i+1<argc) {
+            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--ank-rom" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive" || arg=="--boot-dip" || arg=="--z80-clock") && i+1<argc) {
                 if(arg=="--rom")romPath=argv[++i];
+                else if(arg=="--z80-clock")z80ClockHz=parseCount(argv[++i]);
                 else if(arg=="--main-rom")mainRomPath=argv[++i];
                 else if(arg=="--ank-rom")ankPath=argv[++i];
                 else if(arg=="--boot-dip") {
@@ -103,6 +107,8 @@ int main(int argc,char** argv) {
                 else instructions=parseCount(argv[++i]);
             } else {usage();return 2;}
         }
+        if(z80Enabled && (testPattern || mainRomPath.empty()))
+            throw std::invalid_argument("--z80 requires --main-rom and cannot use --test-pattern");
         if(instructions>1000000)
             throw std::invalid_argument("--cycles must be <= 1000000");
         Machine machine;
@@ -116,6 +122,11 @@ int main(int argc,char** argv) {
                 mainBoard=mainCpu.get();
                 mainCpu->setCpuClockHz(2000000);
                 machine.addBoard(std::move(mainCpu));
+                if(z80Enabled) {
+                    machine.addBoard(std::make_unique<MainZ80Board>());
+                    machine.enableFd05Selection(true);
+                    machine.setZ80ClockHz(z80ClockHz);
+                }
                 // addBoard() attaches the CPU to the machine's shared
                 // FloppyDevice. Mount only afterwards: mounting on the
                 // CPU's initial private device would lose the image.
@@ -278,7 +289,9 @@ int main(int argc,char** argv) {
             if(!paused && !testPattern) {
                 // Let the host idle while the guest waits for an interrupt.
                 // The elapsed interval is fed into the PTM below on wake.
-                if(mainBoard && mainBoard->cpuWaitState()!=CSim09::WaitState::Running)
+                const bool main6809Active=mainBoard &&
+                    machine.activeBoard()==static_cast<CpuBoard*>(mainBoard);
+                if(main6809Active && mainBoard->cpuWaitState()!=CSim09::WaitState::Running)
                     SDL_Delay(1);
                 // While the 6809 waits in SYNC/CWAI, instruction-cycle
                 // advancement stops. Keep the independent PTM clock moving.
@@ -286,7 +299,7 @@ int main(int argc,char** argv) {
                 const auto waitElapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
                     tickNow-lastWaitTick).count();
                 lastWaitTick=tickNow;
-                if(mainBoard &&
+                if(main6809Active &&
                    mainBoard->cpuWaitState()!=CSim09::WaitState::Running &&
                    waitElapsed>0) {
                     machine.advanceTimeNanoseconds(static_cast<std::uint64_t>(
@@ -308,7 +321,8 @@ int main(int argc,char** argv) {
                         machine.executeOne();
                         serviceSerial();
                         ++executed;
-                        if(mainBoard && mainBoard->cpuWaitState()!=CSim09::WaitState::Running)
+                        if(mainBoard && machine.activeBoard()==static_cast<CpuBoard*>(mainBoard) &&
+                           mainBoard->cpuWaitState()!=CSim09::WaitState::Running)
                             break;
                     }
                 } else {
