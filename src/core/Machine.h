@@ -107,6 +107,7 @@ public:
     }
     std::uint64_t displayCpuClockHz() const {return displayCpuClockHz_;}
     std::uint64_t clock8088Hz() const {return clock8088Hz_;}
+    std::uint64_t clockZ80Hz() const {return clockZ80Hz_;}
     std::uint64_t lastExecutionCycles() const {return lastExecutionCycles_;}
     // Advance the common main-board timebase regardless of active CPU.
     // Do not also advance the same interval through board.advanceCpuCycles().

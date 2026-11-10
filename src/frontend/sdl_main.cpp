@@ -1,4 +1,5 @@
 #include "Machine.h"
+#include "SdlCpuPacer.h"
 #include "Main6809Board.h"
 #include "MainZ80Board.h"
 #include "DisplayBitmap.h"
@@ -233,6 +234,7 @@ int main(int argc,char** argv) {
         auto lastLog=std::chrono::steady_clock::now();
         auto lastFrame=lastLog-std::chrono::milliseconds(17);
         auto lastWaitTick=std::chrono::steady_clock::now();
+        SdlCpuPacer cpuPacer;
         CpuBoard* lastCpuOwner=machine.activeBoard();
         auto traceCpmSnapshot=[&](const char* event) {
             if(!traceCpm80 || !mainBoard)return;
@@ -316,31 +318,44 @@ int main(int argc,char** argv) {
                     }
                 }
             }
+            // Keep host-time pacing independent of the emulated clocks:
+            // Machine::executeOne() already advances the PTM and display CPU
+            // by each guest instruction's true cycle count.
+            const auto tickNow=std::chrono::steady_clock::now();
+            const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
+                tickNow-lastWaitTick);
+            lastWaitTick=tickNow;
             if(!paused && !testPattern) {
-                // Let the host idle while the guest waits for an interrupt.
-                // The elapsed interval is fed into the PTM below on wake.
                 const bool main6809Active=mainBoard &&
                     machine.activeBoard()==static_cast<CpuBoard*>(mainBoard);
-                if(main6809Active && mainBoard->cpuWaitState()!=CSim09::WaitState::Running)
+                const bool waiting=main6809Active &&
+                    mainBoard->cpuWaitState()!=CSim09::WaitState::Running;
+                if(waiting) {
+                    // A SYNC/CWAI wait has no CPU instruction cycles.
+                    // Advance peripherals by actual wall time only here.
+                    // Discard old CPU credit: it must not be replayed when
+                    // the interrupt wakes the 6809.
+                    cpuPacer.reset();
                     SDL_Delay(1);
-                // While the 6809 waits in SYNC/CWAI, instruction-cycle
-                // advancement stops. Keep the independent PTM clock moving.
-                const auto tickNow=std::chrono::steady_clock::now();
-                const auto waitElapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
-                    tickNow-lastWaitTick).count();
-                lastWaitTick=tickNow;
-                if(main6809Active &&
-                   mainBoard->cpuWaitState()!=CSim09::WaitState::Running &&
-                   waitElapsed>0) {
+                    const auto afterDelay=std::chrono::steady_clock::now();
+                    const auto waitNs=std::chrono::duration_cast<std::chrono::nanoseconds>(
+                        afterDelay-tickNow);
+                    lastWaitTick=afterDelay;
                     machine.advanceTimeNanoseconds(static_cast<std::uint64_t>(
-                        std::min<std::int64_t>(waitElapsed,50000000)));
-                }
-                if(machine.boardCount()) {
-                    for(std::uint64_t i=0;i<instructions;++i) {
-                        // Only inspect the PC before execution: reading memory
-                        // via CPU bus here might acknowledge I/O registers.
-                        if(traceBoot && executed+i<64 && mainBoard) {
-                            std::cerr<<"main step="<<(executed+i)
+                        std::min<std::int64_t>(
+                            elapsed.count()+waitNs.count(),50000000)));
+                } else if(machine.boardCount()) {
+                    cpuPacer.addElapsed(elapsed);
+                    std::uint64_t ran=0;
+                    for(;ran<instructions && cpuPacer.ready();++ran) {
+                        // Determine the active card BEFORE the instruction;
+                        // FD05 can switch the CPU during executeOne().
+                        const auto* active=machine.activeBoard();
+                        const auto hz=active && active->cpu().type()==CpuType::Z80
+                            ?machine.clockZ80Hz()
+                            :mainBoard?mainBoard->cpuClockHz():2000000ULL;
+                        if(traceBoot && executed<64 && mainBoard) {
+                            std::cerr<<"main step="<<executed
                                      <<" PC=$"<<std::hex
                                      <<std::setw(4)<<std::setfill('0')
                                      <<mainBoard->cpu().pc()
@@ -349,12 +364,8 @@ int main(int argc,char** argv) {
                                      <<std::dec<<std::setfill(' ')<<"\n";
                         }
                         machine.executeOne();
+                        cpuPacer.consume(machine.lastExecutionCycles(),hz);
                         ++executed;
-                        // Polling a nonblocking PTY after every emulated CPU
-                        // instruction makes even the boot ROM's RAM test
-                        // syscall-bound. Flush/receive in bounded batches.
-                        // 128 instructions is short enough for interactive
-                        // serial input, including console character echo.
                         if((executed&127u)==0)serviceSerial();
                         if(traceCpm80) {
                             CpuBoard* owner=machine.activeBoard();
@@ -364,16 +375,24 @@ int main(int argc,char** argv) {
                             } else if(executed%200000==0)
                                 traceCpmSnapshot("progress");
                         }
-                        if(mainBoard && machine.activeBoard()==static_cast<CpuBoard*>(mainBoard) &&
-                           mainBoard->cpuWaitState()!=CSim09::WaitState::Running)
+                        if(mainBoard &&
+                           machine.activeBoard()==static_cast<CpuBoard*>(mainBoard) &&
+                           mainBoard->cpuWaitState()!=CSim09::WaitState::Running) {
+                            cpuPacer.reset();
                             break;
+                        }
                     }
+                    // Do not busy-spin when ahead of the host clock.
+                    if(ran==0)SDL_Delay(1);
                 } else {
-                    // 2 MHz display CPU: advance elapsed time without a main
-                    // CPU. The Machine scheduler also handles HALT and waits.
-                    machine.advanceTimeNanoseconds(instructions*500);
+                    // Standalone display CPU has no primary CPU cycles.
+                    machine.advanceTimeNanoseconds(static_cast<std::uint64_t>(
+                        std::clamp<std::int64_t>(elapsed.count(),0,20000000)));
+                    cpuPacer.reset();
                 }
-                if(!machine.boardCount())executed+=instructions;
+            } else {
+                // Pause must not accumulate a burst of catch-up instructions.
+                cpuPacer.reset();
             }
             serviceSerial();
             const auto frameTime=std::chrono::steady_clock::now();
