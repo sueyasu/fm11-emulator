@@ -114,11 +114,11 @@ CSim09::~CSim09()
 ////////////////////////////////////////////////////////////////
 // CSim09 メンバー関数
 
-BYTE CSim09::GetMemByte(WORD addr)
+BYTE CSim09::GetMemByte(WORD /*addr*/)
 {
 	return 0;
 }
-void CSim09::SetMemByte(WORD addr, BYTE data)
+void CSim09::SetMemByte(WORD /*addr*/, BYTE /*data*/)
 {
 }
 
@@ -244,6 +244,7 @@ WORD	CSim09::GetAddrInd()
 
     case 0x0c:	/* 1RR0 1100 8 bit PC offset	*/
 		reg = &REG_PC;
+        [[fallthrough]];
     case 0x08:	/* 1RR0 1000 8 bit const ofs	*/
 		ofs = (signed char)GetOpByte();
 		ofs += *reg;
@@ -251,6 +252,7 @@ WORD	CSim09::GetAddrInd()
 
     case 0x0d:	/* 1RR0 1101 16 bit PC offset	*/
 		reg = &REG_PC;
+        [[fallthrough]];
     case 0x09:	/* 1RR0 1001 16 bit const ofs	*/
 		ofs = GetMemWord(REG_PC); REG_PC += 2;
 		ofs += *reg;

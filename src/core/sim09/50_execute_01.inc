@@ -5,8 +5,8 @@ void	CSim09::SimONE()
     indexedCycleExtra_ = 0;
     stackTimingMask_ = 0;
     WORD op;
-    register ACC accA;
-    register ACC accB;
+    ACC accA;
+    ACC accB;
     WORD accP;
     LONG accL;
 
