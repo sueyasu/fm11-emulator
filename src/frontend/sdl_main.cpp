@@ -349,8 +349,13 @@ int main(int argc,char** argv) {
                                      <<std::dec<<std::setfill(' ')<<"\n";
                         }
                         machine.executeOne();
-                        serviceSerial();
                         ++executed;
+                        // Polling a nonblocking PTY after every emulated CPU
+                        // instruction makes even the boot ROM's RAM test
+                        // syscall-bound. Flush/receive in bounded batches.
+                        // 128 instructions is short enough for interactive
+                        // serial input, including console character echo.
+                        if((executed&127u)==0)serviceSerial();
                         if(traceCpm80) {
                             CpuBoard* owner=machine.activeBoard();
                             if(owner!=lastCpuOwner) {
