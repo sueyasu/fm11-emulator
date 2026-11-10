@@ -62,6 +62,7 @@ int main()
     reversed.enableFd05Selection(true);
     if(reversed.activeBoard()!=primaryPtr)return 13;
     primaryPtr->writeCpu(0xfd05,1);
+    reversed.enableFd05Selection(true);
     if(reversed.activeBoard()!=optPtr)return 14;
     return 0;
 }
