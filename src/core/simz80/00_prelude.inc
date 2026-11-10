@@ -43,12 +43,12 @@ void CSimZ80::SetMem(WORD addr, BYTE data)
 		Memory[addr] = data;
 }
 
-BYTE CSimZ80::GetIO(BYTE port)
+BYTE CSimZ80::GetIO(BYTE /*port*/)
 {
 	return 0;
 }
 
-void CSimZ80::SetIO(BYTE port, BYTE data)
+void CSimZ80::SetIO(BYTE /*port*/, BYTE /*data*/)
 {
 }
 

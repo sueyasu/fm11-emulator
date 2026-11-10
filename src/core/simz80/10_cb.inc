@@ -1,6 +1,6 @@
 void	CSimZ80::z80emuCB(WORD *ix)
 {
-	int op, bit, ofs;
+	int op, bit, ofs=0;
 	BYTE *reg = NULL;
 	BYTE tmp;
 

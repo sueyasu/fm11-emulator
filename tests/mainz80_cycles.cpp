@@ -1,5 +1,7 @@
 #include "MainZ80Board.h"
 #include "Machine.h"
+#include "SimZ80.h"
+#include <array>
 #include <cstdint>
 #include <iostream>
 #include <memory>
@@ -25,6 +27,15 @@ bool run(MainZ80Board& z,const std::vector<BYTE>& program,
     return true;
 }
 }
+
+class PortZ80 final : public CSimZ80 {
+public:
+    std::array<BYTE,65536> ram{};
+    std::vector<BYTE> transmitted;
+    BYTE GetMem(WORD address) override {return ram[address];}
+    void SetMem(WORD address,BYTE value) override {ram[address]=value;}
+    void SetIO(BYTE, BYTE data) override {transmitted.push_back(data);}
+};
 
 int main() {
     MainZ80Board z;
@@ -75,5 +86,29 @@ int main() {
     machine.reset();
     machine.executeOne();
     if(machine.lastExecutionCycles()!=10 || cpu->cpu().pc()!=3)return 13;
+
+    // OUTD transfers exactly one descending byte, while OTDR transfers
+    // B descending bytes. The old interpreter fell through from OTDR to
+    // OUTD and incorrectly repeated OUTD as well.
+    PortZ80 port;
+    port.ram[0]=0xed;port.ram[1]=0xab; // OUTD
+    port.ram[0x2000]=0x5a;port.ram[0x1fff]=0x7c;
+    port.regs.r.w.HL=0x2000;
+    port.regs.r.b.B=2;
+    port.regs.r.b.C=0x40;
+    port.z80emu();
+    if(port.transmitted!=std::vector<BYTE>{0x5a} ||
+       port.regs.r.w.HL!=0x1fff || port.regs.r.b.B!=1 ||
+       port.LastInstructionCycles()!=16)return 14;
+
+    port.regs.PC=0;
+    port.ram[1]=0xbb; // OTDR
+    port.regs.r.w.HL=0x2000;
+    port.regs.r.b.B=2;
+    port.transmitted.clear();
+    port.z80emu();
+    if(port.transmitted!=std::vector<BYTE>{0x5a,0x7c} ||
+       port.regs.r.w.HL!=0x1ffe || port.regs.r.b.B!=0 ||
+       port.LastInstructionCycles()!=37)return 15;
     return 0;
 }

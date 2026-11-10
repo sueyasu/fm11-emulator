@@ -319,11 +319,12 @@ void	CSimZ80::z80emuED()
 		SetZf(TRUE);
 		SetNf(TRUE);
 		break;  
-	case 0xBB:  		/* OTDR 		*/
-		SetIO(REG_C, GetByte(REG_HL++));
+	case 0xAB:  		/* OUTD: one byte, descending */
+		SetIO(REG_C, GetByte(REG_HL--));
 		SetZf(--REG_B == 0);
 		SetNf(TRUE);
-	case 0xAB:  		/* OUTD 		*/
+		break;
+	case 0xBB:  		/* OTDR: repeat until B reaches zero */
 		do {
 			SetIO(REG_C, GetByte(REG_HL--));
 		} while ( --REG_B != 0 );
