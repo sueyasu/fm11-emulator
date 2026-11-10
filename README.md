@@ -69,6 +69,18 @@ per frame, or the approximate display CPU cycle budget without a main CPU
 (default 10000). This is a
 bring-up throttle, **not** a calibrated real-time CPU clock.
 
+To measure effective main-CPU throughput, pass `--cpu-speed` to `fm11-sdl`.
+It reports each second's **executed guest T-states**, wall-clock MHz,
+instruction counts, and total guest CPU time per wall second on stderr.
+6809 and Z80 are measured separately across FD05 handoffs. For example,
+an uninterrupted 4 MHz Z80 should approach **4,000,000 T/s** and
+**4.000 MHz**; a smaller rate can indicate host-side slowdown.
+`guest/wall` sums emulated 6809 and Z80 instruction times and divides by
+wall time. Interrupt waits (SYNC/CWAI) and other idle periods reduce this
+ratio even when the emulator itself is not overloaded. The display sub-CPU
+is intentionally excluded. This diagnostic has no effect unless enabled;
+it does not adjust guest clock speeds.
+
 For a black screen while running **original** main and display ROMs, first
 inspect the main CPU boot path and shared-bus handshake without changing
 emulated memory or acknowledging IRQ/event registers:

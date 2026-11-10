@@ -1,5 +1,6 @@
 #include "Machine.h"
 #include "SdlCpuPacer.h"
+#include "CpuSpeedMeter.h"
 #include "Main6809Board.h"
 #include "MainZ80Board.h"
 #include "DisplayBitmap.h"
@@ -61,7 +62,7 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--z80] [--z80-clock HZ] [--trace-cpm80]\n"
+    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--z80] [--z80-clock HZ] [--trace-cpm80] [--cpu-speed]\n"
              <<"  ROM defaults to external/roms/display6809.bin\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
@@ -74,7 +75,7 @@ int main(int argc,char** argv) {
         std::uint64_t z80ClockHz=4000000;
         unsigned floppyDrive=0;
         unsigned bootDip=0x9f;
-        bool high=false, testPattern=false, traceBoot=false, traceInkey=false, diagnostics=false, traceCpm80=false;
+        bool high=false, testPattern=false, traceBoot=false, traceInkey=false, diagnostics=false, traceCpm80=false, cpuSpeed=false;
         std::uint64_t instructions=10000;
         for(int i=1;i<argc;++i) {
             const std::string arg=argv[i];
@@ -82,6 +83,7 @@ int main(int argc,char** argv) {
             if(arg=="--high"){high=true;continue;}
             if(arg=="--z80"){z80Enabled=true;continue;}
             if(arg=="--trace-cpm80"){traceCpm80=true;continue;}
+            if(arg=="--cpu-speed"){cpuSpeed=true;continue;}
             if(arg=="--test-pattern"){testPattern=true;continue;}
             if(arg=="--trace-boot"){traceBoot=true;continue;}
             if(arg=="--trace-inkey"){traceInkey=true;continue;}
@@ -235,6 +237,9 @@ int main(int argc,char** argv) {
         auto lastFrame=lastLog-std::chrono::milliseconds(17);
         auto lastWaitTick=std::chrono::steady_clock::now();
         SdlCpuPacer cpuPacer;
+        CpuSpeedMeter cpuMeter;
+        auto lastSpeedReport=std::chrono::steady_clock::now();
+        bool wasPaused=false;
         CpuBoard* lastCpuOwner=machine.activeBoard();
         auto traceCpmSnapshot=[&](const char* event) {
             if(!traceCpm80 || !mainBoard)return;
@@ -318,6 +323,12 @@ int main(int argc,char** argv) {
                     }
                 }
             }
+            if(cpuSpeed && paused!=wasPaused) {
+                // Pause/resume should not dilute a measurement window.
+                cpuMeter.reset();
+                lastSpeedReport=std::chrono::steady_clock::now();
+            }
+            wasPaused=paused;
             // Keep host-time pacing independent of the emulated clocks:
             // Machine::executeOne() already advances the PTM and display CPU
             // by each guest instruction's true cycle count.
@@ -364,7 +375,14 @@ int main(int argc,char** argv) {
                                      <<std::dec<<std::setfill(' ')<<"\n";
                         }
                         machine.executeOne();
-                        cpuPacer.consume(machine.lastExecutionCycles(),hz);
+                        const auto guestCycles=machine.lastExecutionCycles();
+                        cpuPacer.consume(guestCycles,hz);
+                        if(cpuSpeed && active) {
+                            const auto card=active->cpu().type()==CpuType::Z80
+                                ?CpuSpeedMeter::Card::Z80
+                                :CpuSpeedMeter::Card::Main6809;
+                            cpuMeter.record(card,guestCycles);
+                        }
                         ++executed;
                         if((executed&127u)==0)serviceSerial();
                         if(traceCpm80) {
@@ -395,6 +413,29 @@ int main(int argc,char** argv) {
                 cpuPacer.reset();
             }
             serviceSerial();
+            if(cpuSpeed && !paused && machine.boardCount()) {
+                const auto reportNow=std::chrono::steady_clock::now();
+                const auto reportElapsed=reportNow-lastSpeedReport;
+                if(reportElapsed>=std::chrono::seconds(1)) {
+                    const auto sample=cpuMeter.take(reportElapsed);
+                    const auto hz6809=mainBoard?mainBoard->cpuClockHz():0;
+                    const auto hzZ80=z80Enabled?machine.clockZ80Hz():0;
+                    std::cerr<<std::fixed<<std::setprecision(3)
+                             <<"CPU speed wall="<<sample.wallSeconds<<"s"
+                             <<" 6809="<<sample.main6809.cycles<<" T"
+                             <<" ("<<sample.mhz(CpuSpeedMeter::Card::Main6809)
+                             <<" MHz, "<<sample.main6809.instructions<<" ins)"
+                             ;
+                    if(z80Enabled)
+                        std::cerr<<" Z80="<<sample.z80.cycles<<" T"
+                                 <<" ("<<sample.mhz(CpuSpeedMeter::Card::Z80)
+                                 <<" MHz, "<<sample.z80.instructions<<" ins)";
+                    std::cerr<<" guest/wall="
+                             <<sample.progressRatio(hz6809,hzZ80)<<"x"
+                             <<" [main CPU only; SYNC/CWAI lowers ratio]\n";
+                    lastSpeedReport=reportNow;
+                }
+            }
             const auto frameTime=std::chrono::steady_clock::now();
             if(frameTime-lastFrame>=std::chrono::microseconds(16667)) {
                 lastFrame=frameTime;
