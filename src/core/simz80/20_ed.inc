@@ -5,6 +5,9 @@ void	CSimZ80::z80emuED()
 	WORD ACC_R, ACC_C;
 
 	op = GetOp();
+	instructionCycles_=Z80Timing::ed(op);
+	const WORD beforeBC=REG_BC;
+	const BYTE beforeB=REG_B;
 
 	switch(op & 0070) {
 	case 0000: reg = &(REG_B); break;
@@ -327,5 +330,15 @@ void	CSimZ80::z80emuED()
 		SetZf(TRUE);
 		SetNf(TRUE);
 		break;
+	}
+	// Block-repeat ED opcodes run to completion in one legacy interpreter call.
+	// Sum all passes: 21 T-states for each repeat, 16 for the final pass.
+	if(Z80Timing::blockRepeat(op)) {
+		const bool byteCount=(op&0x07)==2 || (op&0x07)==3;
+		unsigned iterations=byteCount
+			?static_cast<BYTE>(beforeB-REG_B)
+			:static_cast<WORD>(beforeBC-REG_BC);
+		if(iterations==0)iterations=byteCount?256u:65536u;
+		instructionCycles_+=21ull*(iterations-1);
 	}
 }

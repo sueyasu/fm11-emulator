@@ -3,7 +3,9 @@ void	CSimZ80::z80emuIndex(WORD *ix)
 	WORD ACC_A, ACC_O;
 	BYTE ACC_R, ACC_C;
 
-	switch(GetOp()) {
+	const BYTE op=GetOp();
+	instructionCycles_=Z80Timing::index(op);
+	switch(op) {
 	case 0x09:			/* ADD	IX,BC		--XXX-0* */
 		ACC_W = REG_BC;
 		goto ADDOP;

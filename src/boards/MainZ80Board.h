@@ -36,16 +36,15 @@ private:
         void SetMem(WORD addr,BYTE data) override {board_.writeMemory(addr,data);}
         BYTE GetIO(BYTE port) override {return board_.readIo(port);}
         void SetIO(BYTE port,BYTE data) override {board_.writeIo(port,data);}
-        void reset() override {regs=ZREGS{};lastCycles_=0;}
-        void executeOne() override {z80emu();lastCycles_=4;}
+        void reset() override {regs=ZREGS{};instructionCycles_=0;}
+        void executeOne() override {z80emu();}
         std::uint32_t pc() const override {return regs.PC;}
         void irq() override {z80irq();}
         void nmi() override {z80nmi();}
         CpuType type() const override {return CpuType::Z80;}
-        std::uint64_t lastExecutionCycles() const override {return lastCycles_;}
+        std::uint64_t lastExecutionCycles() const override {return LastInstructionCycles();}
     private:
         MainZ80Board& board_;
-        std::uint64_t lastCycles_=0; // provisional; per-opcode timing is a later step
     };
     std::shared_ptr<std::vector<BYTE>> memory_ =
         std::make_shared<std::vector<BYTE>>(1u<<20,0);

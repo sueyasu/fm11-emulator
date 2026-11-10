@@ -2,6 +2,7 @@
 //
 
 #include "SimZ80.h"
+#include "Z80Timing.h"
 
 #include <cstdio>
 #include <cstring>

@@ -3,6 +3,8 @@ void	CSimZ80::z80emu()
 	WORD ACC_A;
 	BYTE ACC_R, ACC_C;
 	BYTE op = GetOp();
+	instructionCycles_=Z80Timing::base(op,FLG_Z!=0,FLG_C!=0,FLG_P!=0,FLG_S!=0);
+	if(op==0x10)instructionCycles_=(REG_B!=1)?13:8;
 
 	switch(op) {
 	case 0000:  		/* NOP  		*/  	/* --X-X--- */

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "portable_types.h"
+#include <cstdint>
 
 // CSimZ80 コマンド ターゲット
 
@@ -49,6 +50,7 @@ public:
 
 public:
 	BYTE *Memory;
+	std::uint64_t instructionCycles_=0;
 	ZREGS regs;
 	union {
 		struct {
@@ -78,6 +80,7 @@ public:
 	void z80emuED();
 	void z80emuIndex(WORD *ix);
 	void z80emu();
+	std::uint64_t LastInstructionCycles() const {return instructionCycles_;}
 	void z80irq();
 	void z80nmi();
 	void z80dis(char *tmp, unsigned char *mem, unsigned short pc);

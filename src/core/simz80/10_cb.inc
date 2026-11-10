@@ -8,6 +8,7 @@ void	CSimZ80::z80emuCB(WORD *ix)
 		ofs = (signed char)(GetOp());
 
 	op = GetOp();
+	instructionCycles_=Z80Timing::cb(static_cast<BYTE>(op),ix!=NULL);
 	bit = (op & 0070) >> 3;
 
 	switch(op & 0007) {
@@ -132,9 +133,9 @@ void	CSimZ80::z80emuCB(WORD *ix)
 	}
 
 	if ( reg == &tmp ) {
-		if ( *ix == NULL )
+		if ( ix == NULL )
 			SetByte(REG_HL, tmp);
 		else
-			SetByte(*ix, tmp);
+			SetByte(static_cast<WORD>(*ix + ofs), tmp);
 	}
 }
