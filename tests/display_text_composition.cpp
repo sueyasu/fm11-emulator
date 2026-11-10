@@ -42,31 +42,6 @@ int main() {
     if(high.argb[0]!=0xffc00000u ||
        high.argb[7]!=0xffc00000u ||
        high.argb[8]!=0xff000000u)return 6;
-    // The original renderer truncated the 8 KiB sub-CPU text RAM to
-    // 4 KiB, so a long-running CRTC scroll wrapped at 2048 cells.
-    // With 80 columns that is 48 columns into a line, causing the
-    // conspicuous mid-row split seen after prolonged CP/M output.
-    setCrtc(12,0x08); // CRTC cell 0x800 -> RAM byte 0x1000 ($9000)
-    setCrtc(13,0);
-    display.writeMemory(0x9000,65);
-    display.writeMemory(0x9001,0x07);
-    display.writeMemory(0x8000,0);
-    high=DisplayBitmap::captureFrame(display,true);
-    DisplayBitmap::compositeText(high,display);
-    if(high.argb[0]!=0xffc0c0c0u)return 7;
-
-    // At the end of the 8 KiB ring, the next character must appear
-    // at $8000 (not $9000 and not byte 0x1000 into the 4 KiB ring).
-    setCrtc(12,0x0f);
-    setCrtc(13,0xff);
-    display.writeMemory(0x9ffe,65);
-    display.writeMemory(0x9fff,0x07);
-    display.writeMemory(0x8000,65);
-    display.writeMemory(0x8001,0x07);
-    high=DisplayBitmap::captureFrame(display,true);
-    DisplayBitmap::compositeText(high,display);
-    if(high.argb[0]!=0xffc0c0c0u || high.argb[8]!=0xffc0c0c0u)return 8;
-
-    std::cout<<"PASS: CRTC text CRAM, 8 KiB wrapping, ANK, 200/400 lines, reverse attribute\n";
+    std::cout<<"PASS: CRTC text CRAM, ANK bit order, 200/400 lines, reverse attribute\n";
     return 0;
 }

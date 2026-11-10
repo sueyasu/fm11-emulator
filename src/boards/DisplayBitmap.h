@@ -162,7 +162,7 @@ public:
     }
 
     // CPU version of the character stage in the original fm11.hlsl.
-    // Character/attribute pairs reside in the 8 KiB SubRam $8000-$9FFF, with a
+    // Character/attribute pairs reside at SubRam $8000-$8FFF, with a
     // 2-byte CRTC start-address offset. ANK rows use LSB-first pixel order.
     // This entry point is explicit to preserve graphics-only regression
     // frames and to allow comparing text scanout separately.
@@ -188,7 +188,7 @@ public:
         // CRTC R12:R13 is a character-cell address; text RAM stores
         // two bytes (character, attribute) per cell. Convert only once.
         const unsigned start=((unsigned(display.crtcRegister(12))<<8) |
-                              unsigned(display.crtcRegister(13)))&0xfffu;
+                              unsigned(display.crtcRegister(13)))&0x7ffu;
         const unsigned textStart=start*2u;
         for(unsigned y=0;y<frame.height;++y) {
             const unsigned scanY=unsigned(y)*400u/unsigned(frame.height);
@@ -197,9 +197,9 @@ public:
             for(unsigned x=0;x<640;++x) {
                 const unsigned cx=x/charW,sx=x%charW;
                 if(cx>=columns)continue;
-                const unsigned off=(textStart+(cx+cy*columns)*2u)&0x1fffu;
+                const unsigned off=(textStart+(cx+cy*columns)*2u)&0xfffu;
                 const BYTE character=display.textByte(off);
-                const BYTE attribute=display.textByte((off+1)&0x1fffu);
+                const BYTE attribute=display.textByte((off+1)&0xfffu);
                 unsigned glyphX=sx;
                 if(charW>8)glyphX/=2;
                 bool lit=false;
