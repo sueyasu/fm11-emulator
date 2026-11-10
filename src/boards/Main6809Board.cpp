@@ -4,7 +4,7 @@
 #include <algorithm>
 
 Main6809Board::Main6809Board(CpuType variant)
-    : memory_(kPhysicalMemorySize, 0), core_(*this, variant)
+    : memory_(std::make_shared<std::vector<BYTE>>(kPhysicalMemorySize, 0)), core_(*this, variant)
 {
     if (variant != CpuType::MC6809 && variant != CpuType::HD6309)
         throw std::invalid_argument("Main6809Board requires MC6809 or HD6309 CPU type");
@@ -171,7 +171,7 @@ void Main6809Board::writeFloppySector()
     const std::uint32_t dmaBank=std::uint32_t(ioRegisters_[0x94]&0x0f)<<16;
     for(unsigned i=0;i<256;++i) {
         const WORD address=WORD(startAddress+(down?-int(i):int(i)));
-        if((dmaBank|address)>=memory_.size()) {
+        if((dmaBank|address)>=memory_->size()) {
             floppyStatus_=0x10;
             ioRegisters_[0x50]|=0x40;
             return;
@@ -482,14 +482,14 @@ BYTE Main6809Board::readPhysical(std::uint32_t address) const
 {
     if (address >= memory_.size())
         throw std::out_of_range("Main6809Board physical read outside backing memory");
-    return memory_[address];
+    return (*memory_)[address];
 }
 
 void Main6809Board::writePhysical(std::uint32_t address, BYTE value)
 {
     if (address >= memory_.size())
         throw std::out_of_range("Main6809Board physical write outside backing memory");
-    memory_[address] = value;
+    (*memory_)[address] = value;
 }
 
 bool Main6809Board::isMmrRegister(WORD address) const

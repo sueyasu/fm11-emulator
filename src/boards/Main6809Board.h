@@ -12,6 +12,8 @@
 #include <deque>
 #include <vector>
 #include <memory>
+#include <stdexcept>
+#include <utility>
 
 class Main6809Board final : public CpuBoard
 {
@@ -102,6 +104,12 @@ public:
     BYTE readCpu(WORD address);
     void writeCpu(WORD address, BYTE value);
 
+    std::shared_ptr<std::vector<BYTE>> physicalMemory() const {return memory_;}
+    void setPhysicalMemory(std::shared_ptr<std::vector<BYTE>> memory) {
+        if(!memory || memory->size()!=kPhysicalMemorySize)
+            throw std::invalid_argument("invalid shared physical memory");
+        memory_=std::move(memory);
+    }
     BYTE readPhysical(std::uint32_t address) const;
     void writePhysical(std::uint32_t address, BYTE value);
 
@@ -153,7 +161,7 @@ private:
         std::uint64_t lastCycles_=0;
     };
 
-    std::vector<BYTE> memory_;
+    std::shared_ptr<std::vector<BYTE>> memory_;
     BootRomImage bootRom_{};
     std::array<BYTE, kOnboardRamSize> onboardRam_{};
 

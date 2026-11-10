@@ -31,6 +31,7 @@ public:
     void reset();
     void executeOne();
     void set8088ClockHz(std::uint64_t hz);
+    void setZ80ClockHz(std::uint64_t hz);
     // Display CPU scheduling is opt-in until the hardware clock is resolved.
     void setDisplayCpuClockHz(std::uint64_t hz);
     void loadDisplayRom(const DisplaySubsystem::RomImage& rom) {mainBoard_->displaySubsystem().loadRom(rom);}
@@ -122,6 +123,7 @@ private:
     std::size_t active_board_ = 0;
     std::uint64_t lastExecutionCycles_ = 0;
     std::uint64_t clock8088Hz_ = 0;
+    std::uint64_t clockZ80Hz_ = 4000000;
     std::uint64_t displayCpuClockHz_ = 0;
     std::uint64_t displayCycleFraction_ = 0;
     std::uint64_t displayCpuInputHz_ = 0;

@@ -1,6 +1,7 @@
 #include "Machine.h"
 #include "Main6809Board.h"
 #include "Main8088Board.h"
+#include "MainZ80Board.h"
 
 #include <stdexcept>
 #include <limits>
@@ -17,6 +18,18 @@ std::size_t Machine::addBoard(std::unique_ptr<CpuBoard> board)
     }
     if(auto* cpu8088=dynamic_cast<Main8088Board*>(board.get()))
         cpu8088->bus().setMainBoard(mainBoard_);
+    if(auto* cpuZ80=dynamic_cast<MainZ80Board*>(board.get())) {
+        cpuZ80->setMainBoard(mainBoard_);
+        for(const auto& attached:boards_)
+            if(auto* cpu6809=dynamic_cast<Main6809Board*>(attached.get())) {
+                cpuZ80->setPhysicalMemory(cpu6809->physicalMemory());
+                break;
+            }
+    }
+    if(auto* cpu6809=dynamic_cast<Main6809Board*>(board.get()))
+        for(auto& attached:boards_)
+            if(auto* cpuZ80=dynamic_cast<MainZ80Board*>(attached.get()))
+                cpuZ80->setPhysicalMemory(cpu6809->physicalMemory());
     boards_.push_back(std::move(board));
     const auto index=boards_.size()-1;
     // A newly attached CPU card may complete the FD05 primary/optional
@@ -65,7 +78,8 @@ void Machine::synchronizeFd05Selection()
         if(primary==boards_.size() &&
            dynamic_cast<Main6809Board*>(boards_[i].get()))primary=i;
         if(optional==boards_.size() &&
-           dynamic_cast<Main8088Board*>(boards_[i].get()))optional=i;
+           (dynamic_cast<Main8088Board*>(boards_[i].get()) ||
+            dynamic_cast<MainZ80Board*>(boards_[i].get())))optional=i;
     }
     // Do not invent a CPU card when only one kind is installed.
     if(primary==boards_.size() || optional==boards_.size())return;
@@ -111,6 +125,13 @@ void Machine::set8088ClockHz(std::uint64_t hz)
     if(hz==0 || hz>1000000000ULL)
         throw std::invalid_argument("8088/V20 clock must be between 1 and 1e9 Hz");
     clock8088Hz_=hz;
+}
+
+void Machine::setZ80ClockHz(std::uint64_t hz)
+{
+    if(hz==0 || hz>1000000000ULL)
+        throw std::invalid_argument("Z80 clock must be between 1 and 1e9 Hz");
+    clockZ80Hz_=hz;
 }
 
 void Machine::setDisplayCpuClockHz(std::uint64_t hz)
@@ -197,6 +218,13 @@ void Machine::executeOne()
                 advanceDisplayCpuCycles(lastExecutionCycles_,cpu6809->cpuClockHz());
                 cpu6809->syncPtmIrq();
             }
+        } else if(dynamic_cast<MainZ80Board*>(board) &&
+                  lastExecutionCycles_ && clockZ80Hz_) {
+            mainBoard_->advanceCpuCycles(lastExecutionCycles_,clockZ80Hz_);
+            advanceDisplayCpuCycles(lastExecutionCycles_,clockZ80Hz_);
+            for(auto& attached:boards_)
+                if(auto* cpu6809=dynamic_cast<Main6809Board*>(attached.get()))
+                    cpu6809->syncPtmIrq();
         } else if(dynamic_cast<Main8088Board*>(board) &&
                   lastExecutionCycles_ && clock8088Hz_) {
             mainBoard_->advanceCpuCycles(lastExecutionCycles_,clock8088Hz_);

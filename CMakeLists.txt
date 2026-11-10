@@ -13,6 +13,7 @@ add_library(fm11_core STATIC
     src/core/Machine.cpp
     src/core/Sim09.cpp
     src/core/SimZ80.cpp
+    src/boards/MainZ80Board.cpp
     src/boards/Main6809Board.cpp
     src/boards/Main8088Bus.cpp
     src/boards/Main8088Board.cpp
@@ -87,6 +88,9 @@ if(FM11_BUILD_TESTS)
                      ${CMAKE_CURRENT_SOURCE_DIR}/tests/main8088_opcode_inventory.py
                      ${CMAKE_CURRENT_SOURCE_DIR}/src/boards/Main8088Board.cpp)
 
+    add_executable(mainz80_handoff tests/mainz80_handoff.cpp)
+    target_link_libraries(mainz80_handoff PRIVATE fm11_core)
+    add_test(NAME mainz80_handoff COMMAND mainz80_handoff)
     add_executable(main6809_dma_irq_gating tests/main6809_dma_irq_gating.cpp)
     target_link_libraries(main6809_dma_irq_gating PRIVATE fm11_core)
     add_test(NAME main6809_dma_irq_gating COMMAND main6809_dma_irq_gating)
