@@ -62,7 +62,7 @@ int main() {
     fast.addElapsed(milliseconds(5)); // a VSYNC-like delay
     if(fast.creditPs()!=SdlCpuPacer::maxLagPs*10/4)return 18;
     fast.consume(1000000,4000000); // 250 ms debt: clipped to 200 ms
-    if(fast.creditPs()!=-SdlCpuPacer::maxLagPs*3/4)return 19;
+    if(fast.creditPs()!=-SdlCpuPacer::maxLagPs*10*3/4)return 19;
 
     // "unlimited" must never block the guest or modify emulated clocks.
     SdlCpuPacer unlimited(0);
