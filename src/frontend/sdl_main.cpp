@@ -62,9 +62,10 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--z80] [--z80-clock HZ] [--trace-cpm80] [--cpu-speed]\n"
+    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--z80] [--z80-clock HZ] [--trace-cpm80] [--cpu-speed] [--speed 0..100]\n"
              <<"  ROM defaults to external/roms/display6809.bin\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
+             <<"  --speed N: emulated-time multiplier (default 10, 1=real-time, 0=unlimited).\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
 }
 }
@@ -73,6 +74,7 @@ int main(int argc,char** argv) {
         std::string romPath="external/roms/display6809.bin", mainRomPath, ankPath, floppyPath;
         bool floppyD88=false, z80Enabled=false;
         std::uint64_t z80ClockHz=4000000;
+        unsigned speed=10;
         unsigned floppyDrive=0;
         unsigned bootDip=0x9f;
         bool high=false, testPattern=false, traceBoot=false, traceInkey=false, diagnostics=false, traceCpm80=false, cpuSpeed=false;
@@ -88,9 +90,15 @@ int main(int argc,char** argv) {
             if(arg=="--trace-boot"){traceBoot=true;continue;}
             if(arg=="--trace-inkey"){traceInkey=true;continue;}
             if(arg=="--diagnostics"){diagnostics=true;continue;}
-            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--ank-rom" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive" || arg=="--boot-dip" || arg=="--z80-clock") && i+1<argc) {
+            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--ank-rom" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive" || arg=="--boot-dip" || arg=="--z80-clock" || arg=="--speed") && i+1<argc) {
                 if(arg=="--rom")romPath=argv[++i];
                 else if(arg=="--z80-clock")z80ClockHz=parseCount(argv[++i]);
+                else if(arg=="--speed") {
+                    const auto value=parseCount(argv[++i]);
+                    if(value>SdlCpuPacer::maxSpeed)
+                        throw std::invalid_argument("--speed must be 0..100");
+                    speed=static_cast<unsigned>(value);
+                }
                 else if(arg=="--main-rom")mainRomPath=argv[++i];
                 else if(arg=="--ank-rom")ankPath=argv[++i];
                 else if(arg=="--boot-dip") {
@@ -236,7 +244,7 @@ int main(int argc,char** argv) {
         auto lastLog=std::chrono::steady_clock::now();
         auto lastFrame=lastLog-std::chrono::milliseconds(17);
         auto lastWaitTick=std::chrono::steady_clock::now();
-        SdlCpuPacer cpuPacer;
+        SdlCpuPacer cpuPacer(speed);
         CpuSpeedMeter cpuMeter;
         auto lastSpeedReport=std::chrono::steady_clock::now();
         bool wasPaused=false;
@@ -347,14 +355,23 @@ int main(int argc,char** argv) {
                     // Discard old CPU credit: it must not be replayed when
                     // the interrupt wakes the 6809.
                     cpuPacer.reset();
-                    SDL_Delay(1);
+                    if(speed!=0)SDL_Delay(1);
                     const auto afterDelay=std::chrono::steady_clock::now();
                     const auto waitNs=std::chrono::duration_cast<std::chrono::nanoseconds>(
                         afterDelay-tickNow);
                     lastWaitTick=afterDelay;
-                    machine.advanceTimeNanoseconds(static_cast<std::uint64_t>(
-                        std::min<std::int64_t>(
-                            elapsed.count()+waitNs.count(),50000000)));
+                    // SYNC/CWAI does not execute guest instructions.
+                    // Move the independent timers ahead at the same
+                    // virtual speed as the CPU pacing, including in 0
+                    // (unlimited) mode. Unlimited has no wall-time
+                    // reference; use one fixed 1 ms virtual quantum per
+                    // wait poll, while retaining host throttling for input.
+                    constexpr std::int64_t maxWaitHostNs=50000000;
+                    const auto hostNs=std::clamp<std::int64_t>(
+                        elapsed.count()+waitNs.count(),0,maxWaitHostNs);
+                    const auto virtualNs=speed==0?1000000ULL:
+                        static_cast<std::uint64_t>(hostNs)*speed;
+                    machine.advanceTimeNanoseconds(virtualNs);
                 } else if(machine.boardCount()) {
                     cpuPacer.addElapsed(elapsed);
                     std::uint64_t ran=0;
@@ -404,8 +421,11 @@ int main(int argc,char** argv) {
                     if(ran==0)SDL_Delay(1);
                 } else {
                     // Standalone display CPU has no primary CPU cycles.
-                    machine.advanceTimeNanoseconds(static_cast<std::uint64_t>(
-                        std::clamp<std::int64_t>(elapsed.count(),0,20000000)));
+                    const auto hostNs=std::clamp<std::int64_t>(
+                        elapsed.count(),0,20000000);
+                    machine.advanceTimeNanoseconds(speed==0
+                        ?instructions*500
+                        :static_cast<std::uint64_t>(hostNs)*speed);
                     cpuPacer.reset();
                 }
             } else {
@@ -430,6 +450,9 @@ int main(int argc,char** argv) {
                         std::cerr<<" Z80="<<sample.z80.cycles<<" T"
                                  <<" ("<<sample.mhz(CpuSpeedMeter::Card::Z80)
                                  <<" MHz, "<<sample.z80.instructions<<" ins)";
+                    std::cerr<<" target=";
+                    if(speed==0)std::cerr<<"unlimited";
+                    else std::cerr<<speed<<"x";
                     std::cerr<<" guest/wall="
                              <<sample.progressRatio(hz6809,hzZ80)<<"x"
                              <<" [main CPU only; SYNC/CWAI lowers ratio]\n";

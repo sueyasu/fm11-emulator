@@ -64,22 +64,39 @@ is shown at native 1:1 size rather than distorted to 1.5x. Enlarge the
 window to at least 1280x400 for a sharp 2x 640x200 display, or 1280x800
 for a sharp 2x 640x400 display. Smaller windows clip instead of using
 fractional resampling.
-`--high` starts in 400-line mode; `--cycles N` controls main CPU instructions
-per frame, or the approximate display CPU cycle budget without a main CPU
-(default 10000). This is a
-bring-up throttle, **not** a calibrated real-time CPU clock.
+`--high` starts in 400-line mode. The SDL frontend defaults to
+**`--speed 10`** (ten times real-time emulated CPU/peripheral time).
+Use `--speed 1` for real-time FM-11 clocks, `--speed 5` for five times
+real-time, or `--speed 0` for unlimited execution (as fast as the host
+can manage). Values 0 through 100 are supported as whole-number
+multipliers. The hardware clock configuration remains 2 MHz for the
+main 6809/display CPU and 4 MHz for the optional Z80 by default;
+`--speed` changes the host-time pacing, not those clock settings.
+Guest CPU/peripheral clocks remain synchronized relative to each other.
+`SYNC/CWAI` advances peripherals at the requested virtual rate while
+the main CPU is waiting. The display refresh cadence remains tied to
+host time, near 60 frames/s. `--cycles N` remains the *maximum* number
+of primary CPU instructions per SDL loop (default 10000), not a clock
+rate. Achieving the requested speed depends on host performance and
+graphics/ROM workload. In unlimited mode idle waiting is also unpaced;
+expect higher host CPU usage.
 
 To measure effective main-CPU throughput, pass `--cpu-speed` to `fm11-sdl`.
 It reports each second's **executed guest T-states**, wall-clock MHz,
 instruction counts, and total guest CPU time per wall second on stderr.
 6809 and Z80 are measured separately across FD05 handoffs. For example,
-an uninterrupted 4 MHz Z80 should approach **4,000,000 T/s** and
-**4.000 MHz**; a smaller rate can indicate host-side slowdown.
+an uninterrupted 4 MHz Z80 at `--speed 1` should approach
+**4,000,000 T/s** and **4.000 MHz**; at `--speed 10` the ideal
+is **40,000,000 T/s** and **40.000 MHz**. A smaller rate
+can indicate host-side slowdown (or guest CPU waiting/switching).
 `guest/wall` sums emulated 6809 and Z80 instruction times and divides by
 wall time. Interrupt waits (SYNC/CWAI) and other idle periods reduce this
 ratio even when the emulator itself is not overloaded. The display sub-CPU
-is intentionally excluded. This diagnostic has no effect unless enabled;
-it does not adjust guest clock speeds.
+is intentionally excluded. The `target=` field shows the requested
+speed multiplier and `guest/wall=` shows the achieved aggregate guest
+CPU time per host second (not counting time spent in idle waits).
+This diagnostic has no effect unless enabled; it does not adjust
+guest clock speeds.
 
 For a black screen while running **original** main and display ROMs, first
 inspect the main CPU boot path and shared-bus handshake without changing
