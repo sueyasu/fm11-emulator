@@ -60,7 +60,7 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--z80] [--z80-clock HZ]\n"
+    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--z80] [--z80-clock HZ] [--trace-cpm80]\n"
              <<"  ROM defaults to external/roms/display6809.bin\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
@@ -73,13 +73,14 @@ int main(int argc,char** argv) {
         std::uint64_t z80ClockHz=4000000;
         unsigned floppyDrive=0;
         unsigned bootDip=0x9f;
-        bool high=false, testPattern=false, traceBoot=false, traceInkey=false, diagnostics=false;
+        bool high=false, testPattern=false, traceBoot=false, traceInkey=false, diagnostics=false, traceCpm80=false;
         std::uint64_t instructions=10000;
         for(int i=1;i<argc;++i) {
             const std::string arg=argv[i];
             if(arg=="--help"){usage();return 0;}
             if(arg=="--high"){high=true;continue;}
             if(arg=="--z80"){z80Enabled=true;continue;}
+            if(arg=="--trace-cpm80"){traceCpm80=true;continue;}
             if(arg=="--test-pattern"){testPattern=true;continue;}
             if(arg=="--trace-boot"){traceBoot=true;continue;}
             if(arg=="--trace-inkey"){traceInkey=true;continue;}
@@ -107,6 +108,8 @@ int main(int argc,char** argv) {
                 else instructions=parseCount(argv[++i]);
             } else {usage();return 2;}
         }
+        if(traceCpm80 && !z80Enabled)
+            throw std::invalid_argument("--trace-cpm80 requires --z80");
         if(z80Enabled && (testPattern || mainRomPath.empty()))
             throw std::invalid_argument("--z80 requires --main-rom and cannot use --test-pattern");
         if(instructions>1000000)
@@ -230,6 +233,33 @@ int main(int argc,char** argv) {
         auto lastLog=std::chrono::steady_clock::now();
         auto lastFrame=lastLog-std::chrono::milliseconds(17);
         auto lastWaitTick=std::chrono::steady_clock::now();
+        CpuBoard* lastCpuOwner=machine.activeBoard();
+        auto traceCpmSnapshot=[&](const char* event) {
+            if(!traceCpm80 || !mainBoard)return;
+            const auto* owner=machine.activeBoard();
+            // No CPU-visible I/O reads: several FDxx reads acknowledge IRQs.
+            std::cerr<<"CPM80 "<<event
+                     <<" step="<<executed
+                     <<" owner="<<(owner && owner->cpu().type()==CpuType::Z80?"Z80":"6809")
+                     <<" pc=$"<<std::hex<<(owner?owner->cpu().pc():0)
+                     <<" pc6809=$"<<mainBoard->cpu().pc()
+                     <<" FD05write=$"<<unsigned(machine.mainSubCpuControl())
+                     <<" FDCtrk=$"<<unsigned(mainBoard->fdcTrack())
+                     <<" FDCsec=$"<<unsigned(mainBoard->fdcSector())
+                     <<" FDCstatus=$"<<unsigned(mainBoard->fdcStatus())
+                     <<" phys10000=$"<<unsigned(mainBoard->readPhysical(0x10000))
+                     <<" ccpbase=$"<<unsigned(mainBoard->readPhysical(0xdc00))
+                     <<" biosbase=$"<<unsigned(mainBoard->readPhysical(0xf200))
+                     <<std::dec
+                     <<" fdcReads="<<mainBoard->fdcReadCommands()
+                     <<" fdcOK="<<mainBoard->fdcSuccessfulReads()
+                     <<" fdcFailed="<<mainBoard->fdcFailedReads()
+                     <<" hdReads="<<mainBoard->hdReadAttempts()
+                     <<" hdFailed="<<mainBoard->hdReadFailures()
+                     <<"\n";
+        };
+        if(traceCpm80)traceCpmSnapshot("reset");
+
         while(running) {
             SDL_Event event;
             while(SDL_PollEvent(&event)) {
@@ -321,6 +351,14 @@ int main(int argc,char** argv) {
                         machine.executeOne();
                         serviceSerial();
                         ++executed;
+                        if(traceCpm80) {
+                            CpuBoard* owner=machine.activeBoard();
+                            if(owner!=lastCpuOwner) {
+                                traceCpmSnapshot("handoff");
+                                lastCpuOwner=owner;
+                            } else if(executed%200000==0)
+                                traceCpmSnapshot("progress");
+                        }
                         if(mainBoard && machine.activeBoard()==static_cast<CpuBoard*>(mainBoard) &&
                            mainBoard->cpuWaitState()!=CSim09::WaitState::Running)
                             break;
