@@ -218,7 +218,7 @@ void Main6809Board::readFloppySector()
         const std::uint32_t dmaBank=std::uint32_t(ioRegisters_[0x94]&0x0f)<<16;
         for(unsigned i=0;i<transfer;++i) {
             const WORD address=WORD(startAddress+(down?-int(i):int(i)));
-            if((dmaBank|address)>=memory_.size()) {
+            if((dmaBank|address)>=memory_->size()) {
                 ++fdcReadFailures_;
                 floppyStatus_=0x10;
                 ioRegisters_[0x50]|=0x40;
@@ -480,14 +480,14 @@ void Main6809Board::writeCpu(WORD address, BYTE value)
 
 BYTE Main6809Board::readPhysical(std::uint32_t address) const
 {
-    if (address >= memory_.size())
+    if (address >= memory_->size())
         throw std::out_of_range("Main6809Board physical read outside backing memory");
     return (*memory_)[address];
 }
 
 void Main6809Board::writePhysical(std::uint32_t address, BYTE value)
 {
-    if (address >= memory_.size())
+    if (address >= memory_->size())
         throw std::out_of_range("Main6809Board physical write outside backing memory");
     (*memory_)[address] = value;
 }
