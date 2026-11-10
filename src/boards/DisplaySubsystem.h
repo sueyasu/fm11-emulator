@@ -53,6 +53,7 @@ public:
         gvuPage_=gvuPlane_=gvuOffset_=gvdPage_=0;
         gvuControl_=gvuAddressHigh_=0;
         displayAddress_=0;displayAddressHigh_=0;crtcIndex_=0;
+        textStartAddress_=0;
         crtcRegisters_.fill(0);
         // ROM contents and display memory survive a CPU reset. Hardware
         // power-on clearing is a separate future operation.
@@ -114,6 +115,9 @@ public:
     std::size_t graphicsReadPlane() const {return gvuPlane_;}
     std::uint16_t graphicsDisplayAddress() const {return displayAddress_;}
     BYTE crtcRegister(unsigned index) const {return crtcRegisters_.at(index);}
+    // CSubCpu::SubCRTC() latches DumStaAdr only on CRTC R13 writes.
+    // OnDraw() passes (DumStaAdr & 0x07ff) * 2 to fm11.hlsl.
+    unsigned textStartAddress() const {return textStartAddress_;}
     // AFE6 video-control flags. Individual bits are not yet mapped to
     // display modes until their FM-11 semantics have been verified.
     BYTE videoFlags() const {return videoFlags_;}
@@ -292,11 +296,24 @@ public:
         }
         else if(address==0xafee)crtcIndex_=value&0x1f;
         else if(address==0xafef) {
-            if(crtcIndex_<crtcRegisters_.size() &&
-               crtcRegisters_[crtcIndex_]!=value) {
-                crtcRegisters_[crtcIndex_]=value;
-                if(crtcIndex_==13)vsyncCount_=100;
-                markVideoChanged();
+            if(crtcIndex_<crtcRegisters_.size()) {
+                if(crtcRegisters_[crtcIndex_]!=value) {
+                    crtcRegisters_[crtcIndex_]=value;
+                    markVideoChanged();
+                }
+                if(crtcIndex_==13) {
+                    // Original SubCpu.cpp SubCRTC(): the latched display
+                    // start is updated on every R13 write, not on R12 writes.
+                    const unsigned dumStaAdr=
+                        ((unsigned(crtcRegisters_[12])<<9) |
+                         (unsigned(crtcRegisters_[13])<<1))&0x07ffu;
+                    const unsigned next=dumStaAdr*2u;
+                    if(textStartAddress_!=next) {
+                        textStartAddress_=next;
+                        markVideoChanged();
+                    }
+                    vsyncCount_=100;
+                }
             }
         }
         else if(address==0xafe6) {
@@ -352,6 +369,7 @@ private:
     std::uint16_t gvuOffset_=0;
     BYTE displayAddressHigh_=0,crtcIndex_=0;
     std::uint16_t displayAddress_=0;
+    unsigned textStartAddress_=0;
     std::array<BYTE,17> crtcRegisters_{};
     std::array<BYTE,kPhysicalVramSize> vram_{};
     std::array<BYTE,kRamSize> ram_{};

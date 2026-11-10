@@ -25,7 +25,7 @@ int main(int argc,char** argv) {
             return 10;
         const auto& display=machine.displaySubsystem();
         if(display.crtcRegister(1)!=40 || display.crtcRegister(6)!=25 ||
-           display.crtcRegister(13)!=(mode=="top"?0:80))return 11;
+           display.crtcRegister(13)!=(mode=="top"?0:40))return 11;
         for(const auto& [line,word]:std::initializer_list<std::pair<unsigned,std::string>>{
                 {0,"FIRST LINE"},{1,"SECOND LINE"}})
             for(unsigned i=0;i<word.size();++i) {
@@ -37,6 +37,7 @@ int main(int argc,char** argv) {
             auto frame=machine.captureDisplayFrame(high);
             DisplayBitmap::compositeText(frame,display);
             const bool shifted=mode=="scroll";
+            if(display.textStartAddress()!=(shifted?160u:0u))return 16;
             const auto white=0xffc0c0c0u, black=0xff000000u;
             // F has bit 0 set, S has bit 1 set. The same RAM is visible
             // at different screen coordinates solely from CRTC R13.

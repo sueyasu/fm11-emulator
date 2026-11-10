@@ -185,11 +185,11 @@ public:
         const unsigned charW=640u/columns;
         const unsigned charH=400u/rows;
         if(charW==0 || charH==0)return;
-        // CRTC R12:R13 is a character-cell address; text RAM stores
-        // two bytes (character, attribute) per cell. Convert only once.
-        const unsigned start=((unsigned(display.crtcRegister(12))<<8) |
-                              unsigned(display.crtcRegister(13)))&0x7ffu;
-        const unsigned textStart=start*2u;
+        // Reference SubCpu.cpp: CRTC R13 latches DumStaAdr as
+        // ((R12 << 9) | (R13 << 1)) & 0x07ff. The original OnDraw()
+        // then multiplies DumStaAdr by two before passing CramAddr
+        // to fm11.hlsl. Do not re-read live R12/R13 here.
+        const unsigned textStart=display.textStartAddress();
         for(unsigned y=0;y<frame.height;++y) {
             const unsigned scanY=unsigned(y)*400u/unsigned(frame.height);
             const unsigned cy=scanY/charH,sy=scanY%charH;

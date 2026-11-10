@@ -349,9 +349,10 @@ for ch in b"LAYER TEST":
 print(out/"ank_layers.bin")
 
 # Stage 6: CRTC display-start scrolling. Both ROMs populate TWO lines in
-# the same physical text RAM; only CRTC R13 changes (0 vs 80 cells).
+# the same physical text RAM; original CSubCpu::SubCRTC R13=40
+# advances CramAddr by 160 bytes (one 80-column text line).
 # Thus changing the displayed first line must not rewrite character RAM.
-for start_cell,name in ((0,"top"),(80,"scroll")):
+for start_cell,name in ((0,"top"),(40,"scroll")):
     rom=bytearray(0x5000)
     code=bytearray()
     def sw(address,value):
