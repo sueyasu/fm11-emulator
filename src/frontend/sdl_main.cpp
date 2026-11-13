@@ -164,7 +164,7 @@ int main(int argc,char** argv) {
              high?600:300,SDL_WINDOW_RESIZABLE);
         if(!ui.window)throw std::runtime_error(SDL_GetError());
         ui.renderer=SDL_CreateRenderer(ui.window,-1,
-                       SDL_RENDERER_ACCELERATED|SDL_RENDERER_PRESENTVSYNC);
+                       SDL_RENDERER_ACCELERATED);
         if(!ui.renderer)
             ui.renderer=SDL_CreateRenderer(ui.window,-1,SDL_RENDERER_SOFTWARE);
         if(!ui.renderer)throw std::runtime_error(SDL_GetError());
@@ -242,7 +242,8 @@ int main(int argc,char** argv) {
         if(diagnostics)
             machine.setDisplayIoWriteObserver([&](DisplaySubsystem::IoWriteTrace){++ioWrites;});
         auto lastLog=std::chrono::steady_clock::now();
-        auto lastFrame=lastLog-std::chrono::milliseconds(17);
+        // Match the original emulator's approximately 32 ms paint cadence.
+        auto lastFrame=lastLog-std::chrono::milliseconds(32);
         auto lastWaitTick=std::chrono::steady_clock::now();
         SdlCpuPacer cpuPacer(speed);
         CpuSpeedMeter cpuMeter;
@@ -460,7 +461,7 @@ int main(int argc,char** argv) {
                 }
             }
             const auto frameTime=std::chrono::steady_clock::now();
-            if(frameTime-lastFrame>=std::chrono::microseconds(16667)) {
+            if(frameTime-lastFrame>=std::chrono::milliseconds(32)) {
                 lastFrame=frameTime;
             auto frame=machine.captureDisplayFrame(high);
             // Original SubCpu::OnDraw derives both layers from FD A0.

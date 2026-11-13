@@ -75,7 +75,9 @@ main 6809/display CPU and 4 MHz for the optional Z80 by default;
 Guest CPU/peripheral clocks remain synchronized relative to each other.
 `SYNC/CWAI` advances peripherals at the requested virtual rate while
 the main CPU is waiting. The display refresh cadence remains tied to
-host time, near 60 frames/s. `--cycles N` remains the *maximum* number
+host time, near 31 frames/s (approximately one frame per 32 ms),
+and the SDL renderer does not request VSYNC so rendering does not
+block guest CPU execution waiting for a display refresh. `--cycles N` remains the *maximum* number
 of primary CPU instructions per SDL loop (default 10000), not a clock
 rate. Achieving the requested speed depends on host performance and
 graphics/ROM workload. In unlimited mode idle waiting is also unpaced;
