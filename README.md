@@ -83,6 +83,23 @@ rate. Achieving the requested speed depends on host performance and
 graphics/ROM workload. In unlimited mode idle waiting is also unpaced;
 expect higher host CPU usage.
 
+The window renderer defaults to `--renderer auto`: it tries the
+OpenGL 3.3 core-profile shader renderer first and falls back to the existing
+SDL software-composition path if the GPU/context is unavailable. Use
+`--renderer gl` to **require** OpenGL (startup reports an error if unsupported),
+or `--renderer software` to retain the previous `DisplayBitmap` and
+SDL texture path. The chosen backend is printed on startup. The GL
+fragment shader decodes all three physical graphics VRAM planes,
+the palette, 4 KiB interleaved character/attribute RAM, the ANK ROM,
+and the CRTC's latched text start directly from raw integer textures.
+It preserves 200/400-line selection, text attributes, reverse video, and
+integer pixel scaling without CPU bitmap composition. It requires desktop
+OpenGL 3.3; neither the headless emulator nor the portable core/tests
+requires OpenGL development headers. Both renderer modes remain
+non-VSYNC at the host's ~31 fps repaint cadence. To compare performance,
+run the same workload with `--cpu-speed --renderer gl` and with
+`--cpu-speed --renderer software` (keeping `--speed` unchanged).
+
 To measure effective main-CPU throughput, pass `--cpu-speed` to `fm11-sdl`.
 It reports each second's **executed guest T-states**, wall-clock MHz,
 instruction counts, and total guest CPU time per wall second on stderr.

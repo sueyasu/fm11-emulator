@@ -1,5 +1,6 @@
 #include "Machine.h"
 #include "SdlCpuPacer.h"
+#include "OpenGlRenderer.h"
 #include "CpuSpeedMeter.h"
 #include "Main6809Board.h"
 #include "MainZ80Board.h"
@@ -35,17 +36,24 @@ struct Window {
     SDL_Window* window=nullptr;
     SDL_Renderer* renderer=nullptr;
     SDL_Texture* texture=nullptr;
+    SDL_GLContext glContext=nullptr;
+    std::unique_ptr<OpenGlRenderer> glRenderer;
     ~Window() {
+        // GL resources must be destroyed while their context is current.
+        glRenderer.reset();
         if(texture)SDL_DestroyTexture(texture);
         if(renderer)SDL_DestroyRenderer(renderer);
+        if(glContext)SDL_GL_DeleteContext(glContext);
         if(window)SDL_DestroyWindow(window);
     }
     void setMode(bool high) {
         const int height=high?400:200;
-        if(texture)SDL_DestroyTexture(texture);
-        texture=SDL_CreateTexture(renderer,SDL_PIXELFORMAT_ARGB8888,
-                                   SDL_TEXTUREACCESS_STREAMING,640,height);
-        if(!texture)throw std::runtime_error(SDL_GetError());
+        if(renderer) {
+            if(texture)SDL_DestroyTexture(texture);
+            texture=SDL_CreateTexture(renderer,SDL_PIXELFORMAT_ARGB8888,
+                                       SDL_TEXTUREACCESS_STREAMING,640,height);
+            if(!texture)throw std::runtime_error(SDL_GetError());
+        }
         SDL_SetWindowSize(window,960,height*3/2);
     }
 };
@@ -62,10 +70,11 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--z80] [--z80-clock HZ] [--trace-cpm80] [--cpu-speed] [--speed 0..100]\n"
+    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--z80] [--z80-clock HZ] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software]\n"
              <<"  ROM defaults to external/roms/display6809.bin\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
              <<"  --speed N: emulated-time multiplier (default 10, 1=real-time, 0=unlimited).\n"
+             <<"  --renderer auto (default): prefer OpenGL 3.3, fall back to software.\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
 }
 }
@@ -75,6 +84,7 @@ int main(int argc,char** argv) {
         bool floppyD88=false, z80Enabled=false;
         std::uint64_t z80ClockHz=4000000;
         unsigned speed=10;
+        std::string rendererMode="auto";
         unsigned floppyDrive=0;
         unsigned bootDip=0x9f;
         bool high=false, testPattern=false, traceBoot=false, traceInkey=false, diagnostics=false, traceCpm80=false, cpuSpeed=false;
@@ -90,9 +100,15 @@ int main(int argc,char** argv) {
             if(arg=="--trace-boot"){traceBoot=true;continue;}
             if(arg=="--trace-inkey"){traceInkey=true;continue;}
             if(arg=="--diagnostics"){diagnostics=true;continue;}
-            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--ank-rom" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive" || arg=="--boot-dip" || arg=="--z80-clock" || arg=="--speed") && i+1<argc) {
+            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--ank-rom" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive" || arg=="--boot-dip" || arg=="--z80-clock" || arg=="--speed" || arg=="--renderer") && i+1<argc) {
                 if(arg=="--rom")romPath=argv[++i];
                 else if(arg=="--z80-clock")z80ClockHz=parseCount(argv[++i]);
+                else if(arg=="--renderer") {
+                    rendererMode=argv[++i];
+                    if(rendererMode!="auto" && rendererMode!="gl" &&
+                       rendererMode!="software")
+                        throw std::invalid_argument("--renderer must be auto, gl, or software");
+                }
                 else if(arg=="--speed") {
                     const auto value=parseCount(argv[++i]);
                     if(value>SdlCpuPacer::maxSpeed)
@@ -159,17 +175,46 @@ int main(int argc,char** argv) {
         machine.reset();
         Sdl sdl;
         Window ui;
-        ui.window=SDL_CreateWindow("FM-11 display subsystem",
-             SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,960,
-             high?600:300,SDL_WINDOW_RESIZABLE);
-        if(!ui.window)throw std::runtime_error(SDL_GetError());
-        ui.renderer=SDL_CreateRenderer(ui.window,-1,
-                       SDL_RENDERER_ACCELERATED);
-        if(!ui.renderer)
-            ui.renderer=SDL_CreateRenderer(ui.window,-1,SDL_RENDERER_SOFTWARE);
-        if(!ui.renderer)throw std::runtime_error(SDL_GetError());
+        auto createWindow=[&](Uint32 flags) {
+            return SDL_CreateWindow("FM-11 display subsystem",
+                 SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,960,
+                 high?600:300,flags|SDL_WINDOW_RESIZABLE);
+        };
+        if(rendererMode!="software") {
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION,3);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION,3);
+            SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,SDL_GL_CONTEXT_PROFILE_CORE);
+            ui.window=createWindow(SDL_WINDOW_OPENGL);
+            if(ui.window) {
+                ui.glContext=SDL_GL_CreateContext(ui.window);
+                if(ui.glContext) {
+                    try {
+                        SDL_GL_SetSwapInterval(0); // never throttle CPU on VSYNC
+                        ui.glRenderer=std::make_unique<OpenGlRenderer>();
+                    } catch(const std::exception& e) {
+                        if(rendererMode=="gl")throw;
+                        std::cerr<<"OpenGL unavailable: "<<e.what()<<"; using software renderer\n";
+                    }
+                }
+            }
+            if(!ui.glRenderer) {
+                if(rendererMode=="gl")
+                    throw std::runtime_error(std::string("OpenGL unavailable: ")+SDL_GetError());
+                if(ui.glContext) {SDL_GL_DeleteContext(ui.glContext);ui.glContext=nullptr;}
+                if(ui.window) {SDL_DestroyWindow(ui.window);ui.window=nullptr;}
+            }
+        }
+        if(!ui.glRenderer) {
+            ui.window=createWindow(0);
+            if(!ui.window)throw std::runtime_error(SDL_GetError());
+            ui.renderer=SDL_CreateRenderer(ui.window,-1,SDL_RENDERER_ACCELERATED);
+            if(!ui.renderer)
+                ui.renderer=SDL_CreateRenderer(ui.window,-1,SDL_RENDERER_SOFTWARE);
+            if(!ui.renderer)throw std::runtime_error(SDL_GetError());
+        }
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"0");
         ui.setMode(high);
+        std::cerr<<"FM-11 renderer: "<<(ui.glRenderer?"OpenGL 3.3":"software")<<"\n";
         // Standalone raw PTY for guest serial, independent of SDL input.
         int serialMaster=-1,serialSlave=-1;
         if(mainBoard) {
@@ -463,93 +508,101 @@ int main(int argc,char** argv) {
             const auto frameTime=std::chrono::steady_clock::now();
             if(frameTime-lastFrame>=std::chrono::milliseconds(32)) {
                 lastFrame=frameTime;
-            auto frame=machine.captureDisplayFrame(high);
-            // Original SubCpu::OnDraw derives both layers from FD A0.
-            // In particular, loading a font does NOT enable text by itself.
-            if(machine.boardCount()) {
-                const BYTE control=machine.mainDisplayControl();
-                if((control&0x0c)==0) {
-                    std::fill(frame.argb.begin(),frame.argb.end(),0xff000000u);
-                } else {
-                    // Original PalTab is a lookup of eight four-bit indices.
-                    for(auto& pixel:frame.argb) {
-                        unsigned index=0;
-                        if(pixel&0x00ff0000u)index|=1;
-                        if(pixel&0x0000ff00u)index|=2;
-                        if(pixel&0x000000ffu)index|=4;
-                        pixel=DisplayBitmap::referenceColor(
-                            machine.mainDisplayPalette(index));
+            if(ui.glRenderer) {
+                int outputW=0,outputH=0;
+                SDL_GL_GetDrawableSize(ui.window,&outputW,&outputH);
+                ui.glRenderer->render(machine,high,testPattern,!ankPath.empty(),
+                                      outputW,outputH);
+                SDL_GL_SwapWindow(ui.window);
+            } else {
+                auto frame=machine.captureDisplayFrame(high);
+                // Original SubCpu::OnDraw derives both layers from FD A0.
+                // In particular, loading a font does NOT enable text by itself.
+                if(machine.boardCount()) {
+                    const BYTE control=machine.mainDisplayControl();
+                    if((control&0x0c)==0) {
+                        std::fill(frame.argb.begin(),frame.argb.end(),0xff000000u);
+                    } else {
+                        // Original PalTab is a lookup of eight four-bit indices.
+                        for(auto& pixel:frame.argb) {
+                            unsigned index=0;
+                            if(pixel&0x00ff0000u)index|=1;
+                            if(pixel&0x0000ff00u)index|=2;
+                            if(pixel&0x000000ffu)index|=4;
+                            pixel=DisplayBitmap::referenceColor(
+                                machine.mainDisplayPalette(index));
+                        }
                     }
-                }
-                if((control&0x03)!=0 && !ankPath.empty())
+                    if((control&0x03)!=0 && !ankPath.empty())
+                        DisplayBitmap::compositeText(frame,machine.displaySubsystem());
+                } else if(!ankPath.empty()) {
                     DisplayBitmap::compositeText(frame,machine.displaySubsystem());
-            } else if(!ankPath.empty()) {
-                DisplayBitmap::compositeText(frame,machine.displaySubsystem());
-            }
-            if(testPattern) {
-                for(std::size_t y=0;y<frame.height;++y)
-                    for(std::size_t x=0;x<frame.width;++x)
-                        frame.argb[y*frame.width+x]=DisplayBitmap::colorArgb(
-                            static_cast<unsigned>((x/80+y/50)%8));
-            }
-            const auto now=std::chrono::steady_clock::now();
-            if(diagnostics && now-lastLog>=std::chrono::seconds(2)) {
-                std::cerr<<"display PC="<<std::hex<<machine.displayCpuPc()
-                         <<std::dec<<" steps="<<executed
-                         <<" delta="<<(executed-lastReported)
-                         <<" ioWrites="<<ioWrites
-                         <<" VRAM_nonzero="<<machine.displayNonzeroVramBytes()
-                         <<" page="<<machine.displayPage()
-                         <<" revision="<<machine.displayRevision()
-                         <<" mainPC="<<(mainBoard?static_cast<int>(mainBoard->cpu().pc()):-1)
-                         <<" FDA0="<<unsigned(machine.mainDisplayControl())
-                         <<" FD05="<<unsigned(machine.mainSubCpuControl())
-                         <<" FD04_latch="<<unsigned(machine.mainEventStatus())
-                         <<" BUSY="<<unsigned(machine.displayBusyStatus())
-                         <<" sharedWrites="<<machine.displaySharedWriteRevision()
-                         <<" shared0="<<unsigned(machine.displaySharedByte(0))
-                         <<" halted="<<machine.displayHalted()
-                         <<(machine.boardCount()?" main6809":" display-only")
-                         <<(testPattern?" test-pattern":"")<<"\n";
-                lastReported=executed;
-                lastLog=now;
-            }
-            if(SDL_UpdateTexture(ui.texture,nullptr,frame.argb.data(),
-                                 640*static_cast<int>(sizeof(std::uint32_t)))!=0)
-                throw std::runtime_error(SDL_GetError());
-            // Integer-only pixel scaling: avoid uneven 1/2-pixel stripes
-            // when a 640-wide frame is stretched to a 960-wide window.
-            // For windows smaller than the native image, use a centered
-            // clipped 1:1 image instead of fractional downscaling.
-            int outputW=0,outputH=0;
-            if(SDL_GetRendererOutputSize(ui.renderer,&outputW,&outputH)!=0)
-                throw std::runtime_error(SDL_GetError());
-            const int nativeW=static_cast<int>(frame.width);
-            const int nativeH=static_cast<int>(frame.height);
-            const int scale=std::max(1,std::min(outputW/nativeW,outputH/nativeH));
-            const SDL_Rect destination{
-                (outputW-nativeW*scale)/2,
-                (outputH-nativeH*scale)/2,
-                nativeW*scale,nativeH*scale
-            };
-            // The emulator image stays untouched. Paint the letterbox
-            // margins dark gray, and draw a one-pixel border OUTSIDE
-            // the screen rectangle whenever those pixels are visible.
-            if(SDL_SetRenderDrawColor(ui.renderer,48,52,56,255)!=0)
-                throw std::runtime_error(SDL_GetError());
-            if(SDL_RenderClear(ui.renderer)!=0)
-                throw std::runtime_error(SDL_GetError());
-            if(SDL_RenderCopy(ui.renderer,ui.texture,nullptr,&destination)!=0)
-                throw std::runtime_error(SDL_GetError());
-            const SDL_Rect border{
-                destination.x-1,destination.y-1,
-                destination.w+2,destination.h+2
-            };
-            if(SDL_SetRenderDrawColor(ui.renderer,144,148,152,255)!=0)
-                throw std::runtime_error(SDL_GetError());
-            if(SDL_RenderDrawRect(ui.renderer,&border)!=0)
-                throw std::runtime_error(SDL_GetError());
-            SDL_RenderPresent(ui.renderer);
+                }
+                if(testPattern) {
+                    for(std::size_t y=0;y<frame.height;++y)
+                        for(std::size_t x=0;x<frame.width;++x)
+                            frame.argb[y*frame.width+x]=DisplayBitmap::colorArgb(
+                                static_cast<unsigned>((x/80+y/50)%8));
+                }
+                const auto now=std::chrono::steady_clock::now();
+                if(diagnostics && now-lastLog>=std::chrono::seconds(2)) {
+                    std::cerr<<"display PC="<<std::hex<<machine.displayCpuPc()
+                             <<std::dec<<" steps="<<executed
+                             <<" delta="<<(executed-lastReported)
+                             <<" ioWrites="<<ioWrites
+                             <<" VRAM_nonzero="<<machine.displayNonzeroVramBytes()
+                             <<" page="<<machine.displayPage()
+                             <<" revision="<<machine.displayRevision()
+                             <<" mainPC="<<(mainBoard?static_cast<int>(mainBoard->cpu().pc()):-1)
+                             <<" FDA0="<<unsigned(machine.mainDisplayControl())
+                             <<" FD05="<<unsigned(machine.mainSubCpuControl())
+                             <<" FD04_latch="<<unsigned(machine.mainEventStatus())
+                             <<" BUSY="<<unsigned(machine.displayBusyStatus())
+                             <<" sharedWrites="<<machine.displaySharedWriteRevision()
+                             <<" shared0="<<unsigned(machine.displaySharedByte(0))
+                             <<" halted="<<machine.displayHalted()
+                             <<(machine.boardCount()?" main6809":" display-only")
+                             <<(testPattern?" test-pattern":"")<<"\n";
+                    lastReported=executed;
+                    lastLog=now;
+                }
+                if(SDL_UpdateTexture(ui.texture,nullptr,frame.argb.data(),
+                                     640*static_cast<int>(sizeof(std::uint32_t)))!=0)
+                    throw std::runtime_error(SDL_GetError());
+                // Integer-only pixel scaling: avoid uneven 1/2-pixel stripes
+                // when a 640-wide frame is stretched to a 960-wide window.
+                // For windows smaller than the native image, use a centered
+                // clipped 1:1 image instead of fractional downscaling.
+                int outputW=0,outputH=0;
+                if(SDL_GetRendererOutputSize(ui.renderer,&outputW,&outputH)!=0)
+                    throw std::runtime_error(SDL_GetError());
+                const int nativeW=static_cast<int>(frame.width);
+                const int nativeH=static_cast<int>(frame.height);
+                const int scale=std::max(1,std::min(outputW/nativeW,outputH/nativeH));
+                const SDL_Rect destination{
+                    (outputW-nativeW*scale)/2,
+                    (outputH-nativeH*scale)/2,
+                    nativeW*scale,nativeH*scale
+                };
+                // The emulator image stays untouched. Paint the letterbox
+                // margins dark gray, and draw a one-pixel border OUTSIDE
+                // the screen rectangle whenever those pixels are visible.
+                if(SDL_SetRenderDrawColor(ui.renderer,48,52,56,255)!=0)
+                    throw std::runtime_error(SDL_GetError());
+                if(SDL_RenderClear(ui.renderer)!=0)
+                    throw std::runtime_error(SDL_GetError());
+                if(SDL_RenderCopy(ui.renderer,ui.texture,nullptr,&destination)!=0)
+                    throw std::runtime_error(SDL_GetError());
+                const SDL_Rect border{
+                    destination.x-1,destination.y-1,
+                    destination.w+2,destination.h+2
+                };
+                if(SDL_SetRenderDrawColor(ui.renderer,144,148,152,255)!=0)
+                    throw std::runtime_error(SDL_GetError());
+                if(SDL_RenderDrawRect(ui.renderer,&border)!=0)
+                    throw std::runtime_error(SDL_GetError());
+                SDL_RenderPresent(ui.renderer);
+                }
             }
             // Keep the CPU executing between display refreshes. Rendering
             // every 10,000 guest instructions throttled ROM memory checks
