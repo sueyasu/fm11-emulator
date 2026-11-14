@@ -109,6 +109,7 @@ public:
         if(!memory || memory->size()!=kPhysicalMemorySize)
             throw std::invalid_argument("invalid shared physical memory");
         memory_=std::move(memory);
+        rebuildRamPageMappings();
     }
     BYTE readPhysical(std::uint32_t address) const;
     void writePhysical(std::uint32_t address, BYTE value);
@@ -135,7 +136,9 @@ private:
     BYTE serialStatus() const;
     void refreshSerialIrq();
     void writeIo(WORD address, BYTE value);
-    std::uint32_t translateCpuAddress(WORD address) const;
+    // Cache the physical backing of each 4 KiB logical RAM page.
+    // MMU writes, reset and physical-memory rebinding refresh these pointers.
+    void rebuildRamPageMappings();
     std::uint32_t windowPhysicalAddress(WORD address) const;
 
     class Core final : public CSim09, public CpuCore
@@ -204,5 +207,6 @@ private:
 
     std::array<std::array<BYTE, 16>, 16> mmr_{};
     std::array<BYTE, 4> mmrControl_{};
+    std::array<BYTE*, 16> ramPagePointers_{};
     Core core_;
 };

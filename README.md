@@ -974,3 +974,16 @@ as do optional CPU-card execution paths. The main-6809 IRQ aggregator
 also avoids rebuilding FD03/FD2C when the published PTM IRQ source level
 has not changed; explicit IRQ-mask and other-source updates continue to
 recalculate their status at the point of the write.
+
+### Main 6809 RAM page lookup optimization
+
+The main MC6809/HD6309 CPU caches the host-memory base address of each
+logical 4 KiB RAM page, avoiding repeated MMR context translation and
+physical-memory bounds checking on every ordinary RAM access. FD80-FD8F
+writes update the affected active page, while FD90 context changes and FD93
+MMR enable changes refresh the 16-entry mapping. Reset and replacement of
+the shared 1 MiB physical RAM backing also rebuild the cache. The boot-ROM
+overlay, 7C00-7FFF window, FC00-FFFF fixed/IO aperture, and direct physical
+DMA accesses continue through their existing handlers. The `main6809_mmr`
+regression covers page remapping, contexts, enable toggles, window override,
+and shared-memory replacement.

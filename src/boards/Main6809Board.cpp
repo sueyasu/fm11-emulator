@@ -8,6 +8,7 @@ Main6809Board::Main6809Board(CpuType variant)
 {
     if (variant != CpuType::MC6809 && variant != CpuType::HD6309)
         throw std::invalid_argument("Main6809Board requires MC6809 or HD6309 CPU type");
+    rebuildRamPageMappings();
 }
 
 std::string_view Main6809Board::name() const
@@ -30,6 +31,7 @@ void Main6809Board::reset()
     for (auto& page : mmr_)
         page.fill(0);
     mmrControl_.fill(0);
+    rebuildRamPageMappings();
     onboardRam_.fill(0);
     ioRegisters_.fill(0);
     // Reference CMainCpu::SimRESET: FD23 is the active-low boot-device
@@ -461,7 +463,9 @@ BYTE Main6809Board::readCpu(WORD address)
         return onboardRam_[address & 0x0fff];
     }
 
-    return readPhysical(translateCpuAddress(address));
+    // Normal RAM is backed by a cached host page. Exceptional
+    // regions above are still decoded on every access.
+    return ramPagePointers_[address >> 12][address & (kMmrPageSize-1)];
 }
 
 void Main6809Board::writeCpu(WORD address, BYTE value)
@@ -485,7 +489,7 @@ void Main6809Board::writeCpu(WORD address, BYTE value)
         return;
     }
 
-    writePhysical(translateCpuAddress(address), value);
+    ramPagePointers_[address >> 12][address & (kMmrPageSize-1)] = value;
 }
 
 BYTE Main6809Board::readPhysical(std::uint32_t address) const
@@ -524,11 +528,19 @@ void Main6809Board::writeMmrRegister(WORD address, BYTE value)
         const auto logicalPage = static_cast<std::size_t>(address & 0x000f);
         const auto context = static_cast<std::size_t>(mmrControl_[0] & 0x0f);
         mmr_[logicalPage][context] = value;
+        if((mmrControl_[3]&0x80) && context==(mmrControl_[0]&0x0f))
+            ramPagePointers_[logicalPage]=memory_->data()+
+                (static_cast<std::size_t>(value)<<12);
         return;
     }
 
     const auto index = static_cast<std::size_t>(address - 0xfd90);
+    const BYTE previous=mmrControl_[index];
     mmrControl_[index] = (index <= 1) ? static_cast<BYTE>(value & 0x0f) : value;
+    // FD90 selects the active context; FD93 bit 7 enables translation.
+    // FD91/FD92 affect only the separately decoded 7C00 window.
+    if((index==0 || index==3) && previous!=mmrControl_[index])
+        rebuildRamPageMappings();
 }
 
 BYTE Main6809Board::readIo(WORD address)
@@ -913,15 +925,18 @@ void Main6809Board::writeIo(WORD address, BYTE value)
     }
 }
 
-std::uint32_t Main6809Board::translateCpuAddress(WORD address) const
+void Main6809Board::rebuildRamPageMappings()
 {
-    if ((mmrControl_[3] & 0x80) == 0)
-        return address;
-
-    const auto logicalPage = static_cast<std::size_t>(address >> 12);
-    const auto context = static_cast<std::size_t>(mmrControl_[0] & 0x0f);
-    const std::uint32_t physicalPage = mmr_[logicalPage][context];
-    return (physicalPage << 12) | (address & (kMmrPageSize - 1));
+    // The 1 MiB backing store contains all 256 possible physical pages.
+    // Neither MMR context switching nor page-register writes resize it.
+    BYTE* const base=memory_->data();
+    const bool enabled=(mmrControl_[3]&0x80)!=0;
+    const auto context=static_cast<std::size_t>(mmrControl_[0]&0x0f);
+    for(std::size_t page=0;page<ramPagePointers_.size();++page) {
+        const auto physicalPage=enabled
+            ? static_cast<std::size_t>(mmr_[page][context]) : page;
+        ramPagePointers_[page]=base+(physicalPage<<12);
+    }
 }
 
 std::uint32_t Main6809Board::windowPhysicalAddress(WORD address) const

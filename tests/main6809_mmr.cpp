@@ -1,4 +1,6 @@
 #include "Main6809Board.h"
+#include <memory>
+#include <vector>
 
 namespace {
 
@@ -92,6 +94,82 @@ bool resetDisablesAndClearsMmr()
     return board.readCpu(0xfd82) == 0x00;
 }
 
+// A live MMR write must update the corresponding cached page immediately.
+// Updating an inactive context must not disturb the active mapping.
+bool updatesMappedPageWithoutReset()
+{
+    Main6809Board board(CpuType::MC6809);
+    board.writeCpu(0xfd82,0x12);
+    board.writeCpu(0xfd93,0x80);
+    board.writeCpu(0x2123,0xa1);
+    if(board.readPhysical(0x12123)!=0xa1)return false;
+    board.writeCpu(0xfd82,0x34);
+    board.writeCpu(0x2123,0xb2);
+    if(board.readCpu(0x2123)!=0xb2 ||
+       board.readPhysical(0x34123)!=0xb2 ||
+       board.readPhysical(0x12123)!=0xa1)return false;
+    board.writeCpu(0xfd90,1);
+    board.writeCpu(0xfd82,0x56);
+    board.writeCpu(0x2123,0xc3);
+    if(board.readPhysical(0x56123)!=0xc3)return false;
+    board.writeCpu(0xfd90,0);
+    return board.readCpu(0x2123)==0xb2;
+}
+
+bool togglesMmrAndRetainsFixedRegions()
+{
+    Main6809Board board(CpuType::MC6809);
+    board.writePhysical(0x11234,0x71);
+    board.writePhysical(0x0234,0x22);
+    board.writeCpu(0xfd80,0x11);
+    board.writeCpu(0xfd93,0x80);
+    if(board.readCpu(0x0234)!=0x71)return false;
+    board.writeCpu(0xfd93,0x00);
+    if(board.readCpu(0x0234)!=0x22)return false;
+    board.writeCpu(0xfd93,0x80);
+    if(board.readCpu(0x0234)!=0x71)return false;
+    board.writeCpu(0xfc00,0x55);
+    return board.readCpu(0xfc00)==0x55;
+}
+
+bool windowOverridesCachedRamPage()
+{
+    Main6809Board board(CpuType::MC6809);
+    board.writeCpu(0xfd87,0x12); // mapped page 7
+    board.writeCpu(0xfd93,0x80);
+    board.writePhysical(0x12c00,0x12);
+    board.writePhysical(0x07c00,0x07);
+    if(board.readCpu(0x7c00)!=0x12)return false;
+    board.writeCpu(0xfd91,0x02);
+    board.writeCpu(0xfd92,0x00);
+    board.writeCpu(0xfd93,0xc0);
+    board.writePhysical(0x27c00,0x27);
+    if(board.readCpu(0x7c00)!=0x27)return false;
+    board.writeCpu(0x7c00,0x44);
+    if(board.readPhysical(0x27c00)!=0x44 ||
+       board.readPhysical(0x12c00)!=0x12)return false;
+    board.writeCpu(0xfd93,0x80);
+    return board.readCpu(0x7c00)==0x12;
+}
+
+bool sharedBackingReplacementRefreshesPointers()
+{
+    Main6809Board board(CpuType::HD6309);
+    board.writeCpu(0xfd83,0x5a);
+    board.writeCpu(0xfd93,0x80);
+    auto original=board.physicalMemory();
+    auto replacement=std::make_shared<std::vector<BYTE>>(1u<<20,0);
+    (*replacement)[0x5a123]=0x66;
+    board.setPhysicalMemory(replacement);
+    if(board.readCpu(0x3123)!=0x66)return false;
+    board.writeCpu(0x3123,0x77);
+    if((*replacement)[0x5a123]!=0x77 ||
+       (*original)[0x5a123]==0x77)return false;
+    board.reset();
+    board.writeCpu(0x3123,0x88);
+    return (*replacement)[0x3123]==0x88;
+}
+
 } // namespace
 
 int main()
@@ -108,5 +186,13 @@ int main()
         return 5;
     if (!resetDisablesAndClearsMmr())
         return 6;
+    if (!updatesMappedPageWithoutReset())
+        return 7;
+    if (!togglesMmrAndRetainsFixedRegions())
+        return 8;
+    if (!windowOverridesCachedRamPage())
+        return 9;
+    if (!sharedBackingReplacementRefreshesPointers())
+        return 10;
     return 0;
 }
