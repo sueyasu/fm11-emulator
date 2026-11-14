@@ -321,6 +321,10 @@ int main(int argc,char** argv) {
         };
         if(traceCpm80)traceCpmSnapshot("reset");
 
+        // Stage 2: PTM owns its steady-clock thread. CPU and display
+        // execution remain on the existing single SDL thread.
+        if(machine.boardCount())machine.startRealtimePtm();
+
         while(running) {
             SDL_Event event;
             while(SDL_PollEvent(&event)) {
@@ -377,6 +381,10 @@ int main(int argc,char** argv) {
                     }
                 }
             }
+            if(paused!=wasPaused) {
+                if(paused)machine.pauseRealtimePtm();
+                else machine.resumeRealtimePtm();
+            }
             if(cpuSpeed && paused!=wasPaused) {
                 // Pause/resume should not dilute a measurement window.
                 cpuMeter.reset();
@@ -384,8 +392,8 @@ int main(int argc,char** argv) {
             }
             wasPaused=paused;
             // Keep host-time pacing independent of the emulated clocks:
-            // Machine::executeOne() already advances the PTM and display CPU
-            // by each guest instruction's true cycle count.
+            // Machine::executeOne() still advances the display CPU from guest
+            // cycles; the PTM worker advances independently from host time.
             const auto tickNow=std::chrono::steady_clock::now();
             const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
                 tickNow-lastWaitTick);

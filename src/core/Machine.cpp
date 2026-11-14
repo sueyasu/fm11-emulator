@@ -5,6 +5,53 @@
 
 #include <stdexcept>
 #include <limits>
+#include <thread>
+#include <chrono>
+
+void Machine::startRealtimePtm()
+{
+    if(ptmWorker_)return;
+    mainBoard_->startRealtimePtm();
+    try {
+        auto worker=std::make_unique<WorkerGroup>();
+        worker->start([board=mainBoard_] {
+            board->pollRealtimePtm();
+            // Poll at most once per millisecond; PTM register reads/writes
+            // also synchronize to host time under the same mutex.
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        });
+        ptmWorker_=std::move(worker);
+        ptmPaused_=false;
+    } catch(...) {
+        mainBoard_->stopRealtimePtm();
+        throw;
+    }
+}
+
+void Machine::stopRealtimePtm() noexcept
+{
+    if(ptmWorker_) {
+        ptmWorker_->stop();
+        ptmWorker_.reset();
+    }
+    mainBoard_->stopRealtimePtm();
+    ptmPaused_=false;
+}
+
+void Machine::pauseRealtimePtm()
+{
+    if(!ptmWorker_ || ptmPaused_)return;
+    ptmWorker_->pause();
+    ptmPaused_=true;
+}
+
+void Machine::resumeRealtimePtm()
+{
+    if(!ptmWorker_ || !ptmPaused_)return;
+    mainBoard_->rebaseRealtimePtm();
+    ptmWorker_->resume();
+    ptmPaused_=false;
+}
 
 std::size_t Machine::addBoard(std::unique_ptr<CpuBoard> board)
 {
@@ -98,6 +145,8 @@ const CpuBoard* Machine::activeBoard() const
 
 void Machine::reset()
 {
+    const bool wasRealtime=bool(ptmWorker_);
+    if(wasRealtime)stopRealtimePtm();
     mainBoard_->reset();
     for (auto& board : boards_)
         board->reset();
@@ -107,6 +156,7 @@ void Machine::reset()
     displayNanosecondFraction_=0;
     displayCpuInputHz_=0;
     synchronizeFd05Selection();
+    if(wasRealtime)startRealtimePtm();
 }
 
 void Machine::advanceTimeNanoseconds(std::uint64_t nanoseconds)
@@ -214,20 +264,23 @@ void Machine::executeOne()
         lastExecutionCycles_=board->cpu().lastExecutionCycles();
         if(auto* cpu6809=dynamic_cast<Main6809Board*>(board)) {
             if(lastExecutionCycles_ && cpu6809->cpuClockHz()) {
-                mainBoard_->advanceCpuCycles(lastExecutionCycles_,cpu6809->cpuClockHz());
+                if(!realtimePtmEnabled())
+                    mainBoard_->advanceCpuCycles(lastExecutionCycles_,cpu6809->cpuClockHz());
                 advanceDisplayCpuCycles(lastExecutionCycles_,cpu6809->cpuClockHz());
                 cpu6809->syncPtmIrq();
             }
         } else if(dynamic_cast<MainZ80Board*>(board) &&
                   lastExecutionCycles_ && clockZ80Hz_) {
-            mainBoard_->advanceCpuCycles(lastExecutionCycles_,clockZ80Hz_);
+            if(!realtimePtmEnabled())
+                mainBoard_->advanceCpuCycles(lastExecutionCycles_,clockZ80Hz_);
             advanceDisplayCpuCycles(lastExecutionCycles_,clockZ80Hz_);
             for(auto& attached:boards_)
                 if(auto* cpu6809=dynamic_cast<Main6809Board*>(attached.get()))
                     cpu6809->syncPtmIrq();
         } else if(dynamic_cast<Main8088Board*>(board) &&
                   lastExecutionCycles_ && clock8088Hz_) {
-            mainBoard_->advanceCpuCycles(lastExecutionCycles_,clock8088Hz_);
+            if(!realtimePtmEnabled())
+                mainBoard_->advanceCpuCycles(lastExecutionCycles_,clock8088Hz_);
             advanceDisplayCpuCycles(lastExecutionCycles_,clock8088Hz_);
             for(auto& attached:boards_)
                 if(auto* cpu6809=dynamic_cast<Main6809Board*>(attached.get()))

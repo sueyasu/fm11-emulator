@@ -4,16 +4,25 @@
 #include "MainBoard.h"
 #include "RomFiles.h"
 #include "DisplayBitmap.h"
+#include "WorkerGroup.h"
 
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <chrono>
 #include <vector>
 
 class Machine
 {
 public:
+    ~Machine() {stopRealtimePtm();}
+    // Opt-in, SDL-only worker. Headless remains deterministic.
+    void startRealtimePtm();
+    void stopRealtimePtm() noexcept;
+    void pauseRealtimePtm();
+    void resumeRealtimePtm();
+    bool realtimePtmEnabled() const {return mainBoard_->realtimePtmEnabled();}
     std::size_t addBoard(std::unique_ptr<CpuBoard> board);
 
     std::size_t boardCount() const;
@@ -130,4 +139,6 @@ private:
     std::uint64_t displayCpuInputHz_ = 0;
     std::uint64_t displayNanosecondFraction_ = 0;
     std::int64_t displayCycleCredit_ = 0;
+    std::unique_ptr<WorkerGroup> ptmWorker_;
+    bool ptmPaused_=false;
 };

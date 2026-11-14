@@ -291,6 +291,7 @@ CSim09::WaitState Main6809Board::cpuWaitState() const
 
 void Main6809Board::advanceWaitTime(std::uint64_t nanoseconds)
 {
+    if(mainBoard_ && mainBoard_->realtimePtmEnabled())return;
     // Time passes while a real MC6809 is halted by SYNC or CWAI.
     // Advance the PTM's independent 9700 Hz clock from elapsed host time.
     constexpr std::uint64_t tickHz = 9700;
@@ -304,7 +305,8 @@ void Main6809Board::advanceWaitTime(std::uint64_t nanoseconds)
 
 std::uint64_t Main6809Board::nextPtmEventNanoseconds() const
 {
-    return ptm_->nextEventNanoseconds();
+    return mainBoard_?mainBoard_->nextPtmEventNanoseconds():
+                      ptm_->nextEventNanoseconds();
 }
 
 bool Main6809Board::irqPending() const
@@ -379,6 +381,7 @@ void Main6809Board::setCpuClockHz(std::uint64_t hz)
 
 void Main6809Board::advanceCpuCycles(std::uint64_t cycles)
 {
+    if(mainBoard_ && mainBoard_->realtimePtmEnabled())return;
     if (cpuClockHz_ == 0)
         throw std::logic_error("setCpuClockHz must be called before advanceCpuCycles");
     // Divide before multiplying to avoid overflow on large cycle batches.
@@ -400,11 +403,14 @@ void Main6809Board::advanceCpuCycles(std::uint64_t cycles)
 
 void Main6809Board::refreshPtmIrq()
 {
-    ptm_->refreshIrq();
-    const bool asserted=ptm_->irqRequest();
+    // With a real-time PTM worker, do not touch mutable timer state
+    // from the CPU thread. The main board publishes the IRQ level atomically.
+    if(!mainBoard_)ptm_->refreshIrq();
+    const bool asserted=mainBoard_?mainBoard_->ptmIrqLevel():
+                                   ptm_->irqRequest();
     if(asserted && (mainIrqSources_&0x01)==0)++ptmIrqAssertCount_;
     setMainIrqSource(0x01,asserted);
-    if(mainBoard_)mainBoard_->setIrqLine(MainBoard::IrqLine::Timer,asserted);
+    // Shared PTM IRQ publication belongs to MainBoard, not the CPU adapter.
 }
 
 void Main6809Board::syncPtmIrq()

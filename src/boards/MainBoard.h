@@ -10,6 +10,9 @@
 #include <memory>
 #include <limits>
 #include <stdexcept>
+#include <atomic>
+#include <chrono>
+#include <mutex>
 
 // Main-board side of the FM-11 system bus. CPU-card address translation,
 // arbitration and DMA controllers remain on their respective cards.
@@ -39,7 +42,12 @@ public:
         resetTimebase();
         externalIrqLines_=0;
         usart_->reset();
-        ptm_->reset();
+        {
+            std::lock_guard<std::mutex> lock(ptmMutex_);
+            ptm_->reset();
+            ptmIrqLevel_.store(false,std::memory_order_release);
+            realtimePtmLast_=std::chrono::steady_clock::now();
+        }
         floppy_->finishTransfer();
     }
     // FD04 main-board event latch: ATENT bit 0, BREAK bit 1.
@@ -65,9 +73,55 @@ public:
         display_.reset();
     }
 
-    // One common fractional phase, in billionths of a PTM tick.
-    // Nanosecond slices accumulate exactly, without Q32 rounding loss.
+    // Runtime PTM mode is opt-in. All methods touching PTM state serialize
+    // with the dedicated timer worker. Other bus state remains single-owner
+    // until the later CPU-thread commits.
+    void startRealtimePtm() {
+        std::lock_guard<std::mutex> lock(ptmMutex_);
+        realtimePtmLast_=std::chrono::steady_clock::now();
+        realtimePtm_.store(true,std::memory_order_release);
+    }
+    void stopRealtimePtm() {
+        std::lock_guard<std::mutex> lock(ptmMutex_);
+        realtimePtm_.store(false,std::memory_order_release);
+    }
+    bool realtimePtmEnabled() const {
+        return realtimePtm_.load(std::memory_order_acquire);
+    }
+    void rebaseRealtimePtm() {
+        std::lock_guard<std::mutex> lock(ptmMutex_);
+        realtimePtmLast_=std::chrono::steady_clock::now();
+    }
+    void pollRealtimePtm() {
+        std::lock_guard<std::mutex> lock(ptmMutex_);
+        advanceRealtimePtmLocked();
+    }
+    BYTE readPtmRegister(BYTE reg) {
+        std::lock_guard<std::mutex> lock(ptmMutex_);
+        advanceRealtimePtmLocked();
+        const BYTE value=ptm_->read(reg);
+        updatePtmIrqLocked();
+        return value;
+    }
+    void writePtmRegister(BYTE reg,BYTE value) {
+        std::lock_guard<std::mutex> lock(ptmMutex_);
+        advanceRealtimePtmLocked();
+        ptm_->write(reg,value);
+        updatePtmIrqLocked();
+    }
+    bool ptmIrqLevel() const {
+        return ptmIrqLevel_.load(std::memory_order_acquire);
+    }
+    std::uint64_t nextPtmEventNanoseconds() {
+        std::lock_guard<std::mutex> lock(ptmMutex_);
+        advanceRealtimePtmLocked();
+        return ptm_->nextEventNanoseconds();
+    }
+    // Legacy timebase remains available for headless tests and standalone
+    // emulation. A running real-time timer MUST NOT advance twice.
     void advanceTimeNanoseconds(std::uint64_t nanoseconds) {
+        std::lock_guard<std::mutex> lock(ptmMutex_);
+        if(realtimePtmEnabled())return;
         constexpr std::uint64_t second=1000000000ULL, ptmHz=9700;
         const auto whole=nanoseconds/second;
         if(whole>std::numeric_limits<std::uint64_t>::max()/ptmHz)
@@ -75,6 +129,8 @@ public:
         advancePtmFraction(whole*ptmHz,(nanoseconds%second)*ptmHz);
     }
     void advanceCpuCycles(std::uint64_t cycles,std::uint64_t hz) {
+        std::lock_guard<std::mutex> lock(ptmMutex_);
+        if(realtimePtmEnabled())return;
         if(hz==0 || hz>1000000000ULL)
             throw std::invalid_argument("invalid main CPU clock frequency");
         constexpr std::uint64_t ptmHz=9700, phaseUnit=1000000000ULL;
@@ -89,7 +145,7 @@ public:
             throw std::overflow_error("PTM CPU interval too large");
         advancePtmFraction(whole*ptmHz+integer,fraction);
     }
-    void resetTimebase() {ptmPhase_=0;}
+    void resetTimebase() {std::lock_guard<std::mutex> lock(ptmMutex_);ptmPhase_=0;}
 
     // Main-board sources presented to the 8088 card's 8259 inputs.
     // Corresponds to the original Sim86 interrupt wiring. Each group may
@@ -100,6 +156,10 @@ public:
         CoprocessorExtendedIrq=5, Disk5Inch=6, PrinterAck=7
     };
     void setIrqLine(IrqLine line,bool asserted) {
+        if(line==IrqLine::Timer) {
+            ptmIrqLevel_.store(asserted,std::memory_order_release);
+            return;
+        }
         const BYTE bit=static_cast<BYTE>(1u<<static_cast<unsigned>(line));
         if(asserted) externalIrqLines_|=bit;
         else externalIrqLines_&=static_cast<BYTE>(~bit);
@@ -107,6 +167,7 @@ public:
     BYTE irqLines() const {
         // USART is a shared device, not owned by either CPU card.
         return static_cast<BYTE>(externalIrqLines_ |
+               (ptmIrqLevel()?0x01:0) |
                (usart_->irqRequest()?0x10:0));
     }
 
@@ -121,8 +182,7 @@ public:
             return true;
         }
         if(reg>=0x38 && reg<=0x3f) {
-            value=ptm_->read(static_cast<BYTE>(reg));
-            const_cast<MainBoard*>(this)->setIrqLine(IrqLine::Timer,ptm_->irqRequest());
+            value=readPtmRegister(static_cast<BYTE>(reg));
             return true;
         }
         if(reg==0x06) {value=usart_->readData();return true;}
@@ -161,8 +221,7 @@ public:
             return true;
         }
         if(reg>=0x38 && reg<=0x3f) {
-            ptm_->write(static_cast<BYTE>(reg),value);
-            setIrqLine(IrqLine::Timer,ptm_->irqRequest());
+            writePtmRegister(static_cast<BYTE>(reg),value);
             return true;
         }
         if(reg==0x06) {usart_->writeData(value);return true;}
@@ -182,6 +241,25 @@ private:
     BYTE eventStatus_=0;
     BYTE eventControl_=0;
     BYTE externalIrqLines_=0;
+    mutable std::mutex ptmMutex_;
+    std::atomic<bool> realtimePtm_{false};
+    std::atomic<bool> ptmIrqLevel_{false};
+    std::chrono::steady_clock::time_point realtimePtmLast_{};
+    void updatePtmIrqLocked() {
+        // Never mutate the 6809 CPU adapter from the PTM thread.
+        ptmIrqLevel_.store(ptm_->irqRequest(),std::memory_order_release);
+    }
+    void advanceRealtimePtmLocked() {
+        if(!realtimePtmEnabled())return;
+        const auto now=std::chrono::steady_clock::now();
+        const auto ns=std::chrono::duration_cast<std::chrono::nanoseconds>(
+            now-realtimePtmLast_).count();
+        if(ns<=0)return;
+        realtimePtmLast_=now;
+        constexpr std::uint64_t second=1000000000ULL,ptmHz=9700;
+        const auto elapsed=static_cast<std::uint64_t>(ns);
+        advancePtmFraction((elapsed/second)*ptmHz,(elapsed%second)*ptmHz);
+    }
     void advancePtmFraction(std::uint64_t ticks,std::uint64_t fraction) {
         constexpr std::uint64_t phaseUnit=1000000000ULL;
         // fraction may exceed one tick for nanosecond intervals.
@@ -193,7 +271,7 @@ private:
             throw std::overflow_error("PTM time interval too large");
         ptmPhase_=phase%phaseUnit;
         ptm_->advance(ticks+extra+carry);
-        setIrqLine(IrqLine::Timer,ptm_->irqRequest());
+        updatePtmIrqLocked();
     }
     std::uint64_t ptmPhase_=0;
     std::shared_ptr<FloppyDevice> floppy_=std::make_shared<FloppyDevice>();

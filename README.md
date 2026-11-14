@@ -841,6 +841,23 @@ memory directly and requires an immutable render snapshot once the display
 worker exists. Do not wrap every RAM access in a global mutex; do not enable
 unprotected concurrent guest execution.
 
-Run `ctest --test-dir build --output-on-failure` and the new `worker_group`
-test before advancing to stage 2. The existing cycle-based timing, SDL
-speed multiplier, and single-thread behavior are unchanged.
+Stage 2: the SDL frontend starts a **dedicated real-time PTM worker** after
+initialization. The MC6840 advances from host `steady_clock` at its 9700 Hz
+input rate, regardless of `--speed` or main CPU instruction cycles. PTM
+register accesses catch up to the exact host time under a narrow mutex;
+a 1 ms worker polling interval supplies asynchronous IRQs even when the
+CPU is in SYNC/CWAI. The IRQ level is published atomically; only the CPU
+thread changes the CPU adapter's IRQ aggregator. SDL pause parks the PTM
+worker and rebases its clock on resume, and reset stops/restarts the worker.
+
+The display sub-CPU remains on the **legacy cycle-based scheduler** until
+stage 3. Headless and standalone CPU-card tests retain the old deterministic
+virtual-time PTM behavior unless they explicitly enable the real-time mode.
+The PTM worker must be stopped before manipulating or resetting shared
+device state directly. This is not yet a fully parallel CPU/display machine;
+all other shared state still belongs to the single emulation thread.
+
+Run `ctest --test-dir build --output-on-failure`, including `worker_group`
+and `realtime_ptm`, before advancing to stage 3. Check NitrOS-9's wall-time
+clock and SYNC/CWAI wakeups on the SDL frontend. Emulated PTM timing is
+**intentionally no longer multiplied** by `--speed`.
