@@ -169,7 +169,7 @@ void main() {
                 if(lit) {
                     // The CPU renderer overlays foreground pixels, including
                     // reverse-video blanks, on the graphics background.
-                    const uint ci=(attr&7u)|((attr&32u)!=0u?8u:0u);
+                    uint ci=(attr&7u)|((attr&32u)!=0u?8u:0u);
                     const uint shades[16]=uint[16](
                         0x000000u,0x0000c0u,0xc00000u,0xc000c0u,
                         0x00c000u,0x00c0c0u,0xc0c000u,0xc0c0c0u,
