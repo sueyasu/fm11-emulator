@@ -24,14 +24,16 @@ int main() {
     if(machine.displayCpuRealtimeClockHz()!=2000000)return 8;
     machine.setDisplayCpuSpeedMultiplier(2);
     if(machine.displayCpuRealtimeClockHz()!=4000000)return 9;
+    machine.setDisplayCpuSpeedMultiplier(4);
+    if(machine.displayCpuRealtimeClockHz()!=8000000)return 10;
     machine.setDisplayCpuSpeedMultiplier(5);
-    if(machine.displayCpuRealtimeClockHz()!=10000000)return 10;
+    if(machine.displayCpuRealtimeClockHz()!=8000000)return 14;
     machine.setDisplayCpuSpeedMultiplier(10);
-    if(machine.displayCpuRealtimeClockHz()!=10000000)return 11;
+    if(machine.displayCpuRealtimeClockHz()!=8000000)return 11;
     machine.setDisplayCpuSpeedMultiplier(20);
-    if(machine.displayCpuRealtimeClockHz()!=10000000)return 12;
+    if(machine.displayCpuRealtimeClockHz()!=8000000)return 12;
     machine.setDisplayCpuSpeedMultiplier(0);
-    if(machine.displayCpuRealtimeClockHz()!=10000000)return 13;
+    if(machine.displayCpuRealtimeClockHz()!=8000000)return 13;
     // Exercise worker startup, pause/resume and HALT at the capped clock,
     // leaving the deterministic clock unchanged.
     machine.reset();

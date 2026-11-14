@@ -931,9 +931,9 @@ why SDL clock time was previously accelerated.
 
 SDL `--speed 1..100` applies the multiplier to the main CPU and
 display sub-CPU, each starting from its configured 2 MHz hardware clock.
-The display sub-CPU is provisionally capped at 10 MHz, so `--speed 5`
+The display sub-CPU is provisionally capped at 8 MHz, so `--speed 4`
 and above target the same display clock. With `--speed 0`, the main CPU
-runs unlimited while the display sub-CPU remains paced at 10 MHz.
+runs unlimited while the display sub-CPU remains paced at 8 MHz.
 These are pacing targets, not guaranteed achieved throughput. The
 headless/deterministic display scheduler remains at its configured
 base clock. The PTM remains tied to host steady-clock time.

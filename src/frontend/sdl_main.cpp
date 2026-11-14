@@ -77,8 +77,8 @@ void usage() {
              <<"  ROM defaults to external/roms/display6809.bin\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
              <<"  --speed N: main CPU multiplier (default 10, 1=real-time);\n"
-             <<"             display CPU uses the same multiplier, capped at 10 MHz.\n"
-             <<"             0=unlimited main CPU, 10 MHz display CPU; PTM stays real-time.\n"
+             <<"             display CPU uses the same multiplier, capped at 8 MHz.\n"
+             <<"             0=unlimited main CPU, 8 MHz display CPU; PTM stays real-time.\n"
              <<"  --renderer auto (default): prefer OpenGL 3.3, fall back to software.\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
 }
