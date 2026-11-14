@@ -26,7 +26,10 @@ int main() {
     if(machine.displayCpuRealtimeClockHz()!=4000000)return 9;
     machine.setDisplayCpuSpeedMultiplier(10);
     if(machine.displayCpuRealtimeClockHz()!=20000000)return 10;
-    machine.setDisplayCpuSpeedMultiplier(1);
+    machine.setDisplayCpuSpeedMultiplier(0);
+    if(machine.displayCpuRealtimeClockHz()!=0)return 11;
+    // Also exercise actual worker startup, pause/resume and HALT with the
+    // unpaced execution mode; leave the deterministic clock unchanged.
     machine.reset();
     machine.startDisplayCpu();
     if(!machine.displayCpuThreadEnabled())return 1;
@@ -67,7 +70,8 @@ int main() {
     if(!machine.displayCpuThreadEnabled())return 5;
     machine.stopDisplayCpu();
     if(machine.displayCpuThreadEnabled())return 6;
-    // The old deterministic scheduler still works when the worker is off.
+    // The old deterministic scheduler still works at 2 MHz even after
+    // running the display worker without a cycle budget.
     machine.reset();
     machine.advanceTimeNanoseconds(10000);
     if(machine.displayMemory(0x8000)!=0x7b)return 7;

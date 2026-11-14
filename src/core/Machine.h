@@ -53,8 +53,9 @@ public:
     void setZ80ClockHz(std::uint64_t hz);
     // Display CPU scheduling is opt-in until the hardware clock is resolved.
     void setDisplayCpuClockHz(std::uint64_t hz);
-    // Worker-only clock multiplier; deterministic headless scheduling stays
-    // at displayCpuClockHz_. Configure before starting the display worker.
+    // Worker-only clock multiplier; 0 removes pacing of the display CPU.
+    // Deterministic headless scheduling stays at displayCpuClockHz_.
+    // Configure before starting the display worker.
     void setDisplayCpuSpeedMultiplier(unsigned multiplier);
     std::uint64_t displayCpuRealtimeClockHz() const {
         return displayCpuClockHz_*displayCpuSpeedMultiplier_;

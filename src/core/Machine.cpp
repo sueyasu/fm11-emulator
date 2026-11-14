@@ -12,8 +12,8 @@ void Machine::setDisplayCpuSpeedMultiplier(unsigned multiplier)
 {
     if(displayWorker_)
         throw std::logic_error("stop display CPU worker before changing multiplier");
-    if(multiplier<1 || multiplier>100)
-        throw std::invalid_argument("display CPU speed multiplier must be 1..100");
+    if(multiplier>100)
+        throw std::invalid_argument("display CPU speed multiplier must be 0..100");
     displayCpuSpeedMultiplier_=multiplier;
 }
 
@@ -21,12 +21,13 @@ void Machine::startDisplayCpu()
 {
     if(displayWorker_ || !displayCpuClockHz_)return;
     const auto workerClockHz=displayCpuRealtimeClockHz();
+    const bool unlimited=(workerClockHz==0);
     auto worker=std::make_unique<WorkerGroup>();
     using Clock=std::chrono::steady_clock;
     displayThreadActive_.store(true,std::memory_order_release);
     mainBoard_->setDisplayWakeObserver([wake=worker.get()] {wake->notify();});
     try {
-        worker->start([this,wake=worker.get(),workerClockHz,last=Clock::now(),credit=std::int64_t{0},
+        worker->start([this,wake=worker.get(),workerClockHz,unlimited,last=Clock::now(),credit=std::int64_t{0},
                        fraction=std::uint64_t{0},
                        generation=displayResumeGeneration_.load()]() mutable {
             // Snapshot event generation before checking the guest state to
@@ -40,35 +41,37 @@ void Machine::startDisplayCpu()
                 fraction=0;
                 last=now;
             }
-            // Accumulate display CPU cycles from real host nanoseconds.
-            // The worker multiplier does not affect deterministic scheduling
-            // or the independent real-time PTM.
-            // Catch-up is capped at 20 ms to avoid replaying a host stall.
+            // Only paced modes accrue host-time cycle credit. Unlimited
+            // mode bypasses the budget but retains short display-bus locks
+            // and bounded execution batches. The PTM remains real-time.
             constexpr std::uint64_t kSecond=1000000000ULL;
-            const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(now-last).count();
+            if(!unlimited) {
+                const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(now-last).count();
+                const auto bounded=std::clamp<std::int64_t>(elapsed,0,20000000);
+                const auto numerator=static_cast<std::uint64_t>(bounded)*workerClockHz+fraction;
+                credit=std::min<std::int64_t>(
+                    credit+static_cast<std::int64_t>(numerator/kSecond),
+                    static_cast<std::int64_t>(workerClockHz/50));
+                fraction=numerator%kSecond;
+            }
             last=now;
-            const auto bounded=std::clamp<std::int64_t>(elapsed,0,20000000);
-            const auto numerator=static_cast<std::uint64_t>(bounded)*workerClockHz+fraction;
-            // Never accumulate unbounded debt when host CPU cannot keep up.
-            credit=std::min<std::int64_t>(
-                credit+static_cast<std::int64_t>(numerator/kSecond),
-                static_cast<std::int64_t>(workerClockHz/50));
-            fraction=numerator%kSecond;
             // Keep display-bus ownership bounded while avoiding one mutex
             // acquisition per emulated sub-CPU instruction.
             bool halted=false;
             bool hardwareHalt=false;
-            for(unsigned i=0;i<8192 && credit>0 && !halted;) {
+            for(unsigned i=0;i<8192 && (unlimited || credit>0) && !halted;) {
                 auto guard=mainBoard_->lockDisplay();
-                for(unsigned slice=0;slice<16 && i<8192 && credit>0;++slice,++i) {
+                for(unsigned slice=0;slice<16 && i<8192 && (unlimited || credit>0);++slice,++i) {
                     if(!mainBoard_->displayCpu().executeOne()) {
                         hardwareHalt=mainBoard_->displaySubsystem().haltRequested();
                         credit=0;
                         halted=true;
                         break;
                     }
-                    const auto cycles=mainBoard_->displayCpu().LastInstructionCycles();
-                    credit-=static_cast<std::int64_t>(cycles?cycles:1);
+                    if(!unlimited) {
+                        const auto cycles=mainBoard_->displayCpu().LastInstructionCycles();
+                        credit-=static_cast<std::int64_t>(cycles?cycles:1);
+                    }
                 }
             }
             if(halted) {
@@ -76,7 +79,7 @@ void Machine::startDisplayCpu()
                 // for external stimuli and emulated wait-state behavior.
                 wake->waitFor(hardwareHalt?std::chrono::milliseconds(20)
                                           :std::chrono::microseconds(200),observed);
-            } else if(credit<=0) {
+            } else if(!unlimited && credit<=0) {
                 // Sleep only until the next instruction can be funded.
                 // Avoid a tight spin on sub-microsecond cycle deficits.
                 const auto missing=static_cast<std::uint64_t>(1-credit);

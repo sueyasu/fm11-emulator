@@ -931,10 +931,11 @@ why SDL clock time was previously accelerated.
 
 SDL `--speed 1..100` applies the same multiplier to the main CPU and
 display sub-CPU, each starting from its configured 2 MHz hardware clock.
-For `--speed 0`, the main CPU is unlimited but the display sub-CPU is
-provisionally capped at 4 MHz (2x) to avoid the contention caused by
-unlimited sub-CPU execution. These are worker pacing targets, not
-guaranteed achieved throughput. The headless/deterministic display
+For `--speed 0`, both CPUs run without a cycle budget; the display
+worker still releases its display-bus mutex every 16 instructions and
+yields after a bounded 8192-instruction batch. This is an experimental
+mode: host CPU contention and sub-CPU cycle-driven NMI rates can increase.
+Positive values are pacing targets, not guaranteed achieved throughput. The headless/deterministic display
 scheduler remains at its configured base clock. The PTM remains tied
 to host steady-clock time.
 

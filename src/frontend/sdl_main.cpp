@@ -77,7 +77,7 @@ void usage() {
              <<"  ROM defaults to external/roms/display6809.bin\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
              <<"  --speed N: main/display CPU multiplier (default 10, 1=real-time);\n"
-             <<"             0=unlimited main CPU, 4 MHz display CPU. PTM stays real-time.\n"
+             <<"             0=unlimited main and display CPUs. PTM stays real-time.\n"
              <<"  --renderer auto (default): prefer OpenGL 3.3, fall back to software.\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
 }
@@ -176,9 +176,7 @@ int main(int argc,char** argv) {
         if(!floppyPath.empty() && mainBoard==nullptr)
             throw std::invalid_argument("floppy image requires --main-rom");
         machine.setDisplayCpuClockHz(testPattern?0:2000000);
-        // With --speed 0 keep the main CPU unlimited but cap the display
-        // CPU at the previously tested 4 MHz (2x the hardware clock).
-        machine.setDisplayCpuSpeedMultiplier(speed==0?2:speed);
+        machine.setDisplayCpuSpeedMultiplier(speed);
         machine.reset();
         Sdl sdl;
         Window ui;
