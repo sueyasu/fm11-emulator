@@ -4,6 +4,8 @@
 #include "CpuSpeedMeter.h"
 #include "Main6809Board.h"
 #include "MainZ80Board.h"
+#include "Main8088Board.h"
+#include "MachineConfig.h"
 #include "DisplayBitmap.h"
 #include "RomFiles.h"
 #include <SDL.h>
@@ -73,7 +75,7 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--z80] [--z80-clock HZ] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software]\n"
+    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software]\n"
              <<"  ROM defaults to external/roms/display6809.bin\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
              <<"  --speed N: main CPU multiplier (default 10, 1=real-time);\n"
@@ -86,8 +88,8 @@ void usage() {
 int main(int argc,char** argv) {
     try {
         std::string romPath="external/roms/display6809.bin", mainRomPath, ankPath, floppyPath;
-        bool floppyD88=false, z80Enabled=false;
-        std::uint64_t z80ClockHz=4000000;
+        bool floppyD88=false;
+        std::string configPath,main8088RomPath;
         unsigned speed=10;
         std::string rendererMode="auto";
         unsigned floppyDrive=0;
@@ -98,16 +100,16 @@ int main(int argc,char** argv) {
             const std::string arg=argv[i];
             if(arg=="--help"){usage();return 0;}
             if(arg=="--high"){high=true;continue;}
-            if(arg=="--z80"){z80Enabled=true;continue;}
-            if(arg=="--trace-cpm80"){traceCpm80=true;continue;}
+             if(arg=="--trace-cpm80"){traceCpm80=true;continue;}
             if(arg=="--cpu-speed"){cpuSpeed=true;continue;}
             if(arg=="--test-pattern"){testPattern=true;continue;}
             if(arg=="--trace-boot"){traceBoot=true;continue;}
             if(arg=="--trace-inkey"){traceInkey=true;continue;}
             if(arg=="--diagnostics"){diagnostics=true;continue;}
-            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--ank-rom" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive" || arg=="--boot-dip" || arg=="--z80-clock" || arg=="--speed" || arg=="--renderer") && i+1<argc) {
+            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--ank-rom" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive" || arg=="--boot-dip" || arg=="--config" || arg=="--8088-rom" || arg=="--speed" || arg=="--renderer") && i+1<argc) {
                 if(arg=="--rom")romPath=argv[++i];
-                else if(arg=="--z80-clock")z80ClockHz=parseCount(argv[++i]);
+                else if(arg=="--config")configPath=argv[++i];
+                else if(arg=="--8088-rom")main8088RomPath=argv[++i];
                 else if(arg=="--renderer") {
                     rendererMode=argv[++i];
                     if(rendererMode!="auto" && rendererMode!="gl" &&
@@ -140,32 +142,58 @@ int main(int argc,char** argv) {
                 else instructions=parseCount(argv[++i]);
             } else {usage();return 2;}
         }
-        if(traceCpm80 && !z80Enabled)
-            throw std::invalid_argument("--trace-cpm80 requires --z80");
-        if(z80Enabled && (testPattern || mainRomPath.empty()))
-            throw std::invalid_argument("--z80 requires --main-rom and cannot use --test-pattern");
+        const MachineConfig config=loadMachineConfig(configPath);
+        if(traceCpm80 && (!config.z80Installed || !config.main6809Installed))
+            throw std::invalid_argument("--trace-cpm80 requires an installed Z80 and main 6809");
+        if(testPattern && (!mainRomPath.empty() || !main8088RomPath.empty()))
+            throw std::invalid_argument("CPU ROMs cannot be combined with --test-pattern");
         if(instructions>1000000)
             throw std::invalid_argument("--cycles must be <= 1000000");
         Machine machine;
         Main6809Board* mainBoard=nullptr;
+        bool z80Enabled=false;
+        bool main8088Enabled=false;
         if(!testPattern) {
             machine.loadDisplayRomFile(romPath);
             if(!ankPath.empty())machine.loadAnkRomFile(ankPath);
-            if(!mainRomPath.empty()) {
-                auto mainCpu=std::make_unique<Main6809Board>(CpuType::MC6809);
-                mainCpu->loadBootRomFile(mainRomPath);
-                mainBoard=mainCpu.get();
-                mainCpu->setCpuClockHz(2000000);
-                machine.addBoard(std::move(mainCpu));
-                if(z80Enabled) {
-                    machine.addBoard(std::make_unique<MainZ80Board>());
+            if(!mainRomPath.empty() || !main8088RomPath.empty()) {
+                std::size_t cpu6809Index=0,cpu8088Index=0,z80Index=0;
+                if(config.main6809Installed) {
+                    auto mainCpu=std::make_unique<Main6809Board>(config.main6809Cpu);
+                    if(!mainRomPath.empty())mainCpu->loadBootRomFile(mainRomPath);
+                    else if(config.mainSelected==MachineConfig::MainSelection::Cpu6809)
+                        throw std::invalid_argument("selected 6809 card requires --main-rom");
+                    mainBoard=mainCpu.get();
+                    mainCpu->setCpuClockHz(config.main6809ClockHz);
+                    cpu6809Index=machine.addBoard(std::move(mainCpu));
+                }
+                if(config.main8088Installed) {
+                    auto mainCpu=std::make_unique<Main8088Board>(config.main8088Cpu);
+                    if(!main8088RomPath.empty())mainCpu->bus().loadBootRomFile(main8088RomPath);
+                    else if(config.mainSelected==MachineConfig::MainSelection::Cpu8088)
+                        throw std::invalid_argument("selected 8088 card requires --8088-rom");
+                    cpu8088Index=machine.addBoard(std::move(mainCpu));
+                    machine.set8088ClockHz(config.main8088ClockHz);
+                    main8088Enabled=true;
+                }
+                const auto selectedIndex=config.mainSelected==MachineConfig::MainSelection::Cpu6809
+                    ?cpu6809Index:cpu8088Index;
+                // DIP selects the active main card even if both are fitted.
+                // Only the optional Z80 is under FD05 arbitration.
+                machine.setActiveBoard(selectedIndex);
+                if(config.z80Installed) {
+                    z80Index=machine.addBoard(std::make_unique<MainZ80Board>());
+                    machine.setZ80ClockHz(config.z80ClockHz);
+                    machine.configureFd05Boards(selectedIndex,z80Index);
                     machine.enableFd05Selection(true);
-                    machine.setZ80ClockHz(z80ClockHz);
+                    z80Enabled=true;
                 }
                 // addBoard() attaches the CPU to the machine's shared
                 // FloppyDevice. Mount only afterwards: mounting on the
                 // CPU's initial private device would lose the image.
                 if(!floppyPath.empty()) {
+                    if(!mainBoard)
+                        throw std::invalid_argument("floppy mounting via SDL requires an installed 6809 card");
                     auto image=readDiskImage(floppyPath);
                     if(floppyD88)mainBoard->loadFloppyD88(image);
                     else mainBoard->loadFloppy2d(image);
@@ -176,7 +204,7 @@ int main(int argc,char** argv) {
         if(mainBoard)mainBoard->setBootDip(static_cast<BYTE>(bootDip));
         if(!floppyPath.empty() && mainBoard==nullptr)
             throw std::invalid_argument("floppy image requires --main-rom");
-        machine.setDisplayCpuClockHz(testPattern?0:2000000);
+        machine.setDisplayCpuClockHz(testPattern?0:config.displayClockHz);
         machine.setDisplayCpuSpeedMultiplier(speed);
         machine.reset();
         Sdl sdl;
@@ -385,7 +413,9 @@ int main(int argc,char** argv) {
                         const auto activeType=machine.activeCpuType();
                         const auto hz=activeType==CpuType::Z80
                             ?machine.clockZ80Hz()
-                            :mainBoard?mainBoard->cpuClockHz():2000000ULL;
+                            :(activeType==CpuType::I8088 || activeType==CpuType::NECV20)
+                                ?machine.clock8088Hz()
+                                :mainBoard?mainBoard->cpuClockHz():config.main6809ClockHz;
                         if(traceBoot && executed<64 && mainBoard) {
                             std::cerr<<"main step="<<executed
                                      <<" PC=$"<<std::hex
@@ -401,7 +431,9 @@ int main(int argc,char** argv) {
                         if(cpuSpeed) {
                             const auto card=activeType==CpuType::Z80
                                 ?CpuSpeedMeter::Card::Z80
-                                :CpuSpeedMeter::Card::Main6809;
+                                :(activeType==CpuType::I8088 || activeType==CpuType::NECV20)
+                                    ?CpuSpeedMeter::Card::Main8088
+                                    :CpuSpeedMeter::Card::Main6809;
                             cpuMeter.record(card,guestCycles);
                         }
                         const auto step=++executed;
@@ -512,6 +544,7 @@ int main(int argc,char** argv) {
                      sample=cpuMeter.take(reportElapsed);}
                     const auto hz6809=mainBoard?mainBoard->cpuClockHz():0;
                     const auto hzZ80=z80Enabled?machine.clockZ80Hz():0;
+                    const auto hz8088=main8088Enabled?machine.clock8088Hz():0;
                     std::cerr<<std::fixed<<std::setprecision(3)
                              <<"CPU speed wall="<<sample.wallSeconds<<"s"
                              <<" 6809="<<sample.main6809.cycles<<" T"
@@ -522,11 +555,15 @@ int main(int argc,char** argv) {
                         std::cerr<<" Z80="<<sample.z80.cycles<<" T"
                                  <<" ("<<sample.mhz(CpuSpeedMeter::Card::Z80)
                                  <<" MHz, "<<sample.z80.instructions<<" ins)";
+                    if(main8088Enabled)
+                        std::cerr<<" 8088/V20="<<sample.main8088.cycles<<" T"
+                                 <<" ("<<sample.mhz(CpuSpeedMeter::Card::Main8088)
+                                 <<" MHz, "<<sample.main8088.instructions<<" ins)";
                     std::cerr<<" target=";
                     if(speed==0)std::cerr<<"unlimited";
                     else std::cerr<<speed<<"x";
                     std::cerr<<" guest/wall="
-                             <<sample.progressRatio(hz6809,hzZ80)<<"x"
+                             <<sample.progressRatio(hz6809,hzZ80,hz8088)<<"x"
                              <<" [main CPU only; SYNC/CWAI lowers ratio]\n";
                     lastSpeedReport=reportNow;
                 }

@@ -47,6 +47,9 @@ public:
     // Optional FD05 bit-0 CPU-card selection. Disabled by default to
     // preserve explicit board selection during existing bring-up tests.
     void enableFd05Selection(bool enabled);
+    // Define the selected main card and FD05 optional CPU independently.
+    // Needed when 6809 and 8088 main cards are simultaneously installed.
+    void configureFd05Boards(std::size_t mainIndex,std::size_t optionalIndex);
     bool fd05SelectionEnabled() const {return fd05SelectionEnabled_;}
     CpuBoard* activeBoard();
     const CpuBoard* activeBoard() const;

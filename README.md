@@ -25,6 +25,39 @@ the emulator core, frontends, and tests. No CPU emulation logic or scheduling
 behavior changes. Benchmark `fm11-sdl --speed 0 --cpu-speed --renderer gl`
 under identical host conditions to assess whether LTO improves throughput.
 
+## Installed CPU cards and main-CPU DIP selection
+
+`fm11-sdl` reads CPU hardware settings from the first available file:
+`--config FILE` (explicit), `~/.config/fm11emu/fm11emu.conf`, or
+`/etc/fm11emu.conf`. With no file it defaults to the original 6809-only
+configuration. A supplied but invalid file produces a line-numbered error.
+
+Copy `config/fm11emu.conf.example` and edit its values. The independent
+`[main_6809]` and `[main_8088]` `installed` values describe physically
+fitted cards; `[main] active = 6809|8088` models the FM-11 EX DIP switch.
+Selecting either card leaves the other fitted and reset, but inactive.
+The `[main_6809] cpu` accepts `6809|6309`; `[main_8088] cpu`
+accepts `8088|v20`. All `clock_hz` settings are in Hz.
+
+The separate `[optional_cpu] type = none|z80` controls the optional
+Z80 card, selected via FD05 relative to the DIP-selected main card.
+The display CPU supports 6809 only at present; a `6309` setting is
+rejected rather than silently ignored.
+
+CPU ROM and media file paths remain runtime parameters: `--main-rom`
+loads the 6809 card firmware, and `--8088-rom` loads the 8088/V20 card
+firmware. Specify the selected card's ROM to start its CPU. For instance:
+
+```sh
+./build/fm11-sdl --config config/fm11emu.conf.example \
+    --main-rom external/roms/boot6809.bin \
+    --8088-rom external/roms/boot8088.bin --speed 0
+```
+
+`--speed` remains a runtime multiplier of the configured physical CPU
+clock. The independent display CPU still observes its 8 MHz runtime cap.
+The old `--z80` and `--z80-clock` flags are replaced by config settings.
+
 ## External ROM images (not committed)
 
 Original emulator firmware is supplied as C byte arrays. Extract them once

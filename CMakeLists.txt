@@ -25,6 +25,7 @@ option(FM11_BUILD_TESTS "Build portable-core smoke tests" ON)
 
 add_library(fm11_core STATIC
     src/core/Machine.cpp
+    src/core/MachineConfig.cpp
     src/core/Sim09.cpp
     src/core/SimZ80.cpp
     src/boards/MainZ80Board.cpp
@@ -111,6 +112,10 @@ if(FM11_BUILD_TESTS)
     add_executable(machine_z80_rom_boot tests/machine_z80_rom_boot.cpp)
     target_link_libraries(machine_z80_rom_boot PRIVATE fm11_core)
     add_test(NAME machine_z80_rom_boot COMMAND machine_z80_rom_boot)
+    add_executable(machine_config tests/machine_config.cpp)
+    target_link_libraries(machine_config PRIVATE fm11_core)
+    add_test(NAME machine_config COMMAND machine_config)
+
     add_executable(realtime_ptm tests/realtime_ptm.cpp)
     target_link_libraries(realtime_ptm PRIVATE fm11_core)
     add_test(NAME realtime_ptm COMMAND realtime_ptm)

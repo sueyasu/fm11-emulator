@@ -265,6 +265,17 @@ void Machine::setActiveBoard(std::size_t index)
     fd05SelectionEnabled_=false;
 }
 
+void Machine::configureFd05Boards(std::size_t mainIndex,std::size_t optionalIndex)
+{
+    if(mainIndex>=boards_.size() || optionalIndex>=boards_.size() ||
+       mainIndex==optionalIndex)
+        throw std::invalid_argument("invalid CPU selection wiring");
+    primaryBoardIndex_=mainIndex;
+    optionalBoardIndex_=optionalIndex;
+    hasPrimaryBoard_=hasOptionalBoard_=true;
+    if(fd05SelectionEnabled_)synchronizeFd05Selection();
+}
+
 void Machine::enableFd05Selection(bool enabled)
 {
     fd05SelectionEnabled_=enabled;

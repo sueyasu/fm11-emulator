@@ -1,0 +1,24 @@
+# FM-11 EX: both main CPU cards fitted; DIP selects which one boots.
+[main]
+active = 6809
+
+[main_6809]
+installed = true
+cpu = 6309
+clock_hz = 2000000
+
+[main_8088]
+installed = true
+cpu = v20
+clock_hz = 8000000
+
+# Separate optional CPU. FD05 selects between the DIP-selected
+# main CPU and this card, not between the two main CPU cards.
+[optional_cpu]
+type = none
+clock_hz = 4000000
+
+# The display subsystem currently supports MC6809 only.
+[display_cpu]
+cpu = 6809
+clock_hz = 2000000
