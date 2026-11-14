@@ -4,6 +4,27 @@ Linux port and ongoing development of the FM-11 emulator.
 
 This first revision establishes a portable CMake build for the existing 6809/6309 and Z80 CPU cores. The Windows MFC/Direct3D frontend is intentionally not part of the Linux build.
 
+## Optional link-time optimization (LTO)
+
+LTO is **off by default**. To compare the same Release build with and without
+interprocedural optimization, use separate build directories:
+
+```sh
+cmake -S . -B build-normal -DCMAKE_BUILD_TYPE=Release -DFM11_ENABLE_LTO=OFF
+cmake --build build-normal -j$(nproc)
+ctest --test-dir build-normal --output-on-failure
+
+cmake -S . -B build-lto -DCMAKE_BUILD_TYPE=Release -DFM11_ENABLE_LTO=ON
+cmake --build build-lto -j$(nproc)
+ctest --test-dir build-lto --output-on-failure
+```
+
+`FM11_ENABLE_LTO=ON` checks whether CMake's C++ IPO support is available and
+stops configuration with a diagnostic if it is not. IPO is then enabled for
+the emulator core, frontends, and tests. No CPU emulation logic or scheduling
+behavior changes. Benchmark `fm11-sdl --speed 0 --cpu-speed --renderer gl`
+under identical host conditions to assess whether LTO improves throughput.
+
 ## External ROM images (not committed)
 
 Original emulator firmware is supplied as C byte arrays. Extract them once

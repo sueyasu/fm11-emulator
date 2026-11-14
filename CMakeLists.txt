@@ -7,6 +7,20 @@ if(NOT CMAKE_CONFIGURATION_TYPES AND NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build configuration" FORCE)
 endif()
 
+# Link-time optimization is opt-in so baseline builds remain unchanged.
+# CMake IPO sets the appropriate compiler and linker flags for supported
+# toolchains, including all the core library and executable targets below.
+option(FM11_ENABLE_LTO "Enable link-time optimization (IPO)" OFF)
+if(FM11_ENABLE_LTO)
+    include(CheckIPOSupported)
+    check_ipo_supported(RESULT fm11_lto_supported OUTPUT fm11_lto_error
+                        LANGUAGES CXX)
+    if(NOT fm11_lto_supported)
+        message(FATAL_ERROR "FM11_ENABLE_LTO requires IPO support: ${fm11_lto_error}")
+    endif()
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
+endif()
+
 option(FM11_BUILD_TESTS "Build portable-core smoke tests" ON)
 
 add_library(fm11_core STATIC
