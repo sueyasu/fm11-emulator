@@ -878,3 +878,20 @@ Run `ctest --test-dir build --output-on-failure`, including `worker_group`,
 mailbox handshakes and wall-time clock on SDL and `fm11-headless`.
 Both PTM and display clocks are **independent of** `--speed`; only the
 main CPU still uses SDL pacing.
+
+### Stage 4: main CPU worker
+
+SDL no longer executes main 6809/Z80 instructions on its event/render thread.
+A dedicated `WorkerGroup` CPU worker owns the existing
+`Machine::executeOne()` path, including FD05 CPU-card selection, IRQ
+sampling, and the `SdlCpuPacer` clock. `SYNC/CWAI` only wake when their
+interrupt conditions are satisfied; the PTM and display workers continue
+independently. A narrow main-CPU mutex protects serial PTY exchanges and
+frontend CPU diagnostics. Display shared RAM/FD05 transactions preserve
+the CPU-to-display lock order. F2 pauses all three workers; resume rebases
+CPU pacing rather than replaying paused time. Rendering copies display
+memory under its own lock, then presents outside the lock.
+
+The deterministic, nonthreaded `Machine::executeOne()` API remains
+available to existing headless runners and core regression tests. The
+`parallel_cpu_display` test exercises three workers and display snapshots.

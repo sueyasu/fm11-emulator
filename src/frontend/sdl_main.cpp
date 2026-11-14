@@ -23,6 +23,9 @@
 #include <vector>
 #include <stdexcept>
 #include <string>
+#include <mutex>
+#include <atomic>
+#include <thread>
 
 namespace {
 struct Sdl {
@@ -233,7 +236,11 @@ int main(int argc,char** argv) {
             std::cout<<"Serial PTY: "<<name<<"\n"<<std::flush;
         }
         std::vector<BYTE> serialPending;
+        // The main CPU worker owns CPU/FDC/USART state. SDL serial I/O
+        // briefly takes this lock, never the display bus first.
+        std::mutex cpuMutex;
         auto serviceSerial=[&]() {
+            std::lock_guard<std::mutex> cpuLock(cpuMutex);
             if(serialMaster<0)return;
             BYTE ch=0;
             while(mainBoard->takeSerialOutput(ch))serialPending.push_back(ch);
@@ -282,16 +289,17 @@ int main(int argc,char** argv) {
         // The real sub-ROM keyboard path is left untouched otherwise.
         SDL_StartTextInput();
         bool running=true,paused=false;
-        std::uint64_t executed=0,lastReported=0;
+        std::atomic<std::uint64_t> executed{0};
+        std::uint64_t lastReported=0;
         std::uint64_t ioWrites=0;
         if(diagnostics)
             machine.setDisplayIoWriteObserver([&](DisplaySubsystem::IoWriteTrace){++ioWrites;});
         auto lastLog=std::chrono::steady_clock::now();
         // Match the original emulator's approximately 32 ms paint cadence.
         auto lastFrame=lastLog-std::chrono::milliseconds(32);
-        auto lastWaitTick=std::chrono::steady_clock::now();
-        SdlCpuPacer cpuPacer(speed);
         CpuSpeedMeter cpuMeter;
+        WorkerGroup cpuWorker;
+        std::atomic<unsigned> cpuResumeGeneration{0};
         auto lastSpeedReport=std::chrono::steady_clock::now();
         bool wasPaused=false;
         CpuBoard* lastCpuOwner=machine.activeBoard();
@@ -325,6 +333,81 @@ int main(int argc,char** argv) {
         // unrelated to SDL rendering and the main CPU instruction pacing.
         if(machine.boardCount())machine.startRealtimePtm();
         machine.startDisplayCpu();
+
+        if(machine.boardCount())cpuWorker.start(
+            [&,pacer=SdlCpuPacer(speed),
+               lastTick=std::chrono::steady_clock::now(),
+               generation=0u]() mutable {
+                const auto now=std::chrono::steady_clock::now();
+                const auto requested=cpuResumeGeneration.load(std::memory_order_acquire);
+                if(generation!=requested) {
+                    generation=requested;
+                    lastTick=now;
+                    pacer.reset();
+                }
+                const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    now-lastTick);
+                lastTick=now;
+                pacer.addElapsed(elapsed);
+                unsigned ran=0;
+                {
+                    // One bounded batch is the main CPU's ownership boundary.
+                    // No SDL renderer ever executes guest instructions.
+                    std::lock_guard<std::mutex> cpuLock(cpuMutex);
+                    for(;ran<std::min<std::uint64_t>(instructions,512) && pacer.ready();++ran) {
+                        const auto* active=machine.activeBoard();
+                        if(!active)break;
+                        if(mainBoard && active==static_cast<CpuBoard*>(mainBoard)) {
+                            mainBoard->syncPtmIrq();
+                            const auto wait=mainBoard->cpuWaitState();
+                            if(wait!=CSim09::WaitState::Running) {
+                                const auto& regs=dynamic_cast<CSim09&>(mainBoard->cpu()).regs;
+                                const bool canWake=mainBoard->irqPending() &&
+                                    (wait==CSim09::WaitState::Sync ||
+                                     (regs.CC&0x10)==0);
+                                if(!canWake) {
+                                    pacer.reset();
+                                    break;
+                                }
+                            }
+                        }
+                        const auto hz=active->cpu().type()==CpuType::Z80
+                            ?machine.clockZ80Hz()
+                            :mainBoard?mainBoard->cpuClockHz():2000000ULL;
+                        if(traceBoot && executed.load()<64 && mainBoard) {
+                            std::cerr<<"main step="<<executed.load()
+                                     <<" PC=$"<<std::hex
+                                     <<std::setw(4)<<std::setfill('0')
+                                     <<mainBoard->cpu().pc()
+                                     <<" subCtrl=$"<<std::setw(2)
+                                     <<unsigned(machine.mainSubCpuControl())
+                                     <<std::dec<<std::setfill(' ')<<"\n";
+                        }
+                        machine.executeOne();
+                        const auto guestCycles=machine.lastExecutionCycles();
+                        pacer.consume(guestCycles,hz);
+                        if(cpuSpeed) {
+                            const auto card=active->cpu().type()==CpuType::Z80
+                                ?CpuSpeedMeter::Card::Z80
+                                :CpuSpeedMeter::Card::Main6809;
+                            cpuMeter.record(card,guestCycles);
+                        }
+                        const auto step=executed.fetch_add(1)+1;
+                        if(traceCpm80) {
+                            CpuBoard* owner=machine.activeBoard();
+                            if(owner!=lastCpuOwner) {
+                                traceCpmSnapshot("handoff");
+                                lastCpuOwner=owner;
+                            } else if(step%200000==0)
+                                traceCpmSnapshot("progress");
+                        }
+                    }
+                }
+                // Yield while the guest is asleep or CPU pacing is ahead.
+                // PTM and display CPU continue on their independent workers.
+                if(ran==0 || !pacer.ready())
+                    std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            });
 
         while(running) {
             SDL_Event event;
@@ -384,98 +467,36 @@ int main(int argc,char** argv) {
             }
             if(paused!=wasPaused) {
                 if(paused) {
+                    cpuWorker.pause();
                     machine.pauseRealtimePtm();
                     machine.pauseDisplayCpu();
                 } else {
                     machine.resumeDisplayCpu();
                     machine.resumeRealtimePtm();
+                    cpuResumeGeneration.fetch_add(1,std::memory_order_release);
+                    cpuWorker.resume();
                 }
             }
             if(cpuSpeed && paused!=wasPaused) {
                 // Pause/resume should not dilute a measurement window.
-                cpuMeter.reset();
+                {std::lock_guard<std::mutex> cpuLock(cpuMutex);
+                 cpuMeter.reset();}
                 lastSpeedReport=std::chrono::steady_clock::now();
             }
             wasPaused=paused;
-            // The SDL thread paces only the main CPU. Both hardware clocks
-            // are driven independently by their own real-time workers.
-            const auto tickNow=std::chrono::steady_clock::now();
-            const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
-                tickNow-lastWaitTick);
-            lastWaitTick=tickNow;
-            if(!paused && !testPattern) {
-                const bool main6809Active=mainBoard &&
-                    machine.activeBoard()==static_cast<CpuBoard*>(mainBoard);
-                const bool waiting=main6809Active &&
-                    mainBoard->cpuWaitState()!=CSim09::WaitState::Running;
-                if(waiting) {
-                    // No guest clock is advanced by a SYNC/CWAI poll.
-                    // Both timers continue independently while the CPU sleeps.
-                    cpuPacer.reset();
-                    SDL_Delay(1);
-                    lastWaitTick=std::chrono::steady_clock::now();
-                } else if(machine.boardCount()) {
-                    cpuPacer.addElapsed(elapsed);
-                    std::uint64_t ran=0;
-                    for(;ran<instructions && cpuPacer.ready();++ran) {
-                        // Determine the active card BEFORE the instruction;
-                        // FD05 can switch the CPU during executeOne().
-                        const auto* active=machine.activeBoard();
-                        const auto hz=active && active->cpu().type()==CpuType::Z80
-                            ?machine.clockZ80Hz()
-                            :mainBoard?mainBoard->cpuClockHz():2000000ULL;
-                        if(traceBoot && executed<64 && mainBoard) {
-                            std::cerr<<"main step="<<executed
-                                     <<" PC=$"<<std::hex
-                                     <<std::setw(4)<<std::setfill('0')
-                                     <<mainBoard->cpu().pc()
-                                     <<" subCtrl=$"<<std::setw(2)
-                                     <<unsigned(machine.mainSubCpuControl())
-                                     <<std::dec<<std::setfill(' ')<<"\n";
-                        }
-                        machine.executeOne();
-                        const auto guestCycles=machine.lastExecutionCycles();
-                        cpuPacer.consume(guestCycles,hz);
-                        if(cpuSpeed && active) {
-                            const auto card=active->cpu().type()==CpuType::Z80
-                                ?CpuSpeedMeter::Card::Z80
-                                :CpuSpeedMeter::Card::Main6809;
-                            cpuMeter.record(card,guestCycles);
-                        }
-                        ++executed;
-                        if((executed&127u)==0)serviceSerial();
-                        if(traceCpm80) {
-                            CpuBoard* owner=machine.activeBoard();
-                            if(owner!=lastCpuOwner) {
-                                traceCpmSnapshot("handoff");
-                                lastCpuOwner=owner;
-                            } else if(executed%200000==0)
-                                traceCpmSnapshot("progress");
-                        }
-                        if(mainBoard &&
-                           machine.activeBoard()==static_cast<CpuBoard*>(mainBoard) &&
-                           mainBoard->cpuWaitState()!=CSim09::WaitState::Running) {
-                            cpuPacer.reset();
-                            break;
-                        }
-                    }
-                    // Do not busy-spin when ahead of the host clock.
-                    if(ran==0)SDL_Delay(1);
-                } else {
-                    // Display-only mode also runs on its own CPU worker.
-                    SDL_Delay(1);
-                    cpuPacer.reset();
-                }
-            } else {
-                // Pause must not accumulate a burst of catch-up instructions.
-                cpuPacer.reset();
-            }
+            // CPU, PTM and display execution are independently scheduled.
+            // The SDL thread only services host events and paints frames.
+            if(!paused && !testPattern && !machine.boardCount())
+                SDL_Delay(1);
+            cpuWorker.rethrowWorkerFailure();
             serviceSerial();
             if(cpuSpeed && !paused && machine.boardCount()) {
                 const auto reportNow=std::chrono::steady_clock::now();
                 const auto reportElapsed=reportNow-lastSpeedReport;
                 if(reportElapsed>=std::chrono::seconds(1)) {
-                    const auto sample=cpuMeter.take(reportElapsed);
+                    CpuSpeedMeter::Sample sample;
+                    {std::lock_guard<std::mutex> cpuLock(cpuMutex);
+                     sample=cpuMeter.take(reportElapsed);}
                     const auto hz6809=mainBoard?mainBoard->cpuClockHz():0;
                     const auto hzZ80=z80Enabled?machine.clockZ80Hz():0;
                     std::cerr<<std::fixed<<std::setprecision(3)
@@ -500,16 +521,28 @@ int main(int argc,char** argv) {
             const auto frameTime=std::chrono::steady_clock::now();
             if(frameTime-lastFrame>=std::chrono::milliseconds(32)) {
                 lastFrame=frameTime;
+            // Sample main state before taking the display lock. The
+            // CPU worker uses CPU -> display lock order for mailbox access.
+            int sampledMainPc=-1;
+            if(diagnostics) {
+                std::lock_guard<std::mutex> cpuLock(cpuMutex);
+                if(mainBoard)sampledMainPc=static_cast<int>(mainBoard->cpu().pc());
+            }
             if(ui.glRenderer) {
+                {
                 auto displayGuard=machine.lockDisplay();
                 int outputW=0,outputH=0;
                 SDL_GL_GetDrawableSize(ui.window,&outputW,&outputH);
                 ui.glRenderer->render(machine,high,testPattern,!ankPath.empty(),
                                       outputW,outputH);
+                }
+                // GPU swap is outside the display bus critical section.
                 SDL_GL_SwapWindow(ui.window);
             } else {
+                DisplayBitmap::Frame frame{};
+                {
                 auto displayGuard=machine.lockDisplay();
-                auto frame=machine.captureDisplayFrame(high);
+                frame=machine.captureDisplayFrame(high);
                 // Original SubCpu::OnDraw derives both layers from FD A0.
                 // In particular, loading a font does NOT enable text by itself.
                 if(machine.boardCount()) {
@@ -547,7 +580,7 @@ int main(int argc,char** argv) {
                              <<" VRAM_nonzero="<<machine.displayNonzeroVramBytes()
                              <<" page="<<machine.displayPage()
                              <<" revision="<<machine.displayRevision()
-                             <<" mainPC="<<(mainBoard?static_cast<int>(mainBoard->cpu().pc()):-1)
+                             <<" mainPC="<<sampledMainPc
                              <<" FDA0="<<unsigned(machine.mainDisplayControl())
                              <<" FD05="<<unsigned(machine.mainSubCpuControl())
                              <<" FD04_latch="<<unsigned(machine.mainEventStatus())
@@ -557,9 +590,10 @@ int main(int argc,char** argv) {
                              <<" halted="<<machine.displayHalted()
                              <<(machine.boardCount()?" main6809":" display-only")
                              <<(testPattern?" test-pattern":"")<<"\n";
-                    lastReported=executed;
+                    lastReported=executed.load();
                     lastLog=now;
                 }
+                } // release display bus before SDL texture upload/draw
                 if(SDL_UpdateTexture(ui.texture,nullptr,frame.argb.data(),
                                      640*static_cast<int>(sizeof(std::uint32_t)))!=0)
                     throw std::runtime_error(SDL_GetError());
@@ -598,10 +632,13 @@ int main(int argc,char** argv) {
                 SDL_RenderPresent(ui.renderer);
                 }
             }
-            // Keep the CPU executing between display refreshes. Rendering
-            // every 10,000 guest instructions throttled ROM memory checks
-            // with texture uploads, software composition and vsync waits.
+            // The main CPU no longer depends on SDL paint cadence. Yield
+            // host time to the three emulation workers between UI polls.
+            SDL_Delay(1);
         }
+        cpuWorker.stop();
+        machine.stopDisplayCpu();
+        machine.stopRealtimePtm();
         return 0;
     } catch(const std::exception& e) {
         std::cerr<<"fm11-sdl: "<<e.what()<<"\n";

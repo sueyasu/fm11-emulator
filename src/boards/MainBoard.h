@@ -27,8 +27,14 @@ public:
         auto lock=lockDisplay();
         return display_.busyStatus();
     }
-    BYTE displayControl() const {return displayControl_;}
-    BYTE displayPalette(unsigned index) const {return displayPalette_[index&7];}
+    BYTE displayControl() const {
+        auto lock=lockDisplay();
+        return displayControl_;
+    }
+    BYTE displayPalette(unsigned index) const {
+        auto lock=lockDisplay();
+        return displayPalette_[index&7];
+    }
     std::shared_ptr<FloppyDevice> floppyDevice() const { return floppy_; }
     std::shared_ptr<Usart8251> usartDevice() const {return usart_;}
     std::shared_ptr<Ptm6840> ptmDevice() const {return ptm_;}
@@ -223,10 +229,12 @@ public:
     bool writeIo(std::uint16_t address,BYTE value) {
         const unsigned reg=address&0xff;
         if(reg==0xa0) {
+            auto lock=lockDisplay();
             displayControl_=value;
             return true;
         }
         if(reg>=0x98 && reg<=0x9f) {
+            auto lock=lockDisplay();
             displayPalette_[reg&7]=value&0x0f;
             return true;
         }
