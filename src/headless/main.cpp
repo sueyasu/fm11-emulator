@@ -1,4 +1,5 @@
 #include "Main6809Board.h"
+#include "Machine.h"
 
 #include <algorithm>
 #include <array>
@@ -138,12 +139,17 @@ int main(int argc, char** argv) {
         const unsigned long long bootSize = level==1 ? 17*256 : 21*256;
         if (bootMode) {load=bootBase; pc=bootBase+2;}
         if (floppyBootMode) {pc=0x0400;}
-        Main6809Board board(cpu=="6809" ? CpuType::MC6809 : CpuType::HD6309);
+        Machine machine;
+        auto cpuBoard=std::make_unique<Main6809Board>(
+            cpu=="6809" ? CpuType::MC6809 : CpuType::HD6309);
+        auto* cpuPtr=cpuBoard.get();
+        machine.addBoard(std::move(cpuBoard));
+        auto& board=*cpuPtr;
         Main6809Board::BootRomImage rom{};
         rom[0xffe]=static_cast<BYTE>(pc>>8);
         rom[0xfff]=static_cast<BYTE>(pc);
         board.loadBootRom(rom);
-        board.reset();
+        machine.reset();
         board.setCpuClockHz(hz);
         board.setTxIrqEnabled(!disableTxIrq);
         if (!floppy.empty()) {
@@ -244,7 +250,7 @@ int main(int argc, char** argv) {
         };
         auto resetGuest=[&]() {
             flushFloppy();
-            board.reset();
+            machine.reset();
             board.setCpuClockHz(hz);
             if(floppyBootMode)loadFloppyIpl(board);
             else loadBinary(board,bootMode ? boottrack : file,load,bootMode ? bootSize : 0);
@@ -260,16 +266,18 @@ int main(int argc, char** argv) {
                 std::cout << "c/continue, stop, s/step, r/regs, m/mem ADDRESS [LEN], "
                              "mp ADDRESS [LEN], reset, q/quit, h/help\n";
             } else if(cmd=="c"||cmd=="continue") {
+                machine.startRealtimePtm();
                 running=true;
                 std::cout << "CPU running (type stop to pause).\n";
             } else if(cmd=="stop") {
-                running=false;flushFloppy();std::cout << "CPU halted.\n";
+                running=false;machine.stopRealtimePtm();flushFloppy();std::cout << "CPU halted.\n";
             } else if(cmd=="q"||cmd=="quit") {
+                running=false;machine.stopRealtimePtm();
                 quitting=true;
             } else if(cmd=="r"||cmd=="regs")showRegs();
             else if(cmd=="s"||cmd=="step") {
                 if(running)std::cout << "Stop CPU first.\n";
-                else {board.cpu().executeOne();++count;drain();showRegs();}
+                else {machine.executeOne();++count;drain();showRegs();}
             } else if(cmd=="reset") {
                 if(running)std::cout << "Stop CPU first.\n";
                 else {resetGuest();std::cout << "CPU reset and image reloaded.\n";showRegs();}
@@ -301,6 +309,9 @@ int main(int argc, char** argv) {
         while(!stopping && !quitting) {
             pollfd fds[2]={{inputOpen?STDIN_FILENO:-1,POLLIN,0},
                            {master,POLLIN,0}};
+            // Refresh CPU IRQ latches before deciding whether SYNC/CWAI can
+            // sleep. The PTM worker updates only the shared board's IRQ level.
+            if(running)board.syncPtmIrq();
             const bool sleeping = running &&
                 board.cpuWaitState() != CSim09::WaitState::Running &&
                 !(board.irqPending() &&
@@ -321,7 +332,8 @@ int main(int argc, char** argv) {
                 const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
                     std::chrono::steady_clock::now()-waitStart).count();
                 if (elapsed>0) {
-                    board.advanceWaitTime(static_cast<std::uint64_t>(elapsed));
+                    // The real-time worker owns PTM advancement. Only
+                    // accumulate host idle time for diagnostics here.
                     if(board.cpuWaitState()==CSim09::WaitState::Sync) syncWaitNs+=elapsed;
                     else cwaiWaitNs+=elapsed;
                 }
@@ -350,10 +362,11 @@ int main(int argc, char** argv) {
             if(running) {
                 for(unsigned i=0;i<256 && running && !stopping;++i) {
                     if(limit && count>=limit) {
-                        running=false;std::cout << "Instruction limit reached.\n";
+                        running=false;machine.stopRealtimePtm();
+                        std::cout << "Instruction limit reached.\n";
                         prompt();break;
                     }
-                    board.cpu().executeOne();++count;
+                    machine.executeOne();++count;
                     const auto wait=board.cpuWaitState();
                     if(wait!=CSim09::WaitState::Running && previousWait!=wait) {
                         if(wait==CSim09::WaitState::Sync) ++syncEntries;
@@ -390,6 +403,7 @@ int main(int argc, char** argv) {
                 }
             }
         }
+        machine.stopRealtimePtm();
         close(slaveFd);
         close(master);
         return 0;

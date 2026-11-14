@@ -755,16 +755,22 @@ CPU at the limit instead of terminating the monitor.
 ### CPU idle waiting (6809/6309)
 
 The headless runner executes instructions **without a real-time CPU throttle**
-while running. When a guest executes `SYNC` or `CWAI`, the CPU stops
-executing instructions and the host waits using `poll()` for PTY or monitor
-activity and the next PTM timer edge. During that wait, host elapsed time
-advances the 9700 Hz PTM timebase so a timer IRQ can wake NitrOS-9.
+while running. Starting with the parallel-PTM branch, the `c` command also
+starts the **same `Machine::startRealtimePtm()` worker used by SDL**.
+The shared MC6840 timer advances from host `steady_clock` at 9700 Hz,
+independently of guest CPU instructions. CPU instruction cycles and the
+`SYNC`/`CWAI` wait loop do **not** advance this timer a second time.
+When a guest executes `SYNC` or `CWAI`, the host waits using `poll()`
+for PTY/monitor activity or the next timer edge. The CPU adapter samples
+the PTM's published IRQ level at instruction/wait boundaries.
 
 `CWAI` keeps its pre-stacked interrupt frame; `SYNC` does not stack.
 A masked IRQ wakes `SYNC` without entering its vector, while `CWAI`
-requires an accepted interrupt. The guest's normal (non-waiting) execution
-still drives PTM from emulated CPU cycles; the host clock is used only while
-the CPU is asleep. This is **not** a cycle-exact real-time emulation mode.
+requires an accepted interrupt. The monitor `stop`/`q` commands stop
+and join the timer worker, and `c` restarts it with a fresh host-time
+baseline. `reset` while halted resets the shared timer along with the CPU
+card. Single-step while halted uses the legacy deterministic cycle clock.
+This is **not** a cycle-exact real-time CPU emulation mode.
 
 ### Testing without USART Tx interrupts
 
@@ -841,8 +847,9 @@ memory directly and requires an immutable render snapshot once the display
 worker exists. Do not wrap every RAM access in a global mutex; do not enable
 unprotected concurrent guest execution.
 
-Stage 2: the SDL frontend starts a **dedicated real-time PTM worker** after
-initialization. The MC6840 advances from host `steady_clock` at its 9700 Hz
+Stage 2: SDL and the interactive `fm11-headless` runner use a
+**dedicated real-time PTM worker**. SDL starts it after initialization;
+headless starts it on monitor `c` and stops it on `stop`/`q`. The MC6840 advances from host `steady_clock` at its 9700 Hz
 input rate, regardless of `--speed` or main CPU instruction cycles. PTM
 register accesses catch up to the exact host time under a narrow mutex;
 a 1 ms worker polling interval supplies asynchronous IRQs even when the
@@ -851,13 +858,14 @@ thread changes the CPU adapter's IRQ aggregator. SDL pause parks the PTM
 worker and rebases its clock on resume, and reset stops/restarts the worker.
 
 The display sub-CPU remains on the **legacy cycle-based scheduler** until
-stage 3. Headless and standalone CPU-card tests retain the old deterministic
-virtual-time PTM behavior unless they explicitly enable the real-time mode.
+stage 3. Standalone CPU-card tests and other noninteractive Machine
+harnesses retain deterministic virtual-time PTM behavior unless they
+explicitly start the real-time worker.
 The PTM worker must be stopped before manipulating or resetting shared
 device state directly. This is not yet a fully parallel CPU/display machine;
 all other shared state still belongs to the single emulation thread.
 
 Run `ctest --test-dir build --output-on-failure`, including `worker_group`
 and `realtime_ptm`, before advancing to stage 3. Check NitrOS-9's wall-time
-clock and SYNC/CWAI wakeups on the SDL frontend. Emulated PTM timing is
+clock and SYNC/CWAI wakeups on SDL and `fm11-headless`. Emulated PTM timing is
 **intentionally no longer multiplied** by `--speed`.
