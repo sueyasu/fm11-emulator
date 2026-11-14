@@ -1,6 +1,8 @@
 #pragma once
 
 #include <condition_variable>
+#include <chrono>
+#include <cstdint>
 #include <cstddef>
 #include <exception>
 #include <functional>
@@ -68,6 +70,22 @@ public:
         });
     }
 
+    std::uint64_t wakeGeneration() const {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return wakeGeneration_;
+    }
+    void notify() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        ++wakeGeneration_;
+        changed_.notify_all();
+    }
+    // An interruptible wait inside a worker step. stop/pause also wake it.
+    void waitFor(std::chrono::nanoseconds duration,std::uint64_t observed) {
+        std::unique_lock<std::mutex> lock(mutex_);
+        changed_.wait_for(lock,duration,[this,observed] {
+            return stopping_ || paused_ || wakeGeneration_!=observed;
+        });
+    }
     void pause() {
         std::unique_lock<std::mutex> lock(mutex_);
         if(stopping_)return;
@@ -106,5 +124,6 @@ private:
     std::vector<std::thread> workers_;
     std::size_t active_=0,parked_=0;
     bool paused_=false,stopping_=false;
+    std::uint64_t wakeGeneration_=0;
     std::exception_ptr failure_;
 };

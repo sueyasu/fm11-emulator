@@ -42,5 +42,25 @@ int main() {
         catch(const std::invalid_argument&) {rejected=true;}
         if(!rejected)return 5;
     }
+    {
+        WorkerGroup workers;
+        std::atomic<unsigned> waits{0};
+        workers.start([&] {
+            const auto gen=workers.wakeGeneration();
+            ++waits;
+            workers.waitFor(2s,gen);
+        });
+        std::this_thread::sleep_for(5ms);
+        workers.notify();
+        std::this_thread::sleep_for(5ms);
+        if(waits.load()<2)return 6;
+        // pause and stop must interrupt an otherwise long timed wait.
+        workers.pause();
+        const auto before=waits.load();
+        std::this_thread::sleep_for(5ms);
+        if(waits.load()!=before)return 7;
+        workers.resume();
+        workers.stop();
+    }
     return 0;
 }

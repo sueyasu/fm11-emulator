@@ -43,6 +43,11 @@ public:
     std::unique_lock<std::recursive_mutex> lockDisplay() const {
         return std::unique_lock<std::recursive_mutex>(displayMutex_);
     }
+    // Installed only for the lifetime of the display worker.
+    void setDisplayWakeObserver(std::function<void()> observer) {
+        auto lock=lockDisplay();
+        displayWakeObserver_=std::move(observer);
+    }
     BYTE readDisplayShared(std::size_t offset) {
         auto lock=lockDisplay();
         return display_.readShared(offset);
@@ -50,6 +55,7 @@ public:
     void writeDisplayShared(std::size_t offset,BYTE value) {
         auto lock=lockDisplay();
         display_.writeShared(offset,value);
+        if(displayWakeObserver_)displayWakeObserver_();
     }
     DisplaySubsystem& displaySubsystem() {return display_;}
     const DisplaySubsystem& displaySubsystem() const {return display_;}
@@ -248,6 +254,7 @@ public:
             if(value&0x80)display_.requestHalt();
             else display_.releaseHalt();
             if(fd05WriteObserver_)fd05WriteObserver_(value);
+            if(displayWakeObserver_)displayWakeObserver_();
             return true;
         }
         if(reg==0x04) {
@@ -272,6 +279,7 @@ private:
     DisplayCpu6809 displayCpu_{display_};
     BYTE subCpuControl_=0;
     std::function<void(BYTE)> fd05WriteObserver_;
+    std::function<void()> displayWakeObserver_;
     BYTE displayControl_=0;
     std::array<BYTE,8> displayPalette_{{0,1,2,3,4,5,6,7}};
     std::atomic<BYTE> eventStatus_{0};

@@ -14,10 +14,14 @@ void Machine::startDisplayCpu()
     auto worker=std::make_unique<WorkerGroup>();
     using Clock=std::chrono::steady_clock;
     displayThreadActive_.store(true,std::memory_order_release);
+    mainBoard_->setDisplayWakeObserver([wake=worker.get()] {wake->notify();});
     try {
-        worker->start([this,last=Clock::now(),credit=std::int64_t{0},
+        worker->start([this,wake=worker.get(),last=Clock::now(),credit=std::int64_t{0},
                        fraction=std::uint64_t{0},
                        generation=displayResumeGeneration_.load()]() mutable {
+            // Snapshot event generation before checking the guest state to
+            // prevent a write arriving just before the wait being lost.
+            const auto observed=wake->wakeGeneration();
             const auto currentGeneration=displayResumeGeneration_.load(std::memory_order_acquire);
             const auto now=Clock::now();
             if(generation!=currentGeneration) {
@@ -41,10 +45,12 @@ void Machine::startDisplayCpu()
             // Keep display-bus ownership bounded while avoiding one mutex
             // acquisition per emulated sub-CPU instruction.
             bool halted=false;
+            bool hardwareHalt=false;
             for(unsigned i=0;i<8192 && credit>0 && !halted;) {
                 auto guard=mainBoard_->lockDisplay();
                 for(unsigned slice=0;slice<16 && i<8192 && credit>0;++slice,++i) {
                     if(!mainBoard_->displayCpu().executeOne()) {
+                        hardwareHalt=mainBoard_->displaySubsystem().haltRequested();
                         credit=0;
                         halted=true;
                         break;
@@ -53,11 +59,27 @@ void Machine::startDisplayCpu()
                     credit-=static_cast<std::int64_t>(cycles?cycles:1);
                 }
             }
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            if(halted) {
+                // Hardware HALT wakes on FD05; a bounded fallback is kept
+                // for external stimuli and emulated wait-state behavior.
+                wake->waitFor(hardwareHalt?std::chrono::milliseconds(20)
+                                          :std::chrono::microseconds(200),observed);
+            } else if(credit<=0) {
+                // Sleep only until the next instruction can be funded.
+                // Avoid a tight spin on sub-microsecond cycle deficits.
+                const auto missing=static_cast<std::uint64_t>(1-credit);
+                constexpr std::uint64_t second=1000000000ULL;
+                const auto ns=(missing*second+displayCpuClockHz_-1)/displayCpuClockHz_;
+                wake->waitFor(std::chrono::nanoseconds(std::max<std::uint64_t>(ns,25000)),observed);
+            } else {
+                // Hit the bounded 8192-instruction batch while budget remains.
+                std::this_thread::yield();
+            }
         });
         displayWorker_=std::move(worker);
         displayPaused_=false;
     }catch(...) {
+        mainBoard_->setDisplayWakeObserver({});
         worker->stop();
         displayThreadActive_.store(false,std::memory_order_release);
         throw;
@@ -67,6 +89,7 @@ void Machine::startDisplayCpu()
 void Machine::stopDisplayCpu() noexcept
 {
     if(displayWorker_) {
+        mainBoard_->setDisplayWakeObserver({});
         displayWorker_->stop();
         displayWorker_.reset();
     }
