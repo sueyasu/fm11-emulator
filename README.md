@@ -915,3 +915,14 @@ only when a frontend speed or CPU diagnostics consumer is enabled. The display
 worker amortizes its display-bus lock across at most 16 instructions, retaining
 short mailbox/FD05 access opportunities for the main CPU. PTM frequency and
 clock semantics are unchanged by these performance changes.
+
+### PTM channel-specific IRQ acknowledgement
+
+PTM status reads now acknowledge each channel's pending expiry independently.
+An unrelated timer channel reaching terminal count must not reactivate an
+already acknowledged IRQ from another channel. The legacy status latch remains
+visible until that channel's counter register is read, preserving existing
+software behavior. The `main6809_ptm` regression exercises this specific
+cross-channel reassertion case. This correction does not alter the 9700 Hz
+input clock or the 50 Hz OS clock reload value, and does not by itself establish
+why SDL clock time was previously accelerated.

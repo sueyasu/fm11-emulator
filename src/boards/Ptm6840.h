@@ -16,15 +16,18 @@ public:
     void reset() {
         channels.fill(Channel{});
         status=0;
-        irqAcknowledged=false;
+        acknowledgedChannels=0;
         latchHigh.fill(0);
         counterLowLatch.fill(0);
     }
     bool irqRequest() const {
-        bool active=false;
-        for(unsigned i=0;i<channels.size();++i)
-            active |= (status&(1u<<i))!=0 && (channels[i].control&0x40)!=0;
-        return active && !irqAcknowledged;
+        for(unsigned i=0;i<channels.size();++i) {
+            const BYTE bit=static_cast<BYTE>(1u<<i);
+            if((status&bit)!=0 && (channels[i].control&0x40)!=0 &&
+               (acknowledgedChannels&bit)==0)
+                return true;
+        }
+        return false;
     }
     void refreshIrq() {
         bool active=false;
@@ -43,7 +46,7 @@ public:
             }
             const auto remaining=ticks-ch.counter;
             status|=static_cast<BYTE>(1u<<i);
-            irqAcknowledged=false;
+            acknowledgedChannels&=static_cast<BYTE>(~(1u<<i));
             const bool continuous=(ch.control&0x28)==0;
             if(continuous) {
                 const std::uint64_t period=ch.latch==0?0x10000u:ch.latch;
@@ -59,7 +62,10 @@ public:
         if(port==0x38)return 0;
         if(port==0x39) {
             const BYTE result=status;
-            irqAcknowledged=true;
+            // Acknowledge only channels currently pending. An expiry
+            // on another channel must not reassert a previously serviced
+            // interrupt whose status flag is still latched.
+            acknowledgedChannels|=static_cast<BYTE>(status&0x07);
             refreshIrq();
             return result;
         }
@@ -69,6 +75,7 @@ public:
         const unsigned index=static_cast<unsigned>(port-0x3a)/2;
         auto& ch=channels[index];
         status&=static_cast<BYTE>(~(1u<<index));
+        acknowledgedChannels&=static_cast<BYTE>(~(1u<<index));
         refreshIrq();
         const WORD value=static_cast<WORD>(ch.counter);
         if((port&1)==0)counterLowLatch[index]=static_cast<BYTE>(value);
@@ -83,6 +90,7 @@ public:
                 channels[0].control=1;
             } else {
                 status&=static_cast<BYTE>(~(1u<<index));
+                acknowledgedChannels&=static_cast<BYTE>(~(1u<<index));
                 const BYTE mode=value&0x38;
                 if(mode==0x10 || mode==0x30) {
                     auto& ch=channels[index];
@@ -101,6 +109,9 @@ public:
             ch.latch=static_cast<WORD>((static_cast<WORD>(latchHigh[index])<<8)|value);
             ch.counter=ch.latch==0?0x10000u:ch.latch;
             ch.running=true;
+            status&=static_cast<BYTE>(~(1u<<index));
+            acknowledgedChannels&=static_cast<BYTE>(~(1u<<index));
+            refreshIrq();
         }
     }
     std::uint64_t nextEventNanoseconds() const {
@@ -114,5 +125,5 @@ public:
     std::array<BYTE,3> latchHigh{};
     std::array<BYTE,3> counterLowLatch{};
     BYTE status=0;
-    bool irqAcknowledged=false;
+    BYTE acknowledgedChannels=0;
 };
