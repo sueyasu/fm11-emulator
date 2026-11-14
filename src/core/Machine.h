@@ -53,12 +53,15 @@ public:
     void setZ80ClockHz(std::uint64_t hz);
     // Display CPU scheduling is opt-in until the hardware clock is resolved.
     void setDisplayCpuClockHz(std::uint64_t hz);
-    // Worker-only clock multiplier; 0 removes pacing of the display CPU.
+    // Worker-only clock multiplier. The sub-CPU is provisionally capped
+    // at 10 MHz, including --speed 0 (unlimited main CPU).
     // Deterministic headless scheduling stays at displayCpuClockHz_.
     // Configure before starting the display worker.
     void setDisplayCpuSpeedMultiplier(unsigned multiplier);
     std::uint64_t displayCpuRealtimeClockHz() const {
-        return displayCpuClockHz_*displayCpuSpeedMultiplier_;
+        constexpr std::uint64_t kMaxDisplayCpuHz=10000000;
+        if(displayCpuSpeedMultiplier_==0)return displayCpuClockHz_?kMaxDisplayCpuHz:0;
+        return std::min(displayCpuClockHz_*displayCpuSpeedMultiplier_,kMaxDisplayCpuHz);
     }
     void loadDisplayRom(const DisplaySubsystem::RomImage& rom) {mainBoard_->displaySubsystem().loadRom(rom);}
     void loadDisplayRomFile(const std::string& path) {

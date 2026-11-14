@@ -76,8 +76,9 @@ void usage() {
     std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--z80] [--z80-clock HZ] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software]\n"
              <<"  ROM defaults to external/roms/display6809.bin\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
-             <<"  --speed N: main/display CPU multiplier (default 10, 1=real-time);\n"
-             <<"             0=unlimited main and display CPUs. PTM stays real-time.\n"
+             <<"  --speed N: main CPU multiplier (default 10, 1=real-time);\n"
+             <<"             display CPU uses the same multiplier, capped at 10 MHz.\n"
+             <<"             0=unlimited main CPU, 10 MHz display CPU; PTM stays real-time.\n"
              <<"  --renderer auto (default): prefer OpenGL 3.3, fall back to software.\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
 }
