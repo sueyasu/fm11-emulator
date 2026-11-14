@@ -420,20 +420,23 @@ void Main6809Board::syncPtmIrq()
 
 void Main6809Board::advancePtm(std::uint64_t ticks)
 {
-    ptm_->advance(ticks);
+    if(mainBoard_)mainBoard_->advancePtmTicks(ticks);
+    else ptm_->advance(ticks);
     refreshPtmIrq();
 }
 
 BYTE Main6809Board::readPtm(BYTE port)
 {
-    const BYTE value=ptm_->read(port);
+    const BYTE value=mainBoard_?mainBoard_->readPtmRegister(port):
+                                  ptm_->read(port);
     refreshPtmIrq();
     return value;
 }
 
 void Main6809Board::writePtm(BYTE port,BYTE value)
 {
-    ptm_->write(port,value);
+    if(mainBoard_)mainBoard_->writePtmRegister(port,value);
+    else ptm_->write(port,value);
     refreshPtmIrq();
 }
 

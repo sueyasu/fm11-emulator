@@ -109,6 +109,15 @@ public:
         ptm_->write(reg,value);
         updatePtmIrqLocked();
     }
+    // CPU-card/legacy tests use this to advance the shared timer without
+    // bypassing the lock or leaving the published IRQ level stale.
+    // Real-time mode is exclusively advanced by the timer worker.
+    void advancePtmTicks(std::uint64_t ticks) {
+        std::lock_guard<std::mutex> lock(ptmMutex_);
+        if(realtimePtmEnabled())return;
+        ptm_->advance(ticks);
+        updatePtmIrqLocked();
+    }
     bool ptmIrqLevel() const {
         return ptmIrqLevel_.load(std::memory_order_acquire);
     }
