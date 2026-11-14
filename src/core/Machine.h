@@ -5,6 +5,7 @@
 #include "RomFiles.h"
 #include "DisplayBitmap.h"
 #include "WorkerGroup.h"
+#include "DeterministicDisplayScheduler.h"
 
 #include <algorithm>
 #include <cstddef>
@@ -134,20 +135,17 @@ public:
 
 private:
     void synchronizeFd05Selection();
-    void advanceDisplayTime(std::uint64_t ns);
-    void advanceDisplayCpuCycles(std::uint64_t cycles,std::uint64_t cpuHz);
     bool fd05SelectionEnabled_=false;
     std::shared_ptr<MainBoard> mainBoard_=std::make_shared<MainBoard>();
     std::vector<std::unique_ptr<CpuBoard>> boards_;
     std::size_t active_board_ = 0;
+    std::size_t primaryBoardIndex_ = 0, optionalBoardIndex_ = 0;
+    bool hasPrimaryBoard_ = false, hasOptionalBoard_ = false;
     std::uint64_t lastExecutionCycles_ = 0;
     std::uint64_t clock8088Hz_ = 0;
     std::uint64_t clockZ80Hz_ = 4000000;
     std::uint64_t displayCpuClockHz_ = 0;
-    std::uint64_t displayCycleFraction_ = 0;
-    std::uint64_t displayCpuInputHz_ = 0;
-    std::uint64_t displayNanosecondFraction_ = 0;
-    std::int64_t displayCycleCredit_ = 0;
+    DeterministicDisplayScheduler deterministicDisplay_{*mainBoard_};
     std::unique_ptr<WorkerGroup> ptmWorker_;
     bool ptmPaused_=false;
     std::unique_ptr<WorkerGroup> displayWorker_;

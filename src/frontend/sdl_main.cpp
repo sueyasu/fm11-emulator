@@ -288,7 +288,8 @@ int main(int argc,char** argv) {
         // The real sub-ROM keyboard path is left untouched otherwise.
         SDL_StartTextInput();
         bool running=true,paused=false;
-        std::atomic<std::uint64_t> executed{0};
+        std::uint64_t executed=0; // owned by the CPU worker
+        std::atomic<std::uint64_t> publishedExecuted{0}; // SDL diagnostics
         std::uint64_t lastReported=0;
         std::uint64_t ioWrites=0;
         if(diagnostics)
@@ -356,7 +357,9 @@ int main(int argc,char** argv) {
                 {
                     // One bounded batch is the main CPU's ownership boundary.
                     // No SDL renderer ever executes guest instructions.
-                    std::lock_guard<std::mutex> cpuLock(cpuMutex);
+                    std::unique_lock<std::mutex> cpuLock(cpuMutex,std::defer_lock);
+                    // SDL only reads CPU state in explicit diagnostic modes.
+                    if(diagnostics || cpuSpeed)cpuLock.lock();
                     for(;ran<std::min<std::uint64_t>(instructions,512) && pacer.ready();++ran) {
                         const auto* active=machine.activeBoard();
                         if(!active)break;
@@ -377,8 +380,8 @@ int main(int argc,char** argv) {
                         const auto hz=active->cpu().type()==CpuType::Z80
                             ?machine.clockZ80Hz()
                             :mainBoard?mainBoard->cpuClockHz():2000000ULL;
-                        if(traceBoot && executed.load()<64 && mainBoard) {
-                            std::cerr<<"main step="<<executed.load()
+                        if(traceBoot && executed<64 && mainBoard) {
+                            std::cerr<<"main step="<<executed
                                      <<" PC=$"<<std::hex
                                      <<std::setw(4)<<std::setfill('0')
                                      <<mainBoard->cpu().pc()
@@ -395,7 +398,7 @@ int main(int argc,char** argv) {
                                 :CpuSpeedMeter::Card::Main6809;
                             cpuMeter.record(card,guestCycles);
                         }
-                        const auto step=executed.fetch_add(1)+1;
+                        const auto step=++executed;
                         if(traceCpm80) {
                             CpuBoard* owner=machine.activeBoard();
                             if(owner!=lastCpuOwner) {
@@ -405,6 +408,7 @@ int main(int argc,char** argv) {
                                 traceCpmSnapshot("progress");
                         }
                     }
+                    publishedExecuted.store(executed,std::memory_order_release);
                 }
                 // Flush guest output before yielding.
                 serviceSerial();
@@ -577,8 +581,8 @@ int main(int argc,char** argv) {
                 const auto now=std::chrono::steady_clock::now();
                 if(diagnostics && now-lastLog>=std::chrono::seconds(2)) {
                     std::cerr<<"display PC="<<std::hex<<machine.displayCpuPc()
-                             <<std::dec<<" steps="<<executed
-                             <<" delta="<<(executed-lastReported)
+                             <<std::dec<<" steps="<<publishedExecuted.load()
+                             <<" delta="<<(publishedExecuted.load()-lastReported)
                              <<" ioWrites="<<ioWrites
                              <<" VRAM_nonzero="<<machine.displayNonzeroVramBytes()
                              <<" page="<<machine.displayPage()
@@ -593,7 +597,7 @@ int main(int argc,char** argv) {
                              <<" halted="<<machine.displayHalted()
                              <<(machine.boardCount()?" main6809":" display-only")
                              <<(testPattern?" test-pattern":"")<<"\n";
-                    lastReported=executed.load();
+                    lastReported=publishedExecuted.load();
                     lastLog=now;
                 }
                 } // release display bus before SDL texture upload/draw

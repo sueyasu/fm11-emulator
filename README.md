@@ -897,3 +897,21 @@ memory under its own lock, then presents outside the lock.
 The deterministic, nonthreaded `Machine::executeOne()` API remains
 available to existing headless runners and core regression tests. The
 `parallel_cpu_display` test exercises three workers and display snapshots.
+
+### Stage 5: remove the old scheduler from the parallel execution path
+
+The legacy main-CPU-cycle-coupled display scheduler has been extracted from
+`Machine.cpp` into `src/core/DeterministicDisplayScheduler.h`. It is retained
+only for single-threaded headless utilities and regression tests; while the
+display worker runs, CPU instructions and SDL rendering never execute that
+scheduler. This preserves deterministic tests without maintaining two display
+clocks in the interactive frontend.
+
+The hot path caches primary/optional CPU-card indices at attachment time
+instead of scanning every card before and after each instruction. SDL's CPU
+worker publishes its instruction count once per batch instead of performing
+an atomic increment per instruction, and takes the diagnostic CPU-state mutex
+only when a frontend speed or CPU diagnostics consumer is enabled. The display
+worker amortizes its display-bus lock across at most 16 instructions, retaining
+short mailbox/FD05 access opportunities for the main CPU. PTM frequency and
+clock semantics are unchanged by these performance changes.
