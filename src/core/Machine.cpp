@@ -8,6 +8,17 @@
 #include <thread>
 #include <chrono>
 
+Machine::Machine()
+{
+    // Main-board FD05 writes come from any CPU card's I/O path.
+    // The currently executing instruction retains its local CPU pointer;
+    // the cached selection is used starting with the next instruction.
+    mainBoard_->setCpuSelectionObserver([this](bool optional) {
+        if(fd05SelectionEnabled_ && hasPrimaryBoard_ && hasOptionalBoard_)
+            selectActiveBoard(optional?optionalBoardIndex_:primaryBoardIndex_);
+    });
+}
+
 void Machine::setDisplayCpuSpeedMultiplier(unsigned multiplier)
 {
     if(displayWorker_)
@@ -192,19 +203,39 @@ std::size_t Machine::addBoard(std::unique_ptr<CpuBoard> board)
                 cpuZ80->setPhysicalMemory(cpu6809->physicalMemory());
     boards_.push_back(std::move(board));
     const auto index=boards_.size()-1;
-    // Cache CPU-card positions once; FD05 selection is consulted on
-    // instruction boundaries without scanning all attached cards.
-    if(!hasPrimaryBoard_ && dynamic_cast<Main6809Board*>(boards_[index].get())) {
-        primaryBoardIndex_=index;
-        hasPrimaryBoard_=true;
+    CpuBoard* raw=boards_[index].get();
+    ExecutionSlot slot;
+    slot.board=raw;
+    slot.core=&raw->cpu();
+    slot.type=slot.core->type();
+    if(auto* cpu6809=dynamic_cast<Main6809Board*>(raw)) {
+        slot.kind=ExecutionKind::Main6809;
+        slot.main6809=cpu6809;
+        main6809Boards_.push_back(cpu6809);
+        if(!hasPrimaryBoard_) {
+            primaryBoardIndex_=index;
+            hasPrimaryBoard_=true;
+        }
+    } else if(auto* cpu8088=dynamic_cast<Main8088Board*>(raw)) {
+        slot.kind=ExecutionKind::Main8088;
+        slot.main8088=cpu8088;
+        if(!hasOptionalBoard_) {
+            optionalBoardIndex_=index;
+            hasOptionalBoard_=true;
+        }
+    } else if(dynamic_cast<MainZ80Board*>(raw)) {
+        slot.kind=ExecutionKind::MainZ80;
+        if(!hasOptionalBoard_) {
+            optionalBoardIndex_=index;
+            hasOptionalBoard_=true;
+        }
     }
-    if(!hasOptionalBoard_ &&
-       (dynamic_cast<Main8088Board*>(boards_[index].get()) ||
-        dynamic_cast<MainZ80Board*>(boards_[index].get()))) {
-        optionalBoardIndex_=index;
-        hasOptionalBoard_=true;
-    }
-    synchronizeFd05Selection();
+    executionSlots_.push_back(slot);
+    // Adding a board can relocate executionSlots_; always refresh the
+    // current value, even if automatic FD05 selection is disabled.
+    if(fd05SelectionEnabled_ && hasPrimaryBoard_ && hasOptionalBoard_)
+        synchronizeFd05Selection();
+    else selectActiveBoard(active_board_);
     return index;
 }
 
@@ -228,7 +259,7 @@ void Machine::setActiveBoard(std::size_t index)
     if (index >= boards_.size())
         throw std::out_of_range("active CPU board index out of range");
 
-    active_board_ = index;
+    selectActiveBoard(index);
     // Explicit selection disables automatic FD05 arbitration. Callers can
     // re-enable it after completing manual setup/debugging.
     fd05SelectionEnabled_=false;
@@ -240,21 +271,27 @@ void Machine::enableFd05Selection(bool enabled)
     if(enabled)synchronizeFd05Selection();
 }
 
+void Machine::selectActiveBoard(std::size_t index)
+{
+    active_board_=index;
+    activeExecution_=executionSlots_[index];
+}
+
 void Machine::synchronizeFd05Selection()
 {
     if(!fd05SelectionEnabled_ || !hasPrimaryBoard_ || !hasOptionalBoard_)return;
-    active_board_=mainBoard_->optionalCpuRequested()
-        ?optionalBoardIndex_:primaryBoardIndex_;
+    selectActiveBoard(mainBoard_->optionalCpuRequested()
+        ?optionalBoardIndex_:primaryBoardIndex_);
 }
 
 CpuBoard* Machine::activeBoard()
 {
-    return boards_.empty() ? nullptr : boards_[active_board_].get();
+    return activeExecution_.board;
 }
 
 const CpuBoard* Machine::activeBoard() const
 {
-    return boards_.empty() ? nullptr : boards_[active_board_].get();
+    return activeExecution_.board;
 }
 
 void Machine::reset()
@@ -310,43 +347,45 @@ void Machine::setDisplayCpuClockHz(std::uint64_t hz)
 
 void Machine::executeOne()
 {
-    synchronizeFd05Selection();
-    if (auto* board = activeBoard()) {
-        // Sample the main-board USART before the 8088 tests its PIC.
-        // No CPU-card bus conversion or interrupt controller is moved here.
-        if (auto* cpu8088=dynamic_cast<Main8088Board*>(board))
-            cpu8088->bus().refreshSystemIrq();
-        board->cpu().executeOne();
-        lastExecutionCycles_=board->cpu().lastExecutionCycles();
-        if(auto* cpu6809=dynamic_cast<Main6809Board*>(board)) {
-            if(lastExecutionCycles_ && cpu6809->cpuClockHz()) {
-                if(!realtimePtmEnabled())
-                    mainBoard_->advanceCpuCycles(lastExecutionCycles_,cpu6809->cpuClockHz());
-                if(!displayCpuThreadEnabled())
-                    deterministicDisplay_.advanceCpuCycles(lastExecutionCycles_,cpu6809->cpuClockHz());
-                cpu6809->syncPtmIrq();
-            }
-        } else if(dynamic_cast<MainZ80Board*>(board) &&
-                  lastExecutionCycles_ && clockZ80Hz_) {
+    // Selection and dispatch were cached at board attach/manual selection,
+    // reset or an FD05 write. No per-instruction RTTI or FD05 polling.
+    const auto execution=activeExecution_;
+    if(!execution.core)return;
+
+    // Only the optional 8088/V20 card needs a pre-instruction PIC refresh.
+    if(execution.kind==ExecutionKind::Main8088)
+        execution.main8088->bus().refreshSystemIrq();
+    execution.core->executeOne();
+    lastExecutionCycles_=execution.core->lastExecutionCycles();
+
+    switch(execution.kind) {
+    case ExecutionKind::Main6809:
+        if(lastExecutionCycles_ && execution.main6809->cpuClockHz()) {
+            const auto hz=execution.main6809->cpuClockHz();
             if(!realtimePtmEnabled())
-                mainBoard_->advanceCpuCycles(lastExecutionCycles_,clockZ80Hz_);
+                mainBoard_->advanceCpuCycles(lastExecutionCycles_,hz);
             if(!displayCpuThreadEnabled())
-                    deterministicDisplay_.advanceCpuCycles(lastExecutionCycles_,clockZ80Hz_);
-            for(auto& attached:boards_)
-                if(auto* cpu6809=dynamic_cast<Main6809Board*>(attached.get()))
-                    cpu6809->syncPtmIrq();
-        } else if(dynamic_cast<Main8088Board*>(board) &&
-                  lastExecutionCycles_ && clock8088Hz_) {
-            if(!realtimePtmEnabled())
-                mainBoard_->advanceCpuCycles(lastExecutionCycles_,clock8088Hz_);
-            if(!displayCpuThreadEnabled())
-                    deterministicDisplay_.advanceCpuCycles(lastExecutionCycles_,clock8088Hz_);
-            for(auto& attached:boards_)
-                if(auto* cpu6809=dynamic_cast<Main6809Board*>(attached.get()))
-                    cpu6809->syncPtmIrq();
+                deterministicDisplay_.advanceCpuCycles(lastExecutionCycles_,hz);
+            execution.main6809->syncPtmIrq();
         }
-        // The instruction may have written FD05. Perform the next
-        // instruction on the newly selected CPU card.
-        synchronizeFd05Selection();
+        break;
+    case ExecutionKind::MainZ80:
+    case ExecutionKind::Main8088: {
+        const auto hz=execution.kind==ExecutionKind::MainZ80
+            ?clockZ80Hz_:clock8088Hz_;
+        if(lastExecutionCycles_ && hz) {
+            if(!realtimePtmEnabled())
+                mainBoard_->advanceCpuCycles(lastExecutionCycles_,hz);
+            if(!displayCpuThreadEnabled())
+                deterministicDisplay_.advanceCpuCycles(lastExecutionCycles_,hz);
+            for(auto* cpu6809:main6809Boards_)
+                cpu6809->syncPtmIrq();
+        }
+        break;
     }
+    case ExecutionKind::Generic:
+        break;
+    }
+    // FD05 writes synchronously changed activeExecution_ in MainBoard's
+    // callback, but the instruction above completed on its original CPU.
 }

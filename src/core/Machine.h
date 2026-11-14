@@ -16,9 +16,13 @@
 #include <mutex>
 #include <vector>
 
+class Main6809Board;
+class Main8088Board;
+
 class Machine
 {
 public:
+    Machine();
     ~Machine() {stopDisplayCpu();stopRealtimePtm();}
     // Opt-in real-time workers; unstarted machines keep deterministic scheduling.
     void startRealtimePtm();
@@ -46,6 +50,8 @@ public:
     bool fd05SelectionEnabled() const {return fd05SelectionEnabled_;}
     CpuBoard* activeBoard();
     const CpuBoard* activeBoard() const;
+    // Cached CPU identity; refreshed only when the selected board changes.
+    CpuType activeCpuType() const {return activeExecution_.type;}
 
     void reset();
     void executeOne();
@@ -151,10 +157,23 @@ public:
 
 
 private:
+    enum class ExecutionKind {Generic, Main6809, MainZ80, Main8088};
+    struct ExecutionSlot {
+        CpuBoard* board=nullptr;
+        CpuCore* core=nullptr;
+        Main6809Board* main6809=nullptr;
+        Main8088Board* main8088=nullptr;
+        ExecutionKind kind=ExecutionKind::Generic;
+        CpuType type=CpuType::MC6809;
+    };
+    void selectActiveBoard(std::size_t index);
     void synchronizeFd05Selection();
     bool fd05SelectionEnabled_=false;
     std::shared_ptr<MainBoard> mainBoard_=std::make_shared<MainBoard>();
     std::vector<std::unique_ptr<CpuBoard>> boards_;
+    std::vector<ExecutionSlot> executionSlots_;
+    std::vector<Main6809Board*> main6809Boards_;
+    ExecutionSlot activeExecution_{};
     std::size_t active_board_ = 0;
     std::size_t primaryBoardIndex_ = 0, optionalBoardIndex_ = 0;
     bool hasPrimaryBoard_ = false, hasOptionalBoard_ = false;

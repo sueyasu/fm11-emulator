@@ -907,8 +907,13 @@ display worker runs, CPU instructions and SDL rendering never execute that
 scheduler. This preserves deterministic tests without maintaining two display
 clocks in the interactive frontend.
 
-The hot path caches primary/optional CPU-card indices at attachment time
-instead of scanning every card before and after each instruction. SDL's CPU
+The hot path caches primary/optional CPU-card indices at attachment time,
+and FD05 writes now update the active CPU selection through a dedicated
+callback, independently of diagnostic observers. The active CPU's core pointer,
+CPU kind and post-instruction dispatch are cached when the selected board
+changes; ordinary instructions no longer perform per-instruction RTTI or
+FD05 selection polling. Manual selection, reset, and board attachment
+also refresh the cache. SDL's CPU
 worker publishes its instruction count once per batch instead of performing
 an atomic increment per instruction, and takes the diagnostic CPU-state mutex
 only when a frontend speed or CPU diagnostics consumer is enabled. The display

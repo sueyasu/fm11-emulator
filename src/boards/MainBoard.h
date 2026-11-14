@@ -88,6 +88,11 @@ public:
     }
     BYTE subCpuControl() const {return subCpuControl_;}
     void setFd05WriteObserver(std::function<void(BYTE)> cb) {fd05WriteObserver_=std::move(cb);}
+    // Independent from diagnostic FD05 observers: select the CPU card
+    // at the write, rather than polling bit 0 at every instruction.
+    void setCpuSelectionObserver(std::function<void(bool)> cb) {
+        cpuSelectionObserver_=std::move(cb);
+    }
     // FD05 bit 0 selects the optional CPU-card bus-master request.
     // Arbitration/CPU suspension remains in the individual CPU cards.
     bool optionalCpuRequested() const {return (subCpuControl_&0x01)!=0;}
@@ -243,6 +248,7 @@ public:
         if(reg==0x05) {
             auto lock=lockDisplay();
             subCpuControl_=value;
+            if(cpuSelectionObserver_)cpuSelectionObserver_((value&0x01)!=0);
             // Reference main-side FD05 bit 6 (CANCEL) requests the
             // display sub-CPU IRQ. The request remains pending until
             // the sub CPU acknowledges it by reading AFE5.
@@ -285,6 +291,7 @@ private:
     DisplayCpu6809 displayCpu_{display_};
     BYTE subCpuControl_=0;
     std::function<void(BYTE)> fd05WriteObserver_;
+    std::function<void(bool)> cpuSelectionObserver_;
     std::function<void()> displayWakeObserver_;
     BYTE displayControl_=0;
     std::array<BYTE,8> displayPalette_{{0,1,2,3,4,5,6,7}};

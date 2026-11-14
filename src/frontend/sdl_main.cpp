@@ -380,7 +380,8 @@ int main(int argc,char** argv) {
                                 }
                             }
                         }
-                        const auto hz=active->cpu().type()==CpuType::Z80
+                        const auto activeType=machine.activeCpuType();
+                        const auto hz=activeType==CpuType::Z80
                             ?machine.clockZ80Hz()
                             :mainBoard?mainBoard->cpuClockHz():2000000ULL;
                         if(traceBoot && executed<64 && mainBoard) {
@@ -396,7 +397,7 @@ int main(int argc,char** argv) {
                         const auto guestCycles=machine.lastExecutionCycles();
                         pacer.consume(guestCycles,hz);
                         if(cpuSpeed) {
-                            const auto card=active->cpu().type()==CpuType::Z80
+                            const auto card=activeType==CpuType::Z80
                                 ?CpuSpeedMeter::Card::Z80
                                 :CpuSpeedMeter::Card::Main6809;
                             cpuMeter.record(card,guestCycles);

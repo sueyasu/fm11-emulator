@@ -23,13 +23,13 @@ int main()
     for(unsigned i=0;i<sizeof(code);++i)cpuZ80->writeMemory(i,code[i]);
     machine.enableFd05Selection(true);
     machine.reset();
-    if(machine.activeBoard()!=cpu09)return 1;
+    if(machine.activeBoard()!=cpu09 || machine.activeCpuType()!=CpuType::MC6809)return 1;
     machine.executeOne();
     machine.executeOne();
-    if(machine.activeBoard()!=cpuZ80 || cpu09->cpu().pc()!=0x1239)return 2;
+    if(machine.activeBoard()!=cpuZ80 || machine.activeCpuType()!=CpuType::Z80 || cpu09->cpu().pc()!=0x1239)return 2;
     machine.executeOne();
     machine.executeOne();
-    if(machine.activeBoard()!=cpu09 || cpuZ80->cpu().pc()!=5)return 3;
+    if(machine.activeBoard()!=cpu09 || machine.activeCpuType()!=CpuType::MC6809 || cpuZ80->cpu().pc()!=5)return 3;
     machine.executeOne();
     if(cpu09->cpu().pc()!=0x123a || cpuZ80->cpu().pc()!=5)return 4;
 
@@ -62,7 +62,26 @@ int main()
     reversed.enableFd05Selection(true);
     if(reversed.activeBoard()!=primaryPtr)return 13;
     primaryPtr->writeCpu(0xfd05,1);
-    reversed.enableFd05Selection(true);
+    // Selection must change on the write itself: no extra enable call.
     if(reversed.activeBoard()!=optPtr)return 14;
+
+    // A diagnostic observer must coexist with CPU selection notification.
+    BYTE observed=0;
+    reversed.setFd05WriteObserver([&](BYTE value){observed=value;});
+    optPtr->writeMemory(0xfd05,0);
+    if(reversed.activeBoard()!=primaryPtr || observed!=0)return 15;
+    optPtr->writeMemory(0xfd05,1);
+    if(reversed.activeBoard()!=optPtr || observed!=1)return 16;
+
+    // Manual CPU selection disables FD05 arbitration until re-enabled.
+    reversed.setActiveBoard(1);
+    if(reversed.activeBoard()!=primaryPtr)return 17;
+    primaryPtr->writeCpu(0xfd05,1);
+    if(reversed.activeBoard()!=primaryPtr)return 18;
+    reversed.enableFd05Selection(true);
+    if(reversed.activeBoard()!=optPtr)return 19;
+
+    reversed.reset();
+    if(reversed.activeBoard()!=primaryPtr)return 20;
     return 0;
 }
