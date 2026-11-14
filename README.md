@@ -815,3 +815,32 @@ The runner prints the first unimplemented opcode with its physical PC and
 instruction number; `--trace` logs per-instruction register values. For now
 8088 and V20 share the same implemented instruction subset. This tool does
 not modify the 6809/6309 headless boot path.
+
+
+## Experimental parallel CPU/PTM branch
+
+The `dev/parallel-cpu-ptm` branch is an incremental migration; **stage 1
+does not start any emulation worker threads**. CPU, display CPU, PTM and
+frame rendering still run through the existing single-thread scheduler.
+
+Stage 1 adds `WorkerGroup`, a cooperative lifecycle controller for future
+CPU and PTM workers. `start(step)` registers a finite work step;
+`pause()` waits until **all** workers have parked at a step boundary;
+`resume()` releases them, and `stop()` joins the threads. Worker
+exceptions stop the group and can be rethrown on the owner thread via
+`rethrowWorkerFailure()`. Do not call `stop()` or destroy the group from
+one of its own worker threads, and do not use unbounded blocking steps.
+
+The SDL-to-display-CPU keyboard ring buffer now has a narrow mutex. **This
+does not make `DisplaySubsystem` or `MainBoard` generally thread-safe.**
+Shared RAM at $9F80, FD05/AFE0 BUSY and HALT latches, main/sub IRQ and
+FIRQ state, PTM registers, and VRAM/CRTC access have side effects. These
+must be assigned clear owners and access ordering before starting concurrent
+CPU/PTM work (stages 2-4). In particular, OpenGL currently reads display
+memory directly and requires an immutable render snapshot once the display
+worker exists. Do not wrap every RAM access in a global mutex; do not enable
+unprotected concurrent guest execution.
+
+Run `ctest --test-dir build --output-on-failure` and the new `worker_group`
+test before advancing to stage 2. The existing cycle-based timing, SDL
+speed multiplier, and single-thread behavior are unchanged.

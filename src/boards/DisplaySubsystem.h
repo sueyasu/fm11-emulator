@@ -7,6 +7,7 @@
 #include <functional>
 #include <algorithm>
 #include <utility>
+#include <mutex>
 
 // Main-board display/sub-CPU memory. I/O and display scanout are deliberately
 // not decoded yet: the reference map still labels those regions tentative.
@@ -43,7 +44,10 @@ public:
         vsyncStatus_=0x40;
         subIoRam_.fill(0);
         subFirqLatch_=keyboardStatusLatch_=keyboardDataLatch_=0;
-        keyHead_=keyTail_=0;
+        {
+            std::lock_guard<std::mutex> lock(keyQueueMutex_);
+            keyHead_=keyTail_=0;
+        }
         nmiMask_=true;
         nmiClockCycles_=60000;
         subIrq_=false;
@@ -86,10 +90,15 @@ public:
     }
     // Source SubCpu.cpp SetKeyCode/GetKeyCode: interrupt-mode key queue.
     void enqueueKeyCode(std::uint16_t code) {
+        // SDL input and the future display-CPU worker may run concurrently.
+        // Only the producer/consumer queue is protected here; sub-CPU IRQ
+        // latches remain owned by the emulation thread until stage 3.
+        std::lock_guard<std::mutex> lock(keyQueueMutex_);
         const auto next=(keyTail_+1)%keyQueue_.size();
         if(next!=keyHead_) {keyQueue_[keyTail_]=code;keyTail_=next;}
     }
     void processKeyCode() const {
+        std::lock_guard<std::mutex> lock(keyQueueMutex_);
         if(keyHead_==keyTail_ || (subFirqLatch_&1))return;
         const auto code=keyQueue_[keyHead_];
         keyboardStatusLatch_=static_cast<BYTE>(code>>8);
@@ -355,6 +364,7 @@ private:
     bool nmiMask_=true;
     mutable bool subIrq_=false;
     std::uint64_t nmiClockCycles_=60000;
+    mutable std::mutex keyQueueMutex_;
     std::array<std::uint16_t,256> keyQueue_{};
     mutable std::size_t keyHead_=0,keyTail_=0;
     mutable BYTE subFirqLatch_=0,keyboardStatusLatch_=0,keyboardDataLatch_=0;

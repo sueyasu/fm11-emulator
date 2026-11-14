@@ -26,6 +26,10 @@ target_include_directories(fm11_core PUBLIC
 
 target_compile_features(fm11_core PUBLIC cxx_std_17)
 
+# Worker lifecycle is portable; CPU/PTM threads are enabled in later stages.
+find_package(Threads REQUIRED)
+target_link_libraries(fm11_core PUBLIC Threads::Threads)
+
 target_compile_options(fm11_core PRIVATE
     $<$<CXX_COMPILER_ID:GNU,Clang>:-Wall -Wextra -Wpedantic>
 )
@@ -93,6 +97,11 @@ if(FM11_BUILD_TESTS)
     add_executable(machine_z80_rom_boot tests/machine_z80_rom_boot.cpp)
     target_link_libraries(machine_z80_rom_boot PRIVATE fm11_core)
     add_test(NAME machine_z80_rom_boot COMMAND machine_z80_rom_boot)
+    add_executable(worker_group tests/worker_group.cpp)
+    target_include_directories(worker_group PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/core)
+    target_link_libraries(worker_group PRIVATE Threads::Threads)
+    add_test(NAME worker_group COMMAND worker_group)
+
     add_executable(cpu_speed_meter tests/cpu_speed_meter.cpp)
     target_include_directories(cpu_speed_meter PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src/frontend)
     add_test(NAME cpu_speed_meter COMMAND cpu_speed_meter)
