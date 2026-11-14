@@ -76,7 +76,8 @@ void usage() {
     std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--z80] [--z80-clock HZ] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software]\n"
              <<"  ROM defaults to external/roms/display6809.bin\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
-             <<"  --speed N: emulated-time multiplier (default 10, 1=real-time, 0=unlimited).\n"
+             <<"  --speed N: main/display CPU multiplier (default 10, 1=real-time);\n"
+             <<"             0=unlimited main CPU, 4 MHz display CPU. PTM stays real-time.\n"
              <<"  --renderer auto (default): prefer OpenGL 3.3, fall back to software.\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
 }
@@ -175,6 +176,9 @@ int main(int argc,char** argv) {
         if(!floppyPath.empty() && mainBoard==nullptr)
             throw std::invalid_argument("floppy image requires --main-rom");
         machine.setDisplayCpuClockHz(testPattern?0:2000000);
+        // With --speed 0 keep the main CPU unlimited but cap the display
+        // CPU at the previously tested 4 MHz (2x the hardware clock).
+        machine.setDisplayCpuSpeedMultiplier(speed==0?2:speed);
         machine.reset();
         Sdl sdl;
         Window ui;

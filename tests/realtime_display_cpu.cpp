@@ -21,6 +21,12 @@ int main() {
     rom[0x4ffe]=0xc0;rom[0x4fff]=0x00;
     machine.loadDisplayRom(rom);
     machine.setDisplayCpuClockHz(2000000);
+    if(machine.displayCpuRealtimeClockHz()!=2000000)return 8;
+    machine.setDisplayCpuSpeedMultiplier(2);
+    if(machine.displayCpuRealtimeClockHz()!=4000000)return 9;
+    machine.setDisplayCpuSpeedMultiplier(10);
+    if(machine.displayCpuRealtimeClockHz()!=20000000)return 10;
+    machine.setDisplayCpuSpeedMultiplier(1);
     machine.reset();
     machine.startDisplayCpu();
     if(!machine.displayCpuThreadEnabled())return 1;

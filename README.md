@@ -929,12 +929,14 @@ why SDL clock time was previously accelerated.
 
 ### OpenGL snapshot and display worker speed
 
-SDL `--speed` controls the main CPU worker only. The display CPU remains
-paced at its configured 2 MHz independent of the main CPU speed. Applying
-unlimited execution to the display CPU was reverted after it caused a
-substantial interactive performance regression: the continuously running
-sub-CPU contended for the display-bus mutex and host CPU resources.
-The PTM remains tied to host steady-clock time.
+SDL `--speed 1..100` applies the same multiplier to the main CPU and
+display sub-CPU, each starting from its configured 2 MHz hardware clock.
+For `--speed 0`, the main CPU is unlimited but the display sub-CPU is
+provisionally capped at 4 MHz (2x) to avoid the contention caused by
+unlimited sub-CPU execution. These are worker pacing targets, not
+guaranteed achieved throughput. The headless/deterministic display
+scheduler remains at its configured base clock. The PTM remains tied
+to host steady-clock time.
 
 The OpenGL frontend still captures a coherent copy of display VRAM,
 text/ANK data, CRTC state, display control and palette while holding

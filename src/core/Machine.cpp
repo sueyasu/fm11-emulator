@@ -8,15 +8,25 @@
 #include <thread>
 #include <chrono>
 
+void Machine::setDisplayCpuSpeedMultiplier(unsigned multiplier)
+{
+    if(displayWorker_)
+        throw std::logic_error("stop display CPU worker before changing multiplier");
+    if(multiplier<1 || multiplier>100)
+        throw std::invalid_argument("display CPU speed multiplier must be 1..100");
+    displayCpuSpeedMultiplier_=multiplier;
+}
+
 void Machine::startDisplayCpu()
 {
     if(displayWorker_ || !displayCpuClockHz_)return;
+    const auto workerClockHz=displayCpuRealtimeClockHz();
     auto worker=std::make_unique<WorkerGroup>();
     using Clock=std::chrono::steady_clock;
     displayThreadActive_.store(true,std::memory_order_release);
     mainBoard_->setDisplayWakeObserver([wake=worker.get()] {wake->notify();});
     try {
-        worker->start([this,wake=worker.get(),last=Clock::now(),credit=std::int64_t{0},
+        worker->start([this,wake=worker.get(),workerClockHz,last=Clock::now(),credit=std::int64_t{0},
                        fraction=std::uint64_t{0},
                        generation=displayResumeGeneration_.load()]() mutable {
             // Snapshot event generation before checking the guest state to
@@ -30,17 +40,19 @@ void Machine::startDisplayCpu()
                 fraction=0;
                 last=now;
             }
-            // Accumulate 2 MHz display CPU cycles from real host nanoseconds.
+            // Accumulate display CPU cycles from real host nanoseconds.
+            // The worker multiplier does not affect deterministic scheduling
+            // or the independent real-time PTM.
             // Catch-up is capped at 20 ms to avoid replaying a host stall.
             constexpr std::uint64_t kSecond=1000000000ULL;
             const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(now-last).count();
             last=now;
             const auto bounded=std::clamp<std::int64_t>(elapsed,0,20000000);
-            const auto numerator=static_cast<std::uint64_t>(bounded)*displayCpuClockHz_+fraction;
+            const auto numerator=static_cast<std::uint64_t>(bounded)*workerClockHz+fraction;
             // Never accumulate unbounded debt when host CPU cannot keep up.
             credit=std::min<std::int64_t>(
                 credit+static_cast<std::int64_t>(numerator/kSecond),
-                static_cast<std::int64_t>(displayCpuClockHz_/50));
+                static_cast<std::int64_t>(workerClockHz/50));
             fraction=numerator%kSecond;
             // Keep display-bus ownership bounded while avoiding one mutex
             // acquisition per emulated sub-CPU instruction.
@@ -69,7 +81,7 @@ void Machine::startDisplayCpu()
                 // Avoid a tight spin on sub-microsecond cycle deficits.
                 const auto missing=static_cast<std::uint64_t>(1-credit);
                 constexpr std::uint64_t second=1000000000ULL;
-                const auto ns=(missing*second+displayCpuClockHz_-1)/displayCpuClockHz_;
+                const auto ns=(missing*second+workerClockHz-1)/workerClockHz;
                 wake->waitFor(std::chrono::nanoseconds(std::max<std::uint64_t>(ns,25000)),observed);
             } else {
                 // Hit the bounded 8192-instruction batch while budget remains.

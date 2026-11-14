@@ -53,6 +53,12 @@ public:
     void setZ80ClockHz(std::uint64_t hz);
     // Display CPU scheduling is opt-in until the hardware clock is resolved.
     void setDisplayCpuClockHz(std::uint64_t hz);
+    // Worker-only clock multiplier; deterministic headless scheduling stays
+    // at displayCpuClockHz_. Configure before starting the display worker.
+    void setDisplayCpuSpeedMultiplier(unsigned multiplier);
+    std::uint64_t displayCpuRealtimeClockHz() const {
+        return displayCpuClockHz_*displayCpuSpeedMultiplier_;
+    }
     void loadDisplayRom(const DisplaySubsystem::RomImage& rom) {mainBoard_->displaySubsystem().loadRom(rom);}
     void loadDisplayRomFile(const std::string& path) {
         loadDisplayRom(RomFiles::load<DisplaySubsystem::kRomSize>(path));
@@ -152,6 +158,7 @@ private:
     std::uint64_t clock8088Hz_ = 0;
     std::uint64_t clockZ80Hz_ = 4000000;
     std::uint64_t displayCpuClockHz_ = 0;
+    unsigned displayCpuSpeedMultiplier_ = 1;
     DeterministicDisplayScheduler deterministicDisplay_{*mainBoard_};
     std::unique_ptr<WorkerGroup> ptmWorker_;
     bool ptmPaused_=false;
