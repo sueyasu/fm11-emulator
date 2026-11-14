@@ -53,7 +53,6 @@ void Main6809Board::reset()
     }
     acceptedIrqCount_ = 0;
     ptmIrqAssertCount_ = 0;
-    if(!mainBoard_)ptm_->irqAcknowledged = false;
     ptmCycleFraction_ = 0;
     waitNanosecondFraction_ = 0;
 
