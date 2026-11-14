@@ -66,6 +66,25 @@ bool otherChannelExpiryDoesNotReassertAckedClock()
     return ptm.irqRequest();
 }
 
+// Repeated synchronization must not regenerate an IRQ or overwrite an
+// acknowledged latch when the shared PTM level has not changed.
+bool repeatedSyncIsIdempotent()
+{
+    Main6809Board b;
+    b.writeCpu(0xfd02,0x10); // unmask PTM source
+    startFirst(b,0x50,4);
+    b.advancePtm(4);
+    if(!b.irqPending() || b.ptmIrqAssertCount()!=1)return false;
+    for(int i=0;i<100;++i)b.syncPtmIrq();
+    if(!b.irqPending() || b.ptmIrqAssertCount()!=1)return false;
+    (void)b.readCpu(0xfd39);
+    if(b.irqPending())return false;
+    for(int i=0;i<100;++i)b.syncPtmIrq();
+    if(b.irqPending())return false;
+    b.advancePtm(4);
+    return b.irqPending() && b.ptmIrqAssertCount()==2;
+}
+
 bool independentChannels()
 {
     Main6809Board b;
@@ -91,5 +110,6 @@ int main()
     if (!oneShot()) return 3;
     if (!independentChannels()) return 4;
     if (!otherChannelExpiryDoesNotReassertAckedClock()) return 5;
+    if (!repeatedSyncIsIdempotent()) return 6;
     return 0;
 }

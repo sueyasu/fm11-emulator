@@ -345,7 +345,7 @@ void Machine::setDisplayCpuClockHz(std::uint64_t hz)
     deterministicDisplay_.setClockHz(hz);
 }
 
-void Machine::executeOne()
+void Machine::executeOne(bool ptmIrqSyncedBefore)
 {
     // Selection and dispatch were cached at board attach/manual selection,
     // reset or an FD05 write. No per-instruction RTTI or FD05 polling.
@@ -366,7 +366,12 @@ void Machine::executeOne()
                 mainBoard_->advanceCpuCycles(lastExecutionCycles_,hz);
             if(!displayCpuThreadEnabled())
                 deterministicDisplay_.advanceCpuCycles(lastExecutionCycles_,hz);
-            execution.main6809->syncPtmIrq();
+            // SDL samples the real-time PTM immediately before the
+            // instruction for correct SYNC/CWAI and IRQ acceptance.
+            // Avoid doing the same aggregation twice on that path.
+            // Deterministic time advancement still needs post-step sync.
+            if(!ptmIrqSyncedBefore || !realtimePtmEnabled())
+                execution.main6809->syncPtmIrq();
         }
         break;
     case ExecutionKind::MainZ80:

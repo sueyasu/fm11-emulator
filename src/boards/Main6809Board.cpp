@@ -407,7 +407,9 @@ void Main6809Board::refreshPtmIrq()
     if(!mainBoard_)ptm_->refreshIrq();
     const bool asserted=mainBoard_?mainBoard_->ptmIrqLevel():
                                    ptm_->irqRequest();
-    if(asserted && (mainIrqSources_&0x01)==0)++ptmIrqAssertCount_;
+    const bool previous=(mainIrqSources_&0x01)!=0;
+    if(previous==asserted)return; // No change to the IRQ aggregator.
+    if(asserted)++ptmIrqAssertCount_;
     setMainIrqSource(0x01,asserted);
     // Shared PTM IRQ publication belongs to MainBoard, not the CPU adapter.
 }

@@ -366,7 +366,9 @@ int main(int argc,char** argv) {
                     for(;ran<std::min<std::uint64_t>(instructions,512) && pacer.ready();++ran) {
                         const auto* active=machine.activeBoard();
                         if(!active)break;
-                        if(mainBoard && active==static_cast<CpuBoard*>(mainBoard)) {
+                        const bool ptmIrqSyncedBefore=
+                            mainBoard && active==static_cast<CpuBoard*>(mainBoard);
+                        if(ptmIrqSyncedBefore) {
                             mainBoard->syncPtmIrq();
                             const auto wait=mainBoard->cpuWaitState();
                             if(wait!=CSim09::WaitState::Running) {
@@ -393,7 +395,7 @@ int main(int argc,char** argv) {
                                      <<unsigned(machine.mainSubCpuControl())
                                      <<std::dec<<std::setfill(' ')<<"\n";
                         }
-                        machine.executeOne();
+                        machine.executeOne(ptmIrqSyncedBefore);
                         const auto guestCycles=machine.lastExecutionCycles();
                         pacer.consume(guestCycles,hz);
                         if(cpuSpeed) {

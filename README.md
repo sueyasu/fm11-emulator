@@ -962,3 +962,15 @@ state still use the display mutex. The wake-observer callback has a
 separate lifetime mutex so mailbox writes can wake the display worker
 without holding the display lock. Display-CPU instruction slices and
 video snapshots retain their existing display mutex.
+
+### Avoid redundant main-CPU PTM IRQ synchronization
+
+The SDL main-6809 worker samples the PTM IRQ before each instruction for
+SYNC/CWAI wakeup and interrupt acceptance. It now passes that fact into
+`Machine::executeOne()`, which skips the redundant post-instruction PTM
+aggregation only while the PTM is in independent real-time mode. Headless
+and deterministic stepping retain their post-instruction synchronization,
+as do optional CPU-card execution paths. The main-6809 IRQ aggregator
+also avoids rebuilding FD03/FD2C when the published PTM IRQ source level
+has not changed; explicit IRQ-mask and other-source updates continue to
+recalculate their status at the point of the write.

@@ -54,7 +54,9 @@ public:
     CpuType activeCpuType() const {return activeExecution_.type;}
 
     void reset();
-    void executeOne();
+    // Set ptmIrqSyncedBefore only when this instruction's 6809 IRQ
+    // state was sampled immediately before execution (SDL worker).
+    void executeOne(bool ptmIrqSyncedBefore=false);
     void set8088ClockHz(std::uint64_t hz);
     void setZ80ClockHz(std::uint64_t hz);
     // Display CPU scheduling is opt-in until the hardware clock is resolved.
