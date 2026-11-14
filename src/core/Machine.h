@@ -66,6 +66,10 @@ public:
             RomFiles::load<DisplaySubsystem::kKanjiRomSize>(path));
     }
     BYTE displayMemory(std::uint16_t address) const {return mainBoard_->displaySubsystem().readMemory(address);}
+    // Explicit guest-side write stimulus for deterministic display tests.
+    void writeDisplayMemory(std::uint16_t address,BYTE value) {
+        mainBoard_->displaySubsystem().writeMemory(address,value);
+    }
     const DisplaySubsystem& displaySubsystem() const {return mainBoard_->displaySubsystem();}
     void enqueueDisplayKeyCode(std::uint16_t code) {
         mainBoard_->displaySubsystem().enqueueKeyCode(code);

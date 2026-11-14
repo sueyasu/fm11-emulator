@@ -83,7 +83,7 @@ int main() {
     {
         auto held=machine.lockDisplay();
         if(machine.displayMemory(0x9f82)!=0xa5)return 6;
-        machine.displaySubsystem().writeMemory(0x9f82,0x5a);
+        machine.writeDisplayMemory(0x9f82,0x5a);
     }
     if(main->readCpu(0xfc82)!=0x5a)return 7;
     machine.stopRealtimePtm();
