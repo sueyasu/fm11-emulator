@@ -236,11 +236,10 @@ int main(int argc,char** argv) {
             std::cout<<"Serial PTY: "<<name<<"\n"<<std::flush;
         }
         std::vector<BYTE> serialPending;
-        // The main CPU worker owns CPU/FDC/USART state. SDL serial I/O
-        // briefly takes this lock, never the display bus first.
+        // The CPU worker alone owns guest serial queues and the PTY.
+        // Keep a separate mutex only for UI diagnostics/CPU state reads.
         std::mutex cpuMutex;
         auto serviceSerial=[&]() {
-            std::lock_guard<std::mutex> cpuLock(cpuMutex);
             if(serialMaster<0)return;
             BYTE ch=0;
             while(mainBoard->takeSerialOutput(ch))serialPending.push_back(ch);
@@ -349,6 +348,10 @@ int main(int argc,char** argv) {
                     now-lastTick);
                 lastTick=now;
                 pacer.addElapsed(elapsed);
+                // Drain PTY input before executing the next CPU batch.
+                // Running serial I/O here avoids SDL waiting to acquire
+                // cpuMutex while the CPU continually executes instructions.
+                serviceSerial();
                 unsigned ran=0;
                 {
                     // One bounded batch is the main CPU's ownership boundary.
@@ -403,7 +406,8 @@ int main(int argc,char** argv) {
                         }
                     }
                 }
-                // Yield while the guest is asleep or CPU pacing is ahead.
+                // Flush guest output before yielding.
+                serviceSerial();
                 // PTM and display CPU continue on their independent workers.
                 if(ran==0 || !pacer.ready())
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
@@ -489,7 +493,6 @@ int main(int argc,char** argv) {
             if(!paused && !testPattern && !machine.boardCount())
                 SDL_Delay(1);
             cpuWorker.rethrowWorkerFailure();
-            serviceSerial();
             if(cpuSpeed && !paused && machine.boardCount()) {
                 const auto reportNow=std::chrono::steady_clock::now();
                 const auto reportElapsed=reportNow-lastSpeedReport;

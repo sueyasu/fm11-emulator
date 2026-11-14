@@ -886,8 +886,10 @@ A dedicated `WorkerGroup` CPU worker owns the existing
 `Machine::executeOne()` path, including FD05 CPU-card selection, IRQ
 sampling, and the `SdlCpuPacer` clock. `SYNC/CWAI` only wake when their
 interrupt conditions are satisfied; the PTM and display workers continue
-independently. A narrow main-CPU mutex protects serial PTY exchanges and
-frontend CPU diagnostics. Display shared RAM/FD05 transactions preserve
+independently. The main CPU worker services the serial PTY before and after each bounded
+instruction batch, so serial input never waits for SDL's rendering loop or
+contends for a CPU mutex. A separate narrow main-CPU mutex protects frontend
+CPU diagnostics. Display shared RAM/FD05 transactions preserve
 the CPU-to-display lock order. F2 pauses all three workers; resume rebases
 CPU pacing rather than replaying paused time. Rendering copies display
 memory under its own lock, then presents outside the lock.
