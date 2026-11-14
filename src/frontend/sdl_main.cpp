@@ -175,7 +175,6 @@ int main(int argc,char** argv) {
         if(!floppyPath.empty() && mainBoard==nullptr)
             throw std::invalid_argument("floppy image requires --main-rom");
         machine.setDisplayCpuClockHz(testPattern?0:2000000);
-        machine.setDisplayCpuSpeed(speed);
         machine.reset();
         Sdl sdl;
         Window ui;

@@ -927,17 +927,16 @@ cross-channel reassertion case. This correction does not alter the 9700 Hz
 input clock or the 50 Hz OS clock reload value, and does not by itself establish
 why SDL clock time was previously accelerated.
 
-### Parallel display speed and OpenGL bus contention
+### OpenGL snapshot and display worker speed
 
-The SDL `--speed` selection now applies to both main and display CPUs:
-`--speed 1` paces both at their configured hardware clocks,
-`--speed N` permits N-times emulated CPU throughput, and
-`--speed 0` removes both CPU cycle budgets. The PTM remains tied to
-host steady-clock time, independent of CPU speed. The headless and
-deterministic display schedulers retain their existing behavior.
+SDL `--speed` controls the main CPU worker only. The display CPU remains
+paced at its configured 2 MHz independent of the main CPU speed. Applying
+unlimited execution to the display CPU was reverted after it caused a
+substantial interactive performance regression: the continuously running
+sub-CPU contended for the display-bus mutex and host CPU resources.
+The PTM remains tied to host steady-clock time.
 
-The OpenGL frontend now captures a coherent copy of display VRAM,
+The OpenGL frontend still captures a coherent copy of display VRAM,
 text/ANK data, CRTC state, display control and palette while holding
 the display-bus mutex. All OpenGL texture uploads, uniforms, rendering
-and buffer swaps take place after the mutex has been released. This
-prevents long GPU calls from blocking the display sub-CPU and mailbox.
+and buffer swaps take place after the mutex has been released.

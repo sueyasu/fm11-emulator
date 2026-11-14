@@ -8,22 +8,14 @@
 #include <thread>
 #include <chrono>
 
-void Machine::setDisplayCpuSpeed(unsigned multiplier)
-{
-    if(displayWorker_)throw std::logic_error("stop display CPU worker before changing speed");
-    if(multiplier>100)throw std::invalid_argument("display CPU speed must be 0..100");
-    displayCpuSpeed_=multiplier;
-}
-
 void Machine::startDisplayCpu()
 {
     if(displayWorker_ || !displayCpuClockHz_)return;
-    const unsigned speed=displayCpuSpeed_;
     auto worker=std::make_unique<WorkerGroup>();
     using Clock=std::chrono::steady_clock;
     displayThreadActive_.store(true,std::memory_order_release);
     try {
-        worker->start([this,speed,last=Clock::now(),credit=std::int64_t{0},
+        worker->start([this,last=Clock::now(),credit=std::int64_t{0},
                        fraction=std::uint64_t{0},
                        generation=displayResumeGeneration_.load()]() mutable {
             const auto currentGeneration=displayResumeGeneration_.load(std::memory_order_acquire);
@@ -34,44 +26,34 @@ void Machine::startDisplayCpu()
                 fraction=0;
                 last=now;
             }
-            // The PTM always uses host time; --speed affects only sub-CPU
-            // instruction throughput, never the timer's 9700 Hz timebase.
-            if(speed!=0) {
-                constexpr std::uint64_t kSecond=1000000000ULL;
-                const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(now-last).count();
-                const auto bounded=std::clamp<std::int64_t>(elapsed,0,20000000);
-                const auto numerator=static_cast<std::uint64_t>(bounded)*
-                                     displayCpuClockHz_*speed+fraction;
-                const auto ceiling=static_cast<std::int64_t>(displayCpuClockHz_)*speed/50;
-                credit=std::min<std::int64_t>(
-                    credit+static_cast<std::int64_t>(numerator/kSecond),
-                    ceiling);
-                fraction=numerator%kSecond;
-            }
+            // Accumulate 2 MHz display CPU cycles from real host nanoseconds.
+            // Catch-up is capped at 20 ms to avoid replaying a host stall.
+            constexpr std::uint64_t kSecond=1000000000ULL;
+            const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(now-last).count();
             last=now;
-            // Always bound ownership of the display bus, even when unlimited.
-            // A halt is handled by a short sleep instead of a hot spin.
+            const auto bounded=std::clamp<std::int64_t>(elapsed,0,20000000);
+            const auto numerator=static_cast<std::uint64_t>(bounded)*displayCpuClockHz_+fraction;
+            // Never accumulate unbounded debt when host CPU cannot keep up.
+            credit=std::min<std::int64_t>(
+                credit+static_cast<std::int64_t>(numerator/kSecond),
+                static_cast<std::int64_t>(displayCpuClockHz_/50));
+            fraction=numerator%kSecond;
+            // Keep display-bus ownership bounded while avoiding one mutex
+            // acquisition per emulated sub-CPU instruction.
             bool halted=false;
-            unsigned i=0;
-            for(;i<8192 && (speed==0 || credit>0) && !halted;) {
+            for(unsigned i=0;i<8192 && credit>0 && !halted;) {
                 auto guard=mainBoard_->lockDisplay();
-                for(unsigned slice=0;slice<16 && i<8192 &&
-                     (speed==0 || credit>0);++slice,++i) {
+                for(unsigned slice=0;slice<16 && i<8192 && credit>0;++slice,++i) {
                     if(!mainBoard_->displayCpu().executeOne()) {
                         credit=0;
                         halted=true;
                         break;
                     }
-                    if(speed!=0) {
-                        const auto cycles=mainBoard_->displayCpu().LastInstructionCycles();
-                        credit-=static_cast<std::int64_t>(cycles?cycles:1);
-                    }
+                    const auto cycles=mainBoard_->displayCpu().LastInstructionCycles();
+                    credit-=static_cast<std::int64_t>(cycles?cycles:1);
                 }
             }
-            if(halted || (speed!=0 && i==0))
-                std::this_thread::sleep_for(std::chrono::milliseconds(1));
-            else if(speed==0)
-                std::this_thread::yield();
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
         });
         displayWorker_=std::move(worker);
         displayPaused_=false;

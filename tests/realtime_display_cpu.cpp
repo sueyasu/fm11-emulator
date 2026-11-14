@@ -61,15 +61,6 @@ int main() {
     if(!machine.displayCpuThreadEnabled())return 5;
     machine.stopDisplayCpu();
     if(machine.displayCpuThreadEnabled())return 6;
-    // Unlimited display execution is an opt-in frontend policy. The real
-    // PTM clock is unaffected; the display CPU still honors pause and FD05.
-    machine.setDisplayCpuSpeed(0);
-    machine.startDisplayCpu();
-    if(!machine.displayCpuThreadEnabled())return 8;
-    machine.pauseDisplayCpu();
-    machine.resumeDisplayCpu();
-    machine.stopDisplayCpu();
-    machine.setDisplayCpuSpeed(1);
     // The old deterministic scheduler still works when the worker is off.
     machine.reset();
     machine.advanceTimeNanoseconds(10000);
