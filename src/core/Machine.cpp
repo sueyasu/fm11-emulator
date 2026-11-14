@@ -8,6 +8,83 @@
 #include <thread>
 #include <chrono>
 
+void Machine::startDisplayCpu()
+{
+    if(displayWorker_ || !displayCpuClockHz_)return;
+    auto worker=std::make_unique<WorkerGroup>();
+    using Clock=std::chrono::steady_clock;
+    displayThreadActive_.store(true,std::memory_order_release);
+    try {
+        worker->start([this,last=Clock::now(),credit=std::int64_t{0},
+                       fraction=std::uint64_t{0},
+                       generation=displayResumeGeneration_.load()]() mutable {
+            const auto currentGeneration=displayResumeGeneration_.load(std::memory_order_acquire);
+            const auto now=Clock::now();
+            if(generation!=currentGeneration) {
+                generation=currentGeneration;
+                credit=0;
+                fraction=0;
+                last=now;
+            }
+            // Accumulate 2 MHz display CPU cycles from real host nanoseconds.
+            // Catch-up is capped at 20 ms to avoid replaying a host stall.
+            constexpr std::uint64_t kSecond=1000000000ULL;
+            const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(now-last).count();
+            last=now;
+            const auto bounded=std::clamp<std::int64_t>(elapsed,0,20000000);
+            const auto numerator=static_cast<std::uint64_t>(bounded)*displayCpuClockHz_+fraction;
+            // Never accumulate unbounded debt when host CPU cannot keep up.
+            credit=std::min<std::int64_t>(
+                credit+static_cast<std::int64_t>(numerator/kSecond),
+                static_cast<std::int64_t>(displayCpuClockHz_/50));
+            fraction=numerator%kSecond;
+            // Lock only one sub-CPU instruction at a time; main CPU can
+            // access the mailbox and FD05 between instructions.
+            for(unsigned i=0;i<8192 && credit>0;++i) {
+                auto guard=mainBoard_->lockDisplay();
+                if(!mainBoard_->displayCpu().executeOne()) {
+                    credit=0;
+                    break;
+                }
+                const auto cycles=mainBoard_->displayCpu().LastInstructionCycles();
+                credit-=static_cast<std::int64_t>(cycles?cycles:1);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        });
+        displayWorker_=std::move(worker);
+        displayPaused_=false;
+    }catch(...) {
+        worker->stop();
+        displayThreadActive_.store(false,std::memory_order_release);
+        throw;
+    }
+}
+
+void Machine::stopDisplayCpu() noexcept
+{
+    if(displayWorker_) {
+        displayWorker_->stop();
+        displayWorker_.reset();
+    }
+    displayThreadActive_.store(false,std::memory_order_release);
+    displayPaused_=false;
+}
+
+void Machine::pauseDisplayCpu()
+{
+    if(!displayWorker_ || displayPaused_)return;
+    displayWorker_->pause();
+    displayPaused_=true;
+}
+
+void Machine::resumeDisplayCpu()
+{
+    if(!displayWorker_ || !displayPaused_)return;
+    displayResumeGeneration_.fetch_add(1,std::memory_order_release);
+    displayWorker_->resume();
+    displayPaused_=false;
+}
+
 void Machine::startRealtimePtm()
 {
     if(ptmWorker_)return;
@@ -146,6 +223,8 @@ const CpuBoard* Machine::activeBoard() const
 void Machine::reset()
 {
     const bool wasRealtime=bool(ptmWorker_);
+    const bool hadDisplayWorker=bool(displayWorker_);
+    if(hadDisplayWorker)stopDisplayCpu();
     if(wasRealtime)stopRealtimePtm();
     mainBoard_->reset();
     for (auto& board : boards_)
@@ -157,12 +236,13 @@ void Machine::reset()
     displayCpuInputHz_=0;
     synchronizeFd05Selection();
     if(wasRealtime)startRealtimePtm();
+    if(hadDisplayWorker)startDisplayCpu();
 }
 
 void Machine::advanceTimeNanoseconds(std::uint64_t nanoseconds)
 {
     mainBoard_->advanceTimeNanoseconds(nanoseconds);
-    advanceDisplayTime(nanoseconds);
+    if(!displayCpuThreadEnabled())advanceDisplayTime(nanoseconds);
     // The 6809 IRQ aggregator is still implemented in its CPU adapter.
     // Synchronize it with the main-board PTM after independent time advance.
     for(auto& board:boards_)
@@ -186,6 +266,8 @@ void Machine::setZ80ClockHz(std::uint64_t hz)
 
 void Machine::setDisplayCpuClockHz(std::uint64_t hz)
 {
+    if(displayCpuThreadEnabled())
+        throw std::logic_error("stop display CPU worker before changing its clock");
     if(hz>1000000000ULL)
         throw std::invalid_argument("display CPU clock must not exceed 1 GHz");
     // Reapplying the same configuration must not discard fractional
@@ -200,7 +282,7 @@ void Machine::setDisplayCpuClockHz(std::uint64_t hz)
 
 void Machine::advanceDisplayTime(std::uint64_t ns)
 {
-    if(!displayCpuClockHz_)return;
+    if(!displayCpuClockHz_ || displayCpuThreadEnabled())return;
     auto& sub=mainBoard_->displayCpu();
     if(mainBoard_->displaySubsystem().haltRequested()) {
         displayCycleCredit_=0;
@@ -232,7 +314,7 @@ void Machine::advanceDisplayTime(std::uint64_t ns)
 
 void Machine::advanceDisplayCpuCycles(std::uint64_t cycles,std::uint64_t cpuHz)
 {
-    if(!displayCpuClockHz_ || !cycles || !cpuHz)return;
+    if(displayCpuThreadEnabled() || !displayCpuClockHz_ || !cycles || !cpuHz)return;
     constexpr std::uint64_t second=1000000000ULL;
     // The remainder is represented as nanosecond fractions in units of
     // 1/cpuHz. On a CPU-card clock switch, preserve the elapsed fraction

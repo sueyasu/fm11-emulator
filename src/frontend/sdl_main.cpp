@@ -321,9 +321,10 @@ int main(int argc,char** argv) {
         };
         if(traceCpm80)traceCpmSnapshot("reset");
 
-        // Stage 2: PTM owns its steady-clock thread. CPU and display
-        // execution remain on the existing single SDL thread.
+        // Independent hardware clocks: the PTM and sub-CPU workers are
+        // unrelated to SDL rendering and the main CPU instruction pacing.
         if(machine.boardCount())machine.startRealtimePtm();
+        machine.startDisplayCpu();
 
         while(running) {
             SDL_Event event;
@@ -382,8 +383,13 @@ int main(int argc,char** argv) {
                 }
             }
             if(paused!=wasPaused) {
-                if(paused)machine.pauseRealtimePtm();
-                else machine.resumeRealtimePtm();
+                if(paused) {
+                    machine.pauseRealtimePtm();
+                    machine.pauseDisplayCpu();
+                } else {
+                    machine.resumeDisplayCpu();
+                    machine.resumeRealtimePtm();
+                }
             }
             if(cpuSpeed && paused!=wasPaused) {
                 // Pause/resume should not dilute a measurement window.
@@ -391,9 +397,8 @@ int main(int argc,char** argv) {
                 lastSpeedReport=std::chrono::steady_clock::now();
             }
             wasPaused=paused;
-            // Keep host-time pacing independent of the emulated clocks:
-            // Machine::executeOne() still advances the display CPU from guest
-            // cycles; the PTM worker advances independently from host time.
+            // The SDL thread paces only the main CPU. Both hardware clocks
+            // are driven independently by their own real-time workers.
             const auto tickNow=std::chrono::steady_clock::now();
             const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
                 tickNow-lastWaitTick);
@@ -404,28 +409,11 @@ int main(int argc,char** argv) {
                 const bool waiting=main6809Active &&
                     mainBoard->cpuWaitState()!=CSim09::WaitState::Running;
                 if(waiting) {
-                    // A SYNC/CWAI wait has no CPU instruction cycles.
-                    // Advance peripherals by actual wall time only here.
-                    // Discard old CPU credit: it must not be replayed when
-                    // the interrupt wakes the 6809.
+                    // No guest clock is advanced by a SYNC/CWAI poll.
+                    // Both timers continue independently while the CPU sleeps.
                     cpuPacer.reset();
-                    if(speed!=0)SDL_Delay(1);
-                    const auto afterDelay=std::chrono::steady_clock::now();
-                    const auto waitNs=std::chrono::duration_cast<std::chrono::nanoseconds>(
-                        afterDelay-tickNow);
-                    lastWaitTick=afterDelay;
-                    // SYNC/CWAI does not execute guest instructions.
-                    // Move the independent timers ahead at the same
-                    // virtual speed as the CPU pacing, including in 0
-                    // (unlimited) mode. Unlimited has no wall-time
-                    // reference; use one fixed 1 ms virtual quantum per
-                    // wait poll, while retaining host throttling for input.
-                    constexpr std::int64_t maxWaitHostNs=50000000;
-                    const auto hostNs=std::clamp<std::int64_t>(
-                        elapsed.count()+waitNs.count(),0,maxWaitHostNs);
-                    const auto virtualNs=speed==0?1000000ULL:
-                        static_cast<std::uint64_t>(hostNs)*speed;
-                    machine.advanceTimeNanoseconds(virtualNs);
+                    SDL_Delay(1);
+                    lastWaitTick=std::chrono::steady_clock::now();
                 } else if(machine.boardCount()) {
                     cpuPacer.addElapsed(elapsed);
                     std::uint64_t ran=0;
@@ -474,12 +462,8 @@ int main(int argc,char** argv) {
                     // Do not busy-spin when ahead of the host clock.
                     if(ran==0)SDL_Delay(1);
                 } else {
-                    // Standalone display CPU has no primary CPU cycles.
-                    const auto hostNs=std::clamp<std::int64_t>(
-                        elapsed.count(),0,20000000);
-                    machine.advanceTimeNanoseconds(speed==0
-                        ?instructions*500
-                        :static_cast<std::uint64_t>(hostNs)*speed);
+                    // Display-only mode also runs on its own CPU worker.
+                    SDL_Delay(1);
                     cpuPacer.reset();
                 }
             } else {
@@ -517,12 +501,14 @@ int main(int argc,char** argv) {
             if(frameTime-lastFrame>=std::chrono::milliseconds(32)) {
                 lastFrame=frameTime;
             if(ui.glRenderer) {
+                auto displayGuard=machine.lockDisplay();
                 int outputW=0,outputH=0;
                 SDL_GL_GetDrawableSize(ui.window,&outputW,&outputH);
                 ui.glRenderer->render(machine,high,testPattern,!ankPath.empty(),
                                       outputW,outputH);
                 SDL_GL_SwapWindow(ui.window);
             } else {
+                auto displayGuard=machine.lockDisplay();
                 auto frame=machine.captureDisplayFrame(high);
                 // Original SubCpu::OnDraw derives both layers from FD A0.
                 // In particular, loading a font does NOT enable text by itself.

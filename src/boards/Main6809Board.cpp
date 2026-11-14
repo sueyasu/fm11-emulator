@@ -454,7 +454,7 @@ BYTE Main6809Board::readCpu(WORD address)
     // three 256-byte regions are backed by the board's 4 KiB local RAM.
     if (address >= 0xfc00) {
         if (address>=0xfc80 && address<=0xfcff && mainBoard_)
-            return mainBoard_->displaySubsystem().readShared(address-0xfc80);
+            return mainBoard_->readDisplayShared(address-0xfc80);
         if ((address & 0xff00) == 0xfd00)
             return readIo(address);
         return onboardRam_[address & 0x0fff];
@@ -476,7 +476,7 @@ void Main6809Board::writeCpu(WORD address, BYTE value)
 
     if (address >= 0xfc00) {
         if (address>=0xfc80 && address<=0xfcff && mainBoard_)
-            mainBoard_->displaySubsystem().writeShared(address-0xfc80,value);
+            mainBoard_->writeDisplayShared(address-0xfc80,value);
         else if ((address & 0xff00) == 0xfd00)
             writeIo(address, value);
         else

@@ -857,15 +857,24 @@ CPU is in SYNC/CWAI. The IRQ level is published atomically; only the CPU
 thread changes the CPU adapter's IRQ aggregator. SDL pause parks the PTM
 worker and rebases its clock on resume, and reset stops/restarts the worker.
 
-The display sub-CPU remains on the **legacy cycle-based scheduler** until
-stage 3. Standalone CPU-card tests and other noninteractive Machine
-harnesses retain deterministic virtual-time PTM behavior unless they
-explicitly start the real-time worker.
+Stage 3: the SDL frontend starts a **separate display sub-CPU worker**.
+It advances the display 6809 directly from host `steady_clock` at 2 MHz,
+independent of the main CPU and the PTM. The former
+`advanceDisplayCpuCycles()` / `advanceDisplayTime()` paths are disabled
+while the display worker runs, but remain for deterministic legacy tests.
+The SDL SYNC/CWAI path no longer advances guest virtual time. A narrow
+display-bus mutex serializes each sub-CPU instruction with main-CPU
+mailbox/FD05 operations; rendering holds the same lock while reading the
+current VRAM/CRTC state. Display ATTENTION is published through an atomic
+event latch. SDL pause/resume controls both workers and rebases the display
+clock on resume. Headless and other noninteractive harnesses retain their
+existing deterministic display scheduler unless explicitly started.
 The PTM worker must be stopped before manipulating or resetting shared
 device state directly. This is not yet a fully parallel CPU/display machine;
 all other shared state still belongs to the single emulation thread.
 
-Run `ctest --test-dir build --output-on-failure`, including `worker_group`
-and `realtime_ptm`, before advancing to stage 3. Check NitrOS-9's wall-time
-clock and SYNC/CWAI wakeups on SDL and `fm11-headless`. Emulated PTM timing is
-**intentionally no longer multiplied** by `--speed`.
+Run `ctest --test-dir build --output-on-failure`, including `worker_group`,
+`realtime_ptm` and `realtime_display_cpu`. Verify NitrOS-9 boot, shared
+mailbox handshakes and wall-time clock on SDL and `fm11-headless`.
+Both PTM and display clocks are **independent of** `--speed`; only the
+main CPU still uses SDL pacing.

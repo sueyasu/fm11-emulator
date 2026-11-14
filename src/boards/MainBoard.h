@@ -23,12 +23,28 @@ public:
     MainBoard(const MainBoard&)=delete;
     MainBoard& operator=(const MainBoard&)=delete;
     // BUSY is available separately until FD05 status bit semantics are proven.
-    BYTE displayBusyStatus() const {return display_.busyStatus();}
+    BYTE displayBusyStatus() const {
+        auto lock=lockDisplay();
+        return display_.busyStatus();
+    }
     BYTE displayControl() const {return displayControl_;}
     BYTE displayPalette(unsigned index) const {return displayPalette_[index&7];}
     std::shared_ptr<FloppyDevice> floppyDevice() const { return floppy_; }
     std::shared_ptr<Usart8251> usartDevice() const {return usart_;}
     std::shared_ptr<Ptm6840> ptmDevice() const {return ptm_;}
+    // Shared display bus: lock each CPU instruction/mailbox transaction
+    // and capture/render operation, never the entire main CPU loop.
+    std::unique_lock<std::recursive_mutex> lockDisplay() const {
+        return std::unique_lock<std::recursive_mutex>(displayMutex_);
+    }
+    BYTE readDisplayShared(std::size_t offset) {
+        auto lock=lockDisplay();
+        return display_.readShared(offset);
+    }
+    void writeDisplayShared(std::size_t offset,BYTE value) {
+        auto lock=lockDisplay();
+        display_.writeShared(offset,value);
+    }
     DisplaySubsystem& displaySubsystem() {return display_;}
     const DisplaySubsystem& displaySubsystem() const {return display_;}
     DisplayCpu6809& displayCpu() {return displayCpu_;}
@@ -38,7 +54,7 @@ public:
     void reset() {
         resetEvents();
         resetSubCpuControl();
-        displayCpu_.resetCpu();
+        {auto lock=lockDisplay();displayCpu_.resetCpu();}
         resetTimebase();
         externalIrqLines_=0;
         usart_->reset();
@@ -51,14 +67,15 @@ public:
         floppy_->finishTransfer();
     }
     // FD04 main-board event latch: ATENT bit 0, BREAK bit 1.
-    void signalAttention() {eventStatus_|=0x01;}
-    void signalBreak() {eventStatus_|=0x02;}
-    void resetEvents() {eventStatus_=0;eventControl_=0;}
-    BYTE eventStatus() const {return eventStatus_;}
+    void signalAttention() {eventStatus_.fetch_or(0x01,std::memory_order_release);}
+    void signalBreak() {eventStatus_.fetch_or(0x02,std::memory_order_release);}
+    void resetEvents() {eventStatus_.store(0);eventControl_=0;}
+    BYTE eventStatus() const {return eventStatus_.load(std::memory_order_acquire);}
     BYTE eventControl() const {return eventControl_;}
     // FD05 bit 7 is the source emulator's latched $D05 BUSY status.
     // HALT release alone must not report READY.
     BYTE subCpuStatus() const {
+        auto lock=lockDisplay();
         return display_.fd05Status();
     }
     BYTE subCpuControl() const {return subCpuControl_;}
@@ -70,6 +87,7 @@ public:
         subCpuControl_=0;
         displayControl_=0;
         for(unsigned i=0;i<8;++i)displayPalette_[i]=static_cast<BYTE>(i);
+        auto lock=lockDisplay();
         display_.reset();
     }
 
@@ -186,8 +204,7 @@ public:
         const unsigned reg=address&0xff;
         if(reg==0x05) {value=subCpuStatus();return true;}
         if(reg==0x04) {
-            value=eventStatus_;
-            eventStatus_&=static_cast<BYTE>(~0x03);
+            value=eventStatus_.exchange(0,std::memory_order_acq_rel);
             return true;
         }
         if(reg>=0x38 && reg<=0x3f) {
@@ -214,6 +231,7 @@ public:
             return true;
         }
         if(reg==0x05) {
+            auto lock=lockDisplay();
             subCpuControl_=value;
             // Reference main-side FD05 bit 6 (CANCEL) requests the
             // display sub-CPU IRQ. The request remains pending until
@@ -225,7 +243,7 @@ public:
             return true;
         }
         if(reg==0x04) {
-            eventStatus_&=static_cast<BYTE>(~0x01);
+            eventStatus_.fetch_and(static_cast<BYTE>(~0x01),std::memory_order_acq_rel);
             eventControl_=0x80;
             return true;
         }
@@ -241,13 +259,14 @@ public:
         return true;
     }
 private:
+    mutable std::recursive_mutex displayMutex_;
     DisplaySubsystem display_;
     DisplayCpu6809 displayCpu_{display_};
     BYTE subCpuControl_=0;
     std::function<void(BYTE)> fd05WriteObserver_;
     BYTE displayControl_=0;
     std::array<BYTE,8> displayPalette_{{0,1,2,3,4,5,6,7}};
-    BYTE eventStatus_=0;
+    std::atomic<BYTE> eventStatus_{0};
     BYTE eventControl_=0;
     BYTE externalIrqLines_=0;
     mutable std::mutex ptmMutex_;

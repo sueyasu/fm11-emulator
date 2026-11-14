@@ -11,18 +11,27 @@
 #include <cstdint>
 #include <memory>
 #include <chrono>
+#include <atomic>
+#include <mutex>
 #include <vector>
 
 class Machine
 {
 public:
-    ~Machine() {stopRealtimePtm();}
-    // Opt-in, SDL-only worker. Headless remains deterministic.
+    ~Machine() {stopDisplayCpu();stopRealtimePtm();}
+    // Opt-in real-time workers; unstarted machines keep deterministic scheduling.
     void startRealtimePtm();
     void stopRealtimePtm() noexcept;
     void pauseRealtimePtm();
     void resumeRealtimePtm();
     bool realtimePtmEnabled() const {return mainBoard_->realtimePtmEnabled();}
+    void startDisplayCpu();
+    void stopDisplayCpu() noexcept;
+    void pauseDisplayCpu();
+    void resumeDisplayCpu();
+    bool displayCpuThreadEnabled() const {return displayThreadActive_.load(std::memory_order_acquire);}
+    // Hold while reading live display memory or capturing/rendering a frame.
+    std::unique_lock<std::recursive_mutex> lockDisplay() const {return mainBoard_->lockDisplay();}
     std::size_t addBoard(std::unique_ptr<CpuBoard> board);
 
     std::size_t boardCount() const;
@@ -141,4 +150,8 @@ private:
     std::int64_t displayCycleCredit_ = 0;
     std::unique_ptr<WorkerGroup> ptmWorker_;
     bool ptmPaused_=false;
+    std::unique_ptr<WorkerGroup> displayWorker_;
+    std::atomic<bool> displayThreadActive_{false};
+    std::atomic<std::uint64_t> displayResumeGeneration_{0};
+    bool displayPaused_=false;
 };
