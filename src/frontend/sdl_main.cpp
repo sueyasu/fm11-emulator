@@ -175,6 +175,7 @@ int main(int argc,char** argv) {
         if(!floppyPath.empty() && mainBoard==nullptr)
             throw std::invalid_argument("floppy image requires --main-rom");
         machine.setDisplayCpuClockHz(testPattern?0:2000000);
+        machine.setDisplayCpuSpeed(speed);
         machine.reset();
         Sdl sdl;
         Window ui;
@@ -536,14 +537,14 @@ int main(int argc,char** argv) {
                 if(mainBoard)sampledMainPc=static_cast<int>(mainBoard->cpu().pc());
             }
             if(ui.glRenderer) {
-                {
-                auto displayGuard=machine.lockDisplay();
+                // Only the snapshot copy is serialized with the sub-CPU.
+                // All OpenGL uploads, uniforms, drawing and swap occur after
+                // releasing the display-bus lock.
+                const auto snapshot=OpenGlRenderer::capture(machine,!ankPath.empty());
                 int outputW=0,outputH=0;
                 SDL_GL_GetDrawableSize(ui.window,&outputW,&outputH);
-                ui.glRenderer->render(machine,high,testPattern,!ankPath.empty(),
+                ui.glRenderer->render(snapshot,high,testPattern,!ankPath.empty(),
                                       outputW,outputH);
-                }
-                // GPU swap is outside the display bus critical section.
                 SDL_GL_SwapWindow(ui.window);
             } else {
                 DisplayBitmap::Frame frame{};

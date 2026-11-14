@@ -30,6 +30,8 @@ public:
     void stopDisplayCpu() noexcept;
     void pauseDisplayCpu();
     void resumeDisplayCpu();
+    // 1=real-time, N=N times real-time, 0=unlimited (SDL frontend).
+    void setDisplayCpuSpeed(unsigned multiplier);
     bool displayCpuThreadEnabled() const {return displayThreadActive_.load(std::memory_order_acquire);}
     // Hold while reading live display memory or capturing/rendering a frame.
     std::unique_lock<std::recursive_mutex> lockDisplay() const {return mainBoard_->lockDisplay();}
@@ -152,4 +154,5 @@ private:
     std::atomic<bool> displayThreadActive_{false};
     std::atomic<std::uint64_t> displayResumeGeneration_{0};
     bool displayPaused_=false;
+    unsigned displayCpuSpeed_=1;
 };

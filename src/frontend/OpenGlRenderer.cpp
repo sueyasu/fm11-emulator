@@ -247,20 +247,11 @@ struct OpenGlRenderer::Impl {
     void setInt(const char* key,int val) const {
         gl.Uniform1i(gl.GetUniformLocation(program,key),val);
     }
-    void render(const Machine& machine,bool high,bool testPattern,
+    void render(const OpenGlRenderer::Snapshot& snapshot,bool high,bool testPattern,
                 bool hasAnk,int outputWidth,int outputHeight) {
-        const auto& display=machine.displaySubsystem();
         gl.UseProgram(program);
         gl.BindVertexArray(vao);
-        const auto& physical=display.physicalVram();
-        std::array<std::uint8_t,4096> text{};
-        std::array<std::uint8_t,4096> ank{};
-        for(std::size_t i=0;i<text.size();++i)text[i]=display.textByte(i);
-        if(hasAnk)
-            for(unsigned ch=0;ch<256;++ch)
-                for(unsigned row=0;row<16;++row)
-                    ank[ch*16+row]=display.ankGlyphRow(static_cast<BYTE>(ch),row);
-        const void* memory[]={physical.data(),text.data(),ank.data()};
+        const void* memory[]={snapshot.vram.data(),snapshot.text.data(),snapshot.ank.data()};
         constexpr int widths[3]={1024,256,256};
         constexpr int heights[3]={192,16,16};
         for(int i=0;i<3;++i) {
@@ -269,24 +260,19 @@ struct OpenGlRenderer::Impl {
             gl.TexSubImage2D(TEXTURE_2D,0,0,0,widths[i],heights[i],
                              RED_INTEGER,UNSIGNED_BYTE,memory[i]);
         }
-        unsigned int colors[8]{};
-        for(unsigned i=0;i<8;++i)
-            colors[i]=DisplayBitmap::referenceColor(machine.mainDisplayPalette(i));
-        // GL sees only 24-bit RGB; CPU referenceColor carries alpha.
-        auto palette0=gl.GetUniformLocation(program,"uPalette0");
-        auto palette1=gl.GetUniformLocation(program,"uPalette1");
-        gl.Uniform4uiv(palette0,1,colors);
-        gl.Uniform4uiv(palette1,1,colors+4);
+        const auto palette0=gl.GetUniformLocation(program,"uPalette0");
+        const auto palette1=gl.GetUniformLocation(program,"uPalette1");
+        gl.Uniform4uiv(palette0,1,snapshot.palette.data());
+        gl.Uniform4uiv(palette1,1,snapshot.palette.data()+4);
         setInt("uHeight",high?400:200);
         setInt("uTestPattern",testPattern?1:0);
-        const unsigned control=machine.mainDisplayControl();
-        setInt("uGraphics",(machine.boardCount()==0 || (control&0x0c))?1:0);
-        setInt("uTextEnabled",hasAnk && (machine.boardCount()==0 || (control&3))?1:0);
-        setInt("uPage",static_cast<int>(display.graphicsDisplayPage()));
-        setInt("uDisplayAddress",display.graphicsDisplayAddress());
-        setInt("uTextStart",static_cast<int>(display.textStartAddress()));
-        setInt("uColumns",unsigned(display.crtcRegister(1))*2);
-        setInt("uRows",display.crtcRegister(6));
+        setInt("uGraphics",(!snapshot.hasMainBoard || (snapshot.control&0x0c))?1:0);
+        setInt("uTextEnabled",hasAnk && (!snapshot.hasMainBoard || (snapshot.control&3))?1:0);
+        setInt("uPage",snapshot.page);
+        setInt("uDisplayAddress",snapshot.displayAddress);
+        setInt("uTextStart",snapshot.textStart);
+        setInt("uColumns",snapshot.columns);
+        setInt("uRows",snapshot.rows);
 
         const int nativeHeight=high?400:200;
         const int scale=std::max(1,std::min(outputWidth/640,outputHeight/nativeHeight));
@@ -311,7 +297,31 @@ struct OpenGlRenderer::Impl {
 };
 OpenGlRenderer::OpenGlRenderer():impl_(std::make_unique<Impl>()){}
 OpenGlRenderer::~OpenGlRenderer()=default;
-void OpenGlRenderer::render(const Machine& machine,bool high,bool testPattern,
+OpenGlRenderer::Snapshot OpenGlRenderer::capture(const Machine& machine,bool hasAnk) {
+    Snapshot snapshot;
+    // Take one coherent guest memory and register snapshot; do not issue
+    // GPU commands while the main/sub-CPU display bus is locked.
+    auto guard=machine.lockDisplay();
+    const auto& display=machine.displaySubsystem();
+    snapshot.vram=display.physicalVram();
+    for(std::size_t i=0;i<snapshot.text.size();++i)
+        snapshot.text[i]=display.textByte(i);
+    if(hasAnk)
+        for(unsigned ch=0;ch<256;++ch)
+            for(unsigned row=0;row<16;++row)
+                snapshot.ank[ch*16+row]=display.ankGlyphRow(static_cast<BYTE>(ch),row);
+    for(unsigned i=0;i<8;++i)
+        snapshot.palette[i]=DisplayBitmap::referenceColor(machine.mainDisplayPalette(i));
+    snapshot.hasMainBoard=machine.boardCount()!=0;
+    snapshot.control=machine.mainDisplayControl();
+    snapshot.page=static_cast<int>(display.graphicsDisplayPage());
+    snapshot.displayAddress=display.graphicsDisplayAddress();
+    snapshot.textStart=static_cast<int>(display.textStartAddress());
+    snapshot.columns=unsigned(display.crtcRegister(1))*2;
+    snapshot.rows=display.crtcRegister(6);
+    return snapshot;
+}
+void OpenGlRenderer::render(const Snapshot& snapshot,bool high,bool testPattern,
                             bool hasAnk,int width,int height) {
-    impl_->render(machine,high,testPattern,hasAnk,width,height);
+    impl_->render(snapshot,high,testPattern,hasAnk,width,height);
 }

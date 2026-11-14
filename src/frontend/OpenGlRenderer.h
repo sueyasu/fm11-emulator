@@ -1,5 +1,7 @@
 #pragma once
 #include <memory>
+#include <array>
+#include <cstdint>
 
 class Machine;
 
@@ -11,7 +13,18 @@ public:
     ~OpenGlRenderer();
     OpenGlRenderer(const OpenGlRenderer&)=delete;
     OpenGlRenderer& operator=(const OpenGlRenderer&)=delete;
-    void render(const Machine& machine,bool high,bool testPattern,
+    // Capture guest state under the display lock; GPU work never holds it.
+    struct Snapshot {
+        std::array<std::uint8_t,1024*192> vram{};
+        std::array<std::uint8_t,4096> text{};
+        std::array<std::uint8_t,4096> ank{};
+        std::array<unsigned int,8> palette{};
+        unsigned control=0;
+        int page=0,displayAddress=0,textStart=0,columns=0,rows=0;
+        bool hasMainBoard=false;
+    };
+    static Snapshot capture(const Machine& machine,bool hasAnk);
+    void render(const Snapshot& snapshot,bool high,bool testPattern,
                 bool hasAnk,int outputWidth,int outputHeight);
 private:
     struct Impl;
