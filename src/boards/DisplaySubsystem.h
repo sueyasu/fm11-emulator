@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <utility>
 #include <mutex>
+#include <atomic>
 
 // Main-board display/sub-CPU memory. I/O and display scanout are deliberately
 // not decoded yet: the reference map still labels those regions tentative.
@@ -175,12 +176,14 @@ public:
     using SharedTraceObserver=std::function<void(SharedTrace)>;
     void setSharedTraceObserver(SharedTraceObserver cb) {sharedTraceObserver_=std::move(cb);}
     BYTE readShared(std::size_t offset) const {
-        const BYTE value=ram_[0x1f80+offset];
+        std::lock_guard<std::mutex> lock(sharedRamMutex_);
+        const BYTE value=ram_.at(0x1f80+offset);
         if(sharedTraceObserver_ && offset>=2 && offset<=4)
             sharedTraceObserver_({true,false,static_cast<BYTE>(offset),value});
         return value;
     }
     void writeShared(std::size_t offset,BYTE value) {
+        std::lock_guard<std::mutex> lock(sharedRamMutex_);
         if(sharedTraceObserver_ && offset>=2 && offset<=4)
             sharedTraceObserver_({true,true,static_cast<BYTE>(offset),value});
         if(ram_.at(0x1f80+offset)!=value) {
@@ -188,17 +191,25 @@ public:
             ++sharedWriteRevision_;
         }
     }
-    std::uint64_t sharedWriteRevision() const {return sharedWriteRevision_;}
+    std::uint64_t sharedWriteRevision() const {
+        return sharedWriteRevision_.load(std::memory_order_relaxed);
+    }
     BYTE readMemory(std::uint16_t address) const {
         if(address<0x8000) {
             if(!gvuEnabled_)return vram_[vramWindow_*kVramSize+address];
             return vram_[gvuPlane_*0x10000+graphicsAddress(address)];
         }
         if(address<0xa000) {
-            const BYTE value=ram_[address-0x8000];
-            if(sharedTraceObserver_ && address>=0x9f82 && address<=0x9f84)
-                sharedTraceObserver_({false,false,static_cast<BYTE>(address-0x9f80),value});
-            return value;
+            // The top 128 bytes are dual-ported to the main CPU. Lock only
+            // that window; all other sub-CPU RAM stays private to its thread.
+            if(address>=0x9f80) {
+                std::lock_guard<std::mutex> lock(sharedRamMutex_);
+                const BYTE value=ram_[address-0x8000];
+                if(sharedTraceObserver_ && address<=0x9f84 && address>=0x9f82)
+                    sharedTraceObserver_({false,false,static_cast<BYTE>(address-0x9f80),value});
+                return value;
+            }
+            return ram_[address-0x8000];
         }
         // Reference SubCpu.cpp: these I/O latches clear on read.
         if(address==0xafe4)return std::exchange(subFirqLatch_,BYTE{0});
@@ -266,9 +277,14 @@ public:
             }
         }
         else if(address<0xa000) {
-            ram_[address-0x8000]=value;
-            if(sharedTraceObserver_ && address>=0x9f82 && address<=0x9f84)
-                sharedTraceObserver_({false,true,static_cast<BYTE>(address-0x9f80),value});
+            if(address>=0x9f80) {
+                std::lock_guard<std::mutex> lock(sharedRamMutex_);
+                ram_[address-0x8000]=value;
+                if(sharedTraceObserver_ && address<=0x9f84 && address>=0x9f82)
+                    sharedTraceObserver_({false,true,static_cast<BYTE>(address-0x9f80),value});
+            } else {
+                ram_[address-0x8000]=value;
+            }
         }
         else if(address>=0xafe0 && address<=0xafe3) {
             subIoRam_[address-0xafe0]=value;
@@ -278,7 +294,7 @@ public:
                     nmiMask_=false;
                 }
                 busy_=(value&1u)==0;
-                fd05BusyLatch_=busy_;
+                fd05BusyLatch_=busy_.load(std::memory_order_relaxed);
             }
             if(address==0xafe1) {
                 gvuControl_=value;
@@ -348,7 +364,8 @@ private:
     }
     void markVideoChanged() {++videoRevision_;}
     std::uint64_t videoRevision_=0;
-    std::uint64_t sharedWriteRevision_=0;
+    std::atomic<std::uint64_t> sharedWriteRevision_{0};
+    mutable std::mutex sharedRamMutex_;
     IoWriteObserver ioWriteObserver_;
     Afe0ReadObserver afe0ReadObserver_;
     KeyboardReadObserver keyboardReadObserver_;
@@ -357,8 +374,8 @@ private:
     bool traceCpu_=false;
     std::function<void()> attentionSink_;
     bool haltRequested_=false;
-    bool busy_=true;
-    bool fd05BusyLatch_=true;
+    std::atomic<bool> busy_{true};
+    std::atomic<bool> fd05BusyLatch_{true};
     std::array<BYTE,0x1000> ioRam_{};
     BYTE dmaChannel0_=0;
     bool nmiMask_=true;

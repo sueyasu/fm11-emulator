@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <thread>
+#include <future>
 
 // The three workers run independently while a frontend takes immutable
 // display snapshots; no SDL or host graphics subsystem is needed.
@@ -60,6 +61,31 @@ int main() {
     if(executed.load()==stoppedAt)return 4;
     cpuWorker.stop();
     machine.stopDisplayCpu();
+    // Regression: main CPU mailbox access and FD05 BUSY polling must not
+    // block on the display framebuffer/CPU-state mutex. The sub-CPU's
+    // 9F80-9FFF mapping must still share the exact same bytes safely.
+    std::promise<void> go;
+    const auto ready=go.get_future().share();
+    auto shared=std::async(std::launch::async,[&] {
+        ready.wait();
+        main->writeCpu(0xfc82,0xa5);
+        if(main->readCpu(0xfc82)!=0xa5)return false;
+        (void)main->readCpu(0xfd05);
+        return true;
+    });
+    bool independent=false;
+    {
+        auto held=machine.lockDisplay();
+        go.set_value();
+        independent=shared.wait_for(100ms)==std::future_status::ready;
+    }
+    if(!independent || !shared.get())return 5;
+    {
+        auto held=machine.lockDisplay();
+        if(machine.displayMemory(0x9f82)!=0xa5)return 6;
+        machine.displaySubsystem().writeMemory(0x9f82,0x5a);
+    }
+    if(main->readCpu(0xfc82)!=0x5a)return 7;
     machine.stopRealtimePtm();
     return 0;
 }

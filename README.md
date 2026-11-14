@@ -940,3 +940,18 @@ The OpenGL frontend still captures a coherent copy of display VRAM,
 text/ANK data, CRTC state, display control and palette while holding
 the display-bus mutex. All OpenGL texture uploads, uniforms, rendering
 and buffer swaps take place after the mutex has been released.
+
+### Independent display bus and mailbox locking
+
+The main CPU no longer takes the display-CPU/VRAM recursive mutex when
+accessing its 128-byte FC80-FCFF mailbox. The shared bytes are guarded by
+a dedicated mutex on both the main-side FC80-FCFF path and the display
+CPU's 9F80-9FFF memory accesses. Shared transaction tracing is serialized
+under that same mutex. The shared-write revision is atomic.
+
+FD05 BUSY status and the sub-CPU busy latch can be read atomically
+without acquiring the display mutex. FD05 writes that change sub-CPU
+state still use the display mutex. The wake-observer callback has a
+separate lifetime mutex so mailbox writes can wake the display worker
+without holding the display lock. Display-CPU instruction slices and
+video snapshots retain their existing display mutex.

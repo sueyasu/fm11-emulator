@@ -24,7 +24,6 @@ public:
     MainBoard& operator=(const MainBoard&)=delete;
     // BUSY is available separately until FD05 status bit semantics are proven.
     BYTE displayBusyStatus() const {
-        auto lock=lockDisplay();
         return display_.busyStatus();
     }
     BYTE displayControl() const {
@@ -45,17 +44,15 @@ public:
     }
     // Installed only for the lifetime of the display worker.
     void setDisplayWakeObserver(std::function<void()> observer) {
-        auto lock=lockDisplay();
+        std::lock_guard<std::mutex> lock(displayWakeMutex_);
         displayWakeObserver_=std::move(observer);
     }
     BYTE readDisplayShared(std::size_t offset) {
-        auto lock=lockDisplay();
         return display_.readShared(offset);
     }
     void writeDisplayShared(std::size_t offset,BYTE value) {
-        auto lock=lockDisplay();
         display_.writeShared(offset,value);
-        if(displayWakeObserver_)displayWakeObserver_();
+        notifyDisplayWake();
     }
     DisplaySubsystem& displaySubsystem() {return display_;}
     const DisplaySubsystem& displaySubsystem() const {return display_;}
@@ -87,7 +84,6 @@ public:
     // FD05 bit 7 is the source emulator's latched $D05 BUSY status.
     // HALT release alone must not report READY.
     BYTE subCpuStatus() const {
-        auto lock=lockDisplay();
         return display_.fd05Status();
     }
     BYTE subCpuControl() const {return subCpuControl_;}
@@ -254,7 +250,7 @@ public:
             if(value&0x80)display_.requestHalt();
             else display_.releaseHalt();
             if(fd05WriteObserver_)fd05WriteObserver_(value);
-            if(displayWakeObserver_)displayWakeObserver_();
+            notifyDisplayWake();
             return true;
         }
         if(reg==0x04) {
@@ -274,7 +270,17 @@ public:
         return true;
     }
 private:
+    // Display state (VRAM/CPU registers) is protected separately from
+    // dual-ported mailbox RAM. Main CPU never needs this mutex merely to
+    // read or write FC80-FCFF.
     mutable std::recursive_mutex displayMutex_;
+    mutable std::mutex displayWakeMutex_;
+    void notifyDisplayWake() {
+        // Keep the observer alive across invocation so stopDisplayCpu()
+        // cannot destroy the WorkerGroup during a notification.
+        std::lock_guard<std::mutex> lock(displayWakeMutex_);
+        if(displayWakeObserver_)displayWakeObserver_();
+    }
     DisplaySubsystem display_;
     DisplayCpu6809 displayCpu_{display_};
     BYTE subCpuControl_=0;
