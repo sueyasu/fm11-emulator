@@ -122,3 +122,27 @@ signed quotient.
 ctest --test-dir build -R 'mainv20_rep_prefixes|main8088_divide_quirks' --output-on-failure
 python3 tests/run_v20_singlestep.py --opcode 6C --opcode 6D --opcode 6E --opcode 6F --opcode A4 --opcode A5 --opcode AA --opcode AB --opcode AC --opcode AD --opcode F6.7 --opcode F7.7 --limit 100
 ```
+
+## Phase 5: BOUND and bounds exception (62h/63h)
+
+V20 `62 /r` checks signed 16-bit `ModR/M.reg` against two signed,
+inclusive 16-bit boundaries at the memory effective address. Its
+memory operand occupies four bytes, lower word first and upper word
+second. Out-of-range values transfer to interrupt vector 5, with the
+V20 saving the post-instruction IP on the stack. Segment overrides
+apply to both bounds. Register-only bounds operands are not supported.
+
+`63 /r` uses the same decoding path and currently transfers to
+interrupt vector 5 unconditionally, following a known V20 emulator
+implementation. Its precise behavior should be confirmed against
+the supplied hardware test corpus before considering this case
+fully validated.
+
+The `mainv20_bound` CTest exercises positive and negative bounds,
+inclusive endpoints, out-of-range interrupts, interrupt stack
+contents, and a segment override.
+
+```sh
+ctest --test-dir build -R 'mainv20_bound|mainv20_rep_prefixes' --output-on-failure
+python3 tests/run_v20_singlestep.py --opcode 62 --opcode 63 --limit 100
+```
