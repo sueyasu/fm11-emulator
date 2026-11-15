@@ -1,0 +1,21 @@
+# FM-11 BS: 8088 main CPU, 6809 display subsystem only.
+[main]
+active = 8088
+
+[main_6809]
+installed = false
+cpu = 6809
+clock_hz = 2000000
+
+[main_8088]
+installed = true
+cpu = 8088
+clock_hz = 8000000
+
+[optional_cpu]
+type = none
+clock_hz = 4000000
+
+[display_cpu]
+cpu = 6809
+clock_hz = 2000000
