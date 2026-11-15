@@ -1532,7 +1532,11 @@ void Main8088Board::Core::executeOne()
             executeAluModRm(opcode);
             break;
         }
-        if(opcode>=0x70 && opcode<=0x7f) {
+        // Original 8086/8088 decode ignores opcode bit 4 for Jcc:
+        // 60h..6Fh are undocumented aliases of 70h..7Fh.
+        // Later CPUs reuse these opcodes; do not alias NEC V20.
+        if((opcode>=0x70 && opcode<=0x7f) ||
+           (variant_==CpuType::I8088 && opcode>=0x60 && opcode<=0x6f)) {
             const auto displacement=static_cast<std::int8_t>(fetch8());
             if(jumpCondition(opcode&15)) {
                 ip_=WORD(ip_+displacement);
