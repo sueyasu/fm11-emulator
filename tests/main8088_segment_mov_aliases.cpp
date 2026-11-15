@@ -10,7 +10,11 @@ constexpr std::array<WORD,4> initialSegments={
 bool check(BYTE opcode,unsigned field,bool memoryForm) {
     Main8088Board board(CpuType::I8088);
     board.bus().enableConformanceRam();
-    const WORD address=0x2000;
+    const WORD address=0x2000; // effective offset (disp16)
+    // ModR/M mod=00, r/m=110 uses DS:disp16, not physical disp16.
+    // ES/CS/SS/DS are deliberately distinct to catch segment mistakes.
+    const std::uint32_t physicalAddress=
+        (std::uint32_t(initialSegments[3])*16u+address)&0xfffffu;
     const BYTE modrm=BYTE((memoryForm?0x06:0xc0)|(field<<3));
     board.bus().writeMemory(0x10000,opcode);
     board.bus().writeMemory(0x10001,modrm);
@@ -23,8 +27,8 @@ bool check(BYTE opcode,unsigned field,bool memoryForm) {
     regs[4]=0x8000;
     auto segments=initialSegments;
     if(opcode==0x8e && memoryForm) {
-        board.bus().writeMemory(address,0x88);
-        board.bus().writeMemory(address+1,0x77);
+        board.bus().writeMemory(physicalAddress,0x88);
+        board.bus().writeMemory(physicalAddress+1,0x77);
     }
     auto& cpu=static_cast<Main8088Board::Core&>(board.cpu());
     const WORD flags=0x0297;
@@ -37,8 +41,8 @@ bool check(BYTE opcode,unsigned field,bool memoryForm) {
     if(opcode==0x8c) {
         expected=initialSegments[which];
         if(memoryForm)
-            observed=WORD(board.bus().readRam(address)|
-                           (WORD(board.bus().readRam(address+1))<<8));
+            observed=WORD(board.bus().readRam(physicalAddress)|
+                           (WORD(board.bus().readRam(physicalAddress+1))<<8));
         else observed=cpu.reg(0);
     } else {
         expected=expectedSource;
