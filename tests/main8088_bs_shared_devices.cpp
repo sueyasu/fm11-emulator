@@ -97,6 +97,42 @@ int main() {
         std::fputs("FAIL: 8088 CPU does not see shared USART\n",stderr);
         return 3;
     }
+    // Both CPU adapters share the same FDC sector writer:
+    // the 6809 DMA path uses writeSector and the 8088 DMA path
+    // completes through transferWrite.
+    unsigned completed=0;
+    std::size_t lastOffset=9999;
+    floppy->setSectorWriter([&](unsigned channel,std::size_t offset,
+                                 const BYTE* data,std::size_t length) {
+        if(channel!=0 || length!=256 || data[0]!=0x5a)return false;
+        ++completed;
+        lastOffset=offset;
+        return true;
+    });
+    std::vector<BYTE> sector(256,0);
+    sector[0]=0x5a;
+    if(!floppy->writeSector(0,256,sector.data()) ||
+       completed!=1 || lastOffset!=256 || floppy->read(0,256)!=0x5a) {
+        std::fputs("FAIL: 6809 DMA shared sector commit\n",stderr);
+        return 12;
+    }
+    if(!floppy->beginSector(0,0,0,3,0,true))return 13;
+    for(BYTE value:sector)floppy->transferWrite(value);
+    if(completed!=2 || lastOffset!=512 || floppy->transferStatus()!=0 ||
+       floppy->read(0,512)!=0x5a) {
+        std::fputs("FAIL: 8088 DMA shared sector commit\n",stderr);
+        return 14;
+    }
+    floppy->setSectorWriter([](unsigned,std::size_t,const BYTE*,std::size_t) {
+        return false;
+    });
+    sector[1]=0x7e;
+    if(floppy->writeSector(0,256,sector.data()) ||
+       floppy->read(0,257)==0x7e || floppy->transferStatus()!=0x10) {
+        std::fputs("FAIL: failed host image write was acknowledged\n",stderr);
+        return 15;
+    }
+    floppy->setSectorWriter({});
     machine.reset();
     if(cpu->bus().readIo(0xfd23)!=0x9f) {
         std::fputs("FAIL: FD23 boot-device DIP lost on reset\n",stderr);
