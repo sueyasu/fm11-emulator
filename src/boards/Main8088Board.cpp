@@ -783,6 +783,17 @@ void Main8088Board::Core::executeOne()
     if((repeat==0x64 || repeat==0x65) &&
        !(opcode==0xa6 || opcode==0xa7 || opcode==0xae || opcode==0xaf))
         throw std::runtime_error("REPC/REPNC requires a comparison string opcode");
+    // Intel 8088's undocumented 60h..6Fh Jcc aliases must be
+    // dispatched before the switch: 60h/61h/68h..6Fh also have
+    // explicit NEC V20 cases that otherwise throw for an 8088.
+    if(variant_==CpuType::I8088 && opcode>=0x60 && opcode<=0x6f) {
+        const auto displacement=static_cast<std::int8_t>(fetch8());
+        if(jumpCondition(opcode&15)) {
+            ip_=WORD(ip_+displacement);
+            lastCycles_+=12;
+        }
+        return;
+    }
     switch(opcode) {
     case 0x6c: case 0x6d: case 0x6e: case 0x6f: {
         if(variant_!=CpuType::NECV20)
@@ -1532,11 +1543,8 @@ void Main8088Board::Core::executeOne()
             executeAluModRm(opcode);
             break;
         }
-        // Original 8086/8088 decode ignores opcode bit 4 for Jcc:
-        // 60h..6Fh are undocumented aliases of 70h..7Fh.
-        // Later CPUs reuse these opcodes; do not alias NEC V20.
-        if((opcode>=0x70 && opcode<=0x7f) ||
-           (variant_==CpuType::I8088 && opcode>=0x60 && opcode<=0x6f)) {
+        // Standard Jcc 70h..7Fh (8088 aliases are handled above).
+        if(opcode>=0x70 && opcode<=0x7f) {
             const auto displacement=static_cast<std::int8_t>(fetch8());
             if(jumpCondition(opcode&15)) {
                 ip_=WORD(ip_+displacement);
