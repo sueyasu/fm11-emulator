@@ -506,6 +506,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(main8088_carry_flags PRIVATE fm11_core)
     add_test(NAME main8088_carry_flags COMMAND main8088_carry_flags)
 
+    add_executable(main8088_carry_stack_boundaries tests/main8088_carry_stack_boundaries.cpp)
+    target_link_libraries(main8088_carry_stack_boundaries PRIVATE fm11_core)
+    add_test(NAME main8088_carry_stack_boundaries COMMAND main8088_carry_stack_boundaries)
+
     add_executable(main8088_arithmetic_flags tests/main8088_arithmetic_flags.cpp)
     target_link_libraries(main8088_arithmetic_flags PRIVATE fm11_core)
     add_test(NAME main8088_arithmetic_flags COMMAND main8088_arithmetic_flags)
