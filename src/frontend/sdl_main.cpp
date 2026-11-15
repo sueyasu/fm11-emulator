@@ -75,46 +75,6 @@ std::vector<BYTE> readDiskImage(const std::string& path) {
 // Preserve D88 sector headers and commit the whole image atomically.
 // Never truncate the mounted file before every byte of the replacement
 // has reached a temporary file in the same directory.
-void saveDiskImage(const std::string& path,const std::vector<BYTE>& bytes) {
-    struct stat original{};
-    if(::stat(path.c_str(),&original)!=0)
-        throw std::runtime_error("cannot stat floppy image: "+path+": "+std::strerror(errno));
-    std::string temporary=path+".tmp.XXXXXX";
-    std::vector<char> name(temporary.begin(),temporary.end());
-    name.push_back('\0');
-    const int fd=::mkstemp(name.data());
-    if(fd<0)
-        throw std::runtime_error("cannot create floppy save file: "+path+": "+std::strerror(errno));
-    const std::string tmp(name.data());
-    try {
-        if(::fchmod(fd,original.st_mode&07777)!=0)
-            throw std::runtime_error("cannot preserve floppy image permissions: "+path);
-        std::size_t offset=0;
-        while(offset<bytes.size()) {
-            const auto written=::write(fd,bytes.data()+offset,bytes.size()-offset);
-            if(written<0 && errno==EINTR)continue;
-            if(written<=0)
-                throw std::runtime_error("cannot write floppy image: "+path+": "+std::strerror(errno));
-            offset+=static_cast<std::size_t>(written);
-        }
-        if(::fsync(fd)!=0)
-            throw std::runtime_error("cannot sync floppy image: "+path+": "+std::strerror(errno));
-    } catch(...) {
-        ::close(fd);
-        ::unlink(tmp.c_str());
-        throw;
-    }
-    if(::close(fd)!=0) {
-        const int error=errno;
-        ::unlink(tmp.c_str());
-        throw std::runtime_error("cannot close floppy image: "+path+": "+std::strerror(error));
-    }
-    if(::rename(tmp.c_str(),path.c_str())!=0) {
-        const int error=errno;
-        ::unlink(tmp.c_str());
-        throw std::runtime_error("cannot replace floppy image: "+path+": "+std::strerror(error));
-    }
-}
 std::uint64_t parseCount(const std::string& text) {
     std::size_t end=0;
     const auto value=std::stoull(text,&end,0);
@@ -270,10 +230,13 @@ int main(int argc,char** argv) {
                         ::close(*fd);
                         delete fd;
                     });
-                    floppy->setSectorWriter([ownedFd,floppy,floppyPath](
+                    std::weak_ptr<FloppyDevice> weakFloppy=floppy;
+                    floppy->setSectorWriter([ownedFd,weakFloppy,floppyPath](
                         unsigned channel,std::size_t rawOffset,
                         const BYTE* data,std::size_t length) {
-                        const std::size_t imageOffset=floppy->hostImageOffset(channel,rawOffset);
+                        auto disk=weakFloppy.lock();
+                        if(!disk)return false;
+                        const std::size_t imageOffset=disk->hostImageOffset(channel,rawOffset);
                         std::size_t done=0;
                         while(done<length) {
                             const auto n=::pwrite(*ownedFd,data+done,length-done,
