@@ -41,6 +41,11 @@ target_include_directories(fm11_core PUBLIC
 
 target_compile_features(fm11_core PUBLIC cxx_std_17)
 
+# Hardware-reference CPU instruction tests: no SDL or test data is needed
+# for the executable itself. Feed SingleStepTests V2 data with Python.
+add_executable(fm11-8088-singlestep tests/main8088_singlestep.cpp)
+target_link_libraries(fm11-8088-singlestep PRIVATE fm11_core)
+
 # Worker lifecycle is portable; CPU/PTM threads are enabled in later stages.
 find_package(Threads REQUIRED)
 target_link_libraries(fm11_core PUBLIC Threads::Threads)
