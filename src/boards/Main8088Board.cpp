@@ -1120,10 +1120,8 @@ void Main8088Board::Core::executeOne()
         // Group 5: /0 INC /1 DEC /2 near CALL /3 far CALL,
         //          /4 near JMP /5 far JMP /6 PUSH.
         const auto op=decodeModRm();
-        // On the original Intel 8088, FF /7 aliases FF /6 (PUSH r/m16).
-        // Keep the later-CPU/V20 decode restriction unchanged.
-        if(op.reg==7 && variant_!=CpuType::I8088)
-            throw std::runtime_error("invalid FF group opcode");
+        // Intel 8088 and NEC V20 both decode FF /7 as a PUSH r/m16
+        // alias of FF /6 (confirmed by the hardware reference suites).
         if(op.reg==0 || op.reg==1) {
             writeOperand(op,16,incDec(readOperand(op,16),16,op.reg==1));
         } else if(op.reg==3 || op.reg==5) {
@@ -1244,15 +1242,14 @@ void Main8088Board::Core::executeOne()
     case 0x8b: {auto op=decodeModRm();regs_[op.reg]=read16(op);break;} // MOV r16,r/m16
     case 0xc6: { // MOV r/m8,imm8; 8088 ignores the ModR/M.reg extension
         const auto op=decodeModRm();
-        if(variant_!=CpuType::I8088 && op.reg!=0)
-            throw std::runtime_error("invalid MOV C6 group");
+        // Intel 8088 and NEC V20 both ignore the extension field for
+        // MOV immediate, including the /1../7 alias encodings.
         write8(op,fetch8());
         break;
     }
     case 0xc7: { // MOV r/m16,imm16; /1../7 are 8088 undocumented aliases
         const auto op=decodeModRm();
-        if(variant_!=CpuType::I8088 && op.reg!=0)
-            throw std::runtime_error("invalid MOV C7 group");
+        // See C6h: the V20 also accepts all ModR/M.reg encodings.
         write16(op,fetch16());
         break;
     }
@@ -1466,8 +1463,8 @@ void Main8088Board::Core::executeOne()
         }
         if(ext==0x28 || ext==0x2a) { // NEC ROL4 / ROR4, r/m8
             const auto operand=decodeModRm();
-            if(operand.reg!=0)
-                throw std::runtime_error("invalid NEC nibble-rotate ModR/M");
+            // The V20 ignores ModR/M.reg for ROL4/ROR4. The test suite
+            // exercises all eight extension encodings.
             const BYTE oldValue=read8(operand);
             const BYTE al=getReg8(0);
             const BYTE low=BYTE(al&0x0f);
@@ -1476,10 +1473,15 @@ void Main8088Board::Core::executeOne()
                 : BYTE((unsigned(low)<<4)|(oldValue>>4));
             const BYTE newLow=ext==0x28 ? BYTE(oldValue>>4)
                                           : BYTE(oldValue&0x0f);
-            // Save AL's low nibble first, since the r/m8 target may be AL.
-            // NEC leaves AL's high nibble undefined; keep it unchanged.
+            // If the operand is AL itself, the destination write changes
+            // AL's upper nibble too. Do not restore the original upper
+            // nibble afterward: that discards the just-written result.
+            // For other operands the V20 upper AL nibble is unspecified;
+            // retain its prior value as before.
             write8(operand,newValue);
-            setReg8(0,BYTE((al&0xf0)|newLow));
+            const BYTE upper=operand.registerOperand && operand.index==0
+                ? BYTE(newValue&0xf0) : BYTE(al&0xf0);
+            setReg8(0,BYTE(upper|newLow));
             // Neither operation modifies FLAGS.
             break;
         }
