@@ -1575,7 +1575,7 @@ void Main8088Board::Core::executeOne()
         }
         break;
     }
-    case 0x62: case 0x63: { // V20 BOUND / bounds-check exception alias
+    case 0x62: { // V20 BOUND
         if(variant_!=CpuType::NECV20)
             throw std::runtime_error("opcode requires NEC V20");
         const auto op=decodeModRm();
@@ -1591,9 +1591,17 @@ void Main8088Board::Core::executeOne()
             (WORD(bus_.readMemory(physical(segments_[op.segment],
                                           WORD(upperOffset+1))))<<8));
         const auto upper=static_cast<std::int16_t>(upperValue);
-        // 63h has the same operand format but always generates the
-        // V20 bound-range exception. V20 saves IP after the opcode.
-        if(opcode==0x63 || index<lower || index>upper)interrupt(5);
+        // V20 saves the post-instruction IP on a BOUND exception.
+        if(index<lower || index>upper)interrupt(5);
+        break;
+    }
+    case 0x63: { // V20 undocumented/undefined encoding
+        if(variant_!=CpuType::NECV20)
+            throw std::runtime_error("opcode requires NEC V20");
+        // 63h consumes its ModR/M and displacement, but unlike 62h
+        // does not perform the BOUND check or raise INT 5. The NEC
+        // V20 hardware suite confirms that SP remains unchanged.
+        (void)decodeModRm();
         break;
     }
     case 0x68: // NEC V20: PUSH imm16
