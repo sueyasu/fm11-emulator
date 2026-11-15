@@ -33,6 +33,22 @@ public:
         WORD cs() const {return segments_[1];}
         WORD flags() const {return flags_;}
         WORD reg(unsigned i) const {return regs_.at(i);}
+        WORD segment(unsigned i) const {return segments_.at(i);}
+        // Isolated single-instruction conformance tests only: no guest reset,
+        // interrupts, firmware or I/O devices are involved.
+        void setConformanceState(const std::array<WORD,8>& regs,
+                                 const std::array<WORD,4>& segments,
+                                 WORD ip,WORD flags) {
+            regs_=regs;
+            segments_=segments;
+            ip_=ip;
+            flags_=flags;
+            halted_=false;
+            emulation8080_=false;
+            interruptModeStack_.clear();
+            irqInhibit_=0;
+            segmentOverride_=-1;
+        }
         bool halted() const {return halted_;}
         bool emulation8080() const {return emulation8080_;}
     private:
