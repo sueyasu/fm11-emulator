@@ -43,27 +43,50 @@ void Main8088Bus::floppyWriteData(BYTE value)
 
 void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
 {
+    const unsigned base=channel==0?0x18:0x30;
     const auto decoded=FloppyDevice::decodeCommand(command);
     const bool writing=decoded==FloppyDevice::Command::WriteSector;
     if(decoded==FloppyDevice::Command::Other) {
         floppy_->finishTransfer();
+        // Mini-FDC type I commands update the track register. The
+        // standard 8088 ROM uses RESTORE (0Ah) and SEEK (1Ah) before
+        // reading its two-sector disk IPL.
+        if((command&0x80)==0) {
+            const unsigned kind=command&0xe0;
+            if(kind==0x00) {
+                if(command&0x10)
+                    floppy_->writeRegister(base+1,floppy_->registerValue(base+3));
+                else
+                    floppy_->writeRegister(base+1,0);
+            } else if(kind==0x40) {
+                floppy_->writeRegister(base+1,BYTE(floppy_->registerValue(base+1)+1));
+            } else if(kind==0x60) {
+                floppy_->writeRegister(base+1,BYTE(floppy_->registerValue(base+1)-1));
+            }
+        }
+        if(channel==0)floppy_->writeRegister(0x1f,0x40);
         return;
     }
-    const unsigned base=channel==0?0x18:0x30;
-    if(!floppy_->beginSector(channel,floppy_->registerValue(base+1),
+    // Bit 7 of FD1D controls motor/drive selection; only the bottom
+    // two bits identify the physical drive (as in the reference FM-11).
+    const unsigned drive=floppy_->registerValue(channel==0?0x1d:0x35)&3;
+    const bool started=floppy_->beginSector(channel,floppy_->registerValue(base+1),
             floppy_->registerValue(channel==0?0x1c:0x34),
-            floppy_->registerValue(base+2),
-            floppy_->registerValue(channel==0?0x1d:0x35),writing))return;
-
-    // The 8237 remains the bus master; the system FDC only supplies data.
-    setDmaRequest(channel,true);
-    for(unsigned i=0;i<floppy_->transferLength();++i) {
-        if(!serviceDma() || floppy_->transferPosition()==floppy_->transferLength())
-            break;
+            floppy_->registerValue(base+2),drive,writing);
+    if(started) {
+        // The 8237 remains the bus master; the system FDC supplies data.
+        setDmaRequest(channel,true);
+        for(unsigned i=0;i<floppy_->transferLength();++i) {
+            if(!serviceDma() || floppy_->transferPosition()==floppy_->transferLength())
+                break;
+        }
+        setDmaRequest(channel,false);
+        if(floppy_->transferPosition()!=floppy_->transferLength())
+            floppy_->transferError();
     }
-    setDmaRequest(channel,false);
-    if(floppy_->transferPosition()!=floppy_->transferLength())
-        floppy_->transferError();
+    // The source emulator completes synchronous 8088 FDC commands by
+    // setting FD1F bit 6, including failed sector reads.
+    if(channel==0)floppy_->writeRegister(0x1f,0x40);
 }
 
 void Main8088Bus::loadBootRom(const Rom& rom)
