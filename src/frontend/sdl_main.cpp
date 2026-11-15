@@ -99,12 +99,15 @@ void saveDiskImage(const std::string& path,const std::vector<BYTE>& bytes) {
         }
         if(::fsync(fd)!=0)
             throw std::runtime_error("cannot sync floppy image: "+path+": "+std::strerror(errno));
-        if(::close(fd)!=0)
-            throw std::runtime_error("cannot close floppy image: "+path+": "+std::strerror(errno));
     } catch(...) {
         ::close(fd);
         ::unlink(tmp.c_str());
         throw;
+    }
+    if(::close(fd)!=0) {
+        const int error=errno;
+        ::unlink(tmp.c_str());
+        throw std::runtime_error("cannot close floppy image: "+path+": "+std::strerror(error));
     }
     if(::rename(tmp.c_str(),path.c_str())!=0) {
         const int error=errno;
