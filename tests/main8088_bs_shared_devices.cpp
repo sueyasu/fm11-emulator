@@ -33,6 +33,42 @@ int main() {
         std::fputs("FAIL: 8088 CPU does not see shared FDC media\n",stderr);
         return 2;
     }
+    // Standard 8088 ROM: motor on/drive 0, RESTORE then SEEK,
+    // finally read the first 2D sector by channel-0 8237 DMA.
+    cpu->bus().writeIo(0xfd1d,0x80);
+    cpu->bus().writeIo(0xfd18,0x0a); // RESTORE
+    if((cpu->bus().readIo(0xfd1f)&0x40)==0 ||
+       cpu->bus().readIo(0xfd19)!=0) {
+        std::fputs("FAIL: Mini-FDC RESTORE/IRQ completion\n",stderr);
+        return 9;
+    }
+    cpu->bus().writeIo(0xfd1b,2);
+    cpu->bus().writeIo(0xfd18,0x1a); // SEEK to track 2
+    if(cpu->bus().readIo(0xfd19)!=2 ||
+       (cpu->bus().readIo(0xfd1f)&0x40)==0) {
+        std::fputs("FAIL: Mini-FDC SEEK target/IRQ completion\n",stderr);
+        return 10;
+    }
+    cpu->bus().writeIo(0xfd18,0x0a); // back to track 0
+    cpu->bus().writeIo(0x1a,4); // mask DMA channel 0
+    cpu->bus().writeIo(0x1c,0); // clear 8237 address flip-flop
+    cpu->bus().writeIo(0x10,0x00);
+    cpu->bus().writeIo(0x10,0x40); // address 4000h
+    cpu->bus().writeIo(0x11,0xff);
+    cpu->bus().writeIo(0x11,0x00); // 256 bytes
+    cpu->bus().writeIo(0x20,0x00); // DMA bank 0
+    cpu->bus().writeIo(0x1b,0x44); // CH0, I/O to memory
+    cpu->bus().writeIo(0xfd1a,1); // sector 1
+    cpu->bus().writeIo(0xfd1c,0); // head 0
+    cpu->bus().writeIo(0x1a,0); // unmask CH0
+    cpu->bus().writeIo(0xfd18,0x80); // read sector
+    if(cpu->bus().readIo(0xfd18)!=0 ||
+       (cpu->bus().readIo(0xfd1f)&0x40)==0 ||
+       cpu->bus().readRam(0x4000)!=0x12 ||
+       cpu->bus().readRam(0x4001)!=0x34) {
+        std::fputs("FAIL: standard ROM 2D sector READ with drive control bits\n",stderr);
+        return 11;
+    }
     // Original ROM initializes display palette via FD98..FD9F.
     cpu->bus().writeIo(0xfd98,0x07);
     cpu->bus().writeIo(0xfd9f,0x03);
