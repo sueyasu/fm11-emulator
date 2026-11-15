@@ -44,6 +44,11 @@ def pack_test(case, flag_mask):
     if opcode in (0xc0,0xc1) and len(data)>index+2 and data[-1]>1:
         mask &= ~0x0800
     output.extend(struct.pack("<H",mask))
+    # NEC manuals specify that ROL4/ROR4 leave AL[7:4] undefined.
+    # Mask only these bits; the defined low nibble remains checked.
+    extended=(opcode==0x0f and index+1<len(data)
+              and data[index+1] in (0x28,0x2a))
+    output.extend(struct.pack("<H",0xff0f if extended else 0xffff))
     # The native core executes REP string instructions incrementally.
     prefixes=data[:index]
     repeated=bool(any(x in (0xf2,0xf3,0x64,0x65) for x in prefixes) and
