@@ -1110,7 +1110,10 @@ void Main8088Board::Core::executeOne()
             } else if(op.reg==4) {
                 ip_=target;
             } else { // /6 PUSH r/m16
-                push16(target);
+                // FF /6 with a register SP operand follows PUSH SP (54h)
+                // on 8088; memory operands push their read value.
+                push16(op.registerOperand && op.index==4
+                    ? WORD(regs_[4]-2) : target);
             }
         }
         break;
