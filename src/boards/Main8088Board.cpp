@@ -1322,8 +1322,16 @@ void Main8088Board::Core::executeOne()
         ip_=WORD(ip_+offset);
         break;
     }
+    case 0xc1: // Intel 8088 undocumented alias of RET near (C3h)
+        if(variant_!=CpuType::I8088)
+            throw std::runtime_error("opcode requires Intel 8088");
+        [[fallthrough]];
     case 0xc3: ip_=pop16();break; // RET near
     case 0xcb: ip_=pop16();segments_[1]=pop16();break; // RET far
+    case 0xc0: // Intel 8088 undocumented alias of RET imm16 (C2h)
+        if(variant_!=CpuType::I8088)
+            throw std::runtime_error("opcode requires Intel 8088");
+        [[fallthrough]];
     case 0xc2: { const WORD adjustment=fetch16(); ip_=pop16();regs_[4]=WORD(regs_[4]+adjustment);break; }
     case 0xca: { const WORD adjustment=fetch16(); ip_=pop16();segments_[1]=pop16();regs_[4]=WORD(regs_[4]+adjustment);break; }
     case 0x0f: { // POP CS on 8088; V20 bit manipulation escape
