@@ -1,6 +1,7 @@
 #include "Main8088Board.h"
 #include <array>
 #include <cstdio>
+#include <initializer_list>
 
 namespace {
 bool check(CpuType variant, const char* label) {
