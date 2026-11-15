@@ -39,6 +39,11 @@ public:
     std::unique_lock<std::recursive_mutex> lockDisplay() const {return mainBoard_->lockDisplay();}
     std::size_t addBoard(std::unique_ptr<CpuBoard> board);
 
+    // System devices belong to the shared FM-11 main board, not the
+    // optional 6809 CPU card (which is absent in an FM-11 BS).
+    MainBoard& systemBoard() {return *mainBoard_;}
+    const MainBoard& systemBoard() const {return *mainBoard_;}
+
     std::size_t boardCount() const;
     CpuBoard& board(std::size_t index);
     const CpuBoard& board(std::size_t index) const;
