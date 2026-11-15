@@ -259,6 +259,42 @@ int main(int argc,char** argv) {
                     if(floppyD88)floppy->loadD88(image);
                     else floppy->load2d(image);
                     floppy->setMountedDrive(floppyDrive);
+                    // A completed guest sector WRITE is persisted before
+                    // its FDC completion becomes visible. The same shared
+                    // device is used by both 6809 and 8088 CPU boards.
+                    const int imageFd=::open(floppyPath.c_str(),O_RDWR);
+                    if(imageFd<0)
+                        throw std::runtime_error("cannot open writable floppy image: "+
+                                                 floppyPath+": "+std::strerror(errno));
+                    auto ownedFd=std::shared_ptr<int>(new int(imageFd),[](int* fd) {
+                        ::close(*fd);
+                        delete fd;
+                    });
+                    floppy->setSectorWriter([ownedFd,floppy,floppyPath](
+                        unsigned channel,std::size_t rawOffset,
+                        const BYTE* data,std::size_t length) {
+                        const std::size_t imageOffset=floppy->hostImageOffset(channel,rawOffset);
+                        std::size_t done=0;
+                        while(done<length) {
+                            const auto n=::pwrite(*ownedFd,data+done,length-done,
+                                                  static_cast<off_t>(imageOffset+done));
+                            if(n<0 && errno==EINTR)continue;
+                            if(n<=0) {
+                                std::cerr<<"floppy sector write failed: "<<floppyPath
+                                         <<": "<<std::strerror(errno)<<"\n";
+                                return false;
+                            }
+                            done+=static_cast<std::size_t>(n);
+                        }
+                        // Guarantee completion through the host filesystem,
+                        // not just a write to the OS page cache.
+                        if(::fdatasync(*ownedFd)!=0) {
+                            std::cerr<<"floppy sector sync failed: "<<floppyPath
+                                     <<": "<<std::strerror(errno)<<"\n";
+                            return false;
+                        }
+                        return true;
+                    });
                 }
             }
         }
@@ -798,17 +834,9 @@ int main(int argc,char** argv) {
         cpuWorker.stop();
         machine.stopDisplayCpu();
         machine.stopRealtimePtm();
-        // No guest CPU or DMA activity can mutate the floppy after
-        // this point. Flush only dirty media; keep the D88 container
-        // (sector headers, track offsets, and metadata) unchanged.
-        if(!floppyPath.empty()) {
-            auto disk=machine.systemBoard().floppyDevice();
-            if(disk->dirty2d()) {
-                saveDiskImage(floppyPath,disk->image2d());
-                disk->clearDirty2d();
-                std::cerr<<"Floppy image saved: "<<floppyPath<<"\n";
-            }
-        }
+        // Completed writes have already been persisted through the
+        // shared FDC's sector callback. No whole-image rewrite on exit:
+        // it would be redundant and could overwrite external changes.
         return 0;
     } catch(const std::exception& e) {
         std::cerr<<"fm11-sdl: "<<e.what()<<"\n";
