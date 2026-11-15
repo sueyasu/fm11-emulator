@@ -19,6 +19,9 @@
 #include <fcntl.h>
 #include <termios.h>
 #include <unistd.h>
+#include <sys/stat.h>
+#include <cstdio>
+#include <cstring>
 #include <cstdint>
 #include <iostream>
 #include <fstream>
@@ -68,6 +71,46 @@ std::vector<BYTE> readDiskImage(const std::string& path) {
     if(!file)throw std::runtime_error("cannot open floppy image: "+path);
     return std::vector<BYTE>(std::istreambuf_iterator<char>(file),
                              std::istreambuf_iterator<char>());
+}
+// Preserve D88 sector headers and commit the whole image atomically.
+// Never truncate the mounted file before every byte of the replacement
+// has reached a temporary file in the same directory.
+void saveDiskImage(const std::string& path,const std::vector<BYTE>& bytes) {
+    struct stat original{};
+    if(::stat(path.c_str(),&original)!=0)
+        throw std::runtime_error("cannot stat floppy image: "+path+": "+std::strerror(errno));
+    std::string temporary=path+".tmp.XXXXXX";
+    std::vector<char> name(temporary.begin(),temporary.end());
+    name.push_back('\0');
+    const int fd=::mkstemp(name.data());
+    if(fd<0)
+        throw std::runtime_error("cannot create floppy save file: "+path+": "+std::strerror(errno));
+    const std::string tmp(name.data());
+    try {
+        if(::fchmod(fd,original.st_mode&07777)!=0)
+            throw std::runtime_error("cannot preserve floppy image permissions: "+path);
+        std::size_t offset=0;
+        while(offset<bytes.size()) {
+            const auto written=::write(fd,bytes.data()+offset,bytes.size()-offset);
+            if(written<0 && errno==EINTR)continue;
+            if(written<=0)
+                throw std::runtime_error("cannot write floppy image: "+path+": "+std::strerror(errno));
+            offset+=static_cast<std::size_t>(written);
+        }
+        if(::fsync(fd)!=0)
+            throw std::runtime_error("cannot sync floppy image: "+path+": "+std::strerror(errno));
+        if(::close(fd)!=0)
+            throw std::runtime_error("cannot close floppy image: "+path+": "+std::strerror(errno));
+    } catch(...) {
+        ::close(fd);
+        ::unlink(tmp.c_str());
+        throw;
+    }
+    if(::rename(tmp.c_str(),path.c_str())!=0) {
+        const int error=errno;
+        ::unlink(tmp.c_str());
+        throw std::runtime_error("cannot replace floppy image: "+path+": "+std::strerror(error));
+    }
 }
 std::uint64_t parseCount(const std::string& text) {
     std::size_t end=0;
@@ -752,6 +795,17 @@ int main(int argc,char** argv) {
         cpuWorker.stop();
         machine.stopDisplayCpu();
         machine.stopRealtimePtm();
+        // No guest CPU or DMA activity can mutate the floppy after
+        // this point. Flush only dirty media; keep the D88 container
+        // (sector headers, track offsets, and metadata) unchanged.
+        if(!floppyPath.empty()) {
+            auto disk=machine.systemBoard().floppyDevice();
+            if(disk->dirty2d()) {
+                saveDiskImage(floppyPath,disk->image2d());
+                disk->clearDirty2d();
+                std::cerr<<"Floppy image saved: "<<floppyPath<<"\n";
+            }
+        }
         return 0;
     } catch(const std::exception& e) {
         std::cerr<<"fm11-sdl: "<<e.what()<<"\n";
