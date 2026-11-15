@@ -41,6 +41,20 @@ int main() {
         std::fputs("FAIL: 8088 boot ROM cannot initialize display palette\n",stderr);
         return 7;
     }
+    // The original 8088 ROM issues display commands through FC81-FC84.
+    // They must reach the shared display mailbox, not private card I/O RAM.
+    cpu->bus().writeIo(0xfc81,0x15);
+    cpu->bus().writeIo(0xfc82,0x03);
+    cpu->bus().writeIo(0xfc83,0x01);
+    cpu->bus().writeIo(0xfc84,'M');
+    if(machine.systemBoard().readDisplayShared(1)!=0x15 ||
+       machine.systemBoard().readDisplayShared(2)!=0x03 ||
+       machine.systemBoard().readDisplayShared(3)!=0x01 ||
+       machine.systemBoard().readDisplayShared(4)!='M' ||
+       cpu->bus().readIo(0xfc84)!='M') {
+        std::fputs("FAIL: 8088 boot ROM display mailbox is not shared\n",stderr);
+        return 8;
+    }
     machine.systemBoard().queueSerialInput('A');
     if((cpu->bus().readIo(0xfd07)&0x02)==0 ||
        cpu->bus().readIo(0xfd06)!='A') {
