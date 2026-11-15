@@ -71,6 +71,7 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                     else if(value=="6309")cfg.main6809Cpu=CpuType::HD6309;
                     else throw std::invalid_argument("main_6809.cpu must be 6809 or 6309");
                 } else if(key=="clock_hz")cfg.main6809ClockHz=clockHz(value);
+                else if(key=="rom")cfg.main6809Rom=value;
                 else handled=false;
             } else if(section=="main_8088") {
                 if(key=="installed")cfg.main8088Installed=boolean(value);
@@ -79,6 +80,7 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                     else if(value=="v20")cfg.main8088Cpu=CpuType::NECV20;
                     else throw std::invalid_argument("main_8088.cpu must be 8088 or v20");
                 } else if(key=="clock_hz")cfg.main8088ClockHz=clockHz(value);
+                else if(key=="rom")cfg.main8088Rom=value;
                 else handled=false;
             } else if(section=="optional_cpu") {
                 if(key=="type") {
@@ -92,6 +94,8 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                     if(value!="6809")
                         throw std::invalid_argument("display CPU supports 6809 only (6309 not implemented)");
                 } else if(key=="clock_hz")cfg.displayClockHz=clockHz(value);
+                else if(key=="rom")cfg.displayRom=value;
+                else if(key=="ank_rom")cfg.ankRom=value;
                 else handled=false;
             }
             if(!handled)throw std::invalid_argument("unknown setting ["+section+"]."+key);
