@@ -1473,9 +1473,9 @@ void Main8088Board::Core::executeOne()
                     bus_.writeMemory(physical(targetSegment,targetOffset),adjusted);
             }
             if(bytes!=0) {
-                // ZF is only defined for a valid BCD string. Preserve
-                // the existing aggregate-zero policy for this initial
-                // instruction-level implementation.
+                // V20 instruction flags: decimal carry and the last
+                // iteration's zero result are observable. Other status
+                // flags are undefined and masked by test metadata.
                 flags_=WORD(flags_&~(CF|ZF|AF));
                 if(carry)flags_|=CF;
                 if(zeroFlag)flags_|=ZF;
