@@ -115,7 +115,7 @@ def main():
         names = args.opcode or ["00"]
         paths = []
         for name in names:
-            if not re.fullmatch(r"[0-9a-fA-F]{2}(?:\\.[0-7])?", name):
+            if not re.fullmatch(r"[0-9a-fA-F]{2}(?:\.[0-7])?", name):
                 parser.error(f"invalid opcode: {name}")
             matches = sorted(args.data_dir.glob(f"{name.upper()}.json.gz"))
             if "." not in name:
