@@ -43,3 +43,15 @@ Scope: instruction-level final CPU and RAM state, not cycle-accurate
 prefetch/bus timing. This is an initial compatibility survey. Passing
 it does not yet validate the V20's 8080 emulation mode; the upstream
 `v1_emulation` dataset is a separate workstream.
+
+## ROL4/ROR4 undefined AL upper nibble
+
+The NEC instruction manual explicitly states that the upper four bits of
+AL are not guaranteed after `0F 28` (ROL4) or `0F 2A` (ROR4). Hardware
+test cases nevertheless record those bits, producing apparent register
+mismatches that cannot be treated as conformance failures. For these two
+instructions only, the V20 driver sends an AX comparison mask of `FF0Fh`
+to the native adapter; AX bits 15:8 and 3:0, all other registers, RAM,
+IP and documented FLAGS remain checked. The Intel 8088 driver uses
+`FFFFh` for all AX comparisons. The offline regression
+`mainv20_nibble_flag_mask` covers the masking rules.
