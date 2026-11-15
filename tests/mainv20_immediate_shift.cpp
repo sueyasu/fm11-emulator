@@ -104,13 +104,22 @@ int main() {
                 if(!check("count 1",opcode,extension,1,memoryForm,before,
                           expected,flags,STATUS))return 2;
             }
-    // Verify an immediate count > 1 by comparing the same operation
-    // performed twice via C0/C1 count=1 (OF is undefined after count>1).
+    // Two-bit counts: exercise actual shift values and final CF, not
+    // merely decoding/IP. OF is undefined for counts above one.
+    constexpr std::array<WORD,8> byteTwice={
+        0x06,0x60,0x07,0xe0,0x04,0x20,0x04,0xe0};
+    constexpr std::array<WORD,8> wordTwice={
+        0x0006,0x6000,0x0007,0xe000,
+        0x0004,0x2000,0x0004,0xe000};
     for(BYTE opcode:{BYTE(0xc0),BYTE(0xc1)})
-        for(unsigned extension:{0u,1u,2u,3u,4u,5u,7u}) {
-            const WORD before=opcode==0xc0?0x0081:0x8001;
-            const State twice=execute(CpuType::NECV20,opcode,extension,2,false,before);
-            if(twice.ip!=3 || twice.sp!=0x8000 || twice.cs!=0x1000)return 3;
-        }
+        for(unsigned extension:{0u,1u,2u,3u,4u,5u,7u})
+            for(bool memoryForm:{false,true}) {
+                const WORD before=opcode==0xc0?0x0081:0x8001;
+                const WORD expected=(opcode==0xc0?byteTwice:wordTwice)[extension];
+                // Each of the seven groups shifts out a zero bit on
+                // the second iteration, clearing CF.
+                if(!check("count 2",opcode,extension,2,memoryForm,before,
+                          expected,0,0x0001))return 3;
+            }
     return 0;
 }
