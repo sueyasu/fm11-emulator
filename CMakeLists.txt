@@ -94,6 +94,10 @@ endif()
 if(FM11_BUILD_TESTS)
     if(UNIX)
         find_package(Python3 COMPONENTS Interpreter REQUIRED)
+        add_test(NAME main8088_singlestep_smoke
+                 COMMAND ${Python3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/main8088_singlestep_smoke.py
+                         $<TARGET_FILE:fm11-8088-singlestep>)
         add_test(NAME extract_roms
                  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/extract_roms.py
                          ${CMAKE_CURRENT_SOURCE_DIR}/tools/extract_roms.py)
