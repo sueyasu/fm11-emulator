@@ -105,7 +105,8 @@ BYTE Main8088Bus::readIo(WORD port) const
     if(port==0x00)return picReadIsr_?picInService_:picRequest_;
     if(port==0x01)return picMask_;
     if(port>=0xfc00 && port<=0xfcff) return cardIoRam_[port&0xff];
-    if(((port==0xfd04 || port==0xfd05 || port==0xfd06 || port==0xfd07) ||
+    if(((port==0xfd04 || port==0xfd05 || port==0xfd06 || port==0xfd07 ||
+         port==0xfd23) ||
         (port>=0xfd38 && port<=0xfd3f)) && mainBoard_) {
         BYTE value=0;
         if(mainBoard_->readIo(port,value))return value;
