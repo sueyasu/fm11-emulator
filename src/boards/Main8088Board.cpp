@@ -1431,7 +1431,7 @@ void Main8088Board::Core::executeOne()
             const WORD targetSegment=segments_[0];
             bool carry=false;
             bool auxCarry=false;
-            bool allZero=true;
+            bool zeroFlag=false;
             for(unsigned index=0;index<bytes;++index) {
                 const WORD sourceOffset=WORD(regs_[6]+index);
                 const WORD targetOffset=WORD(regs_[7]+index);
@@ -1464,9 +1464,11 @@ void Main8088Board::Core::executeOne()
                 if(adjustHigh)
                     adjusted=BYTE(subtract?unsigned(adjusted)-0x60u
                                           :unsigned(adjusted)+0x60u);
+                // The V20 updates ZF from the binary ADD result
+                // before decimal adjustment; SUB4S/CMP4S clear it.
+                zeroFlag=ext==0x20 && raw==0 && !binaryCarry;
                 carry=adjustHigh;
                 auxCarry=adjustLow;
-                if(adjusted!=0)allZero=false;
                 if(ext!=0x26)
                     bus_.writeMemory(physical(targetSegment,targetOffset),adjusted);
             }
@@ -1476,7 +1478,7 @@ void Main8088Board::Core::executeOne()
                 // instruction-level implementation.
                 flags_=WORD(flags_&~(CF|ZF|AF));
                 if(carry)flags_|=CF;
-                if(allZero)flags_|=ZF;
+                if(zeroFlag)flags_|=ZF;
                 if(auxCarry)flags_|=AF;
             }
             break;
