@@ -946,7 +946,10 @@ void Main8088Board::Core::executeOne()
         break;
     }
     case 0xd5: { // AAD imm8 (normally 0Ah)
-        const unsigned base=fetch8();
+        const unsigned encodedBase=fetch8();
+        // NEC V20 uses decimal radix 10 for AAD irrespective of the
+        // encoded immediate; 8088 uses the immediate as radix.
+        const unsigned base=variant_==CpuType::NECV20?10u:encodedBase;
         const unsigned result=(getReg8(4)*base+getReg8(0))&255u;
         regs_[0]=WORD(result); // AH = 0
         flags_=WORD(flags_&~(SF|ZF|PF));
@@ -1384,8 +1387,8 @@ void Main8088Board::Core::executeOne()
             const unsigned startReg=spec&7u;
             const unsigned lengthReg=(spec>>3)&7u;
             const bool immediate=(ext&8u)!=0;
-            if(immediate && lengthReg!=0)
-                throw std::runtime_error("invalid NEC INS/EXT immediate encoding");
+            // The immediate form ignores ModR/M.reg; real V20 test
+            // encodings use all eight values, not solely /0.
             const unsigned count=((immediate?fetch8():getReg8(lengthReg))&15u)+1u;
             const unsigned start=getReg8(startReg)&15u;
             const bool insert=(ext==0x31 || ext==0x39);
@@ -1410,7 +1413,8 @@ void Main8088Board::Core::executeOne()
             if(!insert)regs_[0]=WORD(value);
             const unsigned end=start+count;
             regs_[insert ? 7u : 6u]=WORD(origin+end/8u);
-            setReg8(startReg,BYTE(end&7u));
+            // V20 bit offset is a four-bit quantity, not three-bit.
+            setReg8(startReg,BYTE(end&15u));
             // FLAGS are unaffected by INS/EXT.
             break;
         }
@@ -1496,10 +1500,16 @@ void Main8088Board::Core::executeOne()
         const unsigned bitMask=1u<<bitIndex;
         const unsigned value=readOperand(operand,bits);
         if(operation==0) {
-            // NEC V20 TEST1 sets ZF from the selected bit, and clears
-            // CY/OV. SF/PF/AF are undefined and masked by metadata.
-            flags_&=WORD(~(CF|OF|ZF));
-            if((value&bitMask)==0)flags_|=ZF;
+            if(ext&8u) {
+                // TEST1 with an immediate computes the status flags
+                // of a masked logical value; unlike CL-form TEST1,
+                // the reference suite defines SF/PF (AF undefined).
+                setLogicFlags(value&bitMask,bits);
+            } else {
+                // TEST1,CL defines CF/OF/ZF only.
+                flags_&=WORD(~(CF|OF|ZF));
+                if((value&bitMask)==0)flags_|=ZF;
+            }
         } else {
             const unsigned updated=operation==1 ? (value&~bitMask)
                 : operation==2 ? (value|bitMask) : (value^bitMask);
