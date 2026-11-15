@@ -778,7 +778,12 @@ void Main8088Board::Core::executeOne()
     (void)lockPrefix;
     const bool ioString=variant_==CpuType::NECV20 && opcode>=0x6c && opcode<=0x6f;
     const bool stringOp=ioString || (opcode>=0xa4 && opcode<=0xa7) || (opcode>=0xaa && opcode<=0xaf);
-    if(repeat && !stringOp)
+    // Intel 8088 permits REP/REPNE on F6/F7 group arithmetic.
+    // On IDIV these undocumented prefixes negate the quotient;
+    // unlike REP strings, they do not repeat the operation.
+    const bool repGroup3=variant_==CpuType::I8088 &&
+                          (opcode==0xf6 || opcode==0xf7);
+    if(repeat && !stringOp && !repGroup3)
         throw std::runtime_error("unsupported REP opcode");
     if((repeat==0x64 || repeat==0x65) &&
        !(opcode==0xa6 || opcode==0xa7 || opcode==0xae || opcode==0xaf))
@@ -1083,16 +1088,26 @@ void Main8088Board::Core::executeOne()
             if(bits==8) {
                 const int dividend=static_cast<std::int16_t>(regs_[0]);
                 const int divisor=static_cast<std::int8_t>(BYTE(operand));
-                const int quotient=dividend/divisor;
-                if(quotient < -128 || quotient > 127){interrupt(0);break;}
+                const int rawQuotient=dividend/divisor;
+                const int quotient=variant_==CpuType::I8088 && repeat
+                    ? -rawQuotient : rawQuotient;
+                // Intel 8088 raises INT 0 for -128 (not just values
+                // outside signed 8-bit range). Later CPUs allow -128.
+                const int minimum=variant_==CpuType::I8088?-127:-128;
+                if(quotient < minimum || quotient > 127){interrupt(0);break;}
                 const int remainder=dividend%divisor;
                 regs_[0]=WORD((unsigned(BYTE(remainder))<<8)|BYTE(quotient));
             } else {
                 const std::uint32_t raw=(std::uint32_t(regs_[2])<<16)|regs_[0];
                 const std::int64_t dividend=static_cast<std::int32_t>(raw);
                 const std::int64_t divisor=static_cast<std::int16_t>(WORD(operand));
-                const std::int64_t quotient=dividend/divisor;
-                if(quotient < -32768 || quotient > 32767){interrupt(0);break;}
+                const std::int64_t rawQuotient=dividend/divisor;
+                const std::int64_t quotient=variant_==CpuType::I8088 && repeat
+                    ? -rawQuotient : rawQuotient;
+                // The original 8088 also faults at the minimum
+                // signed 16-bit quotient (-32768).
+                const std::int64_t minimum=variant_==CpuType::I8088?-32767:-32768;
+                if(quotient < minimum || quotient > 32767){interrupt(0);break;}
                 regs_[0]=WORD(quotient);
                 regs_[2]=WORD(dividend%divisor);
             }
