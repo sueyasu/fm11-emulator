@@ -63,6 +63,19 @@ nonzero on any failure/unsupported result.
 * Use `metadata.json` for opcode/subopcode status and undefined flag
   masks. The native comparison applies a further architecturally relevant
   FLAG mask; reserved status bits are not treated as failures.
+* For `F6.6`/`F6.7` and `F7.6`/`F7.7`, a divide error
+  produces a type-0 interrupt with an ordinary three-word stack frame.
+  The 8088's saved IP points *after* the faulting instruction. The
+  arithmetic status bits of FLAGS are undefined after DIV/IDIV, including
+  in the copy saved on the exception stack. The comparison therefore
+  masks only the two bytes of the saved FLAGS word when an INT0 frame
+  was actually pushed (SP decreased by six), using the same metadata
+  flag mask; it still checks saved IP/CS and other RAM exactly.
+* REP/REPNE preceding IDIV is a documented-by-testing 8088 quirk:
+  it negates the quotient without changing the remainder. The 8088
+  also faults at the most negative signed quotient (-128/-32768),
+  unlike later x86 CPUs. These are exercised by
+  `main8088_divide_quirks` and `main8088_singlestep_divide_stack`.
 * For `D2h`/`D3h` with `CL > 1`, **OF is undefined** on the 8088.
   The driver removes bit `0800h` from the comparison mask for those cases
   individually; it still compares OF for `CL = 0` and `CL = 1`.
