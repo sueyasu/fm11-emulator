@@ -192,18 +192,18 @@ int main(int argc,char** argv) {
                 // FloppyDevice. Mount only afterwards: mounting on the
                 // CPU's initial private device would lose the image.
                 if(!floppyPath.empty()) {
-                    if(!mainBoard)
-                        throw std::invalid_argument("floppy mounting via SDL requires an installed 6809 card");
+                    // Mount on the shared FDC, irrespective of the main
+                    // CPU card: FM-11 BS has an 8088 but no 6809 main CPU.
+                    auto floppy=machine.systemBoard().floppyDevice();
                     auto image=readDiskImage(floppyPath);
-                    if(floppyD88)mainBoard->loadFloppyD88(image);
-                    else mainBoard->loadFloppy2d(image);
-                    mainBoard->setFloppyDrive(floppyDrive);
+                    if(floppyD88)floppy->loadD88(image);
+                    else floppy->load2d(image);
+                    floppy->setMountedDrive(floppyDrive);
                 }
             }
         }
         if(mainBoard)mainBoard->setBootDip(static_cast<BYTE>(bootDip));
-        if(!floppyPath.empty() && mainBoard==nullptr)
-            throw std::invalid_argument("floppy image requires --main-rom");
+
         machine.setDisplayCpuClockHz(testPattern?0:config.displayClockHz);
         machine.setDisplayCpuSpeedMultiplier(speed);
         machine.reset();
@@ -251,7 +251,7 @@ int main(int argc,char** argv) {
         std::cerr<<"FM-11 renderer: "<<(ui.glRenderer?"OpenGL 3.3":"software")<<"\n";
         // Standalone raw PTY for guest serial, independent of SDL input.
         int serialMaster=-1,serialSlave=-1;
-        if(mainBoard) {
+        if(mainBoard || main8088Enabled) {
             serialMaster=posix_openpt(O_RDWR|O_NOCTTY|O_NONBLOCK);
             if(serialMaster<0 || grantpt(serialMaster)!=0 || unlockpt(serialMaster)!=0)
                 throw std::runtime_error("cannot create serial PTY");
@@ -273,7 +273,7 @@ int main(int argc,char** argv) {
         auto serviceSerial=[&]() {
             if(serialMaster<0)return;
             BYTE ch=0;
-            while(mainBoard->takeSerialOutput(ch))serialPending.push_back(ch);
+            while(machine.systemBoard().takeSerialOutput(ch))serialPending.push_back(ch);
             if(!serialPending.empty()) {
                 const ssize_t n=write(serialMaster,serialPending.data(),serialPending.size());
                 if(n>0)serialPending.erase(serialPending.begin(),serialPending.begin()+n);
@@ -284,7 +284,7 @@ int main(int argc,char** argv) {
             for(;;) {
                 const ssize_t n=read(serialMaster,input,sizeof(input));
                 if(n>0) {
-                    for(ssize_t i=0;i<n;++i)mainBoard->queueSerialInput(input[i]);
+                    for(ssize_t i=0;i<n;++i)machine.systemBoard().queueSerialInput(input[i]);
                 } else if(n<0 && errno==EINTR)continue;
                 else if(n<0 && errno!=EAGAIN && errno!=EWOULDBLOCK && errno!=EIO)
                     throw std::runtime_error("serial PTY read failed");
