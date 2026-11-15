@@ -60,6 +60,7 @@ bool checkOne(std::istream& in,Main8088Board& board,U32 testcase,
               unsigned& failures,unsigned& unsupported,unsigned& passed) {
     const Registers initial=readRegs(in),expected=readRegs(in);
     const U16 flagMask=u16(in);
+    const U16 axMask=u16(in); // Per-case defined bits of AX (V20 ROL4/ROR4).
     const U8 isRepeat=u8(in);
     auto& cpu=static_cast<Main8088Board::Core&>(board.cpu());
     auto& bus=board.bus();
@@ -94,8 +95,13 @@ bool checkOne(std::istream& in,Main8088Board& board,U32 testcase,
     const char* general[]={"AX","CX","DX","BX","SP","BP","SI","DI"};
     const char* segment[]={"ES","CS","SS","DS"};
     std::string problem;
-    for(unsigned i=0;i<8;++i)if(cpu.reg(i)!=expected.g[i]){
-        problem=std::string(general[i])+" "+hex(cpu.reg(i))+" != "+hex(expected.g[i]);break;
+    for(unsigned i=0;i<8;++i) {
+        const U16 registerMask=i==0?axMask:U16(0xffff);
+        if(((cpu.reg(i)^expected.g[i])&registerMask)!=0) {
+            problem=std::string(general[i])+" "+hex(cpu.reg(i))+" != "+
+                hex(expected.g[i])+" mask="+hex(registerMask);
+            break;
+        }
     }
     if(problem.empty())for(unsigned i=0;i<4;++i)
         if(cpu.segment(i)!=expected.s[i]) {
