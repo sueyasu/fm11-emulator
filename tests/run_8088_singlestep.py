@@ -40,7 +40,14 @@ def pack_test(test, flag_mask):
     bytes_ = test.get("bytes", [])
     # REP prefixed strings: the FM-11 core runs one iteration per instruction.
     # The actual instruction may carry a segment override prefix.
-    repeat = any(b in (0xF2, 0xF3) for b in bytes_[:-1])
+    repeat = False
+    for b in bytes_:
+        if b in (0x26, 0x2E, 0x36, 0x3E, 0xF0):
+            continue
+        if b in (0xF2, 0xF3):
+            repeat = True
+            continue
+        break
     result.extend(struct.pack("<B", int(repeat)))
     initial_ram = initial.get("ram", [])
     result.extend(struct.pack("<I", len(initial_ram)))
