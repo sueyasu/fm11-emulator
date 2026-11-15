@@ -79,3 +79,24 @@ Run the focused regression and reference tests:
 ctest --test-dir build -R mainv20_extended_arithmetic --output-on-failure
 python3 tests/run_v20_singlestep.py --opcode 0F18 --opcode 0F19 --opcode 0F20 --opcode 0F22 --opcode 0F26 --opcode 0F31 --opcode 0F33 --opcode 0F39 --opcode 0F3B --opcode D5 --limit 100
 ```
+
+## Phase 3: V20 immediate shifts (C0/C1)
+
+On the NEC V20, `C0 /0..7 ib` and `C1 /0..7 ib` are the
+immediate-count forms of the 8-bit and 16-bit Group 2 rotate/shift
+instructions. The byte following ModR/M (and any displacement) is the
+shift count; a count of zero leaves the destination and FLAGS intact.
+The implementation shares the proven D0-D3 shift/rotate logic.
+
+On the original Intel 8088 these same opcodes are undocumented RET
+aliases: C0 means RET near with imm16 stack adjustment, and C1 is RET
+near. Those behaviors remain unchanged.
+
+The `mainv20_immediate_shift` CTest exercises register/memory
+forms, all defined operation subgroups, and zero, one, and multi-bit
+counts. The hardware dataset intentionally skips undocumented /6.
+
+```sh
+ctest --test-dir build -R 'mainv20_immediate_shift|main8088_undocumented_ret' --output-on-failure
+python3 tests/run_v20_singlestep.py --opcode C0 --opcode C1 --limit 100
+```
