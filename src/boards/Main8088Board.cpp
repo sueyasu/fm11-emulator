@@ -1226,8 +1226,21 @@ void Main8088Board::Core::executeOne()
     case 0x8b: {auto op=decodeModRm();regs_[op.reg]=read16(op);break;} // MOV r16,r/m16
     case 0xc6: {auto op=decodeModRm();if(op.reg!=0)throw std::runtime_error("invalid MOV C6 group");write8(op,fetch8());break;}
     case 0xc7: {auto op=decodeModRm();if(op.reg!=0)throw std::runtime_error("invalid MOV C7 group");write16(op,fetch16());break;}
-    case 0x8c: {auto op=decodeModRm();if(op.reg>=4)throw std::runtime_error("invalid MOV segment");write16(op,segments_[op.reg]);break;}
-    case 0x8e: {auto op=decodeModRm();if(op.reg>=4 || op.reg==1)throw std::runtime_error("invalid MOV segment");segments_[op.reg]=read16(op);if(op.reg==2)irqInhibit_=1;break;}
+    case 0x8c: { // MOV r/m16,Sreg
+        const auto op=decodeModRm();
+        // 8086/8088 decodes only the low two bits of ModR/M.reg.
+        // /4../7 are aliases of ES/CS/SS/DS (/0../3).
+        write16(op,segments_[op.reg&3u]);
+        break;
+    }
+    case 0x8e: { // MOV Sreg,r/m16
+        const auto op=decodeModRm();
+        const unsigned segment=op.reg&3u;
+        // Original 8088 also permits MOV CS,r/m16, unlike later x86 CPUs.
+        segments_[segment]=read16(op);
+        if(segment==2)irqInhibit_=1;
+        break;
+    }
     // 8088 I/O instructions: immediate ports are zero-extended to 16 bits.
     // Word accesses use two successive byte ports (including FFFF->0000).
     case 0xe4: setReg8(0,bus_.readIo(fetch8()));break; // IN AL,imm8
