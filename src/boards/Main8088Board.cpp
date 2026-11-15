@@ -1554,9 +1554,14 @@ void Main8088Board::Core::executeOne()
         if(overflow)flags_|=WORD(CF|OF);
         break;
     }
-    case 0xc8: { // NEC V20: ENTER frame_size, nesting_level
-        if(variant_!=CpuType::NECV20)
-            throw std::runtime_error("opcode requires NEC V20");
+    case 0xc8: { // 8088 alias of CAh (RETF imm16); NEC V20 ENTER
+        if(variant_==CpuType::I8088) {
+            const WORD adjustment=fetch16();
+            ip_=pop16();
+            segments_[1]=pop16();
+            regs_[4]=WORD(regs_[4]+adjustment);
+            break;
+        }
         const WORD allocation=fetch16();
         const unsigned nesting=fetch8()&31u;
         push16(regs_[5]);
@@ -1576,9 +1581,12 @@ void Main8088Board::Core::executeOne()
         regs_[4]=WORD(regs_[4]-allocation);
         break;
     }
-    case 0xc9: // NEC V20: LEAVE
-        if(variant_!=CpuType::NECV20)
-            throw std::runtime_error("opcode requires NEC V20");
+    case 0xc9: // 8088 alias of CBh (RETF); NEC V20 LEAVE
+        if(variant_==CpuType::I8088) {
+            ip_=pop16();
+            segments_[1]=pop16();
+            break;
+        }
         regs_[4]=regs_[5];
         regs_[5]=pop16();
         break;
