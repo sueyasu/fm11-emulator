@@ -12,12 +12,18 @@ a disk containing its own IPL:
 
 ```sh
 ./build-no-lto/fm11-sdl --config config/fm11bs.conf.example \
-  --8088-rom external/roms/boot8088.bin \
   --floppy-d88 ../fm11-cpm86/build/fm11_cpm86_boot_2d.d88 \
   --floppy-drive 0
 ```
 
-Do not supply `--main-rom` in this configuration. The display subsystem
+ROM paths for both main CPU cards and the display/ANK subsystems are
+provided by `rom` and `ank_rom` keys in the config file. For a temporary
+boot override use `--main-rom FILE`, which targets the **selected** main CPU.
+Use `--6809-rom FILE` or `--8088-rom FILE` to override one specific CPU
+card instead. Explicit `--main-rom` takes precedence for the selected CPU;
+`--rom FILE` continues to override the display-subsystem ROM.
+
+No ROM options are needed for the example configuration. The display subsystem
 still loads its own ROM through the independent `--rom` option.
 
 To verify the common-device setup:
