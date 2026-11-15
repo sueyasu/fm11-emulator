@@ -178,9 +178,15 @@ void Main6809Board::writeFloppySector()
             return;
         }
     }
+    std::array<BYTE,256> sectorBytes{};
     for(unsigned i=0;i<256;++i) {
         const WORD address=WORD(startAddress+(down?-int(i):int(i)));
-        floppy_->write(0,offset+i,readPhysical(dmaBank|address));
+        sectorBytes[i]=readPhysical(dmaBank|address);
+    }
+    if(!floppy_->writeSector(0,offset,sectorBytes.data())) {
+        floppyStatus_=0x10;
+        ioRegisters_[0x50]|=0x40;
+        return;
     }
     // The completed 256-byte transfer advances the channel address and
     // exhausts the byte count, as a DMA engine would do.
