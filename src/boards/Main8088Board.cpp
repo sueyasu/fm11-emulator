@@ -193,14 +193,19 @@ unsigned Main8088Board::Core::alu(unsigned operation,unsigned lhs,unsigned rhs,u
     case 2: { // ADC
         const unsigned carry=(flags_&CF)?1u:0u;
         result=lhs+rhs+carry;
-        setArithmeticFlags(lhs,rhs+carry,result,bits,false);
-        // AF must use the original operand and the incoming carry.
+        // AF and OF must use the original RHS, not RHS+carry:
+        // e.g. 00h+0Fh+CF => 10h sets AF.
+        setArithmeticFlags(lhs,rhs,result,bits,false);
         break;
     }
     case 3: { // SBB
         const unsigned carry=(flags_&CF)?1u:0u;
         result=(lhs-rhs-carry)&mask;
-        setArithmeticFlags(lhs,rhs+carry,result,bits,true);
+        // AF and OF use the unmodified RHS. For CF the incoming
+        // borrow must also be included, including lhs == rhs.
+        setArithmeticFlags(lhs,rhs,result,bits,true);
+        if(lhs<rhs+carry)flags_|=CF;
+        else flags_&=WORD(~CF);
         break;
     }
     case 4:result=lhs&rhs;setLogicFlags(result,bits);break;
@@ -1537,7 +1542,13 @@ void Main8088Board::Core::executeOne()
             regs_[index]=previous;
             break;
         }
-        if(opcode>=0x50 && opcode<=0x57) {push16(regs_[opcode-0x50]);break;}
+        if(opcode>=0x50 && opcode<=0x57) {
+            const unsigned index=opcode-0x50;
+            // Original FM-11 Sim86 and the 8088 both PUSH the decremented
+            // SP value for opcode 54h. Match that behavior for V20 as well.
+            push16(index==4 ? WORD(regs_[4]-2) : regs_[index]);
+            break;
+        }
         if(opcode>=0x58 && opcode<=0x5f) {regs_[opcode-0x58]=pop16();break;}
         if(opcode>=0xb0 && opcode<=0xb7) {
             const BYTE v=fetch8();
