@@ -33,6 +33,14 @@ int main() {
         std::fputs("FAIL: 8088 CPU does not see shared FDC media\n",stderr);
         return 2;
     }
+    // Original ROM initializes display palette via FD98..FD9F.
+    cpu->bus().writeIo(0xfd98,0x07);
+    cpu->bus().writeIo(0xfd9f,0x03);
+    if(machine.systemBoard().displayPalette(0)!=7 ||
+       machine.systemBoard().displayPalette(7)!=3) {
+        std::fputs("FAIL: 8088 boot ROM cannot initialize display palette\n",stderr);
+        return 7;
+    }
     machine.systemBoard().queueSerialInput('A');
     if((cpu->bus().readIo(0xfd07)&0x02)==0 ||
        cpu->bus().readIo(0xfd06)!='A') {
