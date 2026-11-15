@@ -1488,15 +1488,16 @@ void Main8088Board::Core::executeOne()
         const unsigned operation=(ext>>1)&3; // TEST1, CLR1, SET1, NOT1
         const unsigned bits=(ext&1)?16u:8u;
         const auto operand=decodeModRm();
-        if(operand.reg!=0)
-            throw std::runtime_error("invalid NEC bit ModR/M extension");
+        // The V20 bit-operation decoder ignores the ModR/M.reg field.
+        // The hardware-generated tests include /1../7 encodings.
         const unsigned bitIndex=((ext&8)?fetch8():getReg8(1))&(bits-1);
         const unsigned bitMask=1u<<bitIndex;
         const unsigned value=readOperand(operand,bits);
         if(operation==0) {
-            // TEST1 affects ZF only, unlike the 8088 TEST instruction.
-            if(value&bitMask)flags_&=WORD(~ZF);
-            else flags_|=ZF;
+            // NEC V20 TEST1 sets ZF from the selected bit, and clears
+            // CY/OV. SF/PF/AF are undefined and masked by metadata.
+            flags_&=WORD(~(CF|OF|ZF));
+            if((value&bitMask)==0)flags_|=ZF;
         } else {
             const unsigned updated=operation==1 ? (value&~bitMask)
                 : operation==2 ? (value|bitMask) : (value^bitMask);
