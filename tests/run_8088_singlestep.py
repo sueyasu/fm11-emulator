@@ -54,8 +54,11 @@ def pack_test(test, flag_mask):
 
 
 def run_one(path, runner, metadata, limit):
-    opcode = path.name[:2].upper()
-    spec = metadata.get("opcodes", {}).get(opcode, {})
+    opcode = path.name[:-8].upper()  # e.g. "00" or "80.0" (.json.gz)
+    group = opcode.split(".")
+    spec = metadata.get("opcodes", {}).get(group[0], {})
+    if len(group) > 1:
+        spec = spec.get("reg", {}).get(group[1], {})
     if spec.get("status") in ("undocumented", "undefined", "fpu", "prefix"):
         return ("SKIP", opcode, spec.get("status"), 0)
     mask = int(spec.get("flags-mask", 0xFFFF))
@@ -100,19 +103,19 @@ def main():
         parser.error(f"metadata.json missing: {meta_file}")
     metadata = json.loads(meta_file.read_text(encoding="utf-8"))
     if args.all:
-        paths = sorted(args.data_dir.glob("[0-9A-Fa-f][0-9A-Fa-f].json.gz"))
+        paths = sorted(args.data_dir.glob("*.json.gz"))
     else:
         names = args.opcode or ["00"]
         paths = []
         for name in names:
-            if not re.fullmatch(r"[0-9a-fA-F]{2}", name):
+            if not re.fullmatch(r"[0-9a-fA-F]{2}(?:\\.[0-7])?", name):
                 parser.error(f"invalid opcode: {name}")
-            path = args.data_dir / f"{name.upper()}.json.gz"
-            if not path.exists():
-                path = args.data_dir / f"{name.lower()}.json.gz"
-            if not path.is_file():
+            matches = sorted(args.data_dir.glob(f"{name.upper()}.json.gz"))
+            if "." not in name:
+                matches += sorted(args.data_dir.glob(f"{name.upper()}.[0-7].json.gz"))
+            if not matches:
                 parser.error(f"opcode data not found: {name}")
-            paths.append(path)
+            paths.extend(matches)
     if not paths:
         parser.error("no test files found")
     bad = 0
