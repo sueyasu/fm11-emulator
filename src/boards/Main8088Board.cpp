@@ -1575,6 +1575,27 @@ void Main8088Board::Core::executeOne()
         }
         break;
     }
+    case 0x62: case 0x63: { // V20 BOUND / bounds-check exception alias
+        if(variant_!=CpuType::NECV20)
+            throw std::runtime_error("opcode requires NEC V20");
+        const auto op=decodeModRm();
+        if(op.registerOperand)
+            throw std::runtime_error("V20 BOUND requires a memory operand");
+        // Signed 16-bit index in ModR/M.reg, with inclusive lower
+        // and upper signed bounds in two consecutive memory words.
+        const auto index=static_cast<std::int16_t>(regs_[op.reg]);
+        const auto lower=static_cast<std::int16_t>(read16(op));
+        const WORD upperOffset=WORD(op.offset+2);
+        const WORD upperValue=WORD(
+            bus_.readMemory(physical(segments_[op.segment],upperOffset)) |
+            (WORD(bus_.readMemory(physical(segments_[op.segment],
+                                          WORD(upperOffset+1))))<<8));
+        const auto upper=static_cast<std::int16_t>(upperValue);
+        // 63h has the same operand format but always generates the
+        // V20 bound-range exception. V20 saves IP after the opcode.
+        if(opcode==0x63 || index<lower || index>upper)interrupt(5);
+        break;
+    }
     case 0x68: // NEC V20: PUSH imm16
         if(variant_!=CpuType::NECV20)
             throw std::runtime_error("opcode requires NEC V20");
