@@ -87,11 +87,18 @@ int main() {
         const auto r=execute(0x62,0x06,index,0xfffe,2);
         if(!check("62 BOUND exception",r,true,4,index))return 2;
     }
-    // 63h is a V20 bound-range trap irrespective of index.
-    for(const WORD index:{WORD(0xffff),WORD(0),WORD(1)}) {
+    // The hardware corpus shows 63h is not a BOUND alias and
+    // does not push an interrupt frame, even when a 62h BOUND
+    // with the same operands would raise INT 5.
+    for(const WORD index:{WORD(0xfffd),WORD(0xffff),WORD(0),
+                           WORD(1),WORD(3)}) {
         const auto r=execute(0x63,0x06,index,0xfffe,2);
-        if(!check("63 BOUND trap",r,true,4,index))return 3;
+        if(!check("63 nontrapping decode",r,false,4,index))return 3;
     }
+    // ModR/M effective-address decoding must still consume an
+    // optional segment override and displacement.
+    const auto undefinedSs=execute(0x63,0x06,3,0xfffe,2,true);
+    if(!check("63 SS override",undefinedSs,false,5,3))return 5;
     // Segment overrides must apply to both bound words.
     const auto ss=execute(0x62,0x06,0,0xfffe,2,true);
     if(!check("62 SS override",ss,false,5,0))return 4;
