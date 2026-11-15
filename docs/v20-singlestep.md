@@ -55,3 +55,27 @@ to the native adapter; AX bits 15:8 and 3:0, all other registers, RAM,
 IP and documented FLAGS remain checked. The Intel 8088 driver uses
 `FFFFh` for all AX comparisons. The offline regression
 `mainv20_nibble_flag_mask` covers the masking rules.
+
+## Phase 2: V20 arithmetic and bit-field corrections
+
+The `mainv20_extended_arithmetic` regression covers these native V20
+differences from Intel 8088:
+
+- `D5` (AAD) uses a radix of 10 even when the encoded immediate differs;
+  Intel 8088 still uses the encoded immediate.
+- `0F18/0F19` (immediate TEST1) update SF, ZF and PF from the masked
+  result and clear CF/OF; `0F10/0F11` retain their previous behavior.
+- `0F31/33/39/3B` (INS/EXT) accept immediate encodings with any
+  ModR/M.reg field. Bit position uses four bits; the SI/DI byte index
+  advances by two on crossing a 16-bit word boundary.
+- `0F20/22/26` (ADD4S/SUB4S/CMP4S) perform 8-bit binary ADC/SBB and
+  DAA/DAS-style decimal correction for each packed-BCD byte. This
+  matters when the hardware test suite includes arbitrary nibbles rather
+  than only 0–9. The destination remains unchanged for CMP4S.
+
+Run the focused regression and reference tests:
+
+```sh
+ctest --test-dir build -R mainv20_extended_arithmetic --output-on-failure
+python3 tests/run_v20_singlestep.py --opcode 0F18 --opcode 0F19 --opcode 0F20 --opcode 0F22 --opcode 0F26 --opcode 0F31 --opcode 0F33 --opcode 0F39 --opcode 0F3B --opcode D5 --limit 100
+```
