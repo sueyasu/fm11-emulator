@@ -2,6 +2,7 @@
 #include <array>
 #include <cstdint>
 #include <cstdio>
+#include <stdexcept>
 
 // Intel 8088: C0h == C2h (RET imm16), C1h == C3h (RET).
 // A successor's shift/rotate immediate opcodes must not be used on V20.
