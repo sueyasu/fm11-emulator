@@ -34,6 +34,10 @@ public:
         auto lock=lockDisplay();
         return displayPalette_[index&7];
     }
+    // FD23 is the active-low boot-device DIP, a system-board input.
+    // Original FM-11 emulator default 9Fh enables 2D/2HD boot.
+    void setBootDip(BYTE value) {bootDip_=value;}
+    BYTE bootDip() const {return bootDip_;}
     std::shared_ptr<FloppyDevice> floppyDevice() const { return floppy_; }
     std::shared_ptr<Usart8251> usartDevice() const {return usart_;}
     // Serial transport belongs to the system board, not the 6809 CPU.
@@ -218,6 +222,7 @@ public:
     // The physical PTM, USART and FDC parameter registers live here.
     bool readIo(std::uint16_t address, BYTE& value) {
         const unsigned reg=address&0xff;
+        if(reg==0x23) {value=bootDip_;return true;}
         if(reg==0x05) {value=subCpuStatus();return true;}
         if(reg==0x04) {
             value=eventStatus_.exchange(0,std::memory_order_acq_rel);
@@ -290,6 +295,7 @@ private:
         std::lock_guard<std::mutex> lock(displayWakeMutex_);
         if(displayWakeObserver_)displayWakeObserver_();
     }
+    BYTE bootDip_=0x9f;
     DisplaySubsystem display_;
     DisplayCpu6809 displayCpu_{display_};
     BYTE subCpuControl_=0;
