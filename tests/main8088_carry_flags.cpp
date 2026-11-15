@@ -37,6 +37,14 @@ int main()
         {0x1c,0x00,0x00,0xff,CF|AF|SF|PF,true},
         {0x1c,0x80,0x00,0x7f,OF|AF,true},
         {0x1c,0x01,0x00,0x01,0,false},
+        // Incoming CF must not be folded into the RHS when deriving AF/OF.
+        {0x14,0x00,0x0f,0x10,AF,true},            // ADC 00h,0Fh,CF
+        {0x14,0x7f,0x00,0x80,AF|OF|SF,true},      // ADC signed overflow
+        {0x14,0x00,0xff,0x00,CF|AF|ZF|PF,true},   // ADC wrap/aux carry
+        {0x1c,0x10,0x0f,0x00,AF|ZF|PF,true},      // SBB 10h,0Fh,CF
+        {0x1c,0x80,0x00,0x7f,AF|OF,true},         // SBB signed overflow
+        {0x1c,0x00,0x00,0xff,CF|AF|SF|PF,true},   // SBB equality + borrow
+        {0x1c,0x00,0xff,0x00,CF|AF|ZF|PF,true},   // SBB RHS wrap
     };
     for(const auto type:{CpuType::I8088,CpuType::NECV20})
         for(const auto& t:cases)
