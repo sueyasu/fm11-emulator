@@ -36,7 +36,11 @@ struct Registers {
 };
 Registers readRegs(std::istream& in) {
     Registers r;
-    for(auto& x:r.g)x=u16(in);
+    // Wire format / SingleStepTests: AX BX CX DX SP BP SI DI.
+    // FM-11 CPU core internal regs_: AX CX DX BX SP BP SI DI.
+    // Missing this conversion corrupts BX/CX/DX input and expected state.
+    constexpr std::array<unsigned,8> wireToCore={0,3,1,2,4,5,6,7};
+    for(const unsigned index:wireToCore)r.g[index]=u16(in);
     for(auto& x:r.s)x=u16(in);
     r.ip=u16(in);r.flags=u16(in);
     return r;
@@ -87,7 +91,7 @@ bool checkOne(std::istream& in,Main8088Board& board,U32 testcase,
         if(unsupported<=8)std::cout<<"UNSUPPORTED #"<<testcase<<": "<<e.what()<<"\n";
         return false;
     }
-    const char* general[]={"AX","BX","CX","DX","SP","BP","SI","DI"};
+    const char* general[]={"AX","CX","DX","BX","SP","BP","SI","DI"};
     const char* segment[]={"ES","CS","SS","DS"};
     std::string problem;
     for(unsigned i=0;i<8;++i)if(cpu.reg(i)!=expected.g[i]){
