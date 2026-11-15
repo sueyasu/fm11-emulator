@@ -100,3 +100,23 @@ counts. The hardware dataset intentionally skips undocumented /6.
 ctest --test-dir build -R 'mainv20_immediate_shift|main8088_undocumented_ret' --output-on-failure
 python3 tests/run_v20_singlestep.py --opcode C0 --opcode C1 --limit 100
 ```
+
+## Phase 4: carry-conditional repeat prefixes and REP IDIV
+
+V20 has two additional repeat prefixes: `64h` (REPNC, repeat while
+carry clear) and `65h` (REPC, repeat while carry set). They are
+accepted with all supported string operations, not just CMPS/SCAS:
+MOVS, STOS, LODS, INS and OUTS also qualify. Repeat processing
+executes one element per `executeOne()`; CX decrements and IP returns
+to the prefix while the carry condition and CX permit another iteration.
+The ordinary 8088 prefix handling is unchanged.
+
+On both Intel 8088 and NEC V20, an F2h/F3h-prefixed F6/F7 signed
+division negates the resulting quotient without repetition. The V20
+division-overflow bounds still differ from the original 8088, which
+rejects the minimum negative signed quotient.
+
+```sh
+ctest --test-dir build -R 'mainv20_rep_prefixes|main8088_divide_quirks' --output-on-failure
+python3 tests/run_v20_singlestep.py --opcode 6C --opcode 6D --opcode 6E --opcode 6F --opcode A4 --opcode A5 --opcode AA --opcode AB --opcode AC --opcode AD --opcode F6.7 --opcode F7.7 --limit 100
+```
