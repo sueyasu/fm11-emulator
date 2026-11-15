@@ -6,11 +6,13 @@ active = 8088
 installed = false
 cpu = 6809
 clock_hz = 2000000
+rom = external/roms/boot6809.bin
 
 [main_8088]
 installed = true
 cpu = 8088
 clock_hz = 8000000
+rom = external/roms/boot8088.bin
 
 [optional_cpu]
 type = none
@@ -19,3 +21,5 @@ clock_hz = 4000000
 [display_cpu]
 cpu = 6809
 clock_hz = 2000000
+rom = external/roms/display6809.bin
+ank_rom = external/roms/ank.bin
