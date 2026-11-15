@@ -778,16 +778,13 @@ void Main8088Board::Core::executeOne()
     (void)lockPrefix;
     const bool ioString=variant_==CpuType::NECV20 && opcode>=0x6c && opcode<=0x6f;
     const bool stringOp=ioString || (opcode>=0xa4 && opcode<=0xa7) || (opcode>=0xaa && opcode<=0xaf);
-    // Intel 8088 permits REP/REPNE on F6/F7 group arithmetic.
-    // On IDIV these undocumented prefixes negate the quotient;
-    // unlike REP strings, they do not repeat the operation.
-    const bool repGroup3=variant_==CpuType::I8088 &&
-                          (opcode==0xf6 || opcode==0xf7);
+    // Both 8088 and V20 permit REP/REPNE on F6/F7 group
+    // arithmetic. REP-prefixed IDIV negates the quotient without
+    // repeating. On V20, REPNC/REPC (64h/65h) are valid with all
+    // string instructions, including MOVS/LODS/STOS and INS/OUTS.
+    const bool repGroup3=(opcode==0xf6 || opcode==0xf7);
     if(repeat && !stringOp && !repGroup3)
         throw std::runtime_error("unsupported REP opcode");
-    if((repeat==0x64 || repeat==0x65) &&
-       !(opcode==0xa6 || opcode==0xa7 || opcode==0xae || opcode==0xaf))
-        throw std::runtime_error("REPC/REPNC requires a comparison string opcode");
     // Intel 8088's undocumented 60h..6Fh Jcc aliases must be
     // dispatched before the switch: 60h/61h/68h..6Fh also have
     // explicit NEC V20 cases that otherwise throw for an 8088.
@@ -1092,8 +1089,7 @@ void Main8088Board::Core::executeOne()
                 const int dividend=static_cast<std::int16_t>(regs_[0]);
                 const int divisor=static_cast<std::int8_t>(BYTE(operand));
                 const int rawQuotient=dividend/divisor;
-                const int quotient=variant_==CpuType::I8088 && repeat
-                    ? -rawQuotient : rawQuotient;
+                const int quotient=repeat ? -rawQuotient : rawQuotient;
                 // Intel 8088 raises INT 0 for -128 (not just values
                 // outside signed 8-bit range). Later CPUs allow -128.
                 const int minimum=variant_==CpuType::I8088?-127:-128;
@@ -1105,8 +1101,7 @@ void Main8088Board::Core::executeOne()
                 const std::int64_t dividend=static_cast<std::int32_t>(raw);
                 const std::int64_t divisor=static_cast<std::int16_t>(WORD(operand));
                 const std::int64_t rawQuotient=dividend/divisor;
-                const std::int64_t quotient=variant_==CpuType::I8088 && repeat
-                    ? -rawQuotient : rawQuotient;
+                const std::int64_t quotient=repeat ? -rawQuotient : rawQuotient;
                 // The original 8088 also faults at the minimum
                 // signed 16-bit quotient (-32768).
                 const std::int64_t minimum=variant_==CpuType::I8088?-32767:-32768;
