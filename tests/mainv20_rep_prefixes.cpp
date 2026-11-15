@@ -42,62 +42,69 @@ bool check(const char* label,bool pass,const CpuResult& r) {
 int main() {
     constexpr WORD clearCarry=0x0002, setCarry=0x0003;
 
-    // REPC (65h) continues MOVSB while carry remains set;
-    // REPNC (64h) continues while carry is clear. In either case
-    // the first iteration executes and CX is decremented.
+    // With non-comparison string instructions, V20 64h/65h repeat
+    // unconditionally until CX=0, regardless of CF. A single
+    // executeOne() must return to the prefix when CX remains nonzero.
     for(const BYTE prefix:{BYTE(0x64),BYTE(0x65)})
         for(const bool carry:{false,true}) {
             const auto result=execute(CpuType::NECV20,
                 {prefix,0xa4,0,0},2,0,0,0,2,0x0200,0x0200,
                 carry?setCarry:clearCarry);
-            const bool again=carry==(prefix==0x65);
+        // Both initial CF states must continue for non-comparisons.
             if(!check("REPC/REPNC MOVSB",
                 result.cx==1 && result.si==0x0201 && result.di==0x0201 &&
-                result.dst==0x5a && result.ip==(again?0:2),
+                result.dst==0x5a && result.ip==0,
                 result))return 1;
         }
 
-    // The same carry-controlled repeat prefix must be accepted with
-    // INS/OUTS (6Ch-6Fh) in addition to the ordinary string family.
+    // 64h/65h also repeat I/O strings to CX=0, ignoring carry.
     for(const BYTE prefix:{BYTE(0x64),BYTE(0x65)})
         for(const bool carry:{false,true}) {
             const auto result=execute(CpuType::NECV20,
                 {prefix,0x6c,0,0},2,0,0,0,2,0x0200,0x0200,
                 carry?setCarry:clearCarry);
-            const bool again=carry==(prefix==0x65);
+        // Both initial CF states must continue for non-comparisons.
             if(!check("REPC/REPNC INSB",
                 result.cx==1 && result.di==0x0201 &&
-                result.dst==0xff && result.ip==(again?0:2),
+                result.dst==0xff && result.ip==0,
                 result))return 2;
         }
 
-    // OUTSB shares the same carry termination rules as INSB.
+    // OUTSB shares the same unconditional repeat rules as INSB.
     // The conformance bus ignores output writes, so verify SI/CX/IP.
     for(const BYTE prefix:{BYTE(0x64),BYTE(0x65)})
         for(const bool carry:{false,true}) {
             const auto result=execute(CpuType::NECV20,
                 {prefix,0x6e,0,0},2,0,0,0,2,0x0200,0x0200,
                 carry?setCarry:clearCarry);
-            const bool again=carry==(prefix==0x65);
+        // Both initial CF states must continue for non-comparisons.
             if(!check("REPC/REPNC OUTSB",
                 result.cx==1 && result.si==0x0201 &&
-                result.di==0x0200 && result.ip==(again?0:2),
+                result.di==0x0200 && result.ip==0,
                 result))return 6;
         }
 
-    // REP on V20 IDIV negates the quotient, but does not repeat.
-    // 10 / 2 yields -5, remainder 0, regardless of F2 or F3.
+    // On V20, REP does not negate the quotient for IDIV.
+    // Intel 8088 alone has the undocumented quotient negation.
     for(const BYTE prefix:{BYTE(0xf2),BYTE(0xf3)}) {
         const auto byte=execute(CpuType::NECV20,
             {prefix,0xf6,0xfb,0},3,10,2,0,0,0,0,clearCarry);
-        if(!check("REP IDIV byte",byte.ax==0x00fb &&
+        if(!check("REP IDIV byte",byte.ax==0x0005 &&
             byte.cx==0 && byte.ip==3 && byte.flags==clearCarry,byte))
             return 3;
         const auto word=execute(CpuType::NECV20,
             {prefix,0xf7,0xfb,0},3,10,2,0,0,0,0,clearCarry);
-        if(!check("REP IDIV word",word.ax==0xfffb &&
+        if(!check("REP IDIV word",word.ax==0x0005 &&
             word.dx==0 && word.ip==3 && word.flags==clearCarry,word))
             return 4;
+    }
+
+    // The 8088 signed DIV alias must still negate the quotient.
+    for(const BYTE prefix:{BYTE(0xf2),BYTE(0xf3)}) {
+        const auto intel=execute(CpuType::I8088,
+            {prefix,0xf6,0xfb,0},3,10,2,0,0,0,0,clearCarry);
+        if(!check("8088 REP IDIV",intel.ax==0x00fb &&
+                  intel.ip==3,intel))return 7;
     }
 
     // Keep the unprefixed V20 signed divide unchanged.
