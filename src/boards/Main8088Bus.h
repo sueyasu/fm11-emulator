@@ -4,6 +4,7 @@
 #include "MainBoard.h"
 #include "RomFiles.h"
 #include <array>
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -49,6 +50,12 @@ public:
     void writeIo(WORD port, BYTE value);
     void setSystemIo(IoReader reader, IoWriter writer);
     BYTE readRam(std::uint32_t address) const;
+    // Test-only flat 1-MiB address space, including the reset-ROM region.
+    // No effect on ordinary machine execution unless explicitly enabled.
+    void enableConformanceRam() {conformanceRam_=true;}
+    void clearConformanceRam() {
+        std::fill(memory_.begin(),memory_.end(),BYTE(0));
+    }
     // 8259A PIC on the 8088 card: ports 00h/01h.
     void requestIrq(unsigned line);
     // Sample main-board IRQ lines as edges into the on-card 8259.
@@ -69,6 +76,7 @@ public:
 
 private:
     std::vector<BYTE> memory_;
+    bool conformanceRam_=false;
     Rom bootRom_{};
     // The original FM-11 Sim86 uses the CPU-card SRAM for FCxx port accesses.
     std::array<BYTE,0x100> cardIoRam_{};
