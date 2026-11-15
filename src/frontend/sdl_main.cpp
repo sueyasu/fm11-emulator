@@ -158,7 +158,7 @@ int main(int argc,char** argv) {
             else rom8088=mainRomPath;
         }
         if(ankPath.empty())ankPath=config.ankRom;
-        if(testPattern && (!rom6809.empty() || !rom8088.empty()))
+        if(testPattern && (!mainRomPath.empty() || !main6809RomOverride.empty() || !main8088RomOverride.empty()))
             throw std::invalid_argument("CPU ROMs cannot be combined with --test-pattern");
         if(instructions>1000000)
             throw std::invalid_argument("--cycles must be <= 1000000");
