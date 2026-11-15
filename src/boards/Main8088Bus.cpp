@@ -139,7 +139,7 @@ BYTE Main8088Bus::readIo(WORD port) const
         if(mainBoard_->readIo(port,value))return value;
     }
     if(port>=0xfd00 && port<=0xfdff && systemReader_) return systemReader_(port);
-    if(((port>=0xfd18 && port<=0xfd1d && floppy_->has2d()) ||
+    if(((port>=0xfd18 && port<=0xfd1f && floppy_->has2d()) ||
         (port>=0xfd30 && port<=0xfd35 && floppy_->has2hd()))) {
         if(port==0xfd18 || port==0xfd30)return floppy_->transferStatus();
         if(port==0xfd1b || port==0xfd33)
@@ -202,7 +202,12 @@ void Main8088Bus::writeIo(WORD port,BYTE value)
     else if(((port>=0xfd18 && port<=0xfd1d && floppy_->has2d()) ||
              (port>=0xfd30 && port<=0xfd35 && floppy_->has2hd()))) {
         if(port==0xfd18 || port==0xfd30)floppyCommand(value,port==0xfd18?0:1);
-        else if(port==0xfd1b || port==0xfd33)floppyWriteData(value);
+        else if(port==0xfd1b || port==0xfd33) {
+            // FD1B is the SEEK destination register for type I commands.
+            // It is also a PIO data port during an active transfer.
+            if(floppy_->transferStatus()&0x02)floppyWriteData(value);
+            else floppy_->writeRegister(port&0xff,value);
+        }
         else if(!mainBoard_ || !mainBoard_->writeIo(port,value))
             floppy_->writeRegister(port&0xff,value);
     }
