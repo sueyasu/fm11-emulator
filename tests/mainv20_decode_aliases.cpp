@@ -77,6 +77,11 @@ int main() {
             if(!verify(r.stack==0x1234 && r.sp==0x7ffe &&
                        r.ip==2 && r.flags==FLAGS,
                        "FF PUSH",ext,r,0x1234))return 2;
+            const Result m=run(0xff,0,BYTE(0x06|(ext<<3)),
+                               0x1234,0x8000,0);
+            if(!verify(m.stack==0xa595 && m.sp==0x7ffe &&
+                       m.ip==4 && m.flags==FLAGS && m.ax==0x1234,
+                       "FF PUSH memory",ext,m,0xa595))return 5;
         }
         for(const BYTE op:{BYTE(0x28),BYTE(0x2a)}) {
             // Operand=AL: upper nibble comes from the destination write.
