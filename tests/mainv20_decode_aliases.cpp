@@ -82,7 +82,7 @@ int main() {
             // Operand=AL: upper nibble comes from the destination write.
             const Result r=run(0x0f,op,BYTE(0xc0|(ext<<3)),
                                0x0095,0x8000,0);
-            const BYTE expectAl=op==0x28?0x59:0x59;
+            const BYTE expectAl=op==0x28?0x59:0x55;
             if(!verify(r.ax==expectAl && r.ip==3 &&
                        r.flags==FLAGS && r.sp==0x8000,
                        "nibble AL",ext,r,expectAl))return 3;
