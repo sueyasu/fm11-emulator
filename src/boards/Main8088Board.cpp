@@ -1224,8 +1224,20 @@ void Main8088Board::Core::executeOne()
     case 0x89: {auto op=decodeModRm();write16(op,regs_[op.reg]);break;} // MOV r/m16,r16
     case 0x8a: {auto op=decodeModRm();setReg8(op.reg,read8(op));break;} // MOV r8,r/m8
     case 0x8b: {auto op=decodeModRm();regs_[op.reg]=read16(op);break;} // MOV r16,r/m16
-    case 0xc6: {auto op=decodeModRm();if(op.reg!=0)throw std::runtime_error("invalid MOV C6 group");write8(op,fetch8());break;}
-    case 0xc7: {auto op=decodeModRm();if(op.reg!=0)throw std::runtime_error("invalid MOV C7 group");write16(op,fetch16());break;}
+    case 0xc6: { // MOV r/m8,imm8; 8088 ignores the ModR/M.reg extension
+        const auto op=decodeModRm();
+        if(variant_!=CpuType::I8088 && op.reg!=0)
+            throw std::runtime_error("invalid MOV C6 group");
+        write8(op,fetch8());
+        break;
+    }
+    case 0xc7: { // MOV r/m16,imm16; /1../7 are 8088 undocumented aliases
+        const auto op=decodeModRm();
+        if(variant_!=CpuType::I8088 && op.reg!=0)
+            throw std::runtime_error("invalid MOV C7 group");
+        write16(op,fetch16());
+        break;
+    }
     case 0x8c: { // MOV r/m16,Sreg
         const auto op=decodeModRm();
         // 8086/8088 decodes only the low two bits of ModR/M.reg.
