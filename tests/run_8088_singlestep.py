@@ -35,9 +35,18 @@ def pack_test(test, flag_mask):
     result = bytearray()
     for regs in (initial_regs, final_regs):
         result.extend(struct.pack("<14H", *(int(regs[k]) & 0xFFFF for k in REG_ORDER)))
-    # Only architecturally defined bits are compared by the C++ runner.
-    result.extend(struct.pack("<H", flag_mask & 0xFFFF))
     bytes_ = test.get("bytes", [])
+    # The reference README explicitly warns that OF is undefined for
+    # D2/D3 with CL > 1. metadata.json's mask cannot express this
+    # per-test condition. Preserve OF comparison for CL=0 or 1.
+    first_opcode = next((b for b in bytes_
+                         if b not in (0x26, 0x2E, 0x36, 0x3E, 0xF0)),
+                        None)
+    case_mask = flag_mask & 0xFFFF
+    if first_opcode in (0xD2, 0xD3) and (initial_regs["cx"] & 0xFF) > 1:
+        case_mask &= ~0x0800
+    # Only architecturally defined bits are compared by the C++ runner.
+    result.extend(struct.pack("<H", case_mask))
     # REP prefixed strings: the FM-11 core runs one iteration per instruction.
     # The actual instruction may carry a segment override prefix.
     repeat = False
