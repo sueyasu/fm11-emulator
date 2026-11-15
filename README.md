@@ -1041,3 +1041,21 @@ overlay, 7C00-7FFF window, FC00-FFFF fixed/IO aperture, and direct physical
 DMA accesses continue through their existing handlers. The `main6809_mmr`
 regression covers page remapping, contexts, enable toggles, window override,
 and shared-memory replacement.
+
+## Intel 8088 hardware-reference instruction tests
+
+The standalone `fm11-8088-singlestep` runner can compare
+`Main8088Board::Core::executeOne()` with the real-CPU
+[SingleStepTests/8088 V2](https://github.com/SingleStepTests/8088)
+instruction test suite (external data, not bundled). Build normally, then:
+
+```sh
+ctest --test-dir build -R main8088_singlestep_smoke --output-on-failure
+git clone --filter=blob:none --sparse https://github.com/SingleStepTests/8088 external/8088-tests
+git -C external/8088-tests sparse-checkout set v2
+python3 tests/run_8088_singlestep.py --opcode 00 --limit 100
+python3 tests/run_8088_singlestep.py --all --limit 100
+```
+
+See [docs/8088-singlestep.md](docs/8088-singlestep.md) for full-case
+execution, grouped ModR/M opcodes, failure reports and prefetch limitations.
