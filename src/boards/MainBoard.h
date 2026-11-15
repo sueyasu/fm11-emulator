@@ -36,6 +36,9 @@ public:
     }
     std::shared_ptr<FloppyDevice> floppyDevice() const { return floppy_; }
     std::shared_ptr<Usart8251> usartDevice() const {return usart_;}
+    // Serial transport belongs to the system board, not the 6809 CPU.
+    void queueSerialInput(BYTE value) {usart_->receive(value);}
+    bool takeSerialOutput(BYTE& value) {return usart_->takeOutput(value);}
     std::shared_ptr<Ptm6840> ptmDevice() const {return ptm_;}
     // Shared display bus: lock each CPU instruction/mailbox transaction
     // and capture/render operation, never the entire main CPU loop.
