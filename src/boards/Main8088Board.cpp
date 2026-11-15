@@ -827,9 +827,13 @@ void Main8088Board::Core::executeOne()
         }
         if(repeat) {
             regs_[1]=WORD(regs_[1]-1);
-            // REP is executed one iteration per executeOne(), so the DB
-            // base represents one iteration, not the whole CX count.
-            if(regs_[1]!=0)ip_=opAddress;
+            // REPNC (64h) repeats only with CF clear; REPC (65h)
+            // repeats only with CF set. F2/F3 repeat on CX alone
+            // for these non-comparison I/O string operations.
+            const bool carryRepeat=repeat==0x64 || repeat==0x65;
+            const bool continueRepeat=!carryRepeat ||
+                (((flags_&CF)!=0)==(repeat==0x65));
+            if(regs_[1]!=0 && continueRepeat)ip_=opAddress;
         }
         break;
     }
