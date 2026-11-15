@@ -4,6 +4,7 @@
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <stdexcept>
 #include <vector>
 
@@ -124,8 +125,24 @@ public:
             if(!d88_.empty())d88_.at(offsets_.at(offset/256)+(offset%256))=value;
         } else dirty2hd_=true;
     }
-    void writeSector(unsigned channel,std::size_t offset,const BYTE* bytes) {
-        for(std::size_t i=0;i<sectorLength(channel);++i)write(channel,offset+i,bytes[i]);
+    // Called when a complete sector is ready to commit. The callback
+    // persists its bytes before the emulated FDC reports completion.
+    // Both the 6809 and 8088 CPU adapters use this shared commit path.
+    using SectorWriter=std::function<bool(unsigned,std::size_t,const BYTE*,std::size_t)>;
+    void setSectorWriter(SectorWriter writer) {sectorWriter_=std::move(writer);}
+    bool writeSector(unsigned channel,std::size_t offset,const BYTE* bytes) {
+        const auto length=sectorLength(channel);
+        if(sectorWriter_ && !sectorWriter_(channel,offset,bytes,length)) {
+            status_=0x10;
+            return false;
+        }
+        for(std::size_t i=0;i<length;++i)write(channel,offset+i,bytes[i]);
+        return true;
+    }
+    std::size_t hostImageOffset(unsigned channel,std::size_t rawOffset) const {
+        if(channel==0 && !d88_.empty())
+            return offsets_.at(rawOffset/256)+(rawOffset%256);
+        return rawOffset;
     }
     // FDC control/data registers are system-side, not CPU-card local.
     // Command and data ports are dispatched separately by DMA adapters.
@@ -173,9 +190,9 @@ public:
         if(!transferWriting_ || transferPosition_>=transferLength_)return;
         transferBuffer_[transferPosition_++]=value;
         if(transferPosition_==transferLength_) {
-            writeSector(transferChannel_,transferOffset_,transferBuffer_.data());
+            const bool written=writeSector(transferChannel_,transferOffset_,transferBuffer_.data());
             transferWriting_=false;
-            status_=0;
+            status_=written?0:0x10;
         }
     }
     void finishTransfer() {
@@ -199,6 +216,7 @@ public:
     bool has2d() const {return !raw2d_.empty();}
     bool has2hd() const {return !raw2hd_.empty();}
 private:
+    SectorWriter sectorWriter_;
     unsigned mountedDrive_=0;
     std::vector<BYTE> raw2d_,raw2hd_,d88_;
     std::array<BYTE,256> registers_{};
