@@ -538,6 +538,11 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(main8088_control_transfer PRIVATE fm11_core)
     add_test(NAME main8088_control_transfer COMMAND main8088_control_transfer)
 
+    # CP/M-86 CBIOS: CMP BX,80 / JAE track-range regression.
+    add_executable(main8088_cmp_jae tests/main8088_cmp_jae.cpp)
+    target_link_libraries(main8088_cmp_jae PRIVATE fm11_core)
+    add_test(NAME main8088_cmp_jae COMMAND main8088_cmp_jae)
+
     add_executable(main8088_cpu tests/main8088_cpu.cpp)
     target_link_libraries(main8088_cpu PRIVATE fm11_core)
     add_test(NAME main8088_cpu COMMAND main8088_cpu)
