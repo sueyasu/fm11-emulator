@@ -1412,8 +1412,10 @@ void Main8088Board::Core::executeOne()
             }
             if(!insert)regs_[0]=WORD(value);
             const unsigned end=start+count;
-            regs_[insert ? 7u : 6u]=WORD(origin+end/8u);
-            // V20 bit offset is a four-bit quantity, not three-bit.
+            // Bit offsets 0..15 span one 16-bit word. Advance the
+            // byte index by two only after crossing a word boundary,
+            // keeping the four-bit bit position for the next field.
+            regs_[insert ? 7u : 6u]=WORD(origin+2u*(end/16u));
             setReg8(startReg,BYTE(end&15u));
             // FLAGS are unaffected by INS/EXT.
             break;
@@ -1427,41 +1429,55 @@ void Main8088Board::Core::executeOne()
             const WORD sourceSegment=segments_[segmentOverride_>=0
                 ? unsigned(segmentOverride_) : 3u];
             const WORD targetSegment=segments_[0];
-            unsigned carry=0;
+            bool carry=false;
+            bool auxCarry=false;
             bool allZero=true;
             for(unsigned index=0;index<bytes;++index) {
                 const WORD sourceOffset=WORD(regs_[6]+index);
                 const WORD targetOffset=WORD(regs_[7]+index);
                 const BYTE src=bus_.readMemory(physical(sourceSegment,sourceOffset));
                 const BYTE dst=bus_.readMemory(physical(targetSegment,targetOffset));
-                unsigned out=0;
-                for(unsigned shift=0;shift<=4;shift+=4) {
-                    const unsigned a=(dst>>shift)&15u;
-                    const unsigned b=(src>>shift)&15u;
-                    unsigned digit=0;
-                    if(ext==0x20) {
-                        const unsigned sum=a+b+carry;
-                        carry=sum>9u;
-                        digit=sum>=10u?sum-10u:sum;
-                    } else {
-                        const int difference=int(a)-int(b)-int(carry);
-                        carry=difference<0;
-                        digit=difference<0 ? unsigned(difference+10)
-                                            : unsigned(difference);
-                    }
-                    out|=(digit&15u)<<shift;
-                }
-                if(out!=0)allZero=false;
+                // Hardware performs a binary ADC/SBB followed by a
+                // decimal-adjust (DAA/DAS). Independent base-ten
+                // nibble arithmetic gives different answers for the
+                // arbitrary (non-BCD) bytes in the reference suite.
+                const bool subtract=ext!=0x20;
+                const unsigned rawWide=subtract
+                    ? (unsigned(dst)-unsigned(src)-unsigned(carry))
+                    : (unsigned(dst)+unsigned(src)+unsigned(carry));
+                const BYTE raw=BYTE(rawWide);
+                const bool binaryCarry=subtract
+                    ? (unsigned(dst)<unsigned(src)+unsigned(carry))
+                    : (rawWide>0xffu);
+                const bool binaryAux=subtract
+                    ? ((unsigned(dst)&15u)<((unsigned(src)&15u)+unsigned(carry)))
+                    : (((unsigned(dst)&15u)+(unsigned(src)&15u)+unsigned(carry))>15u);
+                // NEC's decimal adjust threshold changes when AF was
+                // set by the underlying binary operation.
+                const unsigned threshold=binaryAux?0x9fu:0x99u;
+                const bool adjustLow=(raw&15u)>9u || binaryAux;
+                const bool adjustHigh=raw>threshold || binaryCarry;
+                BYTE adjusted=raw;
+                if(adjustLow)
+                    adjusted=BYTE(subtract?unsigned(adjusted)-6u
+                                          :unsigned(adjusted)+6u);
+                if(adjustHigh)
+                    adjusted=BYTE(subtract?unsigned(adjusted)-0x60u
+                                          :unsigned(adjusted)+0x60u);
+                carry=adjustHigh;
+                auxCarry=adjustLow;
+                if(adjusted!=0)allZero=false;
                 if(ext!=0x26)
-                    bus_.writeMemory(physical(targetSegment,targetOffset),BYTE(out));
+                    bus_.writeMemory(physical(targetSegment,targetOffset),adjusted);
             }
-            // For odd CL, NEC operates on the entire final byte. Its upper
-            // nibble and the resulting CF/ZF are not generally meaningful.
-            // Only ZF/CF are defined for valid even-length BCD strings.
             if(bytes!=0) {
-                flags_=WORD(flags_&~(CF|ZF));
+                // ZF is only defined for a valid BCD string. Preserve
+                // the existing aggregate-zero policy for this initial
+                // instruction-level implementation.
+                flags_=WORD(flags_&~(CF|ZF|AF));
                 if(carry)flags_|=CF;
                 if(allZero)flags_|=ZF;
+                if(auxCarry)flags_|=AF;
             }
             break;
         }
