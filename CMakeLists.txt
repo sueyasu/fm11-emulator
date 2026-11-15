@@ -101,6 +101,10 @@ if(FM11_BUILD_TESTS)
         add_test(NAME main8088_singlestep_flag_mask
                  COMMAND ${Python3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/main8088_singlestep_flag_mask.py)
+        add_test(NAME main8088_singlestep_divide_stack
+                 COMMAND ${Python3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/main8088_singlestep_divide_stack.py
+                         $<TARGET_FILE:fm11-8088-singlestep>)
         add_test(NAME extract_roms
                  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/extract_roms.py
                          ${CMAKE_CURRENT_SOURCE_DIR}/tools/extract_roms.py)
@@ -539,6 +543,9 @@ if(FM11_BUILD_TESTS)
     add_executable(main8088_singlestep_io tests/main8088_singlestep_io.cpp)
     target_link_libraries(main8088_singlestep_io PRIVATE fm11_core)
     add_test(NAME main8088_singlestep_io COMMAND main8088_singlestep_io)
+    add_executable(main8088_divide_quirks tests/main8088_divide_quirks.cpp)
+    target_link_libraries(main8088_divide_quirks PRIVATE fm11_core)
+    add_test(NAME main8088_divide_quirks COMMAND main8088_divide_quirks)
 
     add_executable(main8088_arithmetic_flags tests/main8088_arithmetic_flags.cpp)
     target_link_libraries(main8088_arithmetic_flags PRIVATE fm11_core)
