@@ -12,6 +12,7 @@ Result run(CpuType type,std::array<BYTE,8> code,unsigned length,
     auto& bus=board.bus();
     for(unsigned i=0;i<length;++i)bus.writeMemory(0x10000+i,code[i]);
     bus.writeMemory(0x30200,source);
+    bus.writeMemory(0x30201,source);
     bus.writeMemory(0x40200,dest);
     bus.writeMemory(0x40201,0);
     std::array<WORD,8> regs{};
