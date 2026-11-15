@@ -13,11 +13,11 @@ int main() {
     {
         std::ofstream out(path);
         if(!out)return 1;
-        out<<"[main_6809]\ninstalled = true\ncpu = 6309\nclock_hz = 3000000\n"
-              "[main_8088]\ninstalled = true\ncpu = v20\nclock_hz = 8000000\n"
+        out<<"[main_6809]\ninstalled = true\ncpu = 6309\nclock_hz = 3000000\nrom = test-6809.rom\n"
+              "[main_8088]\ninstalled = true\ncpu = v20\nclock_hz = 8000000\nrom = test-8088.rom\n"
               "[main]\nactive = 8088\n"
               "[optional_cpu]\ntype = z80\nclock_hz = 4000000\n"
-              "[display_cpu]\ncpu = 6809\nclock_hz = 2000000\n";
+              "[display_cpu]\ncpu = 6809\nclock_hz = 2000000\nrom = test-display.rom\nank_rom = test-ank.rom\n";
     }
     auto config=parseMachineConfigFile(path);
     if(!config.main6809Installed || !config.main8088Installed ||
@@ -25,7 +25,11 @@ int main() {
        config.main8088Cpu!=CpuType::NECV20 ||
        config.mainSelected!=MachineConfig::MainSelection::Cpu8088 ||
        !config.z80Installed || config.main6809ClockHz!=3000000 ||
-       config.main8088ClockHz!=8000000)return 2;
+       config.main8088ClockHz!=8000000 ||
+       config.main6809Rom!="test-6809.rom" ||
+       config.main8088Rom!="test-8088.rom" ||
+       config.displayRom!="test-display.rom" ||
+       config.ankRom!="test-ank.rom")return 2;
 
     Machine machine;
     auto m6809=std::make_unique<Main6809Board>(config.main6809Cpu);
