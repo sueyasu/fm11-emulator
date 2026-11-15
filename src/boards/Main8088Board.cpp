@@ -827,13 +827,10 @@ void Main8088Board::Core::executeOne()
         }
         if(repeat) {
             regs_[1]=WORD(regs_[1]-1);
-            // REPNC (64h) repeats only with CF clear; REPC (65h)
-            // repeats only with CF set. F2/F3 repeat on CX alone
-            // for these non-comparison I/O string operations.
-            const bool carryRepeat=repeat==0x64 || repeat==0x65;
-            const bool continueRepeat=!carryRepeat ||
-                (((flags_&CF)!=0)==(repeat==0x65));
-            if(regs_[1]!=0 && continueRepeat)ip_=opAddress;
+            // V20 64h/65h on INS/OUTS behave as ordinary REP:
+            // unlike CMPS/SCAS, no comparison updates carry to test.
+            // All prefixes continue until CX is exhausted.
+            if(regs_[1]!=0)ip_=opAddress;
         }
         break;
     }
@@ -874,10 +871,13 @@ void Main8088Board::Core::executeOne()
             // REP is executed one iteration per executeOne(), so the DB
             // base represents one iteration, not the whole CX count.
             const bool carryRepeat=repeat==0x64 || repeat==0x65;
-            const bool continueRepeat=carryRepeat
-                ? (((flags_&CF)!=0)==(repeat==0x65))
-                : ((!cmp && !scas) ||
-                   (((flags_&ZF)!=0)==(repeat==0xf3)));
+            // Carry-conditional repeats apply to comparison strings.
+            // With MOVS/STOS/LODS, 64h/65h behave as ordinary REP.
+            const bool continueRepeat=(cmp || scas)
+                ? (carryRepeat
+                    ? (((flags_&CF)!=0)==(repeat==0x65))
+                    : (((flags_&ZF)!=0)==(repeat==0xf3)))
+                : true;
             if(regs_[1]!=0 && continueRepeat)ip_=opAddress;
         }
         break;
@@ -1093,7 +1093,8 @@ void Main8088Board::Core::executeOne()
                 const int dividend=static_cast<std::int16_t>(regs_[0]);
                 const int divisor=static_cast<std::int8_t>(BYTE(operand));
                 const int rawQuotient=dividend/divisor;
-                const int quotient=repeat ? -rawQuotient : rawQuotient;
+                const int quotient=variant_==CpuType::I8088 && repeat
+                    ? -rawQuotient : rawQuotient;
                 // Intel 8088 raises INT 0 for -128 (not just values
                 // outside signed 8-bit range). Later CPUs allow -128.
                 const int minimum=variant_==CpuType::I8088?-127:-128;
@@ -1105,7 +1106,8 @@ void Main8088Board::Core::executeOne()
                 const std::int64_t dividend=static_cast<std::int32_t>(raw);
                 const std::int64_t divisor=static_cast<std::int16_t>(WORD(operand));
                 const std::int64_t rawQuotient=dividend/divisor;
-                const std::int64_t quotient=repeat ? -rawQuotient : rawQuotient;
+                const std::int64_t quotient=variant_==CpuType::I8088 && repeat
+                    ? -rawQuotient : rawQuotient;
                 // The original 8088 also faults at the minimum
                 // signed 16-bit quotient (-32768).
                 const std::int64_t minimum=variant_==CpuType::I8088?-32767:-32768;
