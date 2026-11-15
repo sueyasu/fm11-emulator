@@ -359,6 +359,7 @@ int main(int argc,char** argv) {
             0x01f1,0x0291,0x0385,0x042f,0x045b
         };
         std::array<bool,romBootOffsets.size()> romBootSeen{};
+        bool diskIplSeen=false, cbiosSeen=false;
         auto traceCpmSnapshot=[&](const char* event) {
             if(!traceCpm80 || !mainBoard)return;
             const auto* owner=machine.activeBoard();
@@ -456,8 +457,12 @@ int main(int argc,char** argv) {
                                         }
                                     }
                                 }
-                                const bool handoff=(cs==0x07c0 && ip==0) ||
-                                                   (cs==0x0400 && ip==0x2500);
+                                const bool diskIpl=(cs==0x07c0 && ip==0);
+                                const bool cbios=(cs==0x0400 && ip==0x2500);
+                                const bool handoff=(diskIpl && !diskIplSeen) ||
+                                                   (cbios && !cbiosSeen);
+                                if(diskIpl)diskIplSeen=true;
+                                if(cbios)cbiosSeen=true;
                                 if(executed<96 || milestone || handoff ||
                                    (executed && executed%200000==0)) {
                                     std::cerr<<"8088 boot step="<<executed
