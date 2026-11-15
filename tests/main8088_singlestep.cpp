@@ -144,13 +144,21 @@ bool checkOne(std::istream& in,Main8088Board& board,U32 testcase,
 }
 int main(int argc,char** argv) {
     try {
-        if(argc!=2){std::cerr<<"usage: fm11-8088-singlestep INPUT.bin\n";return 2;}
-        std::ifstream in(argv[1],std::ios::binary);
+        if(argc!=2 && argc!=4){
+            std::cerr<<"usage: fm11-8088-singlestep [--cpu 8088|v20] INPUT.bin\n";
+            return 2;
+        }
+        const bool v20=argc==4 && std::string(argv[1])=="--cpu" &&
+                       std::string(argv[2])=="v20";
+        if(argc==4 && !v20 && !(std::string(argv[1])=="--cpu" &&
+                                 std::string(argv[2])=="8088"))
+            throw std::runtime_error("invalid CPU option");
+        std::ifstream in(argv[argc-1],std::ios::binary);
         if(!in)throw std::runtime_error("cannot open test stream");
         const std::string magic="SST8088A";
         for(char c:magic)if(u8(in)!=U8(c))throw std::runtime_error("invalid test stream magic");
         const U32 total=u32(in);
-        Main8088Board board(CpuType::I8088);
+        Main8088Board board(v20?CpuType::NECV20:CpuType::I8088);
         board.bus().enableConformanceRam();
         unsigned failures=0,unsupported=0,passed=0;
         for(U32 i=0;i<total;++i)checkOne(in,board,i,failures,unsupported,passed);
