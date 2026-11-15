@@ -891,7 +891,9 @@ void Main8088Board::Core::executeOne()
         if(adjustLow)result=subtract?(result-6u)&255u:(result+6u)&255u;
         // Intel's 8086 DAA/DAS high-digit adjustment is based on
         // the original AL, not the value after the low-digit correction.
-        const bool adjustHigh=original>0x99 || oldCf;
+        // Original 8088 DAA/DAS microcode tests the pre-adjust AL
+        // against 9Fh; values 9Ah..9Fh must not force a high adjust.
+        const bool adjustHigh=original>0x9f || oldCf;
         if(adjustHigh)result=subtract?(result-0x60u)&255u:(result+0x60u)&255u;
         flags_=WORD(flags_&~(CF|AF|SF|ZF|PF));
         if(adjustLow)flags_|=AF;
@@ -905,7 +907,12 @@ void Main8088Board::Core::executeOne()
     case 0x37: case 0x3f: { // AAA/AAS: unpacked decimal correction
         const bool adjust=(getReg8(0)&15)>9 || (flags_&AF);
         if(adjust) {
-            regs_[0]=WORD(regs_[0]+(opcode==0x37?0x0106u:0xfefau));
+            // AL adjustment and AH increment/decrement are separate
+            // byte operations. A 16-bit AX addition double-counts a
+            // carry from AL (e.g. AAA on AX=72FFh).
+            const BYTE al=BYTE(getReg8(0)+(opcode==0x37?6:-6));
+            const BYTE ah=BYTE(getReg8(4)+(opcode==0x37?1:-1));
+            regs_[0]=WORD((unsigned(ah)<<8)|unsigned(al));
             flags_|=WORD(AF|CF);
         } else flags_&=WORD(~(AF|CF));
         setReg8(0,BYTE(getReg8(0)&15));
