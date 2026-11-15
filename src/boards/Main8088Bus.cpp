@@ -74,7 +74,8 @@ void Main8088Bus::loadBootRom(const Rom& rom)
 BYTE Main8088Bus::readMemory(std::uint32_t address) const
 {
     address &= 0xfffff;
-    return address >= kRomBase ? bootRom_[address-kRomBase] : memory_[address];
+    return !conformanceRam_ && address >= kRomBase
+        ? bootRom_[address-kRomBase] : memory_[address];
 }
 
 void Main8088Bus::writeMemory(std::uint32_t address, BYTE value)
