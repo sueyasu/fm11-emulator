@@ -1,13 +1,10 @@
 #include "Main8088Board.h"
-#include <array>
 #include <cstdio>
 
 namespace {
 constexpr WORD CF=0x0001, PF=0x0004, AF=0x0010, ZF=0x0040;
 constexpr WORD SF=0x0080, OF=0x0800;
 constexpr WORD ARITH=CF|PF|AF|ZF|SF|OF;
-
-Main8088Board newBoard(CpuType type) = delete; // Core is tested through board instances.
 
 bool check16(CpuType type, BYTE opcode, WORD lhs, WORD rhs, bool carry,
              WORD expected, WORD expectedFlags)
