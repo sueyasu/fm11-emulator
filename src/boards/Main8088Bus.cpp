@@ -104,6 +104,10 @@ BYTE Main8088Bus::readIo(WORD port) const
     if(port>=0x10 && port<=0x23)return readDma(port);
     if(port==0x00)return picReadIsr_?picInService_:picRequest_;
     if(port==0x01)return picMask_;
+    // FC80-FCFF is the shared display mailbox in the original FM-11.
+    // The 8088 ROM sends text commands through FC81-FC84.
+    if(port>=0xfc80 && port<=0xfcff && mainBoard_)
+        return mainBoard_->readDisplayShared(port-0xfc80);
     if(port>=0xfc00 && port<=0xfcff) return cardIoRam_[port&0xff];
     if(((port==0xfd04 || port==0xfd05 || port==0xfd06 || port==0xfd07 ||
          port==0xfd23) ||
@@ -161,7 +165,9 @@ void Main8088Bus::writeIo(WORD port,BYTE value)
         } else picMask_=value;
         return;
     }
-    if(port>=0xfc00 && port<=0xfcff) cardIoRam_[port&0xff]=value;
+    if(port>=0xfc80 && port<=0xfcff && mainBoard_)
+        mainBoard_->writeDisplayShared(port-0xfc80,value);
+    else if(port>=0xfc00 && port<=0xfcff) cardIoRam_[port&0xff]=value;
     else if(((port==0xfd04 || port==0xfd05 || port==0xfd06 || port==0xfd07 ||
               port==0xfda0) ||
              (port>=0xfd38 && port<=0xfd3f) ||
