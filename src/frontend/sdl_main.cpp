@@ -215,6 +215,9 @@ int main(int argc,char** argv) {
                 }
             }
         }
+        // FD23 boot-device DIP is on the shared system board. An FM-11 BS
+        // has no 6809 main CPU card, but its 8088 boot ROM still reads FD23.
+        machine.systemBoard().setBootDip(static_cast<BYTE>(bootDip));
         if(mainBoard)mainBoard->setBootDip(static_cast<BYTE>(bootDip));
 
         machine.setDisplayCpuClockHz(testPattern?0:config.displayClockHz);
