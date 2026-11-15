@@ -71,6 +71,20 @@ int main() {
                 result))return 2;
         }
 
+    // OUTSB shares the same carry termination rules as INSB.
+    // The conformance bus ignores output writes, so verify SI/CX/IP.
+    for(const BYTE prefix:{BYTE(0x64),BYTE(0x65)})
+        for(const bool carry:{false,true}) {
+            const auto result=execute(CpuType::NECV20,
+                {prefix,0x6e,0,0},2,0,0,0,2,0x0200,0x0200,
+                carry?setCarry:clearCarry);
+            const bool again=carry==(prefix==0x65);
+            if(!check("REPC/REPNC OUTSB",
+                result.cx==1 && result.si==0x0201 &&
+                result.di==0x0200 && result.ip==(again?0:2),
+                result))return 6;
+        }
+
     // REP on V20 IDIV negates the quotient, but does not repeat.
     // 10 / 2 yields -5, remainder 0, regardless of F2 or F3.
     for(const BYTE prefix:{BYTE(0xf2),BYTE(0xf3)}) {
