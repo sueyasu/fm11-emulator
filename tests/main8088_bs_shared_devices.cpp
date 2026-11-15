@@ -12,6 +12,15 @@ int main() {
         std::fputs("FAIL: 8088/V20-only machine CPU selection\n",stderr);
         return 1;
     }
+    // The original 8088 boot ROM reads FD23 and branches on (~DIP & F8h).
+    // FFh means no boot devices, so a missing shared decode prevents
+    // the ROM from ever attempting its two-sector disk IPL read.
+    machine.systemBoard().setBootDip(0x9f);
+    if(cpuIndex>=machine.boardCount() ||
+       dynamic_cast<Main8088Board*>(&machine.board(cpuIndex))->bus().readIo(0xfd23)!=0x9f) {
+        std::fputs("FAIL: 8088-only FM-11 cannot read boot-device DIP FD23\n",stderr);
+        return 5;
+    }
     auto floppy=machine.systemBoard().floppyDevice();
     std::vector<BYTE> image(40u*2*16*256,0xe5);
     image[0]=0x12;
@@ -31,6 +40,10 @@ int main() {
         return 3;
     }
     machine.reset();
+    if(cpu->bus().readIo(0xfd23)!=0x9f) {
+        std::fputs("FAIL: FD23 boot-device DIP lost on reset\n",stderr);
+        return 6;
+    }
     if(cpu->bus().floppyImage().size()!=image.size() ||
        cpu->bus().floppyImage()[1]!=0x34) {
         std::fputs("FAIL: shared FDC media lost on reset\n",stderr);
