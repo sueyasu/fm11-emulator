@@ -63,6 +63,12 @@ nonzero on any failure/unsupported result.
 * Use `metadata.json` for opcode/subopcode status and undefined flag
   masks. The native comparison applies a further architecturally relevant
   FLAG mask; reserved status bits are not treated as failures.
+* For `D2h`/`D3h` with `CL > 1`, **OF is undefined** on the 8088.
+  The driver removes bit `0800h` from the comparison mask for those cases
+  individually; it still compares OF for `CL = 0` and `CL = 1`.
+  This avoids approximately half the cases being reported as false
+  failures when the emulator preserves OF and the measured CPU leaves
+  an arbitrary value. This is documented in the upstream test README.
 * REP string instructions can be executed in multiple calls to
   `executeOne()`, since this emulator runs one iteration per call.
 * Bus cycle timing and prefetch queue state are **not** compared.
