@@ -1395,6 +1395,11 @@ void Main8088Board::Core::executeOne()
             const WORD seg=segments_[insert ? 0u :
                 (segmentOverride_>=0 ? unsigned(segmentOverride_) : 3u)];
             const WORD origin=regs_[insert ? 7u : 6u];
+            const unsigned end=start+count;
+            // INS updates the bit-index register before sampling AX.
+            // When the index lives in AL or AH this ordering changes
+            // the bits inserted into ES:DI (verified against V20 tests).
+            if(insert)setReg8(startReg,BYTE(end&15u));
             unsigned value=insert ? regs_[0] : 0u;
             for(unsigned bit=0;bit<count;++bit) {
                 const unsigned position=start+bit;
@@ -1411,12 +1416,11 @@ void Main8088Board::Core::executeOne()
                 }
             }
             if(!insert)regs_[0]=WORD(value);
-            const unsigned end=start+count;
             // Bit offsets 0..15 span one 16-bit word. Advance the
             // byte index by two only after crossing a word boundary,
             // keeping the four-bit bit position for the next field.
             regs_[insert ? 7u : 6u]=WORD(origin+2u*(end/16u));
-            setReg8(startReg,BYTE(end&15u));
+            if(!insert)setReg8(startReg,BYTE(end&15u));
             // FLAGS are unaffected by INS/EXT.
             break;
         }
