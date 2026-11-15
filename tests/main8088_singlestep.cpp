@@ -108,10 +108,30 @@ bool checkOne(std::istream& in,Main8088Board& board,U32 testcase,
     const U16 mask=flagMask&DEFINED;
     if(problem.empty() && ((cpu.flags()^expected.flags)&mask))
         problem="FLAGS "+hex(cpu.flags()&mask)+" != "+hex(expected.flags&mask);
+    // DIV/IDIV status flags are architecturally undefined. On a type-0
+    // divide error the CPU pushes FLAGS before CS:IP; the reference
+    // hardware may have changed those undefined bits during division.
+    // Applying metadata's flag mask only to the CPU FLAGS register but
+    // comparing the saved copy in RAM byte-for-byte created false FAILs.
+    // Mask *only* the saved FLAGS word, and only on an actual divide
+    // exception (SP decreases by six for the INT0 frame).
+    const bool divideException =
+        flagMask==0xf72a && expected.g[4]==WORD(initial.g[4]-6);
+    const auto stackByte=[&](WORD offset)->U32 {
+        return ((U32(initial.s[2])<<4)+offset)&0xfffffu;
+    };
+    const U32 flagsLowAddress=stackByte(WORD(initial.g[4]-2));
+    const U32 flagsHighAddress=stackByte(WORD(initial.g[4]-1));
     if(problem.empty())for(const auto& m:memory) {
         const U8 actual=bus.readRam(m.addr);
-        if(actual!=m.value) {
-            problem="RAM["+hex(m.addr,5)+"] "+hex(actual,2)+" != "+hex(m.value,2);
+        U8 memoryMask=0xff;
+        if(divideException && m.addr==flagsLowAddress)
+            memoryMask=U8(mask);
+        else if(divideException && m.addr==flagsHighAddress)
+            memoryMask=U8(mask>>8);
+        if(((actual^m.value)&memoryMask)!=0) {
+            problem="RAM["+hex(m.addr,5)+"] "+hex(actual,2)+" != "+hex(m.value,2)
+                +" mask="+hex(memoryMask,2);
             break;
         }
     }
