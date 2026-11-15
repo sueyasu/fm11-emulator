@@ -75,8 +75,8 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software]\n"
-             <<"  ROM defaults to external/roms/display6809.bin\n"
+    std::cout<<"usage: fm11-sdl [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software]\n"
+             <<"  ROM defaults to [display_cpu].rom (external/roms/display6809.bin); CPU ROM paths may be set in the config file\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
              <<"  --speed N: main CPU multiplier (default 10, 1=real-time);\n"
              <<"             display CPU uses the same multiplier, capped at 8 MHz.\n"
@@ -87,9 +87,9 @@ void usage() {
 }
 int main(int argc,char** argv) {
     try {
-        std::string romPath="external/roms/display6809.bin", mainRomPath, ankPath, floppyPath;
+        std::string displayRomOverride, mainRomPath, main6809RomOverride, ankPath, floppyPath;
         bool floppyD88=false;
-        std::string configPath,main8088RomPath;
+        std::string configPath,main8088RomOverride;
         unsigned speed=10;
         std::string rendererMode="auto";
         unsigned floppyDrive=0;
@@ -106,10 +106,11 @@ int main(int argc,char** argv) {
             if(arg=="--trace-boot"){traceBoot=true;continue;}
             if(arg=="--trace-inkey"){traceInkey=true;continue;}
             if(arg=="--diagnostics"){diagnostics=true;continue;}
-            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--ank-rom" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive" || arg=="--boot-dip" || arg=="--config" || arg=="--8088-rom" || arg=="--speed" || arg=="--renderer") && i+1<argc) {
-                if(arg=="--rom")romPath=argv[++i];
+            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--6809-rom" || arg=="--ank-rom" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive" || arg=="--boot-dip" || arg=="--config" || arg=="--8088-rom" || arg=="--speed" || arg=="--renderer") && i+1<argc) {
+                if(arg=="--rom")displayRomOverride=argv[++i];
                 else if(arg=="--config")configPath=argv[++i];
-                else if(arg=="--8088-rom")main8088RomPath=argv[++i];
+                else if(arg=="--8088-rom")main8088RomOverride=argv[++i];
+                else if(arg=="--6809-rom")main6809RomOverride=argv[++i];
                 else if(arg=="--renderer") {
                     rendererMode=argv[++i];
                     if(rendererMode!="auto" && rendererMode!="gl" &&
@@ -145,7 +146,19 @@ int main(int argc,char** argv) {
         const MachineConfig config=loadMachineConfig(configPath);
         if(traceCpm80 && (!config.z80Installed || !config.main6809Installed))
             throw std::invalid_argument("--trace-cpm80 requires an installed Z80 and main 6809");
-        if(testPattern && (!mainRomPath.empty() || !main8088RomPath.empty()))
+        // Card-specific settings provide defaults. CLI --6809-rom/--8088-rom
+        // override those defaults; --main-rom is the boot-ROM override for
+        // the DIP-selected main card regardless of its architecture.
+        std::string romPath=displayRomOverride.empty()?config.displayRom:displayRomOverride;
+        std::string rom6809=main6809RomOverride.empty()?config.main6809Rom:main6809RomOverride;
+        std::string rom8088=main8088RomOverride.empty()?config.main8088Rom:main8088RomOverride;
+        if(!mainRomPath.empty()) {
+            if(config.mainSelected==MachineConfig::MainSelection::Cpu6809)
+                rom6809=mainRomPath;
+            else rom8088=mainRomPath;
+        }
+        if(ankPath.empty())ankPath=config.ankRom;
+        if(testPattern && (!rom6809.empty() || !rom8088.empty()))
             throw std::invalid_argument("CPU ROMs cannot be combined with --test-pattern");
         if(instructions>1000000)
             throw std::invalid_argument("--cycles must be <= 1000000");
@@ -156,22 +169,22 @@ int main(int argc,char** argv) {
         if(!testPattern) {
             machine.loadDisplayRomFile(romPath);
             if(!ankPath.empty())machine.loadAnkRomFile(ankPath);
-            if(!mainRomPath.empty() || !main8088RomPath.empty()) {
+            if(!rom6809.empty() || !rom8088.empty()) {
                 std::size_t cpu6809Index=0,cpu8088Index=0,z80Index=0;
                 if(config.main6809Installed) {
                     auto mainCpu=std::make_unique<Main6809Board>(config.main6809Cpu);
-                    if(!mainRomPath.empty())mainCpu->loadBootRomFile(mainRomPath);
+                    if(!rom6809.empty())mainCpu->loadBootRomFile(rom6809);
                     else if(config.mainSelected==MachineConfig::MainSelection::Cpu6809)
-                        throw std::invalid_argument("selected 6809 card requires --main-rom");
+                        throw std::invalid_argument("selected 6809 card requires [main_6809].rom or --main-rom/--6809-rom");
                     mainBoard=mainCpu.get();
                     mainCpu->setCpuClockHz(config.main6809ClockHz);
                     cpu6809Index=machine.addBoard(std::move(mainCpu));
                 }
                 if(config.main8088Installed) {
                     auto mainCpu=std::make_unique<Main8088Board>(config.main8088Cpu);
-                    if(!main8088RomPath.empty())mainCpu->bus().loadBootRomFile(main8088RomPath);
+                    if(!rom8088.empty())mainCpu->bus().loadBootRomFile(rom8088);
                     else if(config.mainSelected==MachineConfig::MainSelection::Cpu8088)
-                        throw std::invalid_argument("selected 8088 card requires --8088-rom");
+                        throw std::invalid_argument("selected 8088 card requires [main_8088].rom or --main-rom/--8088-rom");
                     cpu8088Index=machine.addBoard(std::move(mainCpu));
                     machine.set8088ClockHz(config.main8088ClockHz);
                     main8088Enabled=true;
