@@ -162,8 +162,10 @@ void Main8088Bus::writeIo(WORD port,BYTE value)
         return;
     }
     if(port>=0xfc00 && port<=0xfcff) cardIoRam_[port&0xff]=value;
-    else if(((port==0xfd04 || port==0xfd05 || port==0xfd06 || port==0xfd07) ||
-             (port>=0xfd38 && port<=0xfd3f)) && mainBoard_) {
+    else if(((port==0xfd04 || port==0xfd05 || port==0xfd06 || port==0xfd07 ||
+              port==0xfda0) ||
+             (port>=0xfd38 && port<=0xfd3f) ||
+             (port>=0xfd98 && port<=0xfd9f)) && mainBoard_) {
         mainBoard_->writeIo(port,value);
         refreshSystemIrq();
     }
