@@ -132,11 +132,13 @@ second. Out-of-range values transfer to interrupt vector 5, with the
 V20 saving the post-instruction IP on the stack. Segment overrides
 apply to both bounds. Register-only bounds operands are not supported.
 
-`63 /r` uses the same decoding path and currently transfers to
-interrupt vector 5 unconditionally, following a known V20 emulator
-implementation. Its precise behavior should be confirmed against
-the supplied hardware test corpus before considering this case
-fully validated.
+`63 /r` is an undocumented/undefined V20 encoding. Unlike
+`62 /r`, it does **not** trigger INT 5: the hardware-generated
+SingleStepTests show SP unchanged in all initial 100 cases. The
+emulator consumes ModR/M and any displacement but leaves registers,
+FLAGS and memory unmodified. This behavior is tested by
+`mainv20_bound` and should be rechecked with a larger hardware
+sample.
 
 The `mainv20_bound` CTest exercises positive and negative bounds,
 inclusive endpoints, out-of-range interrupts, interrupt stack
