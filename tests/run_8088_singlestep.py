@@ -47,6 +47,8 @@ def pack_test(test, flag_mask):
         case_mask &= ~0x0800
     # Only architecturally defined bits are compared by the C++ runner.
     result.extend(struct.pack("<H", case_mask))
+    # The Intel 8088 tests always compare all 16 AX bits.
+    result.extend(struct.pack("<H", 0xffff))
     # REP prefixed strings: the FM-11 core runs one iteration per instruction.
     # The actual instruction may carry a segment override prefix.
     repeat = False
