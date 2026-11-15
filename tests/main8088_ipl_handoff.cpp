@@ -6,14 +6,26 @@
 namespace {
 bool check(CpuType variant, const char* label) {
     Main8088Board board(variant);
-    board.bus().enableConformanceRam();
+    // Exercise the actual 8259 I/O decode too, rather than using
+    // conformance RAM, which deliberately disables peripheral writes.
     auto& bus=board.bus();
     auto put=[&](unsigned seg,unsigned off,const std::initializer_list<BYTE>& code) {
         unsigned physical=((seg<<4)+off)&0xfffff;
         for(BYTE byte:code)bus.writeMemory(physical++,byte);
     };
-    // ROM -> 0400:2500, matching the FM-11 boot IPL far handoff.
-    put(0xff00,0,{0xea,0x00,0x25,0x00,0x04});
+    // The dedicated IPL ROM replaces the original system ROM. Set up
+    // ICW1/ICW2/ICW4 and OCW1 exactly as the original ROM does,
+    // then transfer to 0400:2500.
+    Main8088Bus::Rom rom{};
+    constexpr std::array<BYTE,21> bootstrap{
+        0xb0,0x1b, 0xe6,0x00,
+        0xb0,0x08, 0xe6,0x01,
+        0xb0,0x09, 0xe6,0x01,
+        0xb0,0xff, 0xe6,0x01,
+        0xea,0x00,0x25,0x00,0x04
+    };
+    for(unsigned i=0;i<bootstrap.size();++i)rom[i]=bootstrap[i];
+    bus.loadBootRom(rom);
     // CBIOS INIT: establish DS=SS=CS; temporarily use DS=0000 for
     // interrupt-vector writes, then restore DS and call SELDSK.
     put(0x0400,0x2500,{
@@ -59,13 +71,14 @@ bool check(CpuType variant, const char* label) {
                        cpu.segment(3)==0x0400 &&
                        cpu.segment(2)==0x0400 &&
                        cpu.reg(3)==0x292a &&
-                       cpu.reg(4)==0x4000;
+                       cpu.reg(4)==0x4000 &&
+                       bus.interruptMask()==0xff;
     if(!success)std::fprintf(stderr,
         "%s handoff: CS=%04X IP=%04X DS=%04X SS=%04X "
-        "BX=%04X SP=%04X (expected 0400:2517 DS=SS=0400 "
+        "BX=%04X SP=%04X PIC_MASK=%02X (expected 0400:2517 DS=SS=0400 "
         "BX=292A SP=4000)\n",label,unsigned(cpu.cs()),unsigned(cpu.ip()),
         unsigned(cpu.segment(3)),unsigned(cpu.segment(2)),
-        unsigned(cpu.reg(3)),unsigned(cpu.reg(4)));
+        unsigned(cpu.reg(3)),unsigned(cpu.reg(4)),unsigned(bus.interruptMask()));
     return success;
 }
 }
