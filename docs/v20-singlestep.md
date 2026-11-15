@@ -103,18 +103,20 @@ python3 tests/run_v20_singlestep.py --opcode C0 --opcode C1 --limit 100
 
 ## Phase 4: carry-conditional repeat prefixes and REP IDIV
 
-V20 has two additional repeat prefixes: `64h` (REPNC, repeat while
-carry clear) and `65h` (REPC, repeat while carry set). They are
-accepted with all supported string operations, not just CMPS/SCAS:
-MOVS, STOS, LODS, INS and OUTS also qualify. Repeat processing
-executes one element per `executeOne()`; CX decrements and IP returns
-to the prefix while the carry condition and CX permit another iteration.
-The ordinary 8088 prefix handling is unchanged.
+V20 has two additional repeat prefixes: `64h` (REPNC) and
+`65h` (REPC). With comparison strings (CMPS/SCAS), the carry flag
+controls repetition: REPNC continues while CF=0 and REPC while CF=1.
+With non-comparison strings (MOVS, STOS, LODS, INS and OUTS), these
+prefixes behave like ordinary REP and run until CX=0 without testing
+CF. Repeat processing executes one element per `executeOne()`,
+decrements CX, and returns IP to the prefix when another iteration
+is needed. The original 8088 prefix handling remains unchanged.
 
-On both Intel 8088 and NEC V20, an F2h/F3h-prefixed F6/F7 signed
-division negates the resulting quotient without repetition. The V20
-division-overflow bounds still differ from the original 8088, which
-rejects the minimum negative signed quotient.
+F2h/F3h-prefixed F6/F7 signed division on the **Intel 8088** negates
+the quotient without repetition. The **NEC V20 does not negate** the
+quotient, even when REP is present. The V20 division-overflow bounds
+also differ from the original 8088, which rejects the minimum negative
+signed quotient.
 
 ```sh
 ctest --test-dir build -R 'mainv20_rep_prefixes|main8088_divide_quirks' --output-on-failure
