@@ -98,6 +98,9 @@ if(FM11_BUILD_TESTS)
                  COMMAND ${Python3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/main8088_singlestep_smoke.py
                          $<TARGET_FILE:fm11-8088-singlestep>)
+        add_test(NAME main8088_singlestep_flag_mask
+                 COMMAND ${Python3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/main8088_singlestep_flag_mask.py)
         add_test(NAME extract_roms
                  COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tests/extract_roms.py
                          ${CMAKE_CURRENT_SOURCE_DIR}/tools/extract_roms.py)
