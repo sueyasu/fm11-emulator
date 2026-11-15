@@ -1120,7 +1120,10 @@ void Main8088Board::Core::executeOne()
         // Group 5: /0 INC /1 DEC /2 near CALL /3 far CALL,
         //          /4 near JMP /5 far JMP /6 PUSH.
         const auto op=decodeModRm();
-        if(op.reg==7)throw std::runtime_error("invalid FF group opcode");
+        // On the original Intel 8088, FF /7 aliases FF /6 (PUSH r/m16).
+        // Keep the later-CPU/V20 decode restriction unchanged.
+        if(op.reg==7 && variant_!=CpuType::I8088)
+            throw std::runtime_error("invalid FF group opcode");
         if(op.reg==0 || op.reg==1) {
             writeOperand(op,16,incDec(readOperand(op,16),16,op.reg==1));
         } else if(op.reg==3 || op.reg==5) {
