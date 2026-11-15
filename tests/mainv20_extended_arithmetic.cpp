@@ -75,6 +75,20 @@ int main() {
                extract.si==0x0200 && extract.ax==1 && extract.ip==4,
                extract))return 7;
 
+    // A field ending at bit 16 moves the byte index forward by
+    // exactly two bytes and wraps the bit-offset register to zero.
+    const auto boundary=run(CpuType::NECV20,
+                            {0x0f,0x39,0xfa,0x00},4,
+                            0x0001,0,0x000f,0x0200,0x0200,0,0);
+    if(!verify("INS word boundary",boundary.dx==0 &&
+               boundary.di==0x0202 && boundary.ip==4,boundary))return 11;
+    const auto regLength=run(CpuType::NECV20,
+                             {0x0f,0x31,0xca},3,
+                             0x0001,0,0x0009,0x0200,0x0200,0,0);
+    if(!verify("INS register length",regLength.dx==0x000a &&
+               regLength.di==0x0200 && regLength.ip==3,regLength))
+        return 12;
+
     // BCD operations use binary arithmetic followed by decimal adjust.
     const auto add=run(CpuType::NECV20,{0x0f,0x20},2,
                        0,2,0,0x0200,0x0200,0x01,0x09);
