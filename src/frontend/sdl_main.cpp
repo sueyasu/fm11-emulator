@@ -9,6 +9,7 @@
 #include "DisplayBitmap.h"
 #include "RomFiles.h"
 #include <SDL.h>
+#include <array>
 #include <algorithm>
 #include <chrono>
 #include <iomanip>
@@ -350,6 +351,14 @@ int main(int argc,char** argv) {
         auto lastSpeedReport=std::chrono::steady_clock::now();
         bool wasPaused=false;
         CpuBoard* lastCpuOwner=machine.activeBoard();
+        // ROM milestones from the original FM-11 8088 boot ROM.
+        // Emit only the first visit to each stage, plus bounded early
+        // instructions and occasional progress checkpoints.
+        constexpr std::array<unsigned,10> romBootOffsets{
+            0x00c5,0x011b,0x0123,0x014e,0x01be,
+            0x01f1,0x0291,0x0385,0x042f,0x045b
+        };
+        std::array<bool,romBootOffsets.size()> romBootSeen{};
         auto traceCpmSnapshot=[&](const char* event) {
             if(!traceCpm80 || !mainBoard)return;
             const auto* owner=machine.activeBoard();
@@ -432,6 +441,39 @@ int main(int argc,char** argv) {
                             :(activeType==CpuType::I8088 || activeType==CpuType::NECV20)
                                 ?machine.clock8088Hz()
                                 :mainBoard?mainBoard->cpuClockHz():config.main6809ClockHz;
+                        if(traceBoot &&
+                           (activeType==CpuType::I8088 || activeType==CpuType::NECV20)) {
+                            auto* board8088=dynamic_cast<Main8088Board*>(machine.activeBoard());
+                            if(board8088) {
+                                const auto& cpu=static_cast<const Main8088Board::Core&>(board8088->cpu());
+                                const auto cs=cpu.cs(), ip=cpu.ip();
+                                bool milestone=false;
+                                if(cs==0xff00) {
+                                    for(std::size_t n=0;n<romBootOffsets.size();++n) {
+                                        if(ip==romBootOffsets[n] && !romBootSeen[n]) {
+                                            romBootSeen[n]=true;
+                                            milestone=true;
+                                        }
+                                    }
+                                }
+                                const bool handoff=(cs==0x07c0 && ip==0) ||
+                                                   (cs==0x0400 && ip==0x2500);
+                                if(executed<96 || milestone || handoff ||
+                                   (executed && executed%200000==0)) {
+                                    std::cerr<<"8088 boot step="<<executed
+                                             <<" CS:IP="<<std::hex<<std::setw(4)
+                                             <<std::setfill('0')<<cs<<":"
+                                             <<std::setw(4)<<ip
+                                             <<" AX="<<std::setw(4)<<cpu.reg(0)
+                                             <<" BX="<<std::setw(4)<<cpu.reg(3)
+                                             <<" SP="<<std::setw(4)<<cpu.reg(4)
+                                             <<" DS="<<std::setw(4)<<cpu.segment(3)
+                                             <<" SS="<<std::setw(4)<<cpu.segment(2)
+                                             <<" FLAGS="<<std::setw(4)<<cpu.flags()
+                                             <<std::dec<<std::setfill(' ')<<"\n";
+                                }
+                            }
+                        }
                         if(traceBoot && executed<64 && mainBoard) {
                             std::cerr<<"main step="<<executed
                                      <<" PC=$"<<std::hex
