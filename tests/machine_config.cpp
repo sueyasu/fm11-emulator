@@ -18,6 +18,7 @@ int main() {
               "[DIPSW]\nmain_cpu = 8088\n2D_FDD = true\n2HD_FDD = false\nHDD = false\n"
               "[optional_cpu]\ntype = z80\nclock_hz = 4000000\n"
               "[display_cpu]\ncpu = 6809\nclock_hz = 2000000\nrom = test-display.rom\nank_rom = test-ank.rom\n"
+              "[display]\nheight = 200\n"
               "[floppy_2d]\ndrive0 = system.d88\ndrive3 = extra.d88\n"
               "[floppy_2hd]\ndrive1 = hd1.raw\ndrive2 = hd2.raw\n"
               "[hdd]\nimage = fixed-disk.img\n";
@@ -32,6 +33,7 @@ int main() {
        config.main6809Rom!="test-6809.rom" ||
        config.main8088Rom!="test-8088.rom" ||
        config.displayRom!="test-display.rom" ||
+       config.displayHeight!=200 ||
        config.ankRom!="test-ank.rom" ||
        config.floppy2d[0]!="system.d88" ||
        config.floppy2d[3]!="extra.d88" ||
@@ -44,6 +46,7 @@ int main() {
 
     // Original DIP default enables both FDD formats and disables HDD.
     MachineConfig defaults;
+    if(defaults.displayHeight!=400)return 19;
     if(defaults.bootDip()!=0x9f)return 10;
     // Verify all three independently controlled SW6..SW8 bits.
     defaults.boot2dFdd=false;
@@ -127,6 +130,24 @@ int main() {
         out<<"[DIPSW]\nHDD=true\n[boot]\nHDD=false\n";
     }
     try {(void)parseMachineConfigFile(path);return 18;}
+    catch(const std::runtime_error&) {}
+    // The SDL viewport accepts only 200 or 400 scanlines.
+    {
+        std::ofstream out(path);
+        out<<"[display]\nheight = 400\n";
+    }
+    if(parseMachineConfigFile(path).displayHeight!=400)return 20;
+    {
+        std::ofstream out(path);
+        out<<"[display]\nheight = 300\n";
+    }
+    try {(void)parseMachineConfigFile(path);return 21;}
+    catch(const std::runtime_error&) {}
+    {
+        std::ofstream out(path);
+        out<<"[display]\nunknown = 200\n";
+    }
+    try {(void)parseMachineConfigFile(path);return 22;}
     catch(const std::runtime_error&) {}
     std::remove(path.c_str());
     return 0;

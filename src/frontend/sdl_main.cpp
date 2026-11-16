@@ -84,6 +84,7 @@ std::uint64_t parseCount(const std::string& text) {
 void usage() {
     std::cout<<"usage: fm11-sdl [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software]\n"
              <<"  ROM defaults to [display_cpu].rom (external/roms/display6809.bin); CPU ROM paths may be set in the config file\n"
+             <<"  Initial window height: [display].height=200|400 (default 400); --high forces 400\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
              <<"  --speed N: main CPU multiplier (default 10, 1=real-time);\n"
              <<"             display CPU uses the same multiplier, capped at 8 MHz.\n"
@@ -101,12 +102,12 @@ int main(int argc,char** argv) {
         unsigned floppyDrive=0;
         unsigned bootDip=0x9f;
         bool bootDipOverridden=false;
-        bool high=false, testPattern=false, traceBoot=false, traceInkey=false, diagnostics=false, traceCpm80=false, cpuSpeed=false;
+        bool high=false, highOverridden=false, testPattern=false, traceBoot=false, traceInkey=false, diagnostics=false, traceCpm80=false, cpuSpeed=false;
         std::uint64_t instructions=10000;
         for(int i=1;i<argc;++i) {
             const std::string arg=argv[i];
             if(arg=="--help"){usage();return 0;}
-            if(arg=="--high"){high=true;continue;}
+            if(arg=="--high"){high=true;highOverridden=true;continue;}
              if(arg=="--trace-cpm80"){traceCpm80=true;continue;}
             if(arg=="--cpu-speed"){cpuSpeed=true;continue;}
             if(arg=="--test-pattern"){testPattern=true;continue;}
@@ -151,6 +152,7 @@ int main(int argc,char** argv) {
             } else {usage();return 2;}
         }
         const MachineConfig config=loadMachineConfig(configPath);
+        if(!highOverridden)high=config.displayHeight==400;
         // Explicit raw DIP override remains available for diagnostics.
         if(!bootDipOverridden)bootDip=config.bootDip();
         if(traceCpm80 && (!config.z80Installed || !config.main6809Installed))

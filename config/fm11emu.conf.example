@@ -34,6 +34,10 @@ clock_hz = 2000000
 rom = external/roms/display6809.bin
 ank_rom = external/roms/ank.bin
 
+# Initial SDL window height (not a physical DIP switch).
+[display]
+height = 400
+
 # 2D Mini-FDC: up to four independent physical drives.
 # Raw 320 KiB images and 2D D88 containers are accepted.
 [floppy_2d]

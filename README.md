@@ -196,7 +196,7 @@ is shown at native 1:1 size rather than distorted to 1.5x. Enlarge the
 window to at least 1280x400 for a sharp 2x 640x200 display, or 1280x800
 for a sharp 2x 640x400 display. Smaller windows clip instead of using
 fractional resampling.
-`--high` starts in 400-line mode. The SDL frontend defaults to
+`--high` forces 400-line mode. `[display] height = 200|400` selects the initial viewport (default 400). The SDL frontend defaults to
 **`--speed 10`** (ten times real-time emulated CPU/peripheral time).
 Use `--speed 1` for real-time FM-11 clocks, `--speed 5` for five times
 real-time, or `--speed 0` for unlimited execution (as fast as the host

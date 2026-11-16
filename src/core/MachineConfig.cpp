@@ -52,7 +52,8 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                    section!="main_8088" && section!="optional_cpu" &&
                    section!="display_cpu" && section!="floppy_2d" &&
                    section!="floppy_2hd" && section!="hdd" &&
-                   section!="boot" && section!="DIPSW")
+                   section!="boot" && section!="DIPSW" &&
+                   section!="display")
                     throw std::invalid_argument("unknown section ["+section+"]");
                 continue;
             }
@@ -125,6 +126,12 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
             } else if(section=="hdd") {
                 if(key=="image")cfg.hddImage=value;
                 else handled=false;
+            } else if(section=="display") {
+                if(key=="height") {
+                    if(value=="200")cfg.displayHeight=200;
+                    else if(value=="400")cfg.displayHeight=400;
+                    else throw std::invalid_argument("display.height must be 200 or 400");
+                } else handled=false;
             } else if(section=="display_cpu") {
                 if(key=="cpu") {
                     if(value!="6809")
