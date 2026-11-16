@@ -15,13 +15,12 @@ int main() {
         if(!out)return 1;
         out<<"[main_6809]\ninstalled = true\ncpu = 6309\nclock_hz = 3000000\nrom = test-6809.rom\n"
               "[main_8088]\ninstalled = true\ncpu = v20\nclock_hz = 8000000\nrom = test-8088.rom\n"
-              "[DIPSW]\nmain_cpu = 8088\n"
+              "[DIPSW]\nmain_cpu = 8088\n2D_FDD = true\n2HD_FDD = false\nHDD = false\n"
               "[optional_cpu]\ntype = z80\nclock_hz = 4000000\n"
               "[display_cpu]\ncpu = 6809\nclock_hz = 2000000\nrom = test-display.rom\nank_rom = test-ank.rom\n"
               "[floppy_2d]\ndrive0 = system.d88\ndrive3 = extra.d88\n"
               "[floppy_2hd]\ndrive1 = hd1.raw\ndrive2 = hd2.raw\n"
-              "[hdd]\nimage = fixed-disk.img\n"
-              "2D_FDD = true\n2HD_FDD = false\nHDD = false\n";
+              "[hdd]\nimage = fixed-disk.img\n";
     }
     auto config=parseMachineConfigFile(path);
     if(!config.main6809Installed || !config.main8088Installed ||
