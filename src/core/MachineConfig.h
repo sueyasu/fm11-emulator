@@ -1,6 +1,7 @@
 #pragma once
 #include "CpuCore.h"
 #include <cstdint>
+#include <array>
 #include <string>
 
 // Installed cards and DIP-selected startup main CPU are independent.
@@ -20,6 +21,11 @@ struct MachineConfig {
     std::uint64_t displayClockHz=2000000;
     std::string displayRom="external/roms/display6809.bin";
     std::string ankRom;
+    // Empty paths mean no medium mounted. 2D accepts raw 320 KiB or D88;
+    // 2HD accepts raw 1232 KiB. Drive indices are physical 0..3.
+    std::array<std::string,4> floppy2d{};
+    std::array<std::string,4> floppy2hd{};
+    std::string hddImage;
 };
 MachineConfig loadMachineConfig(const std::string& explicitPath="");
 MachineConfig parseMachineConfigFile(const std::string& path);
