@@ -800,7 +800,7 @@ void Main6809Board::writeIo(WORD address, BYTE value)
                     ++hdBadChs_;
                     status=0x10; // Record Not Found
                 } else {
-                    const unsigned length=static_cast<unsigned>(floppy_->sectorLength(1));
+                    const unsigned length=static_cast<unsigned>(floppy_->sectorLength(1,track,side,sector,drive));
                     const bool dma=(ioRegisters_[0x51]&0x04)!=0;
                     if(!dma) {
                         ++hdReadSuccesses_;
