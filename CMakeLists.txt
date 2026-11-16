@@ -716,6 +716,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(main6809_floppy_write PRIVATE fm11_core)
     add_test(NAME main6809_floppy_write COMMAND main6809_floppy_write)
 
+    add_executable(floppy_four_drives tests/floppy_four_drives.cpp)
+    target_link_libraries(floppy_four_drives PRIVATE fm11_core)
+    add_test(NAME floppy_four_drives COMMAND floppy_four_drives)
+
     add_executable(main6809_floppy_d88 tests/main6809_floppy_d88.cpp)
     target_link_libraries(main6809_floppy_d88 PRIVATE fm11_core)
     add_test(NAME main6809_floppy_d88 COMMAND main6809_floppy_d88)
