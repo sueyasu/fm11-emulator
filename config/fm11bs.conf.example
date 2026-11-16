@@ -43,7 +43,8 @@ height = 400
 # drive2 = /path/to/other.d88
 # drive3 = /path/to/backup.d88
 
-# 2HD FDC: up to four independent physical drives, raw 1232 KiB each.
+# 2HD FDC: up to four independent physical drives.
+# Native 77x2x26x256 raw or mixed 128/256-byte D88, plus legacy 8x1024 images.
 [floppy_2hd]
 # drive0 = /path/to/disk0.2hd
 # drive1 = /path/to/disk1.2hd
