@@ -139,8 +139,8 @@ BYTE Main8088Bus::readIo(WORD port) const
         if(mainBoard_->readIo(port,value))return value;
     }
     if(port>=0xfd00 && port<=0xfdff && systemReader_) return systemReader_(port);
-    if(((port>=0xfd18 && port<=0xfd1f && floppy_->has2d()) ||
-        (port>=0xfd30 && port<=0xfd35 && floppy_->has2hd()))) {
+    if(((port>=0xfd18 && port<=0xfd1f && floppy_->hasAny2d()) ||
+        (port>=0xfd30 && port<=0xfd35 && floppy_->hasAny2hd()))) {
         if(port==0xfd18 || port==0xfd30)return floppy_->transferStatus();
         if(port==0xfd1b || port==0xfd33)
             return const_cast<Main8088Bus*>(this)->floppyReadData();
