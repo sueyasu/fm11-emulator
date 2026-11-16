@@ -1,5 +1,6 @@
 #pragma once
 #include "FloppyDevice.h"
+#include "MdcHddDevice.h"
 #include "Usart8251.h"
 #include "Ptm6840.h"
 #include "DisplaySubsystem.h"
@@ -39,6 +40,7 @@ public:
     void setBootDip(BYTE value) {bootDip_=value;}
     BYTE bootDip() const {return bootDip_;}
     std::shared_ptr<FloppyDevice> floppyDevice() const { return floppy_; }
+    std::shared_ptr<MdcHddDevice> hddDevice() const { return hdd_; }
     std::shared_ptr<Usart8251> usartDevice() const {return usart_;}
     // Serial transport belongs to the system board, not the 6809 CPU.
     void queueSerialInput(BYTE value) {usart_->receive(value);}
@@ -222,6 +224,7 @@ public:
     // The physical PTM, USART and FDC parameter registers live here.
     bool readIo(std::uint16_t address, BYTE& value) {
         const unsigned reg=address&0xff;
+        if(reg>=0xc0 && reg<=0xc3) {value=hdd_->read(reg);return true;}
         if(reg==0x23) {value=bootDip_;return true;}
         if(reg==0x05) {value=subCpuStatus();return true;}
         if(reg==0x04) {
@@ -243,6 +246,7 @@ public:
     }
     bool writeIo(std::uint16_t address,BYTE value) {
         const unsigned reg=address&0xff;
+        if(reg>=0xc0 && reg<=0xc3) {hdd_->write(reg,value);return true;}
         if(reg==0xa0) {
             auto lock=lockDisplay();
             displayControl_=value;
@@ -341,6 +345,7 @@ private:
     }
     std::uint64_t ptmPhase_=0;
     std::shared_ptr<FloppyDevice> floppy_=std::make_shared<FloppyDevice>();
+    std::shared_ptr<MdcHddDevice> hdd_=std::make_shared<MdcHddDevice>();
     std::shared_ptr<Usart8251> usart_=std::make_shared<Usart8251>();
     std::shared_ptr<Ptm6840> ptm_=std::make_shared<Ptm6840>();
 };
