@@ -74,7 +74,7 @@ int main() {
     unsigned lastChannel=99,lastDrive=99;
     floppy.setSectorWriter([&](unsigned channel,unsigned drive,std::size_t,
                                 const BYTE*,std::size_t size) {
-        if(size!=(channel==0?256u:1024u))return false;
+        if(channel==0?size!=256u:(size!=128u && size!=256u && size!=1024u))return false;
         ++writes;
         lastChannel=channel;
         lastDrive=drive;
