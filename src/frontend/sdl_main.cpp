@@ -95,7 +95,6 @@ void usage() {
 int main(int argc,char** argv) {
     try {
         std::string displayRomOverride, mainRomPath, main6809RomOverride, ankPath, floppyPath;
-        bool floppyD88=false;
         std::string configPath,main8088RomOverride;
         unsigned speed=10;
         std::string rendererMode="auto";
@@ -144,7 +143,6 @@ int main(int argc,char** argv) {
                 }
                 else if(arg=="--floppy2d" || arg=="--floppy-d88") {
                     if(!floppyPath.empty())throw std::invalid_argument("only one floppy image may be mounted");
-                    floppyD88=(arg=="--floppy-d88");
                     floppyPath=argv[++i];
                 }
                 else instructions=parseCount(argv[++i]);
@@ -211,49 +209,71 @@ int main(int argc,char** argv) {
                 // addBoard() attaches the CPU to the machine's shared
                 // FloppyDevice. Mount only afterwards: mounting on the
                 // CPU's initial private device would lose the image.
-                if(!floppyPath.empty()) {
-                    // Mount on the shared FDC, irrespective of the main
-                    // CPU card: FM-11 BS has an 8088 but no 6809 main CPU.
+                {
                     auto floppy=machine.systemBoard().floppyDevice();
-                    auto image=readDiskImage(floppyPath);
-                    if(floppyD88)floppy->loadD88(image);
-                    else floppy->load2d(image);
-                    floppy->setMountedDrive(floppyDrive);
-                    // A completed guest sector WRITE is persisted before
-                    // its FDC completion becomes visible. The same shared
-                    // device is used by both 6809 and 8088 CPU boards.
-                    const int imageFd=::open(floppyPath.c_str(),O_RDWR);
-                    if(imageFd<0)
-                        throw std::runtime_error("cannot open writable floppy image: "+
-                                                 floppyPath+": "+std::strerror(errno));
-                    auto ownedFd=std::shared_ptr<int>(new int(imageFd),[](int* fd) {
-                        ::close(*fd);
-                        delete fd;
-                    });
+                    auto paths2d=config.floppy2d, paths2hd=config.floppy2hd;
+                    if(!floppyPath.empty()) {
+                        // Legacy command-line image overrides this 2D slot.
+                        paths2d[floppyDrive]=floppyPath;
+                    }
+                    std::array<std::array<std::shared_ptr<int>,4>,2> opened{};
+                    std::array<std::string,8> allPaths{};
+                    unsigned imageCount=0;
+                    for(unsigned channel=0;channel<2;++channel) {
+                        const auto& paths=channel==0?paths2d:paths2hd;
+                        for(unsigned drive=0;drive<4;++drive) {
+                            const auto& path=paths[drive];
+                            if(path.empty())continue;
+                            // Two virtual drives must not write the same host image.
+                            if(std::find(allPaths.begin(),allPaths.begin()+imageCount,path)
+                               !=allPaths.begin()+imageCount)
+                                throw std::runtime_error("disk image mounted twice: "+path);
+                            allPaths[imageCount++]=path;
+                            const auto bytes=readDiskImage(path);
+                            if(channel==0) {
+                                if(bytes.size()==40u*2*16*256)
+                                    floppy->load2d(bytes,drive);
+                                else
+                                    floppy->loadD88(bytes,drive);
+                            } else floppy->load2hd(bytes,drive);
+                            const int fd=::open(path.c_str(),O_RDWR);
+                            if(fd<0)
+                                throw std::runtime_error("cannot open writable disk image: "+
+                                                         path+": "+std::strerror(errno));
+                            opened[channel][drive]=std::shared_ptr<int>(new int(fd),[](int* handle) {
+                                ::close(*handle);
+                                delete handle;
+                            });
+                            std::cerr<<"Mounted "<<(channel==0?"2D":"2HD")
+                                     <<" FDD"<<drive<<": "<<path<<"\n";
+                        }
+                    }
                     std::weak_ptr<FloppyDevice> weakFloppy=floppy;
-                    floppy->setSectorWriter([ownedFd,weakFloppy,floppyPath](
-                        unsigned channel,std::size_t rawOffset,
+                    floppy->setSectorWriter([opened,weakFloppy](
+                        unsigned channel,unsigned drive,std::size_t rawOffset,
                         const BYTE* data,std::size_t length) {
+                        if(channel>=2 || drive>=4 || !opened[channel][drive])
+                            return false;
                         auto disk=weakFloppy.lock();
                         if(!disk)return false;
-                        const std::size_t imageOffset=disk->hostImageOffset(channel,rawOffset);
+                        const int fd=*opened[channel][drive];
+                        const std::size_t imageOffset=
+                            disk->hostImageOffset(channel,rawOffset,drive);
                         std::size_t done=0;
                         while(done<length) {
-                            const auto n=::pwrite(*ownedFd,data+done,length-done,
+                            const auto n=::pwrite(fd,data+done,length-done,
                                                   static_cast<off_t>(imageOffset+done));
                             if(n<0 && errno==EINTR)continue;
                             if(n<=0) {
-                                std::cerr<<"floppy sector write failed: "<<floppyPath
-                                         <<": "<<std::strerror(errno)<<"\n";
+                                std::cerr<<"floppy sector write failed: "
+                                         <<std::strerror(errno)<<"\n";
                                 return false;
                             }
                             done+=static_cast<std::size_t>(n);
                         }
-                        // Guarantee completion through the host filesystem,
-                        // not just a write to the OS page cache.
-                        if(::fdatasync(*ownedFd)!=0) {
-                            std::cerr<<"floppy sector sync failed: "<<floppyPath
-                                     <<": "<<std::strerror(errno)<<"\n";
+                        if(::fdatasync(fd)!=0) {
+                            std::cerr<<"floppy sector sync failed: "
+                                     <<std::strerror(errno)<<"\n";
                             return false;
                         }
                         return true;
