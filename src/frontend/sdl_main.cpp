@@ -289,6 +289,26 @@ int main(int argc,char** argv) {
                         }
                         return true;
                     });
+                    // WRITE TRACK changes the sector layout and may resize
+                    // a D88. Persist the complete rebuilt image immediately.
+                    floppy->setImageWriter([opened](unsigned channel,unsigned drive,
+                                                     const std::vector<BYTE>& image) {
+                        if(channel>=2 || drive>=4 || !opened[channel][drive])
+                            return false;
+                        const int fd=*opened[channel][drive];
+                        std::size_t done=0;
+                        while(done<image.size()) {
+                            const auto n=::pwrite(fd,image.data()+done,image.size()-done,
+                                                  static_cast<off_t>(done));
+                            if(n<0 && errno==EINTR)continue;
+                            if(n<=0)return false;
+                            done+=static_cast<std::size_t>(n);
+                        }
+                        if(::ftruncate(fd,static_cast<off_t>(image.size()))!=0)
+                            return false;
+                        if(::fdatasync(fd)!=0)return false;
+                        return true;
+                    });
                 }
                 if(!config.hddImage.empty()) {
                     const auto image=readDiskImage(config.hddImage);
