@@ -719,6 +719,9 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             }
             mainBoard_->writeIo(address,value);
             setExtendedIrqSource(0x04,mainBoard_->hddDevice()->irqPending());
+        } else if(reg==0xc2) {
+            // Standalone CPU-board tests retain the FD C2 IRQ gate.
+            mainIrqStatus();
         }
         break;
     case 0x38: case 0x39: case 0x3a: case 0x3b:
