@@ -100,6 +100,7 @@ int main(int argc,char** argv) {
         std::string rendererMode="auto";
         unsigned floppyDrive=0;
         unsigned bootDip=0x9f;
+        bool bootDipOverridden=false;
         bool high=false, testPattern=false, traceBoot=false, traceInkey=false, diagnostics=false, traceCpm80=false, cpuSpeed=false;
         std::uint64_t instructions=10000;
         for(int i=1;i<argc;++i) {
@@ -135,6 +136,7 @@ int main(int argc,char** argv) {
                     const auto v=parseCount(argv[++i]);
                     if(v>255)throw std::invalid_argument("--boot-dip must be a byte");
                     bootDip=static_cast<unsigned>(v);
+                    bootDipOverridden=true;
                 }
                 else if(arg=="--floppy-drive") {
                     const auto d=parseCount(argv[++i]);
@@ -149,6 +151,8 @@ int main(int argc,char** argv) {
             } else {usage();return 2;}
         }
         const MachineConfig config=loadMachineConfig(configPath);
+        // Explicit raw DIP override remains available for diagnostics.
+        if(!bootDipOverridden)bootDip=config.bootDip();
         if(traceCpm80 && (!config.z80Installed || !config.main6809Installed))
             throw std::invalid_argument("--trace-cpm80 requires an installed Z80 and main 6809");
         // Card-specific settings provide defaults. CLI --6809-rom/--8088-rom

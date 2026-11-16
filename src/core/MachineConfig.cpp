@@ -50,7 +50,8 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                 if(section!="main" && section!="main_6809" &&
                    section!="main_8088" && section!="optional_cpu" &&
                    section!="display_cpu" && section!="floppy_2d" &&
-                   section!="floppy_2hd" && section!="hdd")
+                   section!="floppy_2hd" && section!="hdd" &&
+                   section!="boot")
                     throw std::invalid_argument("unknown section ["+section+"]");
                 continue;
             }
@@ -97,6 +98,11 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                     throw std::invalid_argument("floppy key must be drive0..drive3");
                 auto& slots=section=="floppy_2d"?cfg.floppy2d:cfg.floppy2hd;
                 slots[key[5]-'0']=value;
+            } else if(section=="boot") {
+                if(key=="2D_FDD")cfg.boot2dFdd=boolean(value);
+                else if(key=="2HD_FDD")cfg.boot2hdFdd=boolean(value);
+                else if(key=="HDD")cfg.bootHdd=boolean(value);
+                else handled=false;
             } else if(section=="hdd") {
                 if(key=="image")cfg.hddImage=value;
                 else handled=false;

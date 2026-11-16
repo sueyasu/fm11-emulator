@@ -20,7 +20,8 @@ int main() {
               "[display_cpu]\ncpu = 6809\nclock_hz = 2000000\nrom = test-display.rom\nank_rom = test-ank.rom\n"
               "[floppy_2d]\ndrive0 = system.d88\ndrive3 = extra.d88\n"
               "[floppy_2hd]\ndrive1 = hd1.raw\ndrive2 = hd2.raw\n"
-              "[hdd]\nimage = fixed-disk.img\n";
+              "[hdd]\nimage = fixed-disk.img\n"
+              "[boot]\n2D_FDD = true\n2HD_FDD = false\nHDD = false\n";
     }
     auto config=parseMachineConfigFile(path);
     if(!config.main6809Installed || !config.main8088Installed ||
@@ -40,6 +41,18 @@ int main() {
        config.floppy2hd[2]!="hd2.raw" ||
        config.hddImage!="fixed-disk.img")return 2;
 
+    // Original DIP default enables both FDD formats and disables HDD.
+    MachineConfig defaults;
+    if(defaults.bootDip()!=0x9f)return 10;
+    // Verify all three independently controlled SW6..SW8 bits.
+    defaults.boot2dFdd=false;
+    defaults.boot2hdFdd=false;
+    defaults.bootHdd=true;
+    if(defaults.bootDip()!=0x7f)return 11;
+    defaults.boot2dFdd=true;
+    defaults.boot2hdFdd=true;
+    if(defaults.bootDip()!=0x1f)return 12;
+
     Machine machine;
     auto m6809=std::make_unique<Main6809Board>(config.main6809Cpu);
     m6809->setCpuClockHz(config.main6809ClockHz);
@@ -52,7 +65,10 @@ int main() {
     machine.setActiveBoard(b); // DIP-selected 8088/V20.
     machine.configureFd05Boards(b,c);
     machine.enableFd05Selection(true);
+    machine.systemBoard().setBootDip(config.bootDip());
     machine.reset();
+    BYTE dip=0;
+    if(!machine.systemBoard().readIo(0xfd23,dip) || dip!=0xdf)return 13;
     if(machine.activeCpuType()!=CpuType::NECV20 || machine.boardCount()!=3)return 3;
     // FD05 selects Z80, not the otherwise installed 6809 card.
     board6809->writeCpu(0xfd05,0x01);

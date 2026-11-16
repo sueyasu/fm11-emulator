@@ -24,6 +24,14 @@ clock_hz = 2000000
 rom = external/roms/display6809.bin
 ank_rom = external/roms/ank.bin
 
+# Boot ROM device search switches (FD23, active-low).
+# Enabled devices are tried in hardware priority: HDD, 2HD, then 2D.
+# This affects boot eligibility, not whether media are mounted.
+[boot]
+2D_FDD = true
+2HD_FDD = false
+HDD = false
+
 # 2D Mini-FDC: up to four independent physical drives.
 # Raw 320 KiB images and 2D D88 containers are accepted.
 [floppy_2d]

@@ -26,6 +26,17 @@ struct MachineConfig {
     std::array<std::string,4> floppy2d{};
     std::array<std::string,4> floppy2hd{};
     std::string hddImage;
+    // FD23 boot-device DIP switches SW6..SW8 are active-low.
+    // Defaults preserve the existing 0x9f hardware setting.
+    bool boot2dFdd=true;
+    bool boot2hdFdd=true;
+    bool bootHdd=false;
+    std::uint8_t bootDip() const {
+        return static_cast<std::uint8_t>(0x1f |
+            (boot2dFdd?0:0x20) |
+            (boot2hdFdd?0:0x40) |
+            (bootHdd?0:0x80));
+    }
 };
 MachineConfig loadMachineConfig(const std::string& explicitPath="");
 MachineConfig parseMachineConfigFile(const std::string& path);
