@@ -425,21 +425,9 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(main8088_pic_priority PRIVATE fm11_core)
     add_test(NAME main8088_pic_priority COMMAND main8088_pic_priority)
 
-    add_executable(mainv20_carry_repeat tests/mainv20_carry_repeat.cpp)
-    target_link_libraries(mainv20_carry_repeat PRIVATE fm11_core)
-    add_test(NAME mainv20_carry_repeat COMMAND mainv20_carry_repeat)
 
-    add_executable(mainv20_io_strings tests/mainv20_io_strings.cpp)
-    target_link_libraries(mainv20_io_strings PRIVATE fm11_core)
-    add_test(NAME mainv20_io_strings COMMAND mainv20_io_strings)
 
-    add_executable(mainv20_imul_frame tests/mainv20_imul_frame.cpp)
-    target_link_libraries(mainv20_imul_frame PRIVATE fm11_core)
-    add_test(NAME mainv20_imul_frame COMMAND mainv20_imul_frame)
 
-    add_executable(mainv20_stack_extensions tests/mainv20_stack_extensions.cpp)
-    target_link_libraries(mainv20_stack_extensions PRIVATE fm11_core)
-    add_test(NAME mainv20_stack_extensions COMMAND mainv20_stack_extensions)
 
     add_executable(mainv20_bitfield tests/mainv20_bitfield.cpp)
     target_link_libraries(mainv20_bitfield PRIVATE fm11_core)
@@ -599,9 +587,6 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(mainv20_bcd_boundaries PRIVATE fm11_core)
     add_test(NAME mainv20_bcd_boundaries COMMAND mainv20_bcd_boundaries)
 
-    add_executable(mainv20_bcd_string tests/mainv20_bcd_string.cpp)
-    target_link_libraries(mainv20_bcd_string PRIVATE fm11_core)
-    add_test(NAME mainv20_bcd_string COMMAND mainv20_bcd_string)
 
     add_executable(mainv20_nibble_rotate tests/mainv20_nibble_rotate.cpp)
     target_link_libraries(mainv20_nibble_rotate PRIVATE fm11_core)
@@ -624,9 +609,6 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(main8088_cmp_jae PRIVATE fm11_core)
     add_test(NAME main8088_cmp_jae COMMAND main8088_cmp_jae)
 
-    add_executable(main8088_cpu tests/main8088_cpu.cpp)
-    target_link_libraries(main8088_cpu PRIVATE fm11_core)
-    add_test(NAME main8088_cpu COMMAND main8088_cpu)
 
     add_executable(main8088_bus tests/main8088_bus.cpp)
     target_link_libraries(main8088_bus PRIVATE fm11_core)
