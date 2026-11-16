@@ -586,7 +586,21 @@ BYTE Main6809Board::readIo(WORD address)
         return status;
     }
     case 0x33:
-        return ioRegisters_[0x33]; // 2HD FDC PIO data latch
+        // The 2HD IPL disables DMA and reads each sector through FD33.
+        // Return the actual FIFO byte, not the stale data-register latch.
+        if(floppy_->transferChannel()==1 &&
+           (floppy_->transferStatus()&0x02)!=0 &&
+           ioRegisters_[0x30]&0x02) {
+            const BYTE data=floppy_->transferRead();
+            ioRegisters_[0x33]=data;
+            if(floppy_->transferPosition()==floppy_->transferLength()) {
+                ioRegisters_[0x30]=0x01; // INTRQ; DRQ/BUSY cleared
+                ioRegisters_[0x37]=0x40;
+                setExtendedIrqSource(0x40,true);
+            }
+            return data;
+        }
+        return ioRegisters_[0x33];
     case 0x30: {
         // Reference MainCpu::GetIoByte: return the status, acknowledge
         // INTRQ (bit 0), then merge the one-shot DRQ latch.
@@ -869,6 +883,11 @@ void Main6809Board::writeIo(WORD address, BYTE value)
     case 0x33:
         if(floppy_->transferChannel()==1 && (floppy_->transferStatus()&0x02)!=0) {
             floppy_->transferWrite(value);
+            if(floppy_->transferPosition()==floppy_->transferLength()) {
+                ioRegisters_[0x30]=floppy_->transferStatus()==0?0x01:0x20;
+                ioRegisters_[0x37]=0x40;
+                setExtendedIrqSource(0x40,true);
+            }
         }
         ioRegisters_[0x33]=value;
         break;
