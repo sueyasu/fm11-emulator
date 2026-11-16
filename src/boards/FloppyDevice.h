@@ -358,7 +358,7 @@ public:
         transferWriting_=false;
         status_=0;
     }
-    void transferError() {status_=0x10;}
+    void transferError(BYTE status=0x10) {status_=status;}
     BYTE transferStatus() const {return status_;}
     std::size_t transferPosition() const {return transferPosition_;}
     std::size_t transferLength() const {return transferLength_;}
