@@ -36,6 +36,19 @@ is inferred from the source emulator's supported disk-size table.
 Each configured image is independently opened read/write and written
 through on completed sector transfers using `pwrite` and `fdatasync`.
 A filesystem sync failure is reported as an FDC/MDC write failure.
+WRITE TRACK (`F0h`) is now supported on both controllers, following
+the original FM-11 `CMainCpu::Fm11WrtTrack` format stream:
+2D uses 6,400 DMA bytes on channel 0; 2HD uses 10,900 bytes on
+channel 1. The stream's `FE` address marks and `FB` data marks define
+the sector IDs and payloads. The emulator validates the complete track,
+rebuilds D88 sector headers and offsets if needed, and immediately
+persists the resulting image with `fdatasync`. Incomplete or invalid
+track descriptions return a controller write error rather than silently
+discarding or partially replacing sectors. This supports existing
+40x2x16x256 2D and 77x2x26x256 native 2HD geometry (including
+128-byte FM sectors on the 2HD first side-track); a D88 image still
+must be mountable before formatting.
+
 Do not mount the same image into more than one FDD slot. Keep backups
 of important disk images before write tests.
 
