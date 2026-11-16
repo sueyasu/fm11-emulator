@@ -42,6 +42,6 @@ ank_rom = external/roms/ank.bin
 # drive2 = /path/to/disk2.2hd
 # drive3 = /path/to/disk3.2hd
 
-# MDC HDD interface (currently under implementation).
+# MDC HDD controller: one 256-byte-record RAW image.
 [hdd]
 # image = /path/to/m2233b.img
