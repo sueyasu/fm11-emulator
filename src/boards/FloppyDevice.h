@@ -75,7 +75,9 @@ public:
             d88[0x2b0+3]==0 && d88[0x2b0+2]==1;
         const unsigned sectorsPerTrack=is2hd?(native2hd?26:8):16;
         const unsigned sectorSize=is2hd?(native2hd?256:1024):256;
-        const BYTE diskType=is2hd?0x20:0x00;
+        // D88 defines 00h=2D, 10h=2DD, 20h=2HD.  FM-11's
+        // 40x2x16x256 Mini-FDC geometry is also commonly tagged 10h.
+        // Preserve the strict physical CHRN check below for both labels.
         if(d88.size()<headerSize)
             throw std::invalid_argument("D88 header is truncated");
         auto le16=[&](std::size_t offset)->unsigned {
@@ -89,9 +91,10 @@ public:
         };
         if(le32(0x1c)!=d88.size())
             throw std::invalid_argument("D88 disk size field does not match file");
-        if(d88[0x1b]!=diskType)
+        if(is2hd ? d88[0x1b]!=0x20 :
+                    (d88[0x1b]!=0x00 && d88[0x1b]!=0x10))
             throw std::invalid_argument(is2hd?"D88 is not a 2HD disk image":
-                                             "D88 is not a 2D disk image");
+                                             "D88 is not a 2D/2DD disk image");
         std::vector<BYTE> raw(std::size_t(tracks)*2*sectorsPerTrack*sectorSize);
         std::vector<bool> seen(std::size_t(tracks)*2*sectorsPerTrack);
         std::vector<std::size_t> offsets(seen.size());
