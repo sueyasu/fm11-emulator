@@ -48,6 +48,30 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
     const bool writing=decoded==FloppyDevice::Command::WriteSector;
     if(decoded==FloppyDevice::Command::Other) {
         floppy_->finishTransfer();
+        if((command&0xf0)==0xf0) {
+            // FM-11 original: Mini-FDC 6400 bytes, standard FDC 10900.
+            // 8237 channel 0/1 supplies the raw WRITE TRACK stream.
+            const unsigned drive=floppy_->registerValue(channel==0?0x1d:0x35)&3;
+            const unsigned track=floppy_->registerValue(base+1);
+            const unsigned side=floppy_->registerValue(channel==0?0x1c:0x34)&1;
+            const unsigned length=channel==0?6400:10900;
+            std::vector<BYTE> bytes;
+            bytes.reserve(length);
+            const auto oldReader=dmaReaders_[channel];
+            const auto oldWriter=dmaWriters_[channel];
+            setDmaDevice(channel,oldReader,[&bytes](BYTE data){bytes.push_back(data);});
+            setDmaRequest(channel,true);
+            for(unsigned i=0;i<length;++i) {
+                if(!serviceDma())break;
+            }
+            setDmaRequest(channel,false);
+            setDmaDevice(channel,oldReader,oldWriter);
+            if(bytes.size()!=length ||
+               !floppy_->formatTrack(channel,track,side,drive,bytes))
+                floppy_->transferError();
+            if(channel==0)floppy_->writeRegister(0x1f,0x40);
+            return;
+        }
         // Mini-FDC type I commands update the track register. The
         // standard 8088 ROM uses RESTORE (0Ah) and SEEK (1Ah) before
         // reading its two-sector disk IPL.
