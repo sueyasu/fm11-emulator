@@ -8,3 +8,4 @@ CMakeUserPresets.json
 # User-supplied ROM images (never commit firmware)
 /external/
 
+/tests/__pycache__/
