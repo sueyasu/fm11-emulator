@@ -716,6 +716,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(main6809_floppy_write PRIVATE fm11_core)
     add_test(NAME main6809_floppy_write COMMAND main6809_floppy_write)
 
+    add_executable(mdc_cpu_dma tests/mdc_cpu_dma.cpp)
+    target_link_libraries(mdc_cpu_dma PRIVATE fm11_core)
+    add_test(NAME mdc_cpu_dma COMMAND mdc_cpu_dma)
+
     add_executable(mdc_hdd tests/mdc_hdd.cpp)
     target_link_libraries(mdc_hdd PRIVATE fm11_core)
     add_test(NAME mdc_hdd COMMAND mdc_hdd)
