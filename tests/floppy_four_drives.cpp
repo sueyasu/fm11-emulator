@@ -35,6 +35,37 @@ static std::vector<BYTE> make2hdD88() {
     return bytes;
 }
 
+// NitrOS-9 native 2HD: 26 FM 128-byte IPL sectors on C0/H0,
+// followed by 26 MFM 256-byte sectors on each of the other 153 tracks.
+static std::vector<BYTE> makeNative2hdD88() {
+    std::vector<BYTE> bytes(0x2b0,0);
+    bytes[0x1b]=0x20;
+    const auto le16=[&](std::size_t pos,unsigned value) {
+        bytes[pos]=BYTE(value);bytes[pos+1]=BYTE(value>>8);
+    };
+    const auto le32=[&](std::size_t pos,std::uint32_t value) {
+        for(unsigned n=0;n<4;++n)bytes[pos+n]=BYTE(value>>(8*n));
+    };
+    for(unsigned track=0;track<154;++track) {
+        le32(0x20+track*4,std::uint32_t(bytes.size()));
+        const unsigned length=track==0?128:256;
+        for(unsigned sector=1;sector<=26;++sector) {
+            const auto hdr=bytes.size();
+            bytes.resize(hdr+16,0);
+            bytes[hdr]=BYTE(track/2);
+            bytes[hdr+1]=BYTE(track%2);
+            bytes[hdr+2]=BYTE(sector);
+            bytes[hdr+3]=BYTE(track==0?0:1);
+            le16(hdr+4,26);
+            bytes[hdr+6]=BYTE(track==0?0x40:0);
+            le16(hdr+14,length);
+            bytes.insert(bytes.end(),length,BYTE((track+sector)&0xff));
+        }
+    }
+    le32(0x1c,std::uint32_t(bytes.size()));
+    return bytes;
+}
+
 int main() {
     FloppyDevice floppy;
     constexpr std::size_t size2d=40u*2*16*256;
@@ -104,6 +135,45 @@ int main() {
     malformed[0x2b0+3]=1; // N=1 instead of 3
     try {floppy.loadD882hd(malformed);return 16;}
     catch(const std::invalid_argument&) {}
-    std::puts("PASS: four 2D/2HD drives, 2HD D88 CHRN and write offsets");
+    // Check native mixed-size boot track, regular 256-byte tracks and
+    // direct host offsets, including immediate D88 sector write-through.
+    const auto native=makeNative2hdD88();
+    for(unsigned drive=0;drive<4;++drive) {
+        floppy.loadD882hd(native,drive);
+        if(floppy.image2hd(drive)!=native ||
+           floppy.raw2hd(drive).size()!=77u*2*26*256)return 17;
+        std::size_t bootOffset=0,regularOffset=0;
+        if(!floppy.sectorOffset(1,0,0,26,drive,bootOffset) ||
+           !floppy.sectorOffset(1,0,1,1,drive,regularOffset) ||
+           bootOffset!=25u*256 || regularOffset!=26u*256)return 18;
+        if(floppy.sectorLength(1,0,0,1,drive)!=128 ||
+           floppy.sectorLength(1,0,1,1,drive)!=256 ||
+           floppy.sectorLength(1,76,1,26,drive)!=256)return 19;
+        if(!floppy.beginSector(1,0,0,26,drive,false) ||
+           floppy.transferLength()!=128 ||
+           floppy.transferRead()!=26)return 20;
+        if(!floppy.beginSector(1,0,1,1,drive,false) ||
+           floppy.transferLength()!=256 ||
+           floppy.transferRead()!=2)return 21;
+        const auto bootHost=floppy.hostImageOffset(1,bootOffset,drive);
+        const auto regularHost=floppy.hostImageOffset(1,regularOffset,drive);
+        if(bootHost!=0x2b0+25u*(16+128)+16 ||
+           regularHost!=0x2b0+26u*(16+128)+16)return 22;
+        if(!floppy.beginSector(1,0,0,26,drive,true))return 23;
+        for(unsigned i=0;i<128;++i)floppy.transferWrite(0x66);
+        if(floppy.transferStatus()!=0 || floppy.image2hd(drive)[bootHost]!=0x66 ||
+           floppy.image2hd(drive)[bootHost+127]!=0x66)return 24;
+        if(!floppy.beginSector(1,0,1,1,drive,true))return 25;
+        for(unsigned i=0;i<256;++i)floppy.transferWrite(0x77);
+        if(floppy.transferStatus()!=0 || floppy.image2hd(drive)[regularHost]!=0x77 ||
+           floppy.image2hd(drive)[regularHost+255]!=0x77)return 26;
+        // Only the 26 physical sector IDs are legal.
+        if(floppy.sectorOffset(1,0,1,27,drive,regularOffset))return 27;
+    }
+    auto badNative=native;
+    badNative[0x2b0+14]=0; // Invalid short sector length on FM boot track.
+    try {floppy.loadD882hd(badNative);return 28;}
+    catch(const std::invalid_argument&) {}
+    std::puts("PASS: four 2D/2HD drives, native mixed-size 2HD D88 and write offsets");
     return 0;
 }
