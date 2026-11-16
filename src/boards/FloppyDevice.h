@@ -12,27 +12,42 @@
 // The CPU boards retain only their FDC register and DMA-adapter behavior.
 class FloppyDevice {
 public:
+    // The controller drive-select bits address independent inserted media.
     void setMountedDrive(unsigned drive) {
         if(drive>3)throw std::invalid_argument("FDC drive must be 0..3");
         mountedDrive_=drive;
     }
     unsigned mountedDrive() const {return mountedDrive_;}
-    bool present(unsigned drive) const {return drive==mountedDrive_ && has2hd();}
-    void load2d(const std::vector<BYTE>& raw) {
+    bool present(unsigned drive) const {return drive<4 && !media2hd_[drive].raw.empty();}
+    bool has2d(unsigned drive=0) const {return drive<4 && !media2d_[drive].raw.empty();}
+    bool has2hd(unsigned drive=0) const {return drive<4 && !media2hd_[drive].raw.empty();}
+    bool hasAny2d() const {
+        for(const auto& disk:media2d_)if(!disk.raw.empty())return true;
+        return false;
+    }
+    bool hasAny2hd() const {
+        for(const auto& disk:media2hd_)if(!disk.raw.empty())return true;
+        return false;
+    }
+    void load2d(const std::vector<BYTE>& raw,unsigned drive=0) {
+        if(drive>3)throw std::invalid_argument("2D drive must be 0..3");
         if(raw.size()!=40u*2*16*256)
             throw std::invalid_argument("FM-11 2D raw image must be 327680 bytes");
-        raw2d_=raw;
-        d88_.clear();
-        offsets_.fill(0);
-        dirty2d_=false;
+        auto& disk=media2d_[drive];
+        disk.raw=raw;
+        disk.d88.clear();
+        disk.offsets.fill(0);
+        disk.dirty=false;
     }
-    void load2hd(const std::vector<BYTE>& raw) {
+    void load2hd(const std::vector<BYTE>& raw,unsigned drive=0) {
+        if(drive>3)throw std::invalid_argument("2HD drive must be 0..3");
         if(raw.size()!=77u*2*8*1024)
             throw std::invalid_argument("FM-11 2HD raw image must be 1261568 bytes");
-        raw2hd_=raw;
-        dirty2hd_=false;
+        auto& disk=media2hd_[drive];
+        disk.raw=raw;
+        disk.dirty=false;
     }
-    void loadD88(const std::vector<BYTE>& d88)
+    void loadD88(const std::vector<BYTE>& d88,unsigned drive=0)
 {
     // D88: 0x2B0-byte disk header; 164 little-endian track offsets.
     // Sector headers are 16 bytes and carry their own C/H/R/N ID.
@@ -92,56 +107,52 @@ public:
     for (bool present:seen)
         if (!present)
             throw std::invalid_argument("D88 is missing an FM-11 2D sector");
-    load2d(raw);
-    d88_=d88;
-    offsets_=offsets;
+    load2d(raw,drive);
+    media2d_[drive].d88=d88;
+    media2d_[drive].offsets=offsets;
 }
 
 
     bool sectorOffset(unsigned channel,unsigned track,unsigned side,unsigned sector,
                       unsigned drive,std::size_t& offset) const {
+        if(drive>=4)return false;
         if(channel==0) {
-            if(drive!=0)return false;
-            if(raw2d_.empty() || track>=40 || sector<1 || sector>16)return false;
+            if(!has2d(drive) || track>=40 || sector<1 || sector>16)return false;
             offset=((track*2+(side&1))*16+(sector-1))*256;
         } else if(channel==1) {
-            if(drive!=mountedDrive_)return false;
-            // 2D media belong exclusively to Mini FDC (channel 0).
-            if(raw2hd_.empty() || track>=77 || sector<1 || sector>8)return false;
+            if(!has2hd(drive) || track>=77 || sector<1 || sector>8)return false;
             offset=((track*2+(side&1))*8+(sector-1))*1024;
         } else return false;
         return true;
     }
     std::size_t sectorLength(unsigned channel) const {return channel==0?256:1024;}
-    BYTE read(unsigned channel,std::size_t offset) const {
-        return (channel==0?raw2d_:raw2hd_).at(offset);
+    BYTE read(unsigned channel,std::size_t offset,unsigned drive=0) const {
+        return medium(channel,drive).raw.at(offset);
     }
-    void write(unsigned channel,std::size_t offset,BYTE value) {
-        const bool twoD=channel==0;
-        auto& image=twoD?raw2d_:raw2hd_;
-        image.at(offset)=value;
-        if(twoD) {
-            dirty2d_=true;
-            if(!d88_.empty())d88_.at(offsets_.at(offset/256)+(offset%256))=value;
-        } else dirty2hd_=true;
+    void write(unsigned channel,std::size_t offset,BYTE value,unsigned drive=0) {
+        auto& disk=medium(channel,drive);
+        disk.raw.at(offset)=value;
+        disk.dirty=true;
+        if(channel==0 && !disk.d88.empty())
+            disk.d88.at(disk.offsets.at(offset/256)+(offset%256))=value;
     }
-    // Called when a complete sector is ready to commit. The callback
-    // persists its bytes before the emulated FDC reports completion.
-    // Both the 6809 and 8088 CPU adapters use this shared commit path.
-    using SectorWriter=std::function<bool(unsigned,std::size_t,const BYTE*,std::size_t)>;
+    // Callback persists one complete sector to the selected host image.
+    // Both CPU boards, including their PIO and DMA paths, use it.
+    using SectorWriter=std::function<bool(unsigned,unsigned,std::size_t,const BYTE*,std::size_t)>;
     void setSectorWriter(SectorWriter writer) {sectorWriter_=std::move(writer);}
-    bool writeSector(unsigned channel,std::size_t offset,const BYTE* bytes) {
+    bool writeSector(unsigned channel,std::size_t offset,const BYTE* bytes,unsigned drive=0) {
         const auto length=sectorLength(channel);
-        if(sectorWriter_ && !sectorWriter_(channel,offset,bytes,length)) {
+        if(sectorWriter_ && !sectorWriter_(channel,drive,offset,bytes,length)) {
             status_=0x10;
             return false;
         }
-        for(std::size_t i=0;i<length;++i)write(channel,offset+i,bytes[i]);
+        for(std::size_t i=0;i<length;++i)write(channel,offset+i,bytes[i],drive);
         return true;
     }
-    std::size_t hostImageOffset(unsigned channel,std::size_t rawOffset) const {
-        if(channel==0 && !d88_.empty())
-            return offsets_.at(rawOffset/256)+(rawOffset%256);
+    std::size_t hostImageOffset(unsigned channel,std::size_t rawOffset,unsigned drive=0) const {
+        const auto& disk=medium(channel,drive);
+        if(channel==0 && !disk.d88.empty())
+            return disk.offsets.at(rawOffset/256)+(rawOffset%256);
         return rawOffset;
     }
     // FDC control/data registers are system-side, not CPU-card local.
@@ -164,6 +175,7 @@ public:
     bool beginSector(unsigned channel,unsigned track,unsigned side,unsigned sector,
                      unsigned drive,bool writing) {
         transferChannel_=channel;
+        transferDrive_=drive;
         transferLength_=sectorLength(channel);
         transferPosition_=transferLength_;
         transferWriting_=false;
@@ -176,7 +188,7 @@ public:
         transferWriting_=writing;
         if(!writing)
             for(std::size_t i=0;i<transferLength_;++i)
-                transferBuffer_[i]=read(channel,transferOffset_+i);
+                transferBuffer_[i]=read(channel,transferOffset_+i,drive);
         status_=0x02;
         return true;
     }
@@ -190,7 +202,7 @@ public:
         if(!transferWriting_ || transferPosition_>=transferLength_)return;
         transferBuffer_[transferPosition_++]=value;
         if(transferPosition_==transferLength_) {
-            const bool written=writeSector(transferChannel_,transferOffset_,transferBuffer_.data());
+            const bool written=writeSector(transferChannel_,transferOffset_,transferBuffer_.data(),transferDrive_);
             transferWriting_=false;
             status_=written?0:0x10;
         }
@@ -205,26 +217,38 @@ public:
     std::size_t transferPosition() const {return transferPosition_;}
     std::size_t transferLength() const {return transferLength_;}
     unsigned transferChannel() const {return transferChannel_;}
-    const std::vector<BYTE>& raw2d() const {return raw2d_;}
-    const std::vector<BYTE>& raw2hd() const {return raw2hd_;}
-    std::vector<BYTE> image2d() const {return d88_.empty()?raw2d_:d88_;}
-    std::vector<BYTE> image2hd() const {return raw2hd_;}
-    bool dirty2d() const {return dirty2d_;}
-    bool dirty2hd() const {return dirty2hd_;}
-    void clearDirty2d() {dirty2d_=false;}
-    void clearDirty2hd() {dirty2hd_=false;}
-    bool has2d() const {return !raw2d_.empty();}
-    bool has2hd() const {return !raw2hd_.empty();}
+    const std::vector<BYTE>& raw2d(unsigned drive=0) const {return media2d_.at(drive).raw;}
+    const std::vector<BYTE>& raw2hd(unsigned drive=0) const {return media2hd_.at(drive).raw;}
+    std::vector<BYTE> image2d(unsigned drive=0) const {
+        const auto& disk=media2d_.at(drive);
+        return disk.d88.empty()?disk.raw:disk.d88;
+    }
+    std::vector<BYTE> image2hd(unsigned drive=0) const {return media2hd_.at(drive).raw;}
+    bool dirty2d(unsigned drive=0) const {return media2d_.at(drive).dirty;}
+    bool dirty2hd(unsigned drive=0) const {return media2hd_.at(drive).dirty;}
+    void clearDirty2d(unsigned drive=0) {media2d_.at(drive).dirty=false;}
+    void clearDirty2hd(unsigned drive=0) {media2hd_.at(drive).dirty=false;}
 private:
+    struct Disk {
+        std::vector<BYTE> raw,d88;
+        std::array<std::size_t,40*2*16> offsets{};
+        bool dirty=false;
+    };
+    Disk& medium(unsigned channel,unsigned drive) {
+        return channel==0?media2d_.at(drive):media2hd_.at(drive);
+    }
+    const Disk& medium(unsigned channel,unsigned drive) const {
+        return channel==0?media2d_.at(drive):media2hd_.at(drive);
+    }
     SectorWriter sectorWriter_;
     unsigned mountedDrive_=0;
-    std::vector<BYTE> raw2d_,raw2hd_,d88_;
+    std::array<Disk,4> media2d_{},media2hd_{};
     std::array<BYTE,256> registers_{};
     std::array<std::size_t,40*2*16> offsets_{};
     bool dirty2d_=false,dirty2hd_=false;
     std::array<BYTE,1024> transferBuffer_{};
     std::size_t transferOffset_=0,transferPosition_=256,transferLength_=256;
-    unsigned transferChannel_=0;
+    unsigned transferChannel_=0,transferDrive_=0;
     bool transferWriting_=false;
     BYTE status_=0;
 };
