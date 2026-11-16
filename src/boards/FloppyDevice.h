@@ -148,6 +148,107 @@ public:
         disk.lengths=std::move(lengths);
     }
 
+    // The original FM-11 CMainCpu::Fm11WrtTrack decodes WD17xx
+    // WRITE TRACK bytes: zero sync, FE C/H/R/N F7 address field,
+    // and FB/F8 data field ending in F7.  Unlike the original's
+    // count-only parser, require a complete, correctly sized and
+    // unique sector set before changing the image.
+    using ImageWriter=std::function<bool(unsigned,unsigned,const std::vector<BYTE>&)>;
+    void setImageWriter(ImageWriter writer) {imageWriter_=std::move(writer);}
+
+    bool formatTrack(unsigned channel,unsigned track,unsigned side,unsigned drive,
+                     const std::vector<BYTE>& stream) {
+        if(channel>1 || drive>3 || side>1)return false;
+        auto& disk=medium(channel,drive);
+        if(disk.raw.empty() || track>=(channel==0?40u:77u))return false;
+        const unsigned sectors=disk.sectorsPerTrack;
+        const unsigned size=(channel==1 && disk.slotSize==256 && track==0 && side==0)
+                           ?128:disk.slotSize;
+        if(size!=128 && size!=256 && size!=1024)return false;
+        const BYTE n=size==128?0:size==256?1:3;
+        std::vector<std::vector<BYTE>> payloads(sectors);
+        std::vector<bool> seen(sectors,false);
+        unsigned found=0;
+        for(std::size_t i=0;i+5<stream.size();) {
+            // The controller's address-mark sequence uses FE as a
+            // special byte after sync; no CRC bytes are present in
+            // the CPU's format stream (F7 requests CRC generation).
+            if(stream[i]!=0xfe) {++i;continue;}
+            if(stream[i+1]!=track || stream[i+2]!=side ||
+               stream[i+3]<1 || stream[i+3]>sectors || stream[i+4]!=n ||
+               stream[i+5]!=0xf7) {++i;continue;}
+            const unsigned id=stream[i+3]-1;
+            if(seen[id])return false;
+            std::size_t mark=i+6;
+            // Seek the data mark, stopping before another address field.
+            while(mark<stream.size() && stream[mark]!=0xfb &&
+                  stream[mark]!=0xf8 && stream[mark]!=0xf9 &&
+                  stream[mark]!=0xfa && stream[mark]!=0xfe)++mark;
+            if(mark>=stream.size() || stream[mark]==0xfe ||
+               mark+1+size>=stream.size() || stream[mark+1+size]!=0xf7)
+                {++i;continue;}
+            payloads[id].assign(stream.begin()+mark+1,stream.begin()+mark+1+size);
+            seen[id]=true;
+            ++found;
+            i=mark+2+size;
+        }
+        if(found!=sectors)return false;
+        auto newRaw=disk.raw;
+        const std::size_t trackBase=(std::size_t(track)*2+side)*sectors;
+        for(unsigned id=0;id<sectors;++id) {
+            const std::size_t pos=(trackBase+id)*disk.slotSize;
+            std::fill_n(newRaw.begin()+pos,disk.slotSize,BYTE(0xe5));
+            std::copy(payloads[id].begin(),payloads[id].end(),newRaw.begin()+pos);
+        }
+
+        auto newLengths=disk.lengths;
+        for(unsigned id=0;id<sectors;++id)newLengths[trackBase+id]=size;
+        std::vector<BYTE> newD88;
+        std::vector<std::size_t> newOffsets=disk.offsets;
+        if(!disk.d88.empty()) {
+            // Regenerate the whole container: reformatting may change
+            // physical sector sizes and consequently all track offsets.
+            newD88.assign(disk.d88.begin(),disk.d88.begin()+0x2b0);
+            const unsigned tracks=channel==0?40:77;
+            auto put16=[&](std::size_t off,unsigned val) {
+                newD88[off]=BYTE(val);newD88[off+1]=BYTE(val>>8);
+            };
+            auto put32=[&](std::size_t off,std::uint32_t val) {
+                for(unsigned k=0;k<4;++k)newD88[off+k]=BYTE(val>>(8*k));
+            };
+            for(unsigned t=0;t<tracks*2;++t) {
+                put32(0x20+4*t,std::uint32_t(newD88.size()));
+                for(unsigned id=0;id<sectors;++id) {
+                    const std::size_t idx=std::size_t(t)*sectors+id;
+                    const unsigned len=newLengths[idx];
+                    const auto header=newD88.size();
+                    newD88.resize(header+16,0);
+                    newD88[header]=BYTE(t/2);
+                    newD88[header+1]=BYTE(t&1);
+                    newD88[header+2]=BYTE(id+1);
+                    newD88[header+3]=BYTE(len==128?0:len==256?1:3);
+                    newD88[header+6]=BYTE(channel==1 && t==0?0x40:0);
+                    put16(header+4,sectors);
+                    put16(header+14,len);
+                    newOffsets[idx]=newD88.size();
+                    const std::size_t pos=idx*disk.slotSize;
+                    newD88.insert(newD88.end(),newRaw.begin()+pos,newRaw.begin()+pos+len);
+                }
+            }
+            put32(0x1c,std::uint32_t(newD88.size()));
+        }
+        // Persist the complete (possibly resized) D88 before publishing
+        // the format to the running machine. For RAW, size stays fixed.
+        const auto& output=newD88.empty()?newRaw:newD88;
+        if(imageWriter_ && !imageWriter_(channel,drive,output))return false;
+        disk.raw=std::move(newRaw);
+        disk.d88=std::move(newD88);
+        disk.lengths=std::move(newLengths);
+        disk.offsets=std::move(newOffsets);
+        disk.dirty=true;
+        return true;
+    }
+
     bool sectorOffset(unsigned channel,unsigned track,unsigned side,unsigned sector,
                       unsigned drive,std::size_t& offset) const {
         if(drive>=4 || channel>1)return false;
@@ -291,6 +392,7 @@ private:
         return channel==0?media2d_.at(drive):media2hd_.at(drive);
     }
     SectorWriter sectorWriter_;
+    ImageWriter imageWriter_;
     unsigned mountedDrive_=0;
     std::array<Disk,4> media2d_{},media2hd_{};
     std::array<BYTE,256> registers_{};
