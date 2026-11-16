@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <utility>
 #include <stdexcept>
 #include <vector>
 
