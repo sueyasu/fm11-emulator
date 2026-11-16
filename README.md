@@ -27,9 +27,10 @@ drive1 = /path/to/data.d88
 ```
 
 2D accepts 327,680-byte raw images or 2D D88 images with a complete
-40-cylinder, double-sided, 16-sector layout. 2HD currently accepts
-1,261,568-byte raw images (77 cylinders, two sides, eight 1024-byte
-sectors). HDD accepts one raw MDC image with 256-byte records; geometry
+40-cylinder, double-sided, 16-sector layout. 2HD accepts native 1,025,024-byte raw images (77 cylinders, two sides,
+26 sectors of 256 bytes), including D88 images whose first track uses
+26 FM sectors of 128 bytes; the older 1,261,568-byte 8x1024-byte layout
+remains supported. HDD accepts one raw MDC image with 256-byte records; geometry
 is inferred from the source emulator's supported disk-size table.
 
 Each configured image is independently opened read/write and written
