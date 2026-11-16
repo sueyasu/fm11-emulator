@@ -77,6 +77,7 @@ int main() {
     cpu->writeCpu(0xfd42,0x01);
     cpu->writeCpu(0xfd43,0x00);
     cpu->writeCpu(0xfd50,0x04);
+    cpu->writeCpu(0xfdc2,0x00); // return to 6809 DMA channel 0
     cpu->writeCpu(0xfdc0,0x22);
     for(BYTE byte:{BYTE(0),BYTE(0),BYTE(0),BYTE(0),
                    BYTE(0),BYTE(0),BYTE(1),BYTE(0)})
