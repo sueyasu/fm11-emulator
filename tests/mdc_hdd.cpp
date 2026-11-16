@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cstdio>
 #include <vector>
+#include <initializer_list>
 
 static void command(MdcHddDevice& hdd,BYTE opcode,
                     std::initializer_list<BYTE> params) {
