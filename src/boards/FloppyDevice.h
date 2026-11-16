@@ -46,73 +46,87 @@ public:
             throw std::invalid_argument("FM-11 2HD raw image must be 1261568 bytes");
         auto& disk=media2hd_[drive];
         disk.raw=raw;
+        disk.d88.clear();
+        disk.offsets.fill(0);
         disk.dirty=false;
     }
-    void loadD88(const std::vector<BYTE>& d88,unsigned drive=0)
-{
-    // D88: 0x2B0-byte disk header; 164 little-endian track offsets.
-    // Sector headers are 16 bytes and carry their own C/H/R/N ID.
-    constexpr std::size_t headerSize = 0x2b0;
-    constexpr std::size_t rawSize = 40u * 2 * 16 * 256;
-    if (d88.size() < headerSize)
-        throw std::invalid_argument("D88 header is truncated");
-    auto le16 = [&](std::size_t offset) -> unsigned {
-        return unsigned(d88[offset]) | (unsigned(d88[offset+1]) << 8);
-    };
-    auto le32 = [&](std::size_t offset) -> std::uint32_t {
-        return std::uint32_t(d88[offset]) |
-               (std::uint32_t(d88[offset+1]) << 8) |
-               (std::uint32_t(d88[offset+2]) << 16) |
-               (std::uint32_t(d88[offset+3]) << 24);
-    };
-    if (le32(0x1c) != d88.size())
-        throw std::invalid_argument("D88 disk size field does not match file");
-    if (d88[0x1b] != 0x00)
-        throw std::invalid_argument("D88 is not a 2D disk image");
-    std::vector<BYTE> raw(rawSize);
-    std::array<bool,40*2*16> seen{};
-    std::array<std::size_t,40*2*16> offsets{};
-    for (unsigned trackIndex=0; trackIndex<80; ++trackIndex) {
-        const auto start=le32(0x20+trackIndex*4);
-        if (!start)
-            continue;
-        if (start < headerSize || start > d88.size()-16)
-            throw std::invalid_argument("D88 track offset out of range");
-        std::size_t cursor=start;
-        const auto sectors=le16(cursor+4);
-        if (sectors==0 || sectors>256)
-            throw std::invalid_argument("D88 sector count is invalid");
-        for (unsigned i=0;i<sectors;++i) {
-            if (cursor > d88.size()-16)
-                throw std::invalid_argument("D88 sector header is truncated");
-            const unsigned c=d88[cursor], side=d88[cursor+1];
-            const unsigned sector=d88[cursor+2], n=d88[cursor+3];
-            const unsigned count=le16(cursor+4);
-            const unsigned length=le16(cursor+14);
-            if (count!=sectors || c!=trackIndex/2 ||
-                side!=trackIndex%2 || sector<1 || sector>16 ||
-                n!=1 || length!=256 || d88[cursor+8]!=0)
-                throw std::invalid_argument("D88 sector layout is not FM-11 2D");
-            cursor+=16;
-            if (length>d88.size()-cursor)
-                throw std::invalid_argument("D88 sector data is truncated");
-            const auto idx=(c*2+side)*16+(sector-1);
-            if (seen[idx])
-                throw std::invalid_argument("D88 has duplicate sector IDs");
-            seen[idx]=true;
-            offsets[idx]=cursor;
-            std::copy_n(d88.begin()+cursor,length,raw.begin()+idx*256);
-            cursor+=length;
-        }
+    void loadD88(const std::vector<BYTE>& d88,unsigned drive=0) {
+        loadD88Medium(d88,drive,false);
     }
-    for (bool present:seen)
-        if (!present)
-            throw std::invalid_argument("D88 is missing an FM-11 2D sector");
-    load2d(raw,drive);
-    media2d_[drive].d88=d88;
-    media2d_[drive].offsets=offsets;
-}
-
+    void loadD882hd(const std::vector<BYTE>& d88,unsigned drive=0) {
+        loadD88Medium(d88,drive,true);
+    }
+    void loadD88Medium(const std::vector<BYTE>& d88,unsigned drive,bool is2hd) {
+        if(drive>3)throw std::invalid_argument("D88 drive must be 0..3");
+        // D88 header: 0x2B0 bytes, 164 little-endian track offsets.
+        constexpr std::size_t headerSize=0x2b0;
+        const unsigned tracks=is2hd?77:40;
+        const unsigned sectorsPerTrack=is2hd?8:16;
+        const unsigned sectorSize=is2hd?1024:256;
+        const unsigned sectorN=is2hd?3:1;
+        const BYTE diskType=is2hd?0x20:0x00;
+        if(d88.size()<headerSize)
+            throw std::invalid_argument("D88 header is truncated");
+        auto le16=[&](std::size_t offset)->unsigned {
+            return unsigned(d88[offset])|(unsigned(d88[offset+1])<<8);
+        };
+        auto le32=[&](std::size_t offset)->std::uint32_t {
+            return std::uint32_t(d88[offset])|
+                   (std::uint32_t(d88[offset+1])<<8)|
+                   (std::uint32_t(d88[offset+2])<<16)|
+                   (std::uint32_t(d88[offset+3])<<24);
+        };
+        if(le32(0x1c)!=d88.size())
+            throw std::invalid_argument("D88 disk size field does not match file");
+        if(d88[0x1b]!=diskType)
+            throw std::invalid_argument(is2hd?"D88 is not a 2HD disk image":
+                                             "D88 is not a 2D disk image");
+        std::vector<BYTE> raw(std::size_t(tracks)*2*sectorsPerTrack*sectorSize);
+        std::vector<bool> seen(std::size_t(tracks)*2*sectorsPerTrack);
+        std::vector<std::size_t> offsets(seen.size());
+        for(unsigned trackIndex=0;trackIndex<tracks*2;++trackIndex) {
+            const auto trackStart=le32(0x20+trackIndex*4);
+            if(!trackStart)continue;
+            if(trackStart<headerSize || trackStart>d88.size()-16)
+                throw std::invalid_argument("D88 track offset out of range");
+            std::size_t cursor=trackStart;
+            const auto sectors=le16(cursor+4);
+            if(sectors==0 || sectors>256)
+                throw std::invalid_argument("D88 sector count is invalid");
+            for(unsigned i=0;i<sectors;++i) {
+                if(cursor>d88.size()-16)
+                    throw std::invalid_argument("D88 sector header is truncated");
+                const unsigned c=d88[cursor],side=d88[cursor+1];
+                const unsigned sector=d88[cursor+2],n=d88[cursor+3];
+                const unsigned count=le16(cursor+4),length=le16(cursor+14);
+                if(count!=sectors || c!=trackIndex/2 ||
+                   side!=trackIndex%2 || sector<1 || sector>sectorsPerTrack ||
+                   n!=sectorN || length!=sectorSize || d88[cursor+8]!=0)
+                    throw std::invalid_argument(is2hd?
+                        "D88 sector layout is not FM-11 2HD":
+                        "D88 sector layout is not FM-11 2D");
+                cursor+=16;
+                if(length>d88.size()-cursor)
+                    throw std::invalid_argument("D88 sector data is truncated");
+                const auto idx=(std::size_t(c)*2+side)*sectorsPerTrack+(sector-1);
+                if(seen[idx])throw std::invalid_argument("D88 has duplicate sector IDs");
+                seen[idx]=true;
+                offsets[idx]=cursor;
+                std::copy_n(d88.begin()+cursor,length,raw.begin()+idx*sectorSize);
+                cursor+=length;
+            }
+        }
+        for(bool present:seen)
+            if(!present)
+                throw std::invalid_argument(is2hd?
+                    "D88 is missing an FM-11 2HD sector":
+                    "D88 is missing an FM-11 2D sector");
+        if(is2hd)load2hd(raw,drive);
+        else load2d(raw,drive);
+        auto& disk=is2hd?media2hd_[drive]:media2d_[drive];
+        disk.d88=d88;
+        std::copy(offsets.begin(),offsets.end(),disk.offsets.begin());
+    }
 
     bool sectorOffset(unsigned channel,unsigned track,unsigned side,unsigned sector,
                       unsigned drive,std::size_t& offset) const {
@@ -134,8 +148,8 @@ public:
         auto& disk=medium(channel,drive);
         disk.raw.at(offset)=value;
         disk.dirty=true;
-        if(channel==0 && !disk.d88.empty())
-            disk.d88.at(disk.offsets.at(offset/256)+(offset%256))=value;
+        if(!disk.d88.empty())
+            disk.d88.at(disk.offsets.at(offset/sectorLength(channel))+(offset%sectorLength(channel)))=value;
     }
     // Callback persists one complete sector to the selected host image.
     // Both CPU boards, including their PIO and DMA paths, use it.
@@ -152,8 +166,8 @@ public:
     }
     std::size_t hostImageOffset(unsigned channel,std::size_t rawOffset,unsigned drive=0) const {
         const auto& disk=medium(channel,drive);
-        if(channel==0 && !disk.d88.empty())
-            return disk.offsets.at(rawOffset/256)+(rawOffset%256);
+        if(!disk.d88.empty())
+            return disk.offsets.at(rawOffset/sectorLength(channel))+(rawOffset%sectorLength(channel));
         return rawOffset;
     }
     // FDC control/data registers are system-side, not CPU-card local.
@@ -224,7 +238,10 @@ public:
         const auto& disk=media2d_.at(drive);
         return disk.d88.empty()?disk.raw:disk.d88;
     }
-    std::vector<BYTE> image2hd(unsigned drive=0) const {return media2hd_.at(drive).raw;}
+    std::vector<BYTE> image2hd(unsigned drive=0) const {
+        const auto& disk=media2hd_.at(drive);
+        return disk.d88.empty()?disk.raw:disk.d88;
+    }
     bool dirty2d(unsigned drive=0) const {return media2d_.at(drive).dirty;}
     bool dirty2hd(unsigned drive=0) const {return media2hd_.at(drive).dirty;}
     void clearDirty2d(unsigned drive=0) {media2d_.at(drive).dirty=false;}

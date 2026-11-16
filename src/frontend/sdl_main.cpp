@@ -235,7 +235,12 @@ int main(int argc,char** argv) {
                                     floppy->load2d(bytes,drive);
                                 else
                                     floppy->loadD88(bytes,drive);
-                            } else floppy->load2hd(bytes,drive);
+                            } else {
+                                if(bytes.size()==77u*2*8*1024)
+                                    floppy->load2hd(bytes,drive);
+                                else
+                                    floppy->loadD882hd(bytes,drive);
+                            }
                             const int fd=::open(path.c_str(),O_RDWR);
                             if(fd<0)
                                 throw std::runtime_error("cannot open writable disk image: "+
