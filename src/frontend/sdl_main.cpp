@@ -279,6 +279,31 @@ int main(int argc,char** argv) {
                         return true;
                     });
                 }
+                if(!config.hddImage.empty()) {
+                    const auto image=readDiskImage(config.hddImage);
+                    auto hdd=machine.systemBoard().hddDevice();
+                    hdd->load(image);
+                    const int fd=::open(config.hddImage.c_str(),O_RDWR);
+                    if(fd<0)throw std::runtime_error("cannot open writable HDD image: "+
+                                      config.hddImage+": "+std::strerror(errno));
+                    auto ownedFd=std::shared_ptr<int>(new int(fd),[](int* handle) {
+                        ::close(*handle);
+                        delete handle;
+                    });
+                    hdd->setHostWriter([ownedFd](std::size_t offset,
+                                                 const BYTE* data,std::size_t length) {
+                        std::size_t done=0;
+                        while(done<length) {
+                            const auto n=::pwrite(*ownedFd,data+done,length-done,
+                                                  static_cast<off_t>(offset+done));
+                            if(n<0 && errno==EINTR)continue;
+                            if(n<=0)return false;
+                            done+=static_cast<std::size_t>(n);
+                        }
+                        return ::fdatasync(*ownedFd)==0;
+                    });
+                    std::cerr<<"Mounted MDC HDD0: "<<config.hddImage<<"\n";
+                }
             }
         }
         // FD23 boot-device DIP is on the shared system board. An FM-11 BS
