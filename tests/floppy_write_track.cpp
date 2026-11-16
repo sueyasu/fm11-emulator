@@ -1,5 +1,6 @@
 #include "FloppyDevice.h"
 #include "Main8088Bus.h"
+#include "Main6809Board.h"
 #include <memory>
 #include <vector>
 #include <cstdint>
@@ -126,6 +127,35 @@ int main() {
         if(!fd->sectorOffset(channel,0,channel?1:0,16,drive,offset) ||
            fd->read(channel,offset,drive)!=16)return 14;
     }
-    std::puts("PASS: 2D/2HD WRITE TRACK parser, 8088 DMA0/1, D88 rebuild and reload");
+    // 6809/6309 card uses the original 6844 DMA register bank.
+    auto fmDisk=std::make_shared<FloppyDevice>();
+    fmDisk->load2d(std::vector<BYTE>(40u*2*16*256,0xe5),1);
+    fmDisk->load2hd(std::vector<BYTE>(77u*2*26*256,0xe5),2);
+    Main6809Board main6809;
+    main6809.setFloppyDevice(fmDisk);
+    main6809.reset();
+    for(unsigned channel=0;channel<2;++channel) {
+        const unsigned len=channel?10900:6400;
+        const WORD start=WORD(channel?0x5000:0x1000);
+        const unsigned drive=channel?2:1;
+        const auto bytes=stream(0,channel?1:0,channel?26:16,256,len);
+        for(unsigned i=0;i<len;++i)main6809.writePhysical(start+i,bytes[i]);
+        main6809.writeCpu(WORD(0xfd40+channel*4),BYTE(start>>8));
+        main6809.writeCpu(WORD(0xfd41+channel*4),BYTE(start));
+        main6809.writeCpu(WORD(0xfd42+channel*4),BYTE(len>>8));
+        main6809.writeCpu(WORD(0xfd43+channel*4),BYTE(len));
+        main6809.writeCpu(WORD(0xfd94+channel),0);
+        main6809.writeCpu(WORD(0xfd50+channel),0x05); // enable + mem->I/O
+        main6809.writeCpu(WORD(channel?0xfd31:0xfd19),0);
+        main6809.writeCpu(WORD(channel?0xfd34:0xfd1c),BYTE(channel?1:0));
+        main6809.writeCpu(WORD(channel?0xfd35:0xfd1d),BYTE(drive));
+        main6809.writeCpu(WORD(channel?0xfd30:0xfd18),0xf0);
+        const BYTE st=channel?main6809.readCpu(0xfd30):main6809.fdcStatus();
+        if(st!=0)return 15;
+        std::size_t offset=0;
+        if(!fmDisk->sectorOffset(channel,0,channel?1:0,16,drive,offset) ||
+           fmDisk->read(channel,offset,drive)!=16)return 16;
+    }
+    std::puts("PASS: 2D/2HD WRITE TRACK parser, 6809/8088 DMA0/1, D88 rebuild and reload");
     return 0;
 }
