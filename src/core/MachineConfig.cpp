@@ -38,6 +38,7 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
     MachineConfig cfg;
     std::string section,line;
     unsigned number=0;
+    bool legacyMain=false,legacyBoot=false,dipswMain=false,dipswBoot=false;
     while(std::getline(stream,line)) {
         ++number;
         const auto comment=line.find_first_of("#;");
@@ -51,7 +52,7 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                    section!="main_8088" && section!="optional_cpu" &&
                    section!="display_cpu" && section!="floppy_2d" &&
                    section!="floppy_2hd" && section!="hdd" &&
-                   section!="boot")
+                   section!="boot" && section!="DIPSW")
                     throw std::invalid_argument("unknown section ["+section+"]");
                 continue;
             }
@@ -61,7 +62,23 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
             const auto key=trim(line.substr(0,equals));
             const auto value=trim(line.substr(equals+1));
             bool handled=true;
-            if(section=="main") {
+            if(section=="DIPSW") {
+                if(key=="main_cpu") {
+                    if(legacyMain)throw std::invalid_argument("cannot mix [DIPSW].main_cpu with [main].active");
+                    dipswMain=true;
+                    if(value=="6809")cfg.mainSelected=MachineConfig::MainSelection::Cpu6809;
+                    else if(value=="8088")cfg.mainSelected=MachineConfig::MainSelection::Cpu8088;
+                    else throw std::invalid_argument("DIPSW.main_cpu must be 6809 or 8088");
+                } else if(key=="2D_FDD" || key=="2HD_FDD" || key=="HDD") {
+                    if(legacyBoot)throw std::invalid_argument("cannot mix [DIPSW] boot switches with [boot]");
+                    dipswBoot=true;
+                    if(key=="2D_FDD")cfg.boot2dFdd=boolean(value);
+                    else if(key=="2HD_FDD")cfg.boot2hdFdd=boolean(value);
+                    else cfg.bootHdd=boolean(value);
+                } else handled=false;
+            } else if(section=="main") {
+                if(dipswMain)throw std::invalid_argument("cannot mix [main].active with [DIPSW].main_cpu");
+                legacyMain=true;
                 if(key!="active")handled=false;
                 else if(value=="6809")cfg.mainSelected=MachineConfig::MainSelection::Cpu6809;
                 else if(value=="8088")cfg.mainSelected=MachineConfig::MainSelection::Cpu8088;
@@ -99,6 +116,8 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                 auto& slots=section=="floppy_2d"?cfg.floppy2d:cfg.floppy2hd;
                 slots[key[5]-'0']=value;
             } else if(section=="boot") {
+                if(dipswBoot)throw std::invalid_argument("cannot mix [boot] with [DIPSW] boot switches");
+                legacyBoot=true;
                 if(key=="2D_FDD")cfg.boot2dFdd=boolean(value);
                 else if(key=="2HD_FDD")cfg.boot2hdFdd=boolean(value);
                 else if(key=="HDD")cfg.bootHdd=boolean(value);

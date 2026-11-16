@@ -15,13 +15,13 @@ int main() {
         if(!out)return 1;
         out<<"[main_6809]\ninstalled = true\ncpu = 6309\nclock_hz = 3000000\nrom = test-6809.rom\n"
               "[main_8088]\ninstalled = true\ncpu = v20\nclock_hz = 8000000\nrom = test-8088.rom\n"
-              "[main]\nactive = 8088\n"
+              "[DIPSW]\nmain_cpu = 8088\n"
               "[optional_cpu]\ntype = z80\nclock_hz = 4000000\n"
               "[display_cpu]\ncpu = 6809\nclock_hz = 2000000\nrom = test-display.rom\nank_rom = test-ank.rom\n"
               "[floppy_2d]\ndrive0 = system.d88\ndrive3 = extra.d88\n"
               "[floppy_2hd]\ndrive1 = hd1.raw\ndrive2 = hd2.raw\n"
               "[hdd]\nimage = fixed-disk.img\n"
-              "[boot]\n2D_FDD = true\n2HD_FDD = false\nHDD = false\n";
+              "2D_FDD = true\n2HD_FDD = false\nHDD = false\n";
     }
     auto config=parseMachineConfigFile(path);
     if(!config.main6809Installed || !config.main8088Installed ||
@@ -89,7 +89,7 @@ int main() {
     // Explicitly reject a DIP selection of a card that is not fitted.
     {
         std::ofstream out(path);
-        out<<"[main]\nactive=8088\n";
+        out<<"[DIPSW]\nmain_cpu=8088\n";
     }
     try { (void)parseMachineConfigFile(path);return 9; }
     catch(const std::runtime_error&) {}
@@ -98,15 +98,36 @@ int main() {
     // producing an unintended DIP mask.
     {
         std::ofstream out(path);
-        out<<"[boot]\n2HD_FDD = yes\n";
+        out<<"[DIPSW]\n2HD_FDD = yes\n";
     }
     try {(void)parseMachineConfigFile(path);return 14;}
     catch(const std::runtime_error&) {}
     {
         std::ofstream out(path);
-        out<<"[boot]\nUNKNOWN = true\n";
+        out<<"[DIPSW]\nUNKNOWN = true\n";
     }
     try {(void)parseMachineConfigFile(path);return 15;}
+    catch(const std::runtime_error&) {}
+    // Legacy sections remain supported for existing user config files.
+    {
+        std::ofstream out(path);
+        out<<"[main]\\nactive=6809\\n[boot]\\n2D_FDD=false\\n2HD_FDD=false\\nHDD=true\\n";
+    }
+    const auto legacy=parseMachineConfigFile(path);
+    if(legacy.mainSelected!=MachineConfig::MainSelection::Cpu6809 ||
+       legacy.bootDip()!=0x7f)return 16;
+    // Conflicting old and new names must be rejected regardless of order.
+    {
+        std::ofstream out(path);
+        out<<"[main]\\nactive=6809\\n[DIPSW]\\nmain_cpu=8088\\n";
+    }
+    try {(void)parseMachineConfigFile(path);return 17;}
+    catch(const std::runtime_error&) {}
+    {
+        std::ofstream out(path);
+        out<<"[DIPSW]\\nHDD=true\\n[boot]\\nHDD=false\\n";
+    }
+    try {(void)parseMachineConfigFile(path);return 18;}
     catch(const std::runtime_error&) {}
     std::remove(path.c_str());
     return 0;
