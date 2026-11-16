@@ -3,6 +3,7 @@
 #include "Main8088Board.h"
 #include <memory>
 #include <vector>
+#include <initializer_list>
 #include <cstdio>
 
 static BYTE result6809(Main6809Board& cpu) {
