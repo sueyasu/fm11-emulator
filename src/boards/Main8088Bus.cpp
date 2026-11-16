@@ -68,7 +68,7 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
             setDmaDevice(channel,oldReader,oldWriter);
             if(bytes.size()!=length ||
                !floppy_->formatTrack(channel,track,side,drive,bytes))
-                floppy_->transferError();
+                floppy_->transferError(0x20);
             if(channel==0)floppy_->writeRegister(0x1f,0x40);
             return;
         }
