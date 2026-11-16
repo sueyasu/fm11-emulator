@@ -1,5 +1,51 @@
 # FM-11 Emulator
 
+## Configured floppy and hard-disk images
+
+The SDL frontend accepts up to **four 2D FDDs** and **four 2HD FDDs**
+simultaneously, independently of which main CPU (6809 or 8088) is active.
+Their physical selectors are `FD1D & 3` (2D) and `FD35 & 3` (2HD).
+
+Add the following sections to `~/.config/fm11emu/fm11emu.conf`
+(or to the file passed with `--config`):
+
+```ini
+[floppy_2d]
+drive0 = /path/to/system.d88
+drive1 = /path/to/data.d88
+# drive2 = /path/to/other.d88
+# drive3 = /path/to/backup.d88
+
+[floppy_2hd]
+# drive0 = /path/to/hd0.raw
+# drive1 = /path/to/hd1.raw
+# drive2 = /path/to/hd2.raw
+# drive3 = /path/to/hd3.raw
+
+[hdd]
+# image = /path/to/m2233b.img
+```
+
+2D accepts 327,680-byte raw images or 2D D88 images with a complete
+40-cylinder, double-sided, 16-sector layout. 2HD currently accepts
+1,261,568-byte raw images (77 cylinders, two sides, eight 1024-byte
+sectors). HDD accepts one raw MDC image with 256-byte records; geometry
+is inferred from the source emulator's supported disk-size table.
+
+Each configured image is independently opened read/write and written
+through on completed sector transfers using `pwrite` and `fdatasync`.
+A filesystem sync failure is reported as an FDC/MDC write failure.
+Do not mount the same image into more than one FDD slot. Keep backups
+of important disk images before write tests.
+
+Legacy `--floppy2d FILE` and `--floppy-d88 FILE` override the 2D
+slot selected with `--floppy-drive 0..3`; other configured drives
+remain mounted.
+
+MDC HDD support provides the FD C0-C3 command interface, DMA-backed
+read/write and the original disk-type table. ROM boot and OS-level
+HDD formatting remain to be verified separately.
+
 ## FM-11 BS (8088-only main CPU)
 
 The FM-11 BS has an 8088 main CPU card and a separate 6809 display
