@@ -49,7 +49,8 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                 section=trim(line.substr(1,line.size()-2));
                 if(section!="main" && section!="main_6809" &&
                    section!="main_8088" && section!="optional_cpu" &&
-                   section!="display_cpu")
+                   section!="display_cpu" && section!="floppy_2d" &&
+                   section!="floppy_2hd" && section!="hdd")
                     throw std::invalid_argument("unknown section ["+section+"]");
                 continue;
             }
@@ -88,6 +89,16 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                     else if(value=="z80")cfg.z80Installed=true;
                     else throw std::invalid_argument("optional_cpu.type must be none or z80");
                 } else if(key=="clock_hz")cfg.z80ClockHz=clockHz(value);
+                else handled=false;
+            } else if(section=="floppy_2d" || section=="floppy_2hd") {
+                // Each section maps a physical drive index to a host image.
+                if(key.size()!=6 || key.substr(0,5)!="drive" ||
+                   key[5]<'0' || key[5]>'3')
+                    throw std::invalid_argument("floppy key must be drive0..drive3");
+                auto& slots=section=="floppy_2d"?cfg.floppy2d:cfg.floppy2hd;
+                slots[key[5]-'0']=value;
+            } else if(section=="hdd") {
+                if(key=="image")cfg.hddImage=value;
                 else handled=false;
             } else if(section=="display_cpu") {
                 if(key=="cpu") {
