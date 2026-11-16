@@ -43,6 +43,7 @@ public:
         reset();
     }
     bool present() const {return !image_.empty();}
+    bool irqPending() const {return phase_!=0;}
     const Geometry& geometry() const {return geometry_;}
     void setDmaTransfer(DmaTransfer handler) {dma_=std::move(handler);}
     void setHostWriter(HostWrite handler) {writer_=std::move(handler);}
