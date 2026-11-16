@@ -17,7 +17,10 @@ int main() {
               "[main_8088]\ninstalled = true\ncpu = v20\nclock_hz = 8000000\nrom = test-8088.rom\n"
               "[main]\nactive = 8088\n"
               "[optional_cpu]\ntype = z80\nclock_hz = 4000000\n"
-              "[display_cpu]\ncpu = 6809\nclock_hz = 2000000\nrom = test-display.rom\nank_rom = test-ank.rom\n";
+              "[display_cpu]\ncpu = 6809\nclock_hz = 2000000\nrom = test-display.rom\nank_rom = test-ank.rom\n"
+              "[floppy_2d]\ndrive0 = system.d88\ndrive3 = extra.d88\n"
+              "[floppy_2hd]\ndrive1 = hd1.raw\ndrive2 = hd2.raw\n"
+              "[hdd]\nimage = fixed-disk.img\n";
     }
     auto config=parseMachineConfigFile(path);
     if(!config.main6809Installed || !config.main8088Installed ||
@@ -29,7 +32,13 @@ int main() {
        config.main6809Rom!="test-6809.rom" ||
        config.main8088Rom!="test-8088.rom" ||
        config.displayRom!="test-display.rom" ||
-       config.ankRom!="test-ank.rom")return 2;
+       config.ankRom!="test-ank.rom" ||
+       config.floppy2d[0]!="system.d88" ||
+       config.floppy2d[3]!="extra.d88" ||
+       config.floppy2d[1]!="" ||
+       config.floppy2hd[1]!="hd1.raw" ||
+       config.floppy2hd[2]!="hd2.raw" ||
+       config.hddImage!="fixed-disk.img")return 2;
 
     Machine machine;
     auto m6809=std::make_unique<Main6809Board>(config.main6809Cpu);
