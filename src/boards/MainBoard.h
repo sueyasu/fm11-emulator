@@ -83,6 +83,7 @@ public:
             realtimePtmLast_=std::chrono::steady_clock::now();
         }
         floppy_->finishTransfer();
+        hdd_->reset();
     }
     // FD04 main-board event latch: ATENT bit 0, BREAK bit 1.
     void signalAttention() {eventStatus_.fetch_or(0x01,std::memory_order_release);}
