@@ -39,7 +39,9 @@ int main() {
        config.floppy2d[1]!="" ||
        config.floppy2hd[1]!="hd1.raw" ||
        config.floppy2hd[2]!="hd2.raw" ||
-       config.hddImage!="fixed-disk.img")return 2;
+       config.hddImage!="fixed-disk.img" ||
+       !config.boot2dFdd || config.boot2hdFdd || config.bootHdd ||
+       config.bootDip()!=0xdf)return 2;
 
     // Original DIP default enables both FDD formats and disables HDD.
     MachineConfig defaults;
@@ -90,6 +92,21 @@ int main() {
         out<<"[main]\nactive=8088\n";
     }
     try { (void)parseMachineConfigFile(path);return 9; }
+    catch(const std::runtime_error&) {}
+    std::remove(path.c_str());
+    // Invalid boot switch values must be rejected rather than silently
+    // producing an unintended DIP mask.
+    {
+        std::ofstream out(path);
+        out<<"[boot]\\n2HD_FDD = yes\\n";
+    }
+    try {(void)parseMachineConfigFile(path);return 14;}
+    catch(const std::runtime_error&) {}
+    {
+        std::ofstream out(path);
+        out<<"[boot]\\nUNKNOWN = true\\n";
+    }
+    try {(void)parseMachineConfigFile(path);return 15;}
     catch(const std::runtime_error&) {}
     std::remove(path.c_str());
     return 0;
