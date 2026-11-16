@@ -110,7 +110,7 @@ int main() {
     // Legacy sections remain supported for existing user config files.
     {
         std::ofstream out(path);
-        out<<"[main]\\nactive=6809\\n[boot]\\n2D_FDD=false\\n2HD_FDD=false\\nHDD=true\\n";
+        out<<"[main]\nactive=6809\n[boot]\n2D_FDD=false\n2HD_FDD=false\nHDD=true\n";
     }
     const auto legacy=parseMachineConfigFile(path);
     if(legacy.mainSelected!=MachineConfig::MainSelection::Cpu6809 ||
@@ -118,13 +118,13 @@ int main() {
     // Conflicting old and new names must be rejected regardless of order.
     {
         std::ofstream out(path);
-        out<<"[main]\\nactive=6809\\n[DIPSW]\\nmain_cpu=8088\\n";
+        out<<"[main]\nactive=6809\n[DIPSW]\nmain_cpu=8088\n";
     }
     try {(void)parseMachineConfigFile(path);return 17;}
     catch(const std::runtime_error&) {}
     {
         std::ofstream out(path);
-        out<<"[DIPSW]\\nHDD=true\\n[boot]\\nHDD=false\\n";
+        out<<"[DIPSW]\nHDD=true\n[boot]\nHDD=false\n";
     }
     try {(void)parseMachineConfigFile(path);return 18;}
     catch(const std::runtime_error&) {}
