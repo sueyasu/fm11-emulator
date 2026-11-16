@@ -42,7 +42,7 @@ int main() {
     for(BYTE byte:{BYTE(0),BYTE(0),BYTE(0),BYTE(0),
                    BYTE(0),BYTE(0),BYTE(1),BYTE(0)})
         cpu->writeCpu(0xfdc1,byte);
-    if(result6809(*cpu)!=0x10 || cpu->readCpu(0x2000)!=0x5c)return 1;
+    if(result6809(*cpu)!=0x10 || cpu->readCpu(0x2000)!=0x5c){std::fprintf(stderr,"mdc_cpu_dma stage 1 failed\\n");return 1;}
 
     // 8088 channel 2 DMA: I/O -> memory 3000h.
     bus.writeIo(0x1c,0);
@@ -56,7 +56,7 @@ int main() {
     for(BYTE byte:{BYTE(0),BYTE(0),BYTE(0),BYTE(0),
                    BYTE(0),BYTE(0),BYTE(1),BYTE(0)})
         bus.writeIo(0xfdc1,byte);
-    if(result8088(bus)!=0x10 || bus.readRam(0x3000)!=0x5c)return 2;
+    if(result8088(bus)!=0x10 || bus.readRam(0x3000)!=0x5c){std::fprintf(stderr,"mdc_cpu_dma stage 2 failed\\n");return 2;}
 
     // 8088 channel 2 DMA: memory 3200h -> selected HDD.
     for(unsigned i=0;i<256;++i)bus.writeMemory(0x3200+i,0xa5);
@@ -69,7 +69,7 @@ int main() {
     for(BYTE byte:{BYTE(0),BYTE(0),BYTE(0),BYTE(0),
                    BYTE(0),BYTE(0),BYTE(1),BYTE(0)})
         bus.writeIo(0xfdc1,byte);
-    if(result8088(bus)!=0x10 || hdd->image()[0]!=0xa5)return 3;
+    if(result8088(bus)!=0x10 || hdd->image()[0]!=0xa5){std::fprintf(stderr,"mdc_cpu_dma stage 3 failed\\n");return 3;}
 
     // A completed transfer through one CPU is visible to the other.
     cpu->writeCpu(0xfd40,0x21);
@@ -81,7 +81,7 @@ int main() {
     for(BYTE byte:{BYTE(0),BYTE(0),BYTE(0),BYTE(0),
                    BYTE(0),BYTE(0),BYTE(1),BYTE(0)})
         cpu->writeCpu(0xfdc1,byte);
-    if(result6809(*cpu)!=0x10 || cpu->readCpu(0x2100)!=0xa5)return 4;
+    if(result6809(*cpu)!=0x10 || cpu->readCpu(0x2100)!=0xa5){std::fprintf(stderr,"mdc_cpu_dma stage 4 failed\\n");return 4;}
     std::puts("PASS: shared HDD visible via 6809 DMA and 8088 DMA");
     return 0;
 }
