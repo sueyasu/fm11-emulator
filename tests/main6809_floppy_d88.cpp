@@ -30,6 +30,12 @@ int main() {
     put32(img,0x1c,static_cast<unsigned>(img.size()));
     Main6809Board b; b.reset();
     b.loadFloppyD88(img);
+    // Real blank_2d.d88 uses media type 10h (2DD) with this exact
+    // 40x2x16x256 Mini-FDC geometry; both 00h and 10h must work.
+    auto doubleDensity=img;
+    doubleDensity[0x1b]=0x10;
+    b.loadFloppyD88(doubleDensity);
+    if(b.floppyImage()!=doubleDensity)return 11;
     b.writeCpu(0xfd19,1);b.writeCpu(0xfd1c,1);
     b.writeCpu(0xfd1a,3);b.writeCpu(0xfd1d,0);
     b.writeCpu(0xfd18,0x80);
