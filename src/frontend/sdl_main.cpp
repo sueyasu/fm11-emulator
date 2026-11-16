@@ -242,7 +242,7 @@ int main(int argc,char** argv) {
                                 else
                                     floppy->loadD88(bytes,drive);
                             } else {
-                                if(bytes.size()==77u*2*8*1024)
+                                if(bytes.size()==77u*2*8*1024 || bytes.size()==77u*2*26*256)
                                     floppy->load2hd(bytes,drive);
                                 else
                                     floppy->loadD882hd(bytes,drive);
