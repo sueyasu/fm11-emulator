@@ -244,8 +244,6 @@ private:
     unsigned mountedDrive_=0;
     std::array<Disk,4> media2d_{},media2hd_{};
     std::array<BYTE,256> registers_{};
-    std::array<std::size_t,40*2*16> offsets_{};
-    bool dirty2d_=false,dirty2hd_=false;
     std::array<BYTE,1024> transferBuffer_{};
     std::size_t transferOffset_=0,transferPosition_=256,transferLength_=256;
     unsigned transferChannel_=0,transferDrive_=0;
