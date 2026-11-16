@@ -102,9 +102,9 @@ int main() {
     // completes through transferWrite.
     unsigned completed=0;
     std::size_t lastOffset=9999;
-    floppy->setSectorWriter([&](unsigned channel,std::size_t offset,
+    floppy->setSectorWriter([&](unsigned channel,unsigned drive,std::size_t offset,
                                  const BYTE* data,std::size_t length) {
-        if(channel!=0 || length!=256 || data[0]!=0x5a)return false;
+        if(channel!=0 || drive!=0 || length!=256 || data[0]!=0x5a)return false;
         ++completed;
         lastOffset=offset;
         return true;
@@ -123,7 +123,7 @@ int main() {
         std::fputs("FAIL: 8088 DMA shared sector commit\n",stderr);
         return 14;
     }
-    floppy->setSectorWriter([](unsigned,std::size_t,const BYTE*,std::size_t) {
+    floppy->setSectorWriter([](unsigned,unsigned,std::size_t,const BYTE*,std::size_t) {
         return false;
     });
     sector[1]=0x7e;
