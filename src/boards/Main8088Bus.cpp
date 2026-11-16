@@ -129,6 +129,12 @@ BYTE Main8088Bus::readIo(WORD port) const
     if(port==0x01)return picMask_;
     // FC80-FCFF is the shared display mailbox in the original FM-11.
     // The 8088 ROM sends text commands through FC81-FC84.
+    if(port==0xfd36 && mainBoard_) {
+        BYTE ready=0xc0;
+        for(unsigned d=0;d<4;++d)
+            if(floppy_->has2hd(d))ready=BYTE(ready|(1u<<d));
+        return ready;
+    }
     if(port>=0xfdc0 && port<=0xfdc3 && mainBoard_) {
         BYTE value=0;
         mainBoard_->readIo(port,value);
@@ -233,8 +239,8 @@ void Main8088Bus::writeIo(WORD port,BYTE value)
         refreshSystemIrq();
     }
     else if(port>=0xfd00 && port<=0xfdff && systemWriter_) systemWriter_(port,value);
-    else if(((port>=0xfd18 && port<=0xfd1d && floppy_->has2d()) ||
-             (port>=0xfd30 && port<=0xfd35 && floppy_->has2hd()))) {
+    else if(((port>=0xfd18 && port<=0xfd1d && floppy_->hasAny2d()) ||
+             (port>=0xfd30 && port<=0xfd35 && floppy_->hasAny2hd()))) {
         if(port==0xfd18 || port==0xfd30)floppyCommand(value,port==0xfd18?0:1);
         else if(port==0xfd1b || port==0xfd33) {
             // FD1B is the SEEK destination register for type I commands.
