@@ -98,13 +98,13 @@ int main() {
     // producing an unintended DIP mask.
     {
         std::ofstream out(path);
-        out<<"[boot]\\n2HD_FDD = yes\\n";
+        out<<"[boot]\n2HD_FDD = yes\n";
     }
     try {(void)parseMachineConfigFile(path);return 14;}
     catch(const std::runtime_error&) {}
     {
         std::ofstream out(path);
-        out<<"[boot]\\nUNKNOWN = true\\n";
+        out<<"[boot]\nUNKNOWN = true\n";
     }
     try {(void)parseMachineConfigFile(path);return 15;}
     catch(const std::runtime_error&) {}
