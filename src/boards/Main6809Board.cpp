@@ -557,6 +557,14 @@ BYTE Main6809Board::readIo(WORD address)
     const BYTE reg = static_cast<BYTE>(address & 0x00ff);
     ++ioReadCounts_[reg];
     switch (reg) {
+    case 0xc0: case 0xc1: case 0xc2: case 0xc3: {
+        BYTE value=ioRegisters_[reg];
+        if(mainBoard_) {
+            mainBoard_->readIo(address,value);
+            setExtendedIrqSource(0x04,mainBoard_->hddDevice()->irqPending());
+        }
+        return value;
+    }
     case 0x38: case 0x39: case 0x3a: case 0x3b:
     case 0x3c: case 0x3d: case 0x3e: case 0x3f: {
         BYTE value=0;
@@ -671,6 +679,48 @@ void Main6809Board::writeIo(WORD address, BYTE value)
     ++ioWriteCounts_[reg];
     lastIoWrites_[reg]=value;
     switch (reg) {
+    case 0xc0: case 0xc1: case 0xc2: case 0xc3:
+        ioRegisters_[reg]=value;
+        if(mainBoard_) {
+            if(reg==0xc0 || reg==0xc1) {
+                mainBoard_->hddDevice()->setDmaTransfer(
+                    [this](unsigned channel,bool writing,std::vector<BYTE>& bytes) {
+                        if(channel>=4)return false;
+                        const unsigned ctrl=ioRegisters_[0x50+channel];
+                        const unsigned base=0x40+4*channel;
+                        const unsigned count=(unsigned(ioRegisters_[base+2])<<8)|
+                                              ioRegisters_[base+3];
+                        if((ctrl&0x04)==0 || count<bytes.size())return false;
+                        const bool down=(ctrl&0x08)!=0;
+                        const WORD start=WORD((ioRegisters_[base]<<8)|ioRegisters_[base+1]);
+                        const std::uint32_t bank=std::uint32_t(ioRegisters_[0x94+channel]&15)<<16;
+                        for(unsigned i=0;i<bytes.size();++i) {
+                            const WORD addr=WORD(start+(down?-int(i):int(i)));
+                            if((bank|addr)>=memory_->size())return false;
+                        }
+                        for(unsigned i=0;i<bytes.size();++i) {
+                            const WORD addr=WORD(start+(down?-int(i):int(i)));
+                            const auto physical=bank|addr;
+                            if(writing)bytes[i]=readPhysical(physical);
+                            else writePhysical(physical,bytes[i]);
+                        }
+                        const WORD next=WORD(start+(down?-int(bytes.size()):int(bytes.size())));
+                        ioRegisters_[base]=BYTE(next>>8);
+                        ioRegisters_[base+1]=BYTE(next);
+                        const unsigned remaining=count-static_cast<unsigned>(bytes.size());
+                        ioRegisters_[base+2]=BYTE(remaining>>8);
+                        ioRegisters_[base+3]=BYTE(remaining);
+                        if(remaining==0)
+                            ioRegisters_[0x50+channel]=BYTE((ctrl|0x80)&~0x40);
+                        else ioRegisters_[0x50+channel]=BYTE(ctrl|0x40);
+                        refreshDmaCompletion();
+                        return true;
+                    });
+            }
+            mainBoard_->writeIo(address,value);
+            setExtendedIrqSource(0x04,mainBoard_->hddDevice()->irqPending());
+        }
+        break;
     case 0x38: case 0x39: case 0x3a: case 0x3b:
     case 0x3c: case 0x3d: case 0x3e: case 0x3f:
         if(!mainBoard_ || !mainBoard_->writeIo(address,value))
