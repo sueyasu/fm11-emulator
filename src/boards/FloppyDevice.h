@@ -37,17 +37,24 @@ public:
         auto& disk=media2d_[drive];
         disk.raw=raw;
         disk.d88.clear();
-        disk.offsets.fill(0);
+        disk.sectorsPerTrack=16;
+        disk.slotSize=256;
+        disk.offsets.assign(40u*2*16,0);
+        disk.lengths.assign(disk.offsets.size(),256);
         disk.dirty=false;
     }
     void load2hd(const std::vector<BYTE>& raw,unsigned drive=0) {
         if(drive>3)throw std::invalid_argument("2HD drive must be 0..3");
-        if(raw.size()!=77u*2*8*1024)
-            throw std::invalid_argument("FM-11 2HD raw image must be 1261568 bytes");
+        const bool native=raw.size()==77u*2*26*256;
+        if(!native && raw.size()!=77u*2*8*1024)
+            throw std::invalid_argument("FM-11 2HD raw image must be 77x2x26x256 or 77x2x8x1024 bytes");
         auto& disk=media2hd_[drive];
         disk.raw=raw;
         disk.d88.clear();
-        disk.offsets.fill(0);
+        disk.sectorsPerTrack=native?26:8;
+        disk.slotSize=native?256:1024;
+        disk.offsets.assign(77u*2*disk.sectorsPerTrack,0);
+        disk.lengths.assign(disk.offsets.size(),disk.slotSize);
         disk.dirty=false;
     }
     void loadD88(const std::vector<BYTE>& d88,unsigned drive=0) {
@@ -61,9 +68,13 @@ public:
         // D88 header: 0x2B0 bytes, 164 little-endian track offsets.
         constexpr std::size_t headerSize=0x2b0;
         const unsigned tracks=is2hd?77:40;
-        const unsigned sectorsPerTrack=is2hd?8:16;
-        const unsigned sectorSize=is2hd?1024:256;
-        const unsigned sectorN=is2hd?3:1;
+        // FM-11 native 2HD uses 26x128-byte FM records on C0/H0,
+        // and 26x256-byte MFM records on all remaining tracks.
+        // Keep the older 8x1024-byte layout accepted for compatibility.
+        const bool native2hd=is2hd && d88.size()>headerSize+16 &&
+            d88[0x2b0+3]==0 && d88[0x2b0+2]==1;
+        const unsigned sectorsPerTrack=is2hd?(native2hd?26:8):16;
+        const unsigned sectorSize=is2hd?(native2hd?256:1024):256;
         const BYTE diskType=is2hd?0x20:0x00;
         if(d88.size()<headerSize)
             throw std::invalid_argument("D88 header is truncated");
@@ -84,6 +95,7 @@ public:
         std::vector<BYTE> raw(std::size_t(tracks)*2*sectorsPerTrack*sectorSize);
         std::vector<bool> seen(std::size_t(tracks)*2*sectorsPerTrack);
         std::vector<std::size_t> offsets(seen.size());
+        std::vector<unsigned> lengths(seen.size(),sectorSize);
         for(unsigned trackIndex=0;trackIndex<tracks*2;++trackIndex) {
             const auto trackStart=le32(0x20+trackIndex*4);
             if(!trackStart)continue;
@@ -99,9 +111,12 @@ public:
                 const unsigned c=d88[cursor],side=d88[cursor+1];
                 const unsigned sector=d88[cursor+2],n=d88[cursor+3];
                 const unsigned count=le16(cursor+4),length=le16(cursor+14);
-                if(count!=sectors || c!=trackIndex/2 ||
-                   side!=trackIndex%2 || sector<1 || sector>sectorsPerTrack ||
-                   n!=sectorN || length!=sectorSize || d88[cursor+8]!=0)
+                const unsigned expectedSize=(native2hd && trackIndex==0)?128:sectorSize;
+                const unsigned expectedN=expectedSize==128?0:expectedSize==256?1:3;
+                if(count!=sectors || sectors!=sectorsPerTrack ||
+                   c!=trackIndex/2 || side!=trackIndex%2 ||
+                   sector<1 || sector>sectorsPerTrack ||
+                   n!=expectedN || length!=expectedSize || d88[cursor+8]!=0)
                     throw std::invalid_argument(is2hd?
                         "D88 sector layout is not FM-11 2HD":
                         "D88 sector layout is not FM-11 2D");
@@ -112,6 +127,7 @@ public:
                 if(seen[idx])throw std::invalid_argument("D88 has duplicate sector IDs");
                 seen[idx]=true;
                 offsets[idx]=cursor;
+                lengths[idx]=length;
                 std::copy_n(d88.begin()+cursor,length,raw.begin()+idx*sectorSize);
                 cursor+=length;
             }
@@ -125,22 +141,27 @@ public:
         else load2d(raw,drive);
         auto& disk=is2hd?media2hd_[drive]:media2d_[drive];
         disk.d88=d88;
-        std::copy(offsets.begin(),offsets.end(),disk.offsets.begin());
+        disk.offsets=std::move(offsets);
+        disk.lengths=std::move(lengths);
     }
 
     bool sectorOffset(unsigned channel,unsigned track,unsigned side,unsigned sector,
                       unsigned drive,std::size_t& offset) const {
-        if(drive>=4)return false;
-        if(channel==0) {
-            if(!has2d(drive) || track>=40 || sector<1 || sector>16)return false;
-            offset=((track*2+(side&1))*16+(sector-1))*256;
-        } else if(channel==1) {
-            if(!has2hd(drive) || track>=77 || sector<1 || sector>8)return false;
-            offset=((track*2+(side&1))*8+(sector-1))*1024;
-        } else return false;
+        if(drive>=4 || channel>1)return false;
+        const auto& disk=medium(channel,drive);
+        const unsigned tracks=channel==0?40:77;
+        if(disk.raw.empty() || track>=tracks || sector<1 ||
+           sector>disk.sectorsPerTrack)return false;
+        offset=((track*2+(side&1))*disk.sectorsPerTrack+(sector-1))*disk.slotSize;
         return true;
     }
-    std::size_t sectorLength(unsigned channel) const {return channel==0?256:1024;}
+    std::size_t sectorLength(unsigned channel,unsigned track=0,unsigned side=0,
+                             unsigned sector=1,unsigned drive=0) const {
+        const auto& disk=medium(channel,drive);
+        const std::size_t idx=(std::size_t(track)*2+(side&1))*disk.sectorsPerTrack+
+                              (sector-1);
+        return idx<disk.lengths.size()?disk.lengths[idx]:disk.slotSize;
+    }
     BYTE read(unsigned channel,std::size_t offset,unsigned drive=0) const {
         return medium(channel,drive).raw.at(offset);
     }
@@ -148,15 +169,20 @@ public:
         auto& disk=medium(channel,drive);
         disk.raw.at(offset)=value;
         disk.dirty=true;
-        if(!disk.d88.empty())
-            disk.d88.at(disk.offsets.at(offset/sectorLength(channel))+(offset%sectorLength(channel)))=value;
+        if(!disk.d88.empty()) {
+            const auto idx=offset/disk.slotSize;
+            const auto inSector=offset%disk.slotSize;
+            if(inSector<disk.lengths.at(idx))
+                disk.d88.at(disk.offsets.at(idx)+inSector)=value;
+        }
     }
     // Callback persists one complete sector to the selected host image.
     // Both CPU boards, including their PIO and DMA paths, use it.
     using SectorWriter=std::function<bool(unsigned,unsigned,std::size_t,const BYTE*,std::size_t)>;
     void setSectorWriter(SectorWriter writer) {sectorWriter_=std::move(writer);}
     bool writeSector(unsigned channel,std::size_t offset,const BYTE* bytes,unsigned drive=0) {
-        const auto length=sectorLength(channel);
+        const auto& disk=medium(channel,drive);
+        const auto length=disk.lengths.at(offset/disk.slotSize);
         if(sectorWriter_ && !sectorWriter_(channel,drive,offset,bytes,length)) {
             status_=0x10;
             return false;
@@ -167,7 +193,7 @@ public:
     std::size_t hostImageOffset(unsigned channel,std::size_t rawOffset,unsigned drive=0) const {
         const auto& disk=medium(channel,drive);
         if(!disk.d88.empty())
-            return disk.offsets.at(rawOffset/sectorLength(channel))+(rawOffset%sectorLength(channel));
+            return disk.offsets.at(rawOffset/disk.slotSize)+(rawOffset%disk.slotSize);
         return rawOffset;
     }
     // FDC control/data registers are system-side, not CPU-card local.
@@ -191,7 +217,7 @@ public:
                      unsigned drive,bool writing) {
         transferChannel_=channel;
         transferDrive_=drive;
-        transferLength_=sectorLength(channel);
+        transferLength_=0;
         transferPosition_=transferLength_;
         transferWriting_=false;
         status_=0;
@@ -199,6 +225,7 @@ public:
             status_=0x10;
             return false;
         }
+        transferLength_=sectorLength(channel,track,side,sector,drive);
         transferPosition_=0;
         transferWriting_=writing;
         if(!writing)
@@ -249,7 +276,9 @@ public:
 private:
     struct Disk {
         std::vector<BYTE> raw,d88;
-        std::array<std::size_t,40*2*16> offsets{};
+        std::vector<std::size_t> offsets;
+        std::vector<unsigned> lengths;
+        unsigned sectorsPerTrack=16,slotSize=256;
         bool dirty=false;
     };
     Disk& medium(unsigned channel,unsigned drive) {
