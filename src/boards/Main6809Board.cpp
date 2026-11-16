@@ -183,7 +183,7 @@ void Main6809Board::writeFloppySector()
         const WORD address=WORD(startAddress+(down?-int(i):int(i)));
         sectorBytes[i]=readPhysical(dmaBank|address);
     }
-    if(!floppy_->writeSector(0,offset,sectorBytes.data())) {
+    if(!floppy_->writeSector(0,offset,sectorBytes.data(),(floppy_->registerValue(0x1d)&3))) {
         floppyStatus_=0x10;
         ioRegisters_[0x50]|=0x40;
         return;
@@ -208,7 +208,7 @@ void Main6809Board::readFloppySector()
     ++fdcReads_;
     std::size_t offset=0;
     if(!floppySectorOffset(offset)) {++fdcReadFailures_;return;}
-    for(unsigned i=0;i<256;++i)floppySector_[i]=floppy_->read(0,offset+i);
+    for(unsigned i=0;i<256;++i)floppySector_[i]=floppy_->read(0,offset+i,(floppy_->registerValue(0x1d)&3));
     floppyOffset_=0;
     floppyStatus_=0x02; // DRQ for programmed I/O
     const bool dma=(ioRegisters_[0x50]&0x04)!=0;
@@ -589,7 +589,7 @@ BYTE Main6809Board::readIo(WORD address)
     case 0x36:
         // Reference 2HD drive-sense register: C0 | RDY0..RDY3.
         // The shared device currently supports drive zero only.
-        return static_cast<BYTE>(0xc0 | (floppy_->has2hd() ? (1u<<floppy_->mountedDrive()) : 0));
+        return static_cast<BYTE>(0xc0 | ([&](){unsigned ready=0;for(unsigned d=0;d<4;++d)if(floppy_->has2hd(d))ready|=1u<<d;return ready;}()));
     case 0x37: {
         // Reference MainCpu::GetIoByte: reading FDC IRQ status
         // acknowledges the extended FDC interrupt source.
@@ -609,7 +609,7 @@ BYTE Main6809Board::readIo(WORD address)
         // when the guest has no dedicated index pulse clock yet.
         const bool index=(++floppyIndexPolls_%256u)<16u;
         return static_cast<BYTE>((floppyStatus_&~0x02u) |
-            ((floppy_->has2d() && index)?0x02u:0));
+            ((floppy_->has2d((floppy_->registerValue(0x1d)&3)) && index)?0x02u:0));
     }
     case 0x19: case 0x1a: case 0x1c: case 0x1d: {
         BYTE busValue=0;
@@ -769,11 +769,24 @@ void Main6809Board::writeIo(WORD address, BYTE value)
                             const WORD start=WORD((ioRegisters_[0x44]<<8)|ioRegisters_[0x45]);
                             const std::uint32_t bank=std::uint32_t(ioRegisters_[0x95]&15)<<16;
                             const bool write=(ioRegisters_[0x51]&0x01)!=0;
-                            for(unsigned i=0;i<transfer;++i) {
-                                const WORD address=WORD(start+(down?-int(i):int(i)));
-                                const std::uint32_t physical=bank|address;
-                                if(write)floppy_->write(1,offset+i,readPhysical(physical));
-                                else writePhysical(physical,floppy_->read(1,offset+i));
+                            if(write && transfer) {
+                                // Merge partial DMA writes into a complete sector
+                                // and persist the selected drive atomically at
+                                // FDC command completion.
+                                std::array<BYTE,1024> sectorBytes{};
+                                for(unsigned i=0;i<length;++i)
+                                    sectorBytes[i]=floppy_->read(1,offset+i,drive);
+                                for(unsigned i=0;i<transfer;++i) {
+                                    const WORD address=WORD(start+(down?-int(i):int(i)));
+                                    sectorBytes[i]=readPhysical(bank|address);
+                                }
+                                if(!floppy_->writeSector(1,offset,sectorBytes.data(),drive))
+                                    status=0x10;
+                            } else {
+                                for(unsigned i=0;i<transfer;++i) {
+                                    const WORD address=WORD(start+(down?-int(i):int(i)));
+                                    writePhysical(bank|address,floppy_->read(1,offset+i,drive));
+                                }
                             }
                             const WORD next=WORD(start+(down?-int(transfer):int(transfer)));
                             ioRegisters_[0x44]=BYTE(next>>8);
@@ -846,7 +859,7 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             // The boot ROM checks this after RESTORE to verify that
             // the selected drive has reached its home position.
             floppyStatus_=((value&0xf0)==0xd0) ? 0 : static_cast<BYTE>(
-                (floppy_->has2d()?0:0x80) |
+                (floppy_->has2d((floppy_->registerValue(0x1d)&3))?0:0x80) |
                 (floppy_->registerValue(0x19)==0?0x04:0));
             // Original Fm11MiniFDC unconditionally latches completion
             // for Type I and force-interrupt commands.
