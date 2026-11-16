@@ -871,6 +871,41 @@ void Main6809Board::writeIo(WORD address, BYTE value)
                     }
                 }
             }
+        } else if((value&0xf0)==0xf0) {
+            if(!hasDisk)status=0x80;
+            else {
+                const unsigned length=10900;
+                const unsigned count=(unsigned(ioRegisters_[0x46])<<8)|ioRegisters_[0x47];
+                const bool dma=(ioRegisters_[0x51]&0x04)!=0;
+                const bool memToIo=(ioRegisters_[0x51]&1)!=0;
+                const bool down=(ioRegisters_[0x51]&8)!=0;
+                const WORD start=WORD((ioRegisters_[0x44]<<8)|ioRegisters_[0x45]);
+                const std::uint32_t bank=std::uint32_t(ioRegisters_[0x95]&15)<<16;
+                std::vector<BYTE> stream;
+                if(dma && memToIo && count>=length) {
+                    stream.reserve(length);
+                    for(unsigned i=0;i<length;++i) {
+                        const WORD addr=WORD(start+(down?-int(i):int(i)));
+                        if((bank|addr)>=memory_->size())break;
+                        stream.push_back(readPhysical(bank|addr));
+                    }
+                }
+                if(stream.size()!=length ||
+                   !floppy_->formatTrack(1,ioRegisters_[0x31],
+                          ioRegisters_[0x34]&1,ioRegisters_[0x35]&3,stream))
+                    status=0x20;
+                else {
+                    const WORD next=WORD(start+(down?-int(length):int(length)));
+                    ioRegisters_[0x44]=BYTE(next>>8);
+                    ioRegisters_[0x45]=BYTE(next);
+                    const unsigned rest=count-length;
+                    ioRegisters_[0x46]=BYTE(rest>>8);
+                    ioRegisters_[0x47]=BYTE(rest);
+                    if(rest==0)ioRegisters_[0x51]=BYTE((ioRegisters_[0x51]|0x80)&~0x40);
+                    else ioRegisters_[0x51]|=0x40;
+                    refreshDmaCompletion();
+                }
+            }
         } else if((value&0xf0)==0xd0) {
             status=0;
         } else if(!hasDisk) {
@@ -904,6 +939,46 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             floppy_->finishTransfer();
             floppyOffset_=256;
             floppyWritePio_=false;
+            if((value&0xf0)==0xf0) {
+                const unsigned length=6400;
+                const unsigned count=(unsigned(ioRegisters_[0x42])<<8)|ioRegisters_[0x43];
+                const bool dma=(ioRegisters_[0x50]&4)!=0;
+                const bool memToIo=(ioRegisters_[0x50]&1)!=0;
+                const bool down=(ioRegisters_[0x50]&8)!=0;
+                const WORD start=WORD((ioRegisters_[0x40]<<8)|ioRegisters_[0x41]);
+                const std::uint32_t bank=std::uint32_t(ioRegisters_[0x94]&15)<<16;
+                std::vector<BYTE> stream;
+                if(dma && memToIo && count>=length) {
+                    stream.reserve(length);
+                    for(unsigned i=0;i<length;++i) {
+                        const WORD addr=WORD(start+(down?-int(i):int(i)));
+                        if((bank|addr)>=memory_->size())break;
+                        stream.push_back(readPhysical(bank|addr));
+                    }
+                }
+                if(!floppy_->has2d(floppy_->registerValue(0x1d)&3))
+                    floppyStatus_=0x80;
+                else if(stream.size()!=length ||
+                        !floppy_->formatTrack(0,floppy_->registerValue(0x19),
+                               floppy_->registerValue(0x1c)&1,
+                               floppy_->registerValue(0x1d)&3,stream))
+                    floppyStatus_=0x20;
+                else {
+                    floppyStatus_=0;
+                    const WORD next=WORD(start+(down?-int(length):int(length)));
+                    ioRegisters_[0x40]=BYTE(next>>8);
+                    ioRegisters_[0x41]=BYTE(next);
+                    const unsigned rest=count-length;
+                    ioRegisters_[0x42]=BYTE(rest>>8);
+                    ioRegisters_[0x43]=BYTE(rest);
+                    if(rest==0)ioRegisters_[0x50]=BYTE((ioRegisters_[0x50]|0x80)&~0x40);
+                    else ioRegisters_[0x50]|=0x40;
+                    refreshDmaCompletion();
+                }
+                floppy_->writeRegister(0x1c,floppy_->registerValue(0x1c)|0x40);
+                floppy_->writeRegister(0x1f,floppy_->registerValue(0x1c));
+                break;
+            }
             // WD179x Type-I commands update the track register. The boot
             // ROM uses RESTORE before attempting to read IPL sectors.
             // Previously these commands were all silently ignored.
