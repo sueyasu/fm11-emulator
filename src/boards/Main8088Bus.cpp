@@ -129,6 +129,11 @@ BYTE Main8088Bus::readIo(WORD port) const
     if(port==0x01)return picMask_;
     // FC80-FCFF is the shared display mailbox in the original FM-11.
     // The 8088 ROM sends text commands through FC81-FC84.
+    if(port>=0xfdc0 && port<=0xfdc3 && mainBoard_) {
+        BYTE value=0;
+        mainBoard_->readIo(port,value);
+        return value;
+    }
     if(port>=0xfc80 && port<=0xfcff && mainBoard_)
         return mainBoard_->readDisplayShared(port-0xfc80);
     if(port>=0xfc00 && port<=0xfcff) return cardIoRam_[port&0xff];
@@ -186,6 +191,35 @@ void Main8088Bus::writeIo(WORD port,BYTE value)
             picAutoEoi_=(value&0x02)!=0; // ICW4 automatic EOI
             picInitStep_=0;
         } else picMask_=value;
+        return;
+    }
+    if(port>=0xfdc0 && port<=0xfdc3 && mainBoard_) {
+        if(port==0xfdc0 || port==0xfdc1) {
+            mainBoard_->hddDevice()->setDmaTransfer(
+                [this](unsigned channel,bool writing,std::vector<BYTE>& bytes) {
+                    if(channel>=4)return false;
+                    const auto oldReader=dmaReaders_[channel];
+                    const auto oldWriter=dmaWriters_[channel];
+                    std::size_t index=0;
+                    setDmaDevice(channel,
+                        [&]() -> BYTE {
+                            return index<bytes.size()?bytes[index++]:0xff;
+                        },
+                        [&](BYTE byte) {
+                            if(index<bytes.size())bytes[index++]=byte;
+                        });
+                    setDmaRequest(channel,true);
+                    const std::size_t limit=bytes.size()*4+16;
+                    for(std::size_t tries=0;index<bytes.size() && tries<limit;++tries) {
+                        if(!serviceDma())break;
+                    }
+                    setDmaRequest(channel,false);
+                    setDmaDevice(channel,oldReader,oldWriter);
+                    return index==bytes.size();
+                });
+        }
+        mainBoard_->writeIo(port,value);
+        refreshSystemIrq();
         return;
     }
     if(port>=0xfc80 && port<=0xfcff && mainBoard_)
