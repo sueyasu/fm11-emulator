@@ -1,4 +1,6 @@
 #include "FloppyDevice.h"
+#include "Main8088Bus.h"
+#include <memory>
 #include <vector>
 #include <cstdint>
 #include <stdexcept>
@@ -91,6 +93,39 @@ int main() {
         }
     }
     if(persist!=3)return 11;
-    std::puts("PASS: 2D and 2HD WRITE TRACK data marks, all drives, D88 persistence and reload");
+
+    // Exercise both real 8088 FDC command ports and 8237 channels,
+    // not just the shared track parser.
+    Main8088Bus bus;
+    auto fd=std::make_shared<FloppyDevice>();
+    fd->load2d(std::vector<BYTE>(40u*2*16*256,0xe5),1);
+    fd->load2hd(std::vector<BYTE>(77u*2*26*256,0xe5),2);
+    bus.setFloppyDevice(fd);
+    for(unsigned channel=0;channel<2;++channel) {
+        const unsigned len=channel?10900:6400;
+        const unsigned address=channel?0x3000:0x1000;
+        const unsigned drive=channel?2:1;
+        const auto bytes=stream(0,channel?1:0,channel?26:16,256,len);
+        for(unsigned i=0;i<len;++i)bus.writeMemory(address+i,bytes[i]);
+        bus.writeIo(0x1c,0);   // 8237 base-address flip-flop
+        const WORD addressPort=WORD(0x10+2*channel);
+        bus.writeIo(addressPort,BYTE(address));
+        bus.writeIo(addressPort,BYTE(address>>8));
+        bus.writeIo(WORD(addressPort+1),BYTE(len-1));
+        bus.writeIo(WORD(addressPort+1),BYTE((len-1)>>8));
+        bus.writeIo(WORD(0x20+channel),0);
+        bus.writeIo(0x1b,BYTE(0x48+channel));  // single, memory->FDC
+        bus.writeIo(0x1a,BYTE(channel));       // unmask selected channel
+        bus.writeIo(WORD(channel?0xfd31:0xfd19),0);
+        bus.writeIo(WORD(channel?0xfd34:0xfd1c),BYTE(channel?1:0));
+        bus.writeIo(WORD(channel?0xfd35:0xfd1d),BYTE(drive));
+        bus.writeIo(WORD(channel?0xfd30:0xfd18),0xf0);
+        if(bus.readIo(WORD(channel?0xfd30:0xfd18))!=0)return 12;
+        if(!(bus.readIo(0x18)&(1u<<channel)))return 13;
+        std::size_t offset=0;
+        if(!fd->sectorOffset(channel,0,channel?1:0,16,drive,offset) ||
+           fd->read(channel,offset,drive)!=16)return 14;
+    }
+    std::puts("PASS: 2D/2HD WRITE TRACK parser, 8088 DMA0/1, D88 rebuild and reload");
     return 0;
 }
