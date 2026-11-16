@@ -218,7 +218,8 @@ public:
         // USART is a shared device, not owned by either CPU card.
         return static_cast<BYTE>(externalIrqLines_ |
                (ptmIrqLevel()?0x01:0) |
-               (usart_->irqRequest()?0x10:0));
+               (usart_->irqRequest()?0x10:0) |
+               (hdd_->irqPending()?0x04:0));
     }
 
     // Common system I/O aperture, decoded after CPU-card bus translation.
