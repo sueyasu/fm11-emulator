@@ -759,6 +759,9 @@ int main(int argc,char** argv) {
             const auto frameTime=std::chrono::steady_clock::now();
             if(frameTime-lastFrame>=std::chrono::milliseconds(32)) {
                 lastFrame=frameTime;
+                const unsigned cursorTick=static_cast<unsigned>(
+                    std::chrono::duration_cast<std::chrono::milliseconds>(
+                        frameTime.time_since_epoch()).count()/32);
             // Sample main state before taking the display lock. The
             // CPU worker uses CPU -> display lock order for mailbox access.
             int sampledMainPc=-1;
@@ -774,7 +777,7 @@ int main(int argc,char** argv) {
                 int outputW=0,outputH=0;
                 SDL_GL_GetDrawableSize(ui.window,&outputW,&outputH);
                 ui.glRenderer->render(snapshot,high,testPattern,!ankPath.empty(),
-                                      outputW,outputH);
+                                       outputW,outputH,cursorTick);
                 SDL_GL_SwapWindow(ui.window);
             } else {
                 DisplayBitmap::Frame frame{};
@@ -803,6 +806,9 @@ int main(int argc,char** argv) {
                 } else if(!ankPath.empty()) {
                     DisplayBitmap::compositeText(frame,machine.displaySubsystem());
                 }
+                if(!testPattern && !ankPath.empty() &&
+                   (!machine.boardCount() || (machine.mainDisplayControl()&0x03)!=0))
+                    DisplayBitmap::compositeCursor(frame,machine.displaySubsystem(),cursorTick);
                 if(testPattern) {
                     for(std::size_t y=0;y<frame.height;++y)
                         for(std::size_t x=0;x<frame.width;++x)
