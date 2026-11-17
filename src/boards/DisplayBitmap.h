@@ -207,8 +207,21 @@ public:
                     unsigned bits=display.ankGlyphRow(character,sy);
                     // 200-line presentation: combine both 400-line glyph
                     // scanlines rather than dropping every odd line.
-                    if(frame.height==200 && sy+1<16 && sy+1<charH)
+                    if(frame.height==200 && sy+1<16 && sy+1<charH) {
                         bits|=display.ankGlyphRow(character,sy+1);
+                        // A two-raster baseline can straddle the final
+                        // two sampled rows, making the bottom stroke twice
+                        // as thick. Thin only a shared horizontal run;
+                        // preserve isolated pixels and descenders.
+                        if(sy==14) {
+                            const unsigned preceding=
+                                unsigned(display.ankGlyphRow(character,12))|
+                                unsigned(display.ankGlyphRow(character,13));
+                            const unsigned overlap=bits&preceding;
+                            if((overlap&(overlap>>1)&(overlap>>2))!=0)
+                                bits&=~overlap;
+                        }
+                    }
                     lit=(bits&(1u<<glyphX))!=0;
                 }
                 if(attribute&0x08)lit=!lit;
