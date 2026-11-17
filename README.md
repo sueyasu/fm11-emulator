@@ -244,6 +244,24 @@ shape, both blink speeds, hidden mode and AFE0 cursor addressing.
 Guest ROM behavior and hardware-faithful blink timing should also be
 checked on a running CP/M-86 and NitrOS-9 local console.
 
+## 200-line CRT presentation
+
+The FM-11 640x200 video mode is displayed within the same 640x400
+screen aperture as the 400-line mode. Each source line is repeated
+vertically (nearest-neighbor) so a 200-line display no longer appears
+half-height or excessively wide. Both the OpenGL and SDL software
+renderers use integer scaling, a 640x400 presentation rectangle,
+and a 960x600 initial window. Neither the emulated video mode nor
+the underlying VRAM changes.
+
+Use `--scanlines` to darken every second duplicated source line,
+approximating the gaps between CRT scanlines. The effect applies only
+to 200-line mode and is deliberately optional; without this flag
+all doubled rows have identical brightness. The normal `F1` mode
+switch still selects 200/400 emulated scanout lines, and the aspect
+ratio remains the same in both modes. Use `--renderer gl` and
+`--renderer software` to compare presentation backends.
+
 ## SDL2 display frontend (experimental)
 
 Install `libsdl2-dev` on Ubuntu, then reconfigure CMake so it can
