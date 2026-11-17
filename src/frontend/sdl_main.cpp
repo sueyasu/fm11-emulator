@@ -63,7 +63,7 @@ struct Window {
                                        SDL_TEXTUREACCESS_STREAMING,640,height);
             if(!texture)throw std::runtime_error(SDL_GetError());
         }
-        SDL_SetWindowSize(window,960,height*3/2);
+        SDL_SetWindowSize(window,960,600);
     }
 };
 std::vector<BYTE> readDiskImage(const std::string& path) {
@@ -82,7 +82,7 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software]\n"
+    std::cout<<"usage: fm11-sdl [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software] [--scanlines]\n"
              <<"  ROM defaults to [display_cpu].rom (external/roms/display6809.bin); CPU ROM paths may be set in the config file\n"
              <<"  Initial window height: [display].height=200|400 (default 400); --high forces 400\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
@@ -99,6 +99,7 @@ int main(int argc,char** argv) {
         std::string configPath,main8088RomOverride;
         unsigned speed=10;
         std::string rendererMode="auto";
+        bool scanlines=false;
         unsigned floppyDrive=0;
         unsigned bootDip=0x9f;
         bool bootDipOverridden=false;
@@ -108,6 +109,7 @@ int main(int argc,char** argv) {
             const std::string arg=argv[i];
             if(arg=="--help"){usage();return 0;}
             if(arg=="--high"){high=true;highOverridden=true;continue;}
+            if(arg=="--scanlines"){scanlines=true;continue;}
              if(arg=="--trace-cpm80"){traceCpm80=true;continue;}
             if(arg=="--cpu-speed"){cpuSpeed=true;continue;}
             if(arg=="--test-pattern"){testPattern=true;continue;}
@@ -354,7 +356,7 @@ int main(int argc,char** argv) {
         auto createWindow=[&](Uint32 flags) {
             return SDL_CreateWindow("FM-11 display subsystem",
                  SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,960,
-                 high?600:300,flags|SDL_WINDOW_RESIZABLE);
+                 600,flags|SDL_WINDOW_RESIZABLE);
         };
         if(rendererMode!="software") {
             SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION,3);
@@ -777,7 +779,7 @@ int main(int argc,char** argv) {
                 int outputW=0,outputH=0;
                 SDL_GL_GetDrawableSize(ui.window,&outputW,&outputH);
                 ui.glRenderer->render(snapshot,high,testPattern,!ankPath.empty(),
-                                       outputW,outputH,cursorTick);
+                                       outputW,outputH,cursorTick,scanlines);
                 SDL_GL_SwapWindow(ui.window);
             } else {
                 DisplayBitmap::Frame frame{};
@@ -849,12 +851,11 @@ int main(int argc,char** argv) {
                 if(SDL_GetRendererOutputSize(ui.renderer,&outputW,&outputH)!=0)
                     throw std::runtime_error(SDL_GetError());
                 const int nativeW=static_cast<int>(frame.width);
-                const int nativeH=static_cast<int>(frame.height);
-                const int scale=std::max(1,std::min(outputW/nativeW,outputH/nativeH));
+                const int scale=std::max(1,std::min(outputW/nativeW,outputH/400));
                 const SDL_Rect destination{
                     (outputW-nativeW*scale)/2,
                     (outputH-nativeH*scale)/2,
-                    nativeW*scale,nativeH*scale
+                    nativeW*scale,400*scale
                 };
                 // The emulator image stays untouched. Paint the letterbox
                 // margins dark gray, and draw a one-pixel border OUTSIDE
@@ -865,6 +866,18 @@ int main(int argc,char** argv) {
                     throw std::runtime_error(SDL_GetError());
                 if(SDL_RenderCopy(ui.renderer,ui.texture,nullptr,&destination)!=0)
                     throw std::runtime_error(SDL_GetError());
+                // Optional CRT scanline mask on alternate doubled rows.
+                if(!high && scanlines) {
+                    SDL_SetRenderDrawBlendMode(ui.renderer,SDL_BLENDMODE_BLEND);
+                    SDL_SetRenderDrawColor(ui.renderer,0,0,0,128);
+                    for(int line=0;line<200;++line) {
+                        const SDL_Rect stripe{destination.x,
+                            destination.y+(line*2+1)*scale,
+                            destination.w,scale};
+                        SDL_RenderFillRect(ui.renderer,&stripe);
+                    }
+                    SDL_SetRenderDrawBlendMode(ui.renderer,SDL_BLENDMODE_NONE);
+                }
                 const SDL_Rect border{
                     destination.x-1,destination.y-1,
                     destination.w+2,destination.h+2
