@@ -203,8 +203,14 @@ public:
                 unsigned glyphX=sx;
                 if(charW>8)glyphX/=2;
                 bool lit=false;
-                if(character!=0 && character!=0x20 && sy<16 && glyphX<8)
-                    lit=(display.ankGlyphRow(character,sy)&(1u<<glyphX))!=0;
+                if(character!=0 && character!=0x20 && sy<16 && glyphX<8) {
+                    unsigned bits=display.ankGlyphRow(character,sy);
+                    // 200-line presentation: combine both 400-line glyph
+                    // scanlines rather than dropping every odd line.
+                    if(frame.height==200 && sy+1<16 && sy+1<charH)
+                        bits|=display.ankGlyphRow(character,sy+1);
+                    lit=(bits&(1u<<glyphX))!=0;
+                }
                 if(attribute&0x08)lit=!lit;
                 if(lit) {
                     const unsigned color=(attribute&0x07)|((attribute&0x20)?8u:0u);
@@ -239,7 +245,9 @@ public:
             const unsigned scanY=y*400u/static_cast<unsigned>(frame.height);
             if(scanY/charH!=row)continue;
             const unsigned raster=scanY%charH;
-            if(raster<cursor.first || raster>cursor.last)continue;
+            // Preserve one-scanline underlines in 200-line mode too.
+            const unsigned lastRaster=raster+(frame.height==200?1u:0u);
+            if(lastRaster<cursor.first || raster>cursor.last)continue;
             for(unsigned x=col*charW;x<(col+1u)*charW && x<640u;++x)
                 frame.argb[static_cast<std::size_t>(y)*640u+x]^=0x00ffffffu;
         }
