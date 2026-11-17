@@ -169,8 +169,14 @@ void main() {
                 int sx=x%charW,sy=scanY%charH;
                 if(charW>8)sx/=2;
                 bool lit=false;
-                if(ch!=0u && ch!=32u && sy<16 && sx<8)
-                    lit=(ankByte(int(ch),sy)&(1u<<uint(sx)))!=0u;
+                if(ch!=0u && ch!=32u && sy<16 && sx<8) {
+                    uint glyph=ankByte(int(ch),sy);
+                    // 16-row ANK font in 200-line mode: preserve strokes
+                    // on odd raster lines instead of skipping them.
+                    if(uHeight==200 && sy+1<16 && sy+1<charH)
+                        glyph|=ankByte(int(ch),sy+1);
+                    lit=(glyph&(1u<<uint(sx)))!=0u;
+                }
                 if((attr&8u)!=0u)lit=!lit;
                 if(lit) {
                     // The CPU renderer overlays foreground pixels, including
@@ -195,7 +201,8 @@ void main() {
             int raster=scanY%charH;
             if((delta&1)==0 && cell/uColumns<uRows &&
                x/charW==cell%uColumns && scanY/charH==cell/uColumns &&
-               raster>=uCursorFirst && raster<=uCursorLast)
+               raster+(uHeight==200?1:0)>=uCursorFirst &&
+               raster<=uCursorLast)
                 color^=0x00ffffffu;
         }
     }
