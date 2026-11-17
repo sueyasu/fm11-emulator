@@ -44,6 +44,10 @@ public:
     std::vector<BYTE> floppyImage() const { return floppy_->image2d(); }
     bool floppyDirty() const { return floppy_->dirty2d(); }
     void clearFloppyDirty() { floppy_->clearDirty2d(); }
+    // 20-bit RAM decoder mirrors absent addresses into populated memory.
+    // The upper 4-KiB reset-ROM overlay remains unaffected.
+    void setRamKiB(std::size_t kib);
+    std::size_t ramKiB() const {return installedRamBytes_/1024;}
     BYTE readMemory(std::uint32_t address) const;
     void writeMemory(std::uint32_t address, BYTE value);
     BYTE readIo(WORD port) const;
@@ -76,6 +80,10 @@ public:
 
 private:
     std::vector<BYTE> memory_;
+    std::size_t installedRamBytes_=kMemorySize;
+    std::size_t decodedRamAddress(std::uint32_t address) const {
+        return static_cast<std::size_t>(address&0xfffff)%installedRamBytes_;
+    }
     bool conformanceRam_=false;
     Rom bootRom_{};
     // The original FM-11 Sim86 uses the CPU-card SRAM for FCxx port accesses.
