@@ -8,6 +8,7 @@
 #include "MachineConfig.h"
 #include "DisplayBitmap.h"
 #include "RomFiles.h"
+#include "HostImageSync.h"
 #include <SDL.h>
 #include <array>
 #include <algorithm>
@@ -176,6 +177,9 @@ int main(int argc,char** argv) {
             throw std::invalid_argument("CPU ROMs cannot be combined with --test-pattern");
         if(instructions>1000000)
             throw std::invalid_argument("--cycles must be <= 1000000");
+        // Declare before Machine: CPU callbacks must be destroyed before
+        // mounted host image descriptors and their sync worker.
+        HostImageSync imageSync;
         Machine machine;
         Main6809Board* mainBoard=nullptr;
         bool z80Enabled=false;
@@ -229,7 +233,7 @@ int main(int argc,char** argv) {
                         // Legacy command-line image overrides this 2D slot.
                         paths2d[floppyDrive]=floppyPath;
                     }
-                    std::array<std::array<std::shared_ptr<int>,4>,2> opened{};
+                    std::array<std::array<std::shared_ptr<HostImageSync::Image>,4>,2> opened{};
                     std::array<std::string,8> allPaths{};
                     unsigned imageCount=0;
                     for(unsigned channel=0;channel<2;++channel) {
@@ -254,14 +258,7 @@ int main(int argc,char** argv) {
                                 else
                                     floppy->loadD882hd(bytes,drive);
                             }
-                            const int fd=::open(path.c_str(),O_RDWR);
-                            if(fd<0)
-                                throw std::runtime_error("cannot open writable disk image: "+
-                                                         path+": "+std::strerror(errno));
-                            opened[channel][drive]=std::shared_ptr<int>(new int(fd),[](int* handle) {
-                                ::close(*handle);
-                                delete handle;
-                            });
+                            opened[channel][drive]=imageSync.open(path);
                             std::cerr<<"Mounted "<<(channel==0?"2D":"2HD")
                                      <<" FDD"<<drive<<": "<<path<<"\n";
                         }
@@ -274,71 +271,27 @@ int main(int argc,char** argv) {
                             return false;
                         auto disk=weakFloppy.lock();
                         if(!disk)return false;
-                        const int fd=*opened[channel][drive];
                         const std::size_t imageOffset=
                             disk->hostImageOffset(channel,rawOffset,drive);
-                        std::size_t done=0;
-                        while(done<length) {
-                            const auto n=::pwrite(fd,data+done,length-done,
-                                                  static_cast<off_t>(imageOffset+done));
-                            if(n<0 && errno==EINTR)continue;
-                            if(n<=0) {
-                                std::cerr<<"floppy sector write failed: "
-                                         <<std::strerror(errno)<<"\n";
-                                return false;
-                            }
-                            done+=static_cast<std::size_t>(n);
-                        }
-                        if(::fdatasync(fd)!=0) {
-                            std::cerr<<"floppy sector sync failed: "
-                                     <<std::strerror(errno)<<"\n";
-                            return false;
-                        }
-                        return true;
+                        return opened[channel][drive]->write(imageOffset,data,length);
                     });
-                    // WRITE TRACK changes the sector layout and may resize
-                    // a D88. Persist the complete rebuilt image immediately.
+                    // WRITE TRACK may resize D88: update the full image
+                    // immediately; fdatasync is deferred like sector writes.
                     floppy->setImageWriter([opened](unsigned channel,unsigned drive,
                                                      const std::vector<BYTE>& image) {
                         if(channel>=2 || drive>=4 || !opened[channel][drive])
                             return false;
-                        const int fd=*opened[channel][drive];
-                        std::size_t done=0;
-                        while(done<image.size()) {
-                            const auto n=::pwrite(fd,image.data()+done,image.size()-done,
-                                                  static_cast<off_t>(done));
-                            if(n<0 && errno==EINTR)continue;
-                            if(n<=0)return false;
-                            done+=static_cast<std::size_t>(n);
-                        }
-                        if(::ftruncate(fd,static_cast<off_t>(image.size()))!=0)
-                            return false;
-                        if(::fdatasync(fd)!=0)return false;
-                        return true;
+                        return opened[channel][drive]->replace(image);
                     });
                 }
                 if(!config.hddImage.empty()) {
                     const auto image=readDiskImage(config.hddImage);
                     auto hdd=machine.systemBoard().hddDevice();
                     hdd->load(image);
-                    const int fd=::open(config.hddImage.c_str(),O_RDWR);
-                    if(fd<0)throw std::runtime_error("cannot open writable HDD image: "+
-                                      config.hddImage+": "+std::strerror(errno));
-                    auto ownedFd=std::shared_ptr<int>(new int(fd),[](int* handle) {
-                        ::close(*handle);
-                        delete handle;
-                    });
-                    hdd->setHostWriter([ownedFd](std::size_t offset,
-                                                 const BYTE* data,std::size_t length) {
-                        std::size_t done=0;
-                        while(done<length) {
-                            const auto n=::pwrite(*ownedFd,data+done,length-done,
-                                                  static_cast<off_t>(offset+done));
-                            if(n<0 && errno==EINTR)continue;
-                            if(n<=0)return false;
-                            done+=static_cast<std::size_t>(n);
-                        }
-                        return ::fdatasync(*ownedFd)==0;
+                    auto ownedImage=imageSync.open(config.hddImage);
+                    hdd->setHostWriter([ownedImage](std::size_t offset,
+                                                   const BYTE* data,std::size_t length) {
+                        return ownedImage->write(offset,data,length);
                     });
                     std::cerr<<"Mounted MDC HDD0: "<<config.hddImage<<"\n";
                 }
@@ -897,9 +850,12 @@ int main(int argc,char** argv) {
         cpuWorker.stop();
         machine.stopDisplayCpu();
         machine.stopRealtimePtm();
-        // Completed writes have already been persisted through the
-        // shared FDC's sector callback. No whole-image rewrite on exit:
-        // it would be redundant and could overwrite external changes.
+        // No whole-image rewrite on exit. Ensure all immediately pwrite'd
+        // disk updates are fdatasync'd after emulated writers have stopped.
+        if(!imageSync.shutdown()) {
+            std::cerr<<"fm11-sdl: final disk image sync failed\\n";
+            return 1;
+        }
         return 0;
     } catch(const std::exception& e) {
         std::cerr<<"fm11-sdl: "<<e.what()<<"\n";
