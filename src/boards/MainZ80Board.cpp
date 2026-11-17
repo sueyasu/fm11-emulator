@@ -13,7 +13,7 @@ BYTE MainZ80Board::readMemory(WORD address) const
     if(address>=0xfc00)return readIo(address);
     const std::uint32_t physical=(address>=0x4000 && address<0xc000)
         ? (static_cast<std::uint32_t>(bank_)<<16)|address : address;
-    return (*memory_)[physical];
+    return (*memory_)[physical%installedRamBytes_];
 }
 
 void MainZ80Board::writeMemory(WORD address,BYTE value)
@@ -21,7 +21,7 @@ void MainZ80Board::writeMemory(WORD address,BYTE value)
     if(address>=0xfc00) {writeIo(address,value);return;}
     const std::uint32_t physical=(address>=0x4000 && address<0xc000)
         ? (static_cast<std::uint32_t>(bank_)<<16)|address : address;
-    (*memory_)[physical]=value;
+    (*memory_)[physical%installedRamBytes_]=value;
 }
 
 BYTE MainZ80Board::readIo(WORD address) const
