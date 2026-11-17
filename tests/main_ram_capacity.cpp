@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <memory>
 #include <stdexcept>
+#include <vector>
 
 static void programDma(Main8088Bus& bus,unsigned channel,WORD address,WORD count)
 {
@@ -50,6 +51,25 @@ int main()
         cpu.reset();
         cpu.writeCpu(0x100,0x77);
         if(cpu.readPhysical(0x100)!=0x77)return 7;
+
+        // FM-11 6844 DMA0 FDD -> RAM must obey the same decoder.
+        if(bytes < 0x100000) {
+            std::vector<BYTE> floppy(40u*2*16*256,0);
+            floppy[0]=0x88;
+            cpu.loadFloppy2d(floppy);
+            cpu.writeCpu(0xfd19,0);
+            cpu.writeCpu(0xfd1a,1);
+            cpu.writeCpu(0xfd1c,0);
+            cpu.writeCpu(0xfd1d,0);
+            cpu.writeCpu(0xfd94,BYTE(bytes>>16));
+            cpu.writeCpu(0xfd40,0x01);
+            cpu.writeCpu(0xfd41,0x00);
+            cpu.writeCpu(0xfd42,0x01);
+            cpu.writeCpu(0xfd43,0x00);
+            cpu.writeCpu(0xfd50,0x04);
+            cpu.writeCpu(0xfd18,0x80);
+            if(cpu.readPhysical(0x100)!=0x88)return 21;
+        }
 
         // The optional Z80 shares the 6809 backing store. Its banked
         // accesses should see the same mirror rather than a full 1 MiB.
