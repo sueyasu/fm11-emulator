@@ -99,6 +99,8 @@ uniform uvec4 uPalette0;
 uniform uvec4 uPalette1;
 uniform ivec2 uOrigin;
 uniform int uScale;
+uniform int uPixelHeight;
+uniform int uScanlines;
 uniform int uHeight;
 uniform int uGraphics;
 uniform int uTextEnabled;
@@ -137,7 +139,7 @@ void main() {
     ivec2 p=ivec2(gl_FragCoord.xy)-uOrigin;
     int x=p.x/uScale;
     // OpenGL is bottom-up, the FM-11 scanout is top-down.
-    int y=uHeight-1-p.y/uScale;
+    int y=uHeight-1-p.y/uPixelHeight;
     uint color=0u;
     if(uTestPattern!=0) {
         uint index=uint((x/80+y/50)%8);
@@ -198,6 +200,10 @@ void main() {
         }
     }
     outputColor=rgba(color);
+    // A 200-line scanout is displayed at twice its original height.
+    // Darken alternate physical rows only in optional CRT scanline mode.
+    if(uScanlines!=0 && ((p.y/uScale)&1)==0)
+        outputColor.rgb*=0.5;
 }
 )GLSL";
 
@@ -265,7 +271,7 @@ struct OpenGlRenderer::Impl {
         gl.Uniform1i(gl.GetUniformLocation(program,key),val);
     }
     void render(const OpenGlRenderer::Snapshot& snapshot,bool high,bool testPattern,
-                bool hasAnk,int outputWidth,int outputHeight,unsigned frameTick) {
+                bool hasAnk,int outputWidth,int outputHeight,unsigned frameTick,bool scanlines) {
         gl.UseProgram(program);
         gl.BindVertexArray(vao);
         const void* memory[]={snapshot.vram.data(),snapshot.text.data(),snapshot.ank.data()};
@@ -282,6 +288,7 @@ struct OpenGlRenderer::Impl {
         gl.Uniform4uiv(palette0,1,snapshot.palette.data());
         gl.Uniform4uiv(palette1,1,snapshot.palette.data()+4);
         setInt("uHeight",high?400:200);
+        setInt("uScanlines",(!high && scanlines)?1:0);
         setInt("uTestPattern",testPattern?1:0);
         setInt("uGraphics",(!snapshot.hasMainBoard || (snapshot.control&0x0c))?1:0);
         setInt("uTextEnabled",hasAnk && (!snapshot.hasMainBoard || (snapshot.control&3))?1:0);
@@ -302,9 +309,8 @@ struct OpenGlRenderer::Impl {
             cursorVisible=((frameTick/32u)&1u)==0;
         setInt("uCursorVisible",cursorVisible?1:0);
 
-        const int nativeHeight=high?400:200;
-        const int scale=std::max(1,std::min(outputWidth/640,outputHeight/nativeHeight));
-        const int w=640*scale,h=nativeHeight*scale;
+        const int scale=std::max(1,std::min(outputWidth/640,outputHeight/400));
+        const int w=640*scale,h=400*scale;
         const int x=(outputWidth-w)/2,y=(outputHeight-h)/2;
         gl.Disable(SCISSOR_TEST);
         gl.Viewport(0,0,outputWidth,outputHeight);
@@ -320,6 +326,7 @@ struct OpenGlRenderer::Impl {
         gl.Viewport(x,y,w,h);
         gl.Uniform2i(gl.GetUniformLocation(program,"uOrigin"),x,y);
         setInt("uScale",scale);
+        setInt("uPixelHeight",scale*(high?1:2));
         gl.DrawArrays(TRIANGLES,0,3);
     }
 };
@@ -355,6 +362,6 @@ OpenGlRenderer::Snapshot OpenGlRenderer::capture(const Machine& machine,bool has
     return snapshot;
 }
 void OpenGlRenderer::render(const Snapshot& snapshot,bool high,bool testPattern,
-                            bool hasAnk,int width,int height,unsigned frameTick) {
-    impl_->render(snapshot,high,testPattern,hasAnk,width,height,frameTick);
+                            bool hasAnk,int width,int height,unsigned frameTick,bool scanlines) {
+    impl_->render(snapshot,high,testPattern,hasAnk,width,height,frameTick,scanlines);
 }
