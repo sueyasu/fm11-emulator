@@ -1,3 +1,43 @@
+## Configurable main RAM (128 KiB to 1 MiB)
+
+The SDL frontend accepts an optional `[memory]` section in
+`fm11emu.conf`:
+
+```ini
+[memory]
+ram_kib = 512
+```
+
+`ram_kib` accepts **128, 256, 384, 512, 640, 768, 896, or 1024**.
+The default (if omitted) is **1024 KiB**, retaining the previous
+behavior. Values outside this range or not divisible by 128 are
+rejected with a configuration error.
+
+The setting applies to both main CPU cards (6809/6309 and 8088/V20)
+and the optional Z80 card. All boards keep a stable 1 MiB backing
+allocation and mirror physical RAM addresses above the selected
+installed memory size back onto the populated RAM. The 6809's
+4 KiB MMR page mappings, direct RAM access, and floppy/HDD DMA use
+the same decoder. The 8088's 20-bit CPU and 8237 DMA accesses also
+mirror, but **the upper 4 KiB reset-ROM read overlay remains active**
+at FF000h-FFFFFh. The 6809's on-card FCxx/FDxx I/O and its boot ROM
+window remain separate from the main RAM size.
+
+The 6809 MMR's 8 KiB-pair memory alias probe used by NitrOS-9 Level 2
+can thereby detect the RAM size without changing the NitrOS-9 kernel.
+At non-power-of-two sizes (384/640/768/896 KiB), missing RAM addresses
+wrap at the configured physical limit rather than applying a bit mask.
+This is the chosen emulator memory-decoding model, not a verified
+transistor-level simulation of every original RAM board.
+
+`ctest -R '(machine_config|main_ram_capacity)' --output-on-failure`
+checks all eight sizes, invalid settings, MMR page mapping, Z80 bank
+mirrors, 8088 ROM shadow and DMA transfer behavior.
+
+**CP/M-86** still uses a fixed 480 KiB TPA in its CBIOS; that is a
+separate next step. This change only adds configurable hardware RAM to
+the emulator.
+
 # FM-11 Emulator
 
 ## Configured floppy and hard-disk images
