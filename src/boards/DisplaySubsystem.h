@@ -128,6 +128,35 @@ public:
     // CSubCpu::SubCRTC() latches DumStaAdr only on CRTC R13 writes.
     // OnDraw() passes (DumStaAdr & 0x07ff) * 2 to fm11.hlsl.
     unsigned textStartAddress() const {return textStartAddress_;}
+    // 6845 cursor registers, with the FM-11 SubCRTC AFE0 bit-5
+    // extension to the cursor character address. Keep display timing
+    // outside this device: both frontends use the same host frame tick.
+    struct TextCursor {
+        unsigned offset=0;       // byte address in interleaved 4 KiB text RAM
+        unsigned first=0;
+        unsigned last=0;
+        unsigned mode=1;         // 0=steady, 1=off, 2/3=blink
+        bool visible(unsigned frameTick) const {
+            if(mode==1 || first>last)return false;
+            if(mode==0)return true;
+            const unsigned period=(mode==2)?16u:32u;
+            return ((frameTick/period)&1u)==0;
+        }
+    };
+    TextCursor textCursor() const {
+        TextCursor cursor;
+        const unsigned address=
+            ((unsigned(crtcRegisters_[14]&0x3fu)<<8) |
+             unsigned(crtcRegisters_[15]));
+        const unsigned cell=(address<<1) |
+                            ((subIoRam_[0]&0x20u)?1u:0u);
+        cursor.offset=(cell*2u)&0x0fffu;
+        cursor.first=crtcRegisters_[10]&0x1fu;
+        cursor.last=crtcRegisters_[11]&0x1fu;
+        cursor.mode=(crtcRegisters_[10]>>5)&3u;
+        return cursor;
+    }
+
     // AFE6 video-control flags. Individual bits are not yet mapped to
     // display modes until their FM-11 semantics have been verified.
     BYTE videoFlags() const {return videoFlags_;}
