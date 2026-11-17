@@ -90,6 +90,7 @@ void usage() {
              <<"             display CPU uses the same multiplier, capped at 8 MHz.\n"
              <<"             0=unlimited main CPU, 8 MHz display CPU; PTM stays real-time.\n"
              <<"  --renderer auto (default): prefer OpenGL 3.3, fall back to software.\n"
+             <<"  200-line display uses 2x vertical pixels; --scanlines adds CRT-style dark rows.\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
 }
 }
