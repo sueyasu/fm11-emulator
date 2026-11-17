@@ -498,18 +498,26 @@ void Main6809Board::writeCpu(WORD address, BYTE value)
     ramPagePointers_[address >> 12][address & (kMmrPageSize-1)] = value;
 }
 
+void Main6809Board::setRamKiB(std::size_t kib)
+{
+    if(kib<128 || kib>1024 || kib%128!=0)
+        throw std::invalid_argument("FM-11 installed RAM must be 128..1024 KiB in 128 KiB steps");
+    installedRamBytes_=kib*1024;
+    rebuildRamPageMappings();
+}
+
 BYTE Main6809Board::readPhysical(std::uint32_t address) const
 {
-    if (address >= memory_->size())
-        throw std::out_of_range("Main6809Board physical read outside backing memory");
-    return (*memory_)[address];
+    if (address >= kPhysicalMemorySize)
+        throw std::out_of_range("Main6809Board physical read outside 20-bit bus");
+    return (*memory_)[decodedPhysical(address)];
 }
 
 void Main6809Board::writePhysical(std::uint32_t address, BYTE value)
 {
-    if (address >= memory_->size())
-        throw std::out_of_range("Main6809Board physical write outside backing memory");
-    (*memory_)[address] = value;
+    if (address >= kPhysicalMemorySize)
+        throw std::out_of_range("Main6809Board physical write outside 20-bit bus");
+    (*memory_)[decodedPhysical(address)] = value;
 }
 
 bool Main6809Board::isMmrRegister(WORD address) const
@@ -536,7 +544,7 @@ void Main6809Board::writeMmrRegister(WORD address, BYTE value)
         mmr_[logicalPage][context] = value;
         if((mmrControl_[3]&0x80) && context==(mmrControl_[0]&0x0f))
             ramPagePointers_[logicalPage]=memory_->data()+
-                (static_cast<std::size_t>(value)<<12);
+                ((static_cast<std::size_t>(value) % (installedRamBytes_/kMmrPageSize))<<12);
         return;
     }
 
@@ -1093,15 +1101,17 @@ void Main6809Board::writeIo(WORD address, BYTE value)
 
 void Main6809Board::rebuildRamPageMappings()
 {
-    // The 1 MiB backing store contains all 256 possible physical pages.
-    // Neither MMR context switching nor page-register writes resize it.
+    // A fixed 1 MiB backing store retains stable cached page pointers.
+    // Decode absent 4 KiB pages to mirrors of installed RAM, including
+    // memory aliases used by NitrOS-9 FM-11 RAM detection.
     BYTE* const base=memory_->data();
     const bool enabled=(mmrControl_[3]&0x80)!=0;
     const auto context=static_cast<std::size_t>(mmrControl_[0]&0x0f);
     for(std::size_t page=0;page<ramPagePointers_.size();++page) {
         const auto physicalPage=enabled
             ? static_cast<std::size_t>(mmr_[page][context]) : page;
-        ramPagePointers_[page]=base+(physicalPage<<12);
+        ramPagePointers_[page]=base+
+            ((physicalPage % (installedRamBytes_/kMmrPageSize))<<12);
     }
 }
 
