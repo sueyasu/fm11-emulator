@@ -118,21 +118,28 @@ void Main8088Bus::loadBootRom(const Rom& rom)
     bootRom_=rom;
 }
 
+void Main8088Bus::setRamKiB(std::size_t kib)
+{
+    if(kib<128 || kib>1024 || kib%128!=0)
+        throw std::invalid_argument("FM-11 installed RAM must be 128..1024 KiB in 128 KiB steps");
+    installedRamBytes_=kib*1024;
+}
+
 BYTE Main8088Bus::readMemory(std::uint32_t address) const
 {
     address &= 0xfffff;
     return !conformanceRam_ && address >= kRomBase
-        ? bootRom_[address-kRomBase] : memory_[address];
+        ? bootRom_[address-kRomBase] : memory_[decodedRamAddress(address)];
 }
 
 void Main8088Bus::writeMemory(std::uint32_t address, BYTE value)
 {
-    memory_[address&0xfffff]=value;
+    memory_[decodedRamAddress(address)]=value;
 }
 
 BYTE Main8088Bus::readRam(std::uint32_t address) const
 {
-    return memory_[address&0xfffff];
+    return memory_[decodedRamAddress(address)];
 }
 
 void Main8088Bus::setSystemIo(IoReader reader,IoWriter writer)
