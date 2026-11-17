@@ -173,8 +173,18 @@ void main() {
                     uint glyph=ankByte(int(ch),sy);
                     // 16-row ANK font in 200-line mode: preserve strokes
                     // on odd raster lines instead of skipping them.
-                    if(uHeight==200 && sy+1<16 && sy+1<charH)
+                    if(uHeight==200 && sy+1<16 && sy+1<charH) {
                         glyph|=ankByte(int(ch),sy+1);
+                        // Keep thin descenders, but do not double an
+                        // overlapping horizontal stroke at the baseline.
+                        if(sy==14) {
+                            uint preceding=ankByte(int(ch),12)|
+                                           ankByte(int(ch),13);
+                            uint overlap=glyph&preceding;
+                            if((overlap&(overlap>>1u)&(overlap>>2u))!=0u)
+                                glyph&=~overlap;
+                        }
+                    }
                     lit=(glyph&(1u<<uint(sx)))!=0u;
                 }
                 if((attr&8u)!=0u)lit=!lit;
