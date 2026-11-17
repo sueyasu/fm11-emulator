@@ -18,6 +18,7 @@ int main() {
               "[DIPSW]\nmain_cpu = 8088\n2D_FDD = true\n2HD_FDD = false\nHDD = false\n"
               "[optional_cpu]\ntype = z80\nclock_hz = 4000000\n"
               "[display_cpu]\ncpu = 6809\nclock_hz = 2000000\nrom = test-display.rom\nank_rom = test-ank.rom\n"
+              "[memory]\nram_kib = 384\n"
               "[display]\nheight = 200\n"
               "[floppy_2d]\ndrive0 = system.d88\ndrive3 = extra.d88\n"
               "[floppy_2hd]\ndrive1 = hd1.raw\ndrive2 = hd2.raw\n"
@@ -40,6 +41,7 @@ int main() {
        config.floppy2d[1]!="" ||
        config.floppy2hd[1]!="hd1.raw" ||
        config.floppy2hd[2]!="hd2.raw" ||
+       config.ramKiB!=384 ||
        config.hddImage!="fixed-disk.img" ||
        !config.boot2dFdd || config.boot2hdFdd || config.bootHdd ||
        config.bootDip()!=0xdf)return 2;
@@ -47,6 +49,7 @@ int main() {
     // Original DIP default enables both FDD formats and disables HDD.
     MachineConfig defaults;
     if(defaults.displayHeight!=400)return 19;
+    if(defaults.ramKiB!=1024)return 23;
     if(defaults.bootDip()!=0x9f)return 10;
     // Verify all three independently controlled SW6..SW8 bits.
     defaults.boot2dFdd=false;
@@ -148,6 +151,29 @@ int main() {
         out<<"[display]\nunknown = 200\n";
     }
     try {(void)parseMachineConfigFile(path);return 22;}
+    catch(const std::runtime_error&) {}
+    std::remove(path.c_str());
+    // Valid installed capacities: exactly eight 128 KiB steps.
+    for(unsigned kib=128;kib<=1024;kib+=128) {
+        {
+            std::ofstream out(path);
+            out<<"[memory]\\nram_kib="<<kib<<"\\n";
+        }
+        if(parseMachineConfigFile(path).ramKiB!=kib)return 24;
+    }
+    for(const char* invalid:{"0","64","192","1152","-128","128k","abc",""}) {
+        {
+            std::ofstream out(path);
+            out<<"[memory]\\nram_kib="<<invalid<<"\\n";
+        }
+        try {(void)parseMachineConfigFile(path);return 25;}
+        catch(const std::runtime_error&) {}
+    }
+    {
+        std::ofstream out(path);
+        out<<"[memory]\\nunknown=256\\n";
+    }
+    try {(void)parseMachineConfigFile(path);return 26;}
     catch(const std::runtime_error&) {}
     std::remove(path.c_str());
     return 0;
