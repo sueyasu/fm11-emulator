@@ -29,6 +29,37 @@ int main() {
     if(low.argb[0]!=0xffc0c0c0u ||
        low.argb[1]!=0xffc0c0c0u ||
        low.argb[640+1]!=0xff000000u)return 4;
+    // The final baseline must not become a two-row-thick horizontal
+    // stroke after combining 16 ANK rasters into eight 200-line rows.
+    DisplaySubsystem baselineDisplay;
+    DisplaySubsystem::AnkRomImage baselineAnk{};
+    baselineAnk[66*16+12]=0x7e;
+    baselineAnk[66*16+13]=0x7e;
+    baselineAnk[66*16+14]=0x7e;
+    baselineAnk[66*16+15]=0x7e;
+    baselineDisplay.loadAnkRom(baselineAnk);
+    baselineDisplay.writeMemory(0xafee,1);
+    baselineDisplay.writeMemory(0xafef,40);
+    baselineDisplay.writeMemory(0xafee,6);
+    baselineDisplay.writeMemory(0xafef,25);
+    baselineDisplay.writeMemory(0x8000,66);
+    baselineDisplay.writeMemory(0x8001,7);
+    auto baselineLow=DisplayBitmap::captureFrame(baselineDisplay,false);
+    DisplayBitmap::compositeText(baselineLow,baselineDisplay);
+    if(baselineLow.argb[6*640+1]!=0xffc0c0c0u ||
+       baselineLow.argb[7*640+1]!=0xff000000u)return 18;
+    // A genuinely new isolated bottom-row pixel remains visible.
+    baselineAnk[66*16+15]=0x7f;
+    baselineDisplay.loadAnkRom(baselineAnk);
+    baselineLow=DisplayBitmap::captureFrame(baselineDisplay,false);
+    DisplayBitmap::compositeText(baselineLow,baselineDisplay);
+    if(baselineLow.argb[7*640]!=0xffc0c0c0u ||
+       baselineLow.argb[7*640+1]!=0xff000000u)return 19;
+    auto baselineHigh=DisplayBitmap::captureFrame(baselineDisplay,true);
+    DisplayBitmap::compositeText(baselineHigh,baselineDisplay);
+    if(baselineHigh.argb[14*640+1]!=0xffc0c0c0u ||
+       baselineHigh.argb[15*640+1]!=0xffc0c0c0u)return 20;
+
     // Match CSubCpu::SubCRTC and OnDraw: R13=1 starts four
     // bytes (two character/attribute cells) into the 4 KiB CRAM.
     display.writeMemory(0x8000,0);
