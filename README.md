@@ -227,6 +227,23 @@ The headless OS boottrack diagnostic currently uses a synthetic boot ROM,
 not the extracted original boot firmware. The font ROMs are staged for the
 later display/keyboard frontend, not consumed by current rendering code.
 
+## CRTC hardware text cursor
+
+The Linux SDL frontend composites the FM-11 display-CPU CRTC cursor
+in both the OpenGL shader and SDL software renderer. R10/R11 select
+the cursor's raster-line range and steady/hidden/16-frame/32-frame
+blink modes; R14/R15 and the display sub-CPU AFE0 bit 5 select its
+character address. The cursor inverts the completed text/graphics
+pixels and is not written into character RAM. Blink phase is derived
+from host display time (32 ms ticks) so changing guest CPU speed does
+not change its blink period. Both renderers use the same device cursor
+state and the existing 4 KiB character RAM wrap / R13-latched
+display start. The `display_text_composition` regression exercises
+shape, both blink speeds, hidden mode and AFE0 cursor addressing.
+
+Guest ROM behavior and hardware-faithful blink timing should also be
+checked on a running CP/M-86 and NitrOS-9 local console.
+
 ## SDL2 display frontend (experimental)
 
 Install `libsdl2-dev` on Ubuntu, then reconfigure CMake so it can
