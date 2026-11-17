@@ -9,6 +9,11 @@ main_cpu = 8088
 2HD_FDD = false
 HDD = false
 
+# Installed RAM of the FM-11 main CPU, in 128 KiB increments.
+# Valid: 128, 256, 384, 512, 640, 768, 896, 1024 (default).
+[memory]
+ram_kib = 1024
+
 [main_6809]
 installed = false
 cpu = 6809
