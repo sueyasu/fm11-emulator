@@ -23,6 +23,12 @@ public:
             throw std::invalid_argument("invalid Z80 physical RAM");
         memory_=std::move(memory);
     }
+    void setRamKiB(std::size_t kib) {
+        if(kib<128 || kib>1024 || kib%128!=0)
+            throw std::invalid_argument("FM-11 installed RAM must be 128..1024 KiB in 128 KiB steps");
+        installedRamBytes_=kib*1024;
+    }
+    std::size_t ramKiB() const {return installedRamBytes_/1024;}
     BYTE readMemory(WORD address) const;
     void writeMemory(WORD address,BYTE value);
     BYTE readIo(WORD address) const;
@@ -48,6 +54,7 @@ private:
     };
     std::shared_ptr<std::vector<BYTE>> memory_ =
         std::make_shared<std::vector<BYTE>>(1u<<20,0);
+    std::size_t installedRamBytes_=1u<<20;
     std::shared_ptr<MainBoard> mainBoard_;
     BYTE bank_=0;
     Core core_;
