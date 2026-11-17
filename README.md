@@ -282,8 +282,8 @@ SDL always scales the image by an **integer** factor and centers it on
 dark-gray margins with a thin light-gray outline just outside the emulated
 screen. Neither the margins nor the outline alter any emulated pixels. At the default 960-pixel window width, the 640-pixel image
 is shown at native 1:1 size rather than distorted to 1.5x. Enlarge the
-window to at least 1280x400 for a sharp 2x 640x200 display, or 1280x800
-for a sharp 2x 640x400 display. Smaller windows clip instead of using
+window to at least 1280x800 for a sharp 2x presentation in either
+200- or 400-line mode. Smaller windows clip instead of using
 fractional resampling.
 `--high` forces 400-line mode. `[display] height = 200|400` selects the initial viewport (default 400). The SDL frontend defaults to
 **`--speed 10`** (ten times real-time emulated CPU/peripheral time).
