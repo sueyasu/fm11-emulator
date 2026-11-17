@@ -216,6 +216,35 @@ public:
         }
     }
 
+    // Cursor overlays the completed text/graphics image, as in fm11.hlsl.
+    // Inverting existing RGB preserves the underlying glyph/background.
+    // frameTick is based on wall-clock display refresh, not guest CPU speed.
+    static void compositeCursor(Frame& frame,const DisplaySubsystem& display,
+                                unsigned frameTick) {
+        const auto cursor=display.textCursor();
+        if(!cursor.visible(frameTick))return;
+        const unsigned columns=unsigned(display.crtcRegister(1))*2u;
+        const unsigned rows=unsigned(display.crtcRegister(6));
+        if(columns==0 || rows==0 || columns>160 || rows>100)return;
+        const unsigned charW=640u/columns;
+        const unsigned charH=400u/rows;
+        if(charW==0 || charH==0)return;
+        const unsigned start=display.textStartAddress();
+        const unsigned offset=(cursor.offset-start)&0x0fffu;
+        if(offset&1u)return;
+        const unsigned cell=offset/2u;
+        const unsigned col=cell%columns,row=cell/columns;
+        if(row>=rows)return;
+        for(unsigned y=0;y<frame.height;++y) {
+            const unsigned scanY=y*400u/static_cast<unsigned>(frame.height);
+            if(scanY/charH!=row)continue;
+            const unsigned raster=scanY%charH;
+            if(raster<cursor.first || raster>cursor.last)continue;
+            for(unsigned x=col*charW;x<(col+1u)*charW && x<640u;++x)
+                frame.argb[static_cast<std::size_t>(y)*640u+x]^=0x00ffffffu;
+        }
+    }
+
     // Composite a single 8x16 ANK glyph into an indexed 640x200 frame.
     // This primitive makes no assumptions about text VRAM or cursor I/O.
     static void drawAnk(Pixels& pixels,const DisplaySubsystem& display,
