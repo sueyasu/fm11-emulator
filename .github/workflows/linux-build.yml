@@ -10,8 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install SDL2 frontend build dependencies
+        run: sudo apt-get update && sudo apt-get install -y libsdl2-dev libgl1-mesa-dev
       - name: Configure
-        run: cmake -S . -B build
+        run: cmake -S . -B build -DFM11_BUILD_SDL=ON
       - name: Build
         run: cmake --build build --parallel
       - name: Test
