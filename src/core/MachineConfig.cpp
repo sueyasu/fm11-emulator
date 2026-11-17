@@ -27,6 +27,16 @@ std::uint64_t clockHz(const std::string& s) {
         throw std::invalid_argument("clock_hz must be 1..1000000000");
     return hz;
 }
+std::size_t ramKiB(const std::string& value) {
+    if(value.empty() || !std::all_of(value.begin(),value.end(),
+          [](unsigned char c){return std::isdigit(c);}))
+        throw std::invalid_argument("memory.ram_kib must be a decimal integer");
+    std::size_t consumed=0;
+    const auto kib=std::stoull(value,&consumed,10);
+    if(consumed!=value.size() || kib<128 || kib>1024 || kib%128!=0)
+        throw std::invalid_argument("memory.ram_kib must be 128..1024 in steps of 128");
+    return static_cast<std::size_t>(kib);
+}
 bool exists(const std::string& path) {
     std::ifstream stream(path);
     return stream.good();
@@ -53,7 +63,7 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                    section!="display_cpu" && section!="floppy_2d" &&
                    section!="floppy_2hd" && section!="hdd" &&
                    section!="boot" && section!="DIPSW" &&
-                   section!="display")
+                   section!="display" && section!="memory")
                     throw std::invalid_argument("unknown section ["+section+"]");
                 continue;
             }
@@ -125,6 +135,9 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                 else handled=false;
             } else if(section=="hdd") {
                 if(key=="image")cfg.hddImage=value;
+                else handled=false;
+            } else if(section=="memory") {
+                if(key=="ram_kib")cfg.ramKiB=ramKiB(value);
                 else handled=false;
             } else if(section=="display") {
                 if(key=="height") {
