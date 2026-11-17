@@ -21,11 +21,12 @@ public:
         std::array<unsigned int,8> palette{};
         unsigned control=0;
         int page=0,displayAddress=0,textStart=0,columns=0,rows=0;
+        int cursorOffset=0,cursorFirst=0,cursorLast=0,cursorMode=1;
         bool hasMainBoard=false;
     };
     static Snapshot capture(const Machine& machine,bool hasAnk);
     void render(const Snapshot& snapshot,bool high,bool testPattern,
-                bool hasAnk,int outputWidth,int outputHeight);
+                bool hasAnk,int outputWidth,int outputHeight,unsigned frameTick);
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
