@@ -157,21 +157,21 @@ int main() {
     for(unsigned kib=128;kib<=1024;kib+=128) {
         {
             std::ofstream out(path);
-            out<<"[memory]\\nram_kib="<<kib<<"\\n";
+            out<<"[memory]\nram_kib="<<kib<<"\n";
         }
         if(parseMachineConfigFile(path).ramKiB!=kib)return 24;
     }
     for(const char* invalid:{"0","64","192","1152","-128","128k","abc",""}) {
         {
             std::ofstream out(path);
-            out<<"[memory]\\nram_kib="<<invalid<<"\\n";
+            out<<"[memory]\nram_kib="<<invalid<<"\n";
         }
         try {(void)parseMachineConfigFile(path);return 25;}
         catch(const std::runtime_error&) {}
     }
     {
         std::ofstream out(path);
-        out<<"[memory]\\nunknown=256\\n";
+        out<<"[memory]\nunknown=256\n";
     }
     try {(void)parseMachineConfigFile(path);return 26;}
     catch(const std::runtime_error&) {}
