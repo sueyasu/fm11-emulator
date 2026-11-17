@@ -111,6 +111,10 @@ public:
         memory_=std::move(memory);
         rebuildRamPageMappings();
     }
+    // Physical decoder mirrors unpopulated memory onto installed RAM,
+    // matching the alias test used by FM-11 NitrOS-9 Level 2.
+    void setRamKiB(std::size_t kib);
+    std::size_t ramKiB() const {return installedRamBytes_/1024;}
     BYTE readPhysical(std::uint32_t address) const;
     void writePhysical(std::uint32_t address, BYTE value);
 
@@ -165,6 +169,10 @@ private:
     };
 
     std::shared_ptr<std::vector<BYTE>> memory_;
+    std::size_t installedRamBytes_=kPhysicalMemorySize;
+    std::size_t decodedPhysical(std::uint32_t address) const {
+        return static_cast<std::size_t>(address)%installedRamBytes_;
+    }
     BootRomImage bootRom_{};
     std::array<BYTE, kOnboardRamSize> onboardRam_{};
 
