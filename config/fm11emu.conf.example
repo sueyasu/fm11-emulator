@@ -9,6 +9,12 @@ main_cpu = 6809
 2HD_FDD = false
 HDD = false
 
+# Main RAM fitted to the computer, used by both CPU cards and the
+# optional Z80. Valid: 128,256,384,512,640,768,896,1024 KiB.
+# Omitted setting preserves the previous full-1-MiB configuration.
+[memory]
+ram_kib = 1024
+
 [main_6809]
 installed = true
 cpu = 6309
