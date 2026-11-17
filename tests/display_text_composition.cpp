@@ -22,10 +22,13 @@ int main() {
     if(high.argb[0]!=0xffc0c0c0u || high.argb[1]!=0xff000000u)return 1;
     if(high.argb[640+1]!=0xffc0c0c0u || high.argb[640]!=0xff000000u)return 2;
     if(high.argb[8]!=0xff000000u)return 3;
-    // Text scanout occupies 400 virtual scanlines even with 200-line output.
+    // Each 200-line pixel covers two ANK raster lines. Both must
+    // contribute, otherwise fine horizontal strokes disappear.
     auto low=DisplayBitmap::captureFrame(display,false);
     DisplayBitmap::compositeText(low,display);
-    if(low.argb[0]!=0xffc0c0c0u || low.argb[640+1]!=0xff000000u)return 4;
+    if(low.argb[0]!=0xffc0c0c0u ||
+       low.argb[1]!=0xffc0c0c0u ||
+       low.argb[640+1]!=0xff000000u)return 4;
     // Match CSubCpu::SubCRTC and OnDraw: R13=1 starts four
     // bytes (two character/attribute cells) into the 4 KiB CRAM.
     display.writeMemory(0x8000,0);
@@ -97,6 +100,14 @@ int main() {
     DisplayBitmap::compositeCursor(cf,cursorDisplay,0);
     if(cf.argb[14*640]!=0xff000000u || cf.argb[14*640+8]!=0xffffffffu)
         return 16;
-    std::cout<<"PASS: CRTC start latch/scale/wrap, ANK, cursor modes, AFE0 cursor address\\n";
+    // An underline on *only* odd raster 15 must survive in low mode.
+    setCursorReg(10,15);
+    setCursorReg(11,15);
+    cursorDisplay.writeMemory(0xafe0,0);
+    cf=DisplayBitmap::captureFrame(cursorDisplay,false);
+    DisplayBitmap::compositeCursor(cf,cursorDisplay,0);
+    if(cf.argb[7*640]!=0xffffffffu || cf.argb[6*640]!=0xff000000u)
+        return 17;
+    std::cout<<"PASS: CRTC start latch/scale/wrap, 200-line ANK strokes, cursor modes and raster\\n";
     return 0;
 }
