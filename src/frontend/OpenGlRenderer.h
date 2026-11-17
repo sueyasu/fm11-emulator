@@ -26,7 +26,7 @@ public:
     };
     static Snapshot capture(const Machine& machine,bool hasAnk);
     void render(const Snapshot& snapshot,bool high,bool testPattern,
-                bool hasAnk,int outputWidth,int outputHeight,unsigned frameTick);
+                bool hasAnk,int outputWidth,int outputHeight,unsigned frameTick,bool scanlines);
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;
