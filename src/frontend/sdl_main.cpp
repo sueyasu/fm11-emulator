@@ -855,7 +855,7 @@ int main(int argc,char** argv) {
                 const int scale=std::max(1,std::min(outputW/nativeW,outputH/400));
                 const SDL_Rect destination{
                     (outputW-nativeW*scale)/2,
-                    (outputH-nativeH*scale)/2,
+                    (outputH-400*scale)/2,
                     nativeW*scale,400*scale
                 };
                 // The emulator image stays untouched. Paint the letterbox
