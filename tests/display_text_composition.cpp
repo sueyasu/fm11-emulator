@@ -64,6 +64,39 @@ int main() {
     setCrtc(12,4);
     setCrtc(13,0);
     if(display.textStartAddress()!=0)return 11;
-    std::cout<<"PASS: CRTC start latch/scale/wrap, ANK, 200/400 lines, reverse attribute\n";
+    // The 6845 cursor is drawn by the frontend, not written to text RAM.
+    // Verify steady, disabled, two blink periods and AFE0 position bit.
+    DisplaySubsystem cursorDisplay;
+    auto setCursorReg=[&](BYTE reg,BYTE value) {
+        cursorDisplay.writeMemory(0xafee,reg);
+        cursorDisplay.writeMemory(0xafef,value);
+    };
+    setCursorReg(1,40);
+    setCursorReg(6,25);
+    setCursorReg(10,14);             // steady underline, first raster 14
+    setCursorReg(11,15);
+    setCursorReg(14,0);
+    setCursorReg(15,0);
+    auto cf=DisplayBitmap::captureFrame(cursorDisplay,true);
+    DisplayBitmap::compositeCursor(cf,cursorDisplay,0);
+    if(cf.argb[14*640]!=0xffffffffu || cf.argb[13*640]!=0xff000000u)return 12;
+    setCursorReg(10,0x2e);          // hidden
+    cf=DisplayBitmap::captureFrame(cursorDisplay,true);
+    DisplayBitmap::compositeCursor(cf,cursorDisplay,0);
+    if(cf.argb[14*640]!=0xff000000u)return 13;
+    setCursorReg(10,0x4e);          // blink at 16-frame intervals
+    cf=DisplayBitmap::captureFrame(cursorDisplay,true);
+    DisplayBitmap::compositeCursor(cf,cursorDisplay,16);
+    if(cf.argb[14*640]!=0xff000000u)return 14;
+    setCursorReg(10,0x6e);          // blink at 32-frame intervals
+    cf=DisplayBitmap::captureFrame(cursorDisplay,true);
+    DisplayBitmap::compositeCursor(cf,cursorDisplay,16);
+    if(cf.argb[14*640]!=0xffffffffu)return 15;
+    cursorDisplay.writeMemory(0xafe0,0x20);
+    cf=DisplayBitmap::captureFrame(cursorDisplay,true);
+    DisplayBitmap::compositeCursor(cf,cursorDisplay,0);
+    if(cf.argb[14*640]!=0xff000000u || cf.argb[14*640+8]!=0xffffffffu)
+        return 16;
+    std::cout<<"PASS: CRTC start latch/scale/wrap, ANK, cursor modes, AFE0 cursor address\\n";
     return 0;
 }
