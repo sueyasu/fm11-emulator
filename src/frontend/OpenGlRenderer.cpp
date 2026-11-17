@@ -108,6 +108,10 @@ uniform int uDisplayAddress;
 uniform int uTextStart;
 uniform int uColumns;
 uniform int uRows;
+uniform int uCursorOffset;
+uniform int uCursorFirst;
+uniform int uCursorLast;
+uniform int uCursorVisible;
 out vec4 outputColor;
 
 uint vramByte(int address) {
@@ -178,6 +182,19 @@ void main() {
                     color=shades[int(ci)];
                 }
             }
+        }
+        // The cursor inverts the completed character/graphics pixels.
+        if(uTextEnabled!=0 && uCursorVisible!=0 &&
+           uColumns>0 && uColumns<=160 && uRows>0 && uRows<=100) {
+            int charW=640/uColumns,charH=400/uRows;
+            int scanY=y*400/uHeight;
+            int delta=(uCursorOffset-uTextStart)&4095;
+            int cell=delta/2;
+            int raster=scanY%charH;
+            if((delta&1)==0 && cell/uColumns<uRows &&
+               x/charW==cell%uColumns && scanY/charH==cell/uColumns &&
+               raster>=uCursorFirst && raster<=uCursorLast)
+                color^=0x00ffffffu;
         }
     }
     outputColor=rgba(color);
@@ -273,6 +290,17 @@ struct OpenGlRenderer::Impl {
         setInt("uTextStart",snapshot.textStart);
         setInt("uColumns",snapshot.columns);
         setInt("uRows",snapshot.rows);
+        setInt("uCursorOffset",snapshot.cursorOffset);
+        setInt("uCursorFirst",snapshot.cursorFirst);
+        setInt("uCursorLast",snapshot.cursorLast);
+        bool cursorVisible=false;
+        if(snapshot.cursorMode==0 && snapshot.cursorFirst<=snapshot.cursorLast)
+            cursorVisible=true;
+        else if(snapshot.cursorMode==2 && snapshot.cursorFirst<=snapshot.cursorLast)
+            cursorVisible=((frameTick/16u)&1u)==0;
+        else if(snapshot.cursorMode==3 && snapshot.cursorFirst<=snapshot.cursorLast)
+            cursorVisible=((frameTick/32u)&1u)==0;
+        setInt("uCursorVisible",cursorVisible?1:0);
 
         const int nativeHeight=high?400:200;
         const int scale=std::max(1,std::min(outputWidth/640,outputHeight/nativeHeight));
@@ -319,9 +347,14 @@ OpenGlRenderer::Snapshot OpenGlRenderer::capture(const Machine& machine,bool has
     snapshot.textStart=static_cast<int>(display.textStartAddress());
     snapshot.columns=unsigned(display.crtcRegister(1))*2;
     snapshot.rows=display.crtcRegister(6);
+    const auto cursor=display.textCursor();
+    snapshot.cursorOffset=static_cast<int>(cursor.offset);
+    snapshot.cursorFirst=static_cast<int>(cursor.first);
+    snapshot.cursorLast=static_cast<int>(cursor.last);
+    snapshot.cursorMode=static_cast<int>(cursor.mode);
     return snapshot;
 }
 void OpenGlRenderer::render(const Snapshot& snapshot,bool high,bool testPattern,
-                            bool hasAnk,int width,int height) {
-    impl_->render(snapshot,high,testPattern,hasAnk,width,height);
+                            bool hasAnk,int width,int height,unsigned frameTick) {
+    impl_->render(snapshot,high,testPattern,hasAnk,width,height,frameTick);
 }
