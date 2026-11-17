@@ -1,11 +1,15 @@
 #pragma once
 #include "CpuCore.h"
 #include <cstdint>
+#include <cstddef>
 #include <array>
 #include <string>
 
 // Installed cards and DIP-selected startup main CPU are independent.
 struct MachineConfig {
+    // Installed main RAM, shared capacity setting for all CPU cards.
+    // The existing default is 1024 KiB; valid sizes are 128 KiB steps.
+    std::size_t ramKiB=1024;
     bool main6809Installed=true;
     CpuType main6809Cpu=CpuType::MC6809;
     std::uint64_t main6809ClockHz=2000000;
