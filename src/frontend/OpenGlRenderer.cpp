@@ -265,7 +265,7 @@ struct OpenGlRenderer::Impl {
         gl.Uniform1i(gl.GetUniformLocation(program,key),val);
     }
     void render(const OpenGlRenderer::Snapshot& snapshot,bool high,bool testPattern,
-                bool hasAnk,int outputWidth,int outputHeight) {
+                bool hasAnk,int outputWidth,int outputHeight,unsigned frameTick) {
         gl.UseProgram(program);
         gl.BindVertexArray(vao);
         const void* memory[]={snapshot.vram.data(),snapshot.text.data(),snapshot.ank.data()};
