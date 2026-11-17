@@ -244,6 +244,35 @@ shape, both blink speeds, hidden mode and AFE0 cursor addressing.
 Guest ROM behavior and hardware-faithful blink timing should also be
 checked on a running CP/M-86 and NitrOS-9 local console.
 
+## Mounted disk image synchronization (SDL frontend)
+
+All 2D/2HD floppy and MDC HDD sector writes still call `pwrite()`
+**immediately**, including D88 sector payload writes. WRITE TRACK
+replacements also call `pwrite()` and `ftruncate()` immediately. This
+keeps the mounted host file updated during guest execution rather than
+only when the emulator exits.
+
+To avoid forcing the storage device to commit every 128/256-byte
+transaction, a dedicated host thread wakes every **100 ms** and invokes
+`fdatasync()` only for images modified since their previous successful
+sync. The thread does not hold the image write lock during `fdatasync`,
+so normal CPU emulation can continue. Writes arriving during a sync
+remain dirty and are included in a later pass.
+
+On normal exit, after the emulator CPU/device workers stop, a final
+`fdatasync()` runs for all dirty images before returning from main.
+Errors are logged, leave the image dirty for retry, and make a failed
+final sync return a nonzero process status. No full-image rewrite
+is performed on exit.
+
+**Durability note:** guest sector write completion means `pwrite()`
+succeeded, *not* that the host storage has been synchronized. The
+periodic sync improves normal-case performance but a host crash or
+power loss can still lose changes since the last completed sync,
+including data in the guest OS's own write-back cache. A normal
+emulator exit flushes host file changes but cannot force a guest OS
+to empty its own unflushed buffers.
+
 ## 200-line CRT presentation
 
 The FM-11 640x200 video mode is displayed within the same 640x400
