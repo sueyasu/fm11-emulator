@@ -35,8 +35,9 @@ int main(int argc,char** argv) {
             const unsigned width=640/columns;
             const unsigned height=high?400:200;
             if(f.width!=640 || f.height!=height)return 13;
-            // Test font has bit 0 in row 0: 1 pixel wide in 80-column,
-            // 2 pixels wide in 40-column, in both 200/400-line scanout.
+            // Test font has bit 0 in row 0 and bit 1 in row 1.
+            // 400-line scanout preserves separate rows; 200-line scanout
+            // merges them. 40-column mode doubles pixels horizontally.
             for(unsigned i=0;i<sizeof(text)-1;++i) {
                 const unsigned x=i*width;
                 if(text[i]==' ') {
@@ -45,8 +46,17 @@ int main(int argc,char** argv) {
                 }
                 if(f.argb[x]!=0xffc0c0c0u ||
                    f.argb[x+width-1]!=0xff000000u)return 15;
-                if(columns==40 && f.argb[x+1]!=0xffc0c0c0u)return 16;
-                if(columns==80 && f.argb[x+1]!=0xff000000u)return 17;
+                const unsigned scale=columns==40?2:1;
+                for(unsigned px=0;px<width;++px) {
+                    const auto expected=px<scale*(high?1u:2u)
+                        ?0xffc0c0c0u:0xff000000u;
+                    if(f.argb[x+px]!=expected)return 16;
+                    if(high) {
+                        const auto next=(px>=scale && px<2*scale)
+                            ?0xffc0c0c0u:0xff000000u;
+                        if(f.argb[640+x+px]!=next)return 17;
+                    }
+                }
             }
             if(f.argb[640*(height-1)]!=0xff000000u)return 18;
         }

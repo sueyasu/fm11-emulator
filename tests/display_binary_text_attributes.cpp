@@ -33,8 +33,16 @@ int main(int argc,char** argv) {
             for(unsigned i=0;i<6;++i) {
                 const unsigned x=i*8;
                 const bool reverse=i==3;
-                if(frame.argb[x]!=(reverse?0xff000000u:colors[i]) ||
-                   frame.argb[x+1]!=(reverse?colors[i]:0xff000000u))
+                // In 200 lines both glyph bits are lit; reverse video
+                // inverts both. In 400 lines row 0 contains only bit 0.
+                const auto foreground=reverse?0xff000000u:colors[i];
+                const auto background=reverse?colors[i]:0xff000000u;
+                if(frame.argb[x]!=foreground ||
+                   frame.argb[x+1]!=(high?background:foreground) ||
+                   frame.argb[x+2]!=background)
+                    return 12;
+                if(high && (frame.argb[640+x]!=background ||
+                            frame.argb[640+x+1]!=foreground))
                     return 12;
             }
         }

@@ -45,7 +45,9 @@ int main(int argc,char** argv) {
         for(bool high:{false,true}) {
             auto f=m.captureDisplayFrame(high);
             DisplayBitmap::compositeText(f,d);
-            if(f.argb[0]!=0xffc0c0c0u || f.argb[1]!=0xff000000u)
+            // 200-line scanout combines ANK rows 0 and 1 (bits 0 and 1).
+            // 400-line scanout retains each raster separately.
+            if(f.argb[0]!=0xffc0c0c0u || f.argb[1]!=(high?0xff000000u:0xffc0c0c0u))
                 return 16;
         }
         std::cout<<"PASS: original SubRom CAA0 AFE0/FC81/FC82 handshake and text\n";
