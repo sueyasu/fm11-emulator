@@ -46,6 +46,9 @@ target_compile_features(fm11_core PUBLIC cxx_std_17)
 add_executable(fm11-8088-singlestep tests/main8088_singlestep.cpp)
 target_link_libraries(fm11-8088-singlestep PRIVATE fm11_core)
 
+add_executable(fm11-v20-8080-diag tests/mainv20_8080_diag.cpp)
+target_link_libraries(fm11-v20-8080-diag PRIVATE fm11_core)
+
 # Worker lifecycle is portable; CPU/PTM threads are enabled in later stages.
 find_package(Threads REQUIRED)
 target_link_libraries(fm11_core PUBLIC Threads::Threads)
@@ -98,6 +101,7 @@ if(FM11_BUILD_SDL)
 endif()
 
 if(FM11_BUILD_TESTS)
+    add_test(NAME mainv20_8080_diag_smoke COMMAND fm11-v20-8080-diag --self-test)
     if(UNIX)
         find_package(Python3 COMPONENTS Interpreter REQUIRED)
         add_test(NAME main8088_singlestep_smoke

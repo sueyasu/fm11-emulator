@@ -148,3 +148,38 @@ contents, and a segment override.
 ctest --test-dir build -R 'mainv20_bound|mainv20_rep_prefixes' --output-on-failure
 python3 tests/run_v20_singlestep.py --opcode 62 --opcode 63 --limit 100
 ```
+
+## CP/M-format 8080 CPU diagnostic runner
+
+The standalone `fm11-v20-8080-diag` executable loads a COM image at
+2000:0100, enters emulation mode using the actual BRKEM instruction and
+executes the V20 core, not SimZ80. It supplies a minimal CP/M environment:
+BDOS 0 (terminate), 2 (character output), 9 (dollar-terminated string),
+and warm boot at 0000h. Other BDOS functions and unexpected HLT are errors.
+The BDOS vector at 0005h jumps to FF00h, where a real 8080 RET returns
+to the caller. The initial stack is FFFEh with a zero return address.
+No external ROM, disk, or CP/M core is needed.
+
+Download the diagnostic COM files separately from
+[Altair Clone CPU tests](https://altairclone.com/downloads/cpu_tests/).
+They are not redistributed here. For example, place them in
+`external/8080-tests/` and run:
+
+```sh
+cmake --build build --target fm11-v20-8080-diag -j$(nproc)
+ctest --test-dir build -R mainv20_8080_diag_smoke --output-on-failure
+build/fm11-v20-8080-diag external/8080-tests/8080PRE.COM
+build/fm11-v20-8080-diag external/8080-tests/TST8080.COM
+build/fm11-v20-8080-diag external/8080-tests/CPUTEST.COM
+build/fm11-v20-8080-diag --max-instructions 50000000000 external/8080-tests/8080EXM.COM
+```
+
+The default limit is 20 billion guest instructions; exhaustive diagnostics
+can be slow. Output is streamed unless `--expect TEXT` is supplied, in
+which case the captured output must contain TEXT for exit status 0.
+Normal termination alone does not mean the diagnostic passed: inspect its
+own output, including any CRC mismatches. Exit 1 means expected text was
+absent; exit 2 means runner/guest error or instruction limit reached.
+These are Intel 8080 diagnostics, not V20 hardware-reference tests, so
+investigate architectural differences before changing instruction behavior.
+The smoke test uses a built-in synthetic COM and requires no downloads.
