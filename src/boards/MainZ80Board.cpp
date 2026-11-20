@@ -8,19 +8,23 @@ void MainZ80Board::reset()
     core_.reset();
 }
 
+std::uint32_t MainZ80Board::physicalAddress(WORD address) const
+{
+    const BYTE bank=(address>=0x4000 && address<0xc000)?bank_:fixedBank_;
+    return (static_cast<std::uint32_t>(bank)<<16)|address;
+}
+
 BYTE MainZ80Board::readMemory(WORD address) const
 {
     if(address>=0xfc00)return readIo(address);
-    const std::uint32_t physical=(address>=0x4000 && address<0xc000)
-        ? (static_cast<std::uint32_t>(bank_)<<16)|address : address;
+    const auto physical=physicalAddress(address);
     return (*memory_)[physical%installedRamBytes_];
 }
 
 void MainZ80Board::writeMemory(WORD address,BYTE value)
 {
     if(address>=0xfc00) {writeIo(address,value);return;}
-    const std::uint32_t physical=(address>=0x4000 && address<0xc000)
-        ? (static_cast<std::uint32_t>(bank_)<<16)|address : address;
+    const auto physical=physicalAddress(address);
     (*memory_)[physical%installedRamBytes_]=value;
 }
 

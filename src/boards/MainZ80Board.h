@@ -8,7 +8,7 @@
 #include <stdexcept>
 #include <vector>
 
-// The optional Z80 CPU card shares the main 6809 physical RAM and system bus.
+// The optional Z80 CPU card shares the selected main CPU's physical RAM and system bus.
 // FC00-FFFF is card/system I/O rather than ordinary Z80 DRAM.
 class MainZ80Board final : public CpuBoard {
 public:
@@ -18,6 +18,9 @@ public:
     const CpuCore& cpu() const override {return core_;}
     void reset() override;
     void setMainBoard(std::shared_ptr<MainBoard> board) {mainBoard_=std::move(board);}
+    std::shared_ptr<std::vector<BYTE>> physicalMemory() const {return memory_;}
+    // Hardware mode is selected by the master CPU, not by FD05 bus ownership.
+    void set8088Master(bool enabled) {fixedBank_=enabled?1:0;}
     void setPhysicalMemory(std::shared_ptr<std::vector<BYTE>> memory) {
         if(!memory || memory->size()!=(1u<<20))
             throw std::invalid_argument("invalid Z80 physical RAM");
@@ -57,5 +60,7 @@ private:
     std::size_t installedRamBytes_=1u<<20;
     std::shared_ptr<MainBoard> mainBoard_;
     BYTE bank_=0;
+    BYTE fixedBank_=0;
+    std::uint32_t physicalAddress(WORD address) const;
     Core core_;
 };

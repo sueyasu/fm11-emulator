@@ -10,6 +10,8 @@
 #include <functional>
 #include <vector>
 #include <memory>
+#include <stdexcept>
+#include <utility>
 
 // Hardware-facing bus for the optional FM-11 8088 CPU card.
 // The execution core is deliberately separate.  The original Sim86 maps
@@ -48,6 +50,12 @@ public:
     // The upper 4-KiB reset-ROM overlay remains unaffected.
     void setRamKiB(std::size_t kib);
     std::size_t ramKiB() const {return installedRamBytes_/1024;}
+    std::shared_ptr<std::vector<BYTE>> physicalMemory() const {return memory_;}
+    void setPhysicalMemory(std::shared_ptr<std::vector<BYTE>> memory) {
+        if(!memory || memory->size()!=kMemorySize)
+            throw std::invalid_argument("invalid shared physical memory");
+        memory_=std::move(memory);
+    }
     BYTE readMemory(std::uint32_t address) const;
     void writeMemory(std::uint32_t address, BYTE value);
     BYTE readIo(WORD port) const;
@@ -58,7 +66,7 @@ public:
     // No effect on ordinary machine execution unless explicitly enabled.
     void enableConformanceRam() {conformanceRam_=true;}
     void clearConformanceRam() {
-        std::fill(memory_.begin(),memory_.end(),BYTE(0));
+        std::fill(memory_->begin(),memory_->end(),BYTE(0));
     }
     // 8259A PIC on the 8088 card: ports 00h/01h.
     void requestIrq(unsigned line);
@@ -79,7 +87,7 @@ public:
     bool serviceDma();
 
 private:
-    std::vector<BYTE> memory_;
+    std::shared_ptr<std::vector<BYTE>> memory_;
     std::size_t installedRamBytes_=kMemorySize;
     std::size_t decodedRamAddress(std::uint32_t address) const {
         return static_cast<std::size_t>(address&0xfffff)%installedRamBytes_;

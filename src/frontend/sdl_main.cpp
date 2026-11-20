@@ -195,16 +195,15 @@ int main(int argc,char** argv) {
                     else if(config.mainSelected==MachineConfig::MainSelection::Cpu6809)
                         throw std::invalid_argument("selected 6809 card requires [main_6809].rom or --main-rom/--6809-rom");
                     mainBoard=mainCpu.get();
-                    mainCpu->setRamKiB(config.ramKiB);
                     mainCpu->setCpuClockHz(config.main6809ClockHz);
                     cpu6809Index=machine.addBoard(std::move(mainCpu));
                 }
+                machine.setRamKiB(config.ramKiB);
                 if(config.main8088Installed) {
                     auto mainCpu=std::make_unique<Main8088Board>(config.main8088Cpu);
                     if(!rom8088.empty())mainCpu->bus().loadBootRomFile(rom8088);
                     else if(config.mainSelected==MachineConfig::MainSelection::Cpu8088)
                         throw std::invalid_argument("selected 8088 card requires [main_8088].rom or --main-rom/--8088-rom");
-                    mainCpu->bus().setRamKiB(config.ramKiB);
                     cpu8088Index=machine.addBoard(std::move(mainCpu));
                     machine.set8088ClockHz(config.main8088ClockHz);
                     main8088Enabled=true;
@@ -216,7 +215,6 @@ int main(int argc,char** argv) {
                 machine.setActiveBoard(selectedIndex);
                 if(config.z80Installed) {
                     auto z80=std::make_unique<MainZ80Board>();
-                    z80->setRamKiB(config.ramKiB);
                     z80Index=machine.addBoard(std::move(z80));
                     machine.setZ80ClockHz(config.z80ClockHz);
                     machine.configureFd05Boards(selectedIndex,z80Index);

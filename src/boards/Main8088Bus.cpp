@@ -3,7 +3,7 @@
 #include <stdexcept>
 #include <algorithm>
 
-Main8088Bus::Main8088Bus():memory_(kMemorySize,0) {}
+Main8088Bus::Main8088Bus():memory_(std::make_shared<std::vector<BYTE>>(kMemorySize,0)) {}
 
 void Main8088Bus::reset()
 {
@@ -129,17 +129,17 @@ BYTE Main8088Bus::readMemory(std::uint32_t address) const
 {
     address &= 0xfffff;
     return !conformanceRam_ && address >= kRomBase
-        ? bootRom_[address-kRomBase] : memory_[decodedRamAddress(address)];
+        ? bootRom_[address-kRomBase] : (*memory_)[decodedRamAddress(address)];
 }
 
 void Main8088Bus::writeMemory(std::uint32_t address, BYTE value)
 {
-    memory_[decodedRamAddress(address)]=value;
+    (*memory_)[decodedRamAddress(address)]=value;
 }
 
 BYTE Main8088Bus::readRam(std::uint32_t address) const
 {
-    return memory_[decodedRamAddress(address)];
+    return (*memory_)[decodedRamAddress(address)];
 }
 
 void Main8088Bus::setSystemIo(IoReader reader,IoWriter writer)

@@ -38,6 +38,9 @@ public:
     // Hold while reading live display memory or capturing/rendering a frame.
     std::unique_lock<std::recursive_mutex> lockDisplay() const {return mainBoard_->lockDisplay();}
     std::size_t addBoard(std::unique_ptr<CpuBoard> board);
+    // Set installed RAM for every attached CPU (before running the machine).
+    void setRamKiB(std::size_t kib);
+    std::size_t ramKiB() const {return ramKiB_;}
 
     // System devices belong to the shared FM-11 main board, not the
     // optional 6809 CPU card (which is absent in an FM-11 BS).
@@ -178,8 +181,13 @@ private:
     };
     void selectActiveBoard(std::size_t index);
     void synchronizeFd05Selection();
+    void updateZ80MasterMapping();
     bool fd05SelectionEnabled_=false;
+    bool fd05WiringExplicit_=false;
     std::shared_ptr<MainBoard> mainBoard_=std::make_shared<MainBoard>();
+    std::shared_ptr<std::vector<BYTE>> physicalMemory_;
+    std::size_t ramKiB_=1024;
+    bool ramSizeExplicit_=false;
     std::vector<std::unique_ptr<CpuBoard>> boards_;
     std::vector<ExecutionSlot> executionSlots_;
     std::vector<Main6809Board*> main6809Boards_;

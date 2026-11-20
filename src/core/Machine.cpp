@@ -182,25 +182,30 @@ std::size_t Machine::addBoard(std::unique_ptr<CpuBoard> board)
     if (!board)
         throw std::invalid_argument("board must not be null");
 
-    // The physical FDC/media belongs to the system bus, not either CPU card.
+    // The first memory-bearing card donates its backing (including any
+    // preloaded test program). All later cards use the same physical RAM.
+    // CPU ROM, on-card SRAM, MMU, PIC and DMA state remain card-local.
+    auto attachRam=[this](auto& card) {
+        if(!physicalMemory_) {
+            physicalMemory_=card.physicalMemory();
+            if(!ramSizeExplicit_)ramKiB_=card.ramKiB();
+        }
+        card.setPhysicalMemory(physicalMemory_);
+        card.setRamKiB(ramKiB_);
+    };
     if(auto* cpu6809=dynamic_cast<Main6809Board*>(board.get())) {
+        attachRam(*cpu6809);
         cpu6809->setMainBoard(mainBoard_);
         cpu6809->setExternalClocking(true);
     }
-    if(auto* cpu8088=dynamic_cast<Main8088Board*>(board.get()))
+    if(auto* cpu8088=dynamic_cast<Main8088Board*>(board.get())) {
+        attachRam(cpu8088->bus());
         cpu8088->bus().setMainBoard(mainBoard_);
-    if(auto* cpuZ80=dynamic_cast<MainZ80Board*>(board.get())) {
-        cpuZ80->setMainBoard(mainBoard_);
-        for(const auto& attached:boards_)
-            if(auto* cpu6809=dynamic_cast<Main6809Board*>(attached.get())) {
-                cpuZ80->setPhysicalMemory(cpu6809->physicalMemory());
-                break;
-            }
     }
-    if(auto* cpu6809=dynamic_cast<Main6809Board*>(board.get()))
-        for(auto& attached:boards_)
-            if(auto* cpuZ80=dynamic_cast<MainZ80Board*>(attached.get()))
-                cpuZ80->setPhysicalMemory(cpu6809->physicalMemory());
+    if(auto* cpuZ80=dynamic_cast<MainZ80Board*>(board.get())) {
+        attachRam(*cpuZ80);
+        cpuZ80->setMainBoard(mainBoard_);
+    }
     boards_.push_back(std::move(board));
     const auto index=boards_.size()-1;
     CpuBoard* raw=boards_[index].get();
@@ -212,25 +217,41 @@ std::size_t Machine::addBoard(std::unique_ptr<CpuBoard> board)
         slot.kind=ExecutionKind::Main6809;
         slot.main6809=cpu6809;
         main6809Boards_.push_back(cpu6809);
-        if(!hasPrimaryBoard_) {
-            primaryBoardIndex_=index;
-            hasPrimaryBoard_=true;
-        }
     } else if(auto* cpu8088=dynamic_cast<Main8088Board*>(raw)) {
         slot.kind=ExecutionKind::Main8088;
         slot.main8088=cpu8088;
-        if(!hasOptionalBoard_) {
-            optionalBoardIndex_=index;
-            hasOptionalBoard_=true;
-        }
     } else if(dynamic_cast<MainZ80Board*>(raw)) {
         slot.kind=ExecutionKind::MainZ80;
-        if(!hasOptionalBoard_) {
-            optionalBoardIndex_=index;
+    }
+    executionSlots_.push_back(slot);
+    if(!fd05WiringExplicit_) {
+        // Prefer 6809 as the default master when present; otherwise 8088.
+        // Prefer Z80 as the optional card; retain the legacy 6809/8088
+        // pair when no Z80 is installed.
+        hasPrimaryBoard_=hasOptionalBoard_=false;
+        std::size_t first86=boards_.size(),firstZ80=boards_.size();
+        for(std::size_t n=0;n<executionSlots_.size();++n) {
+            const auto kind=executionSlots_[n].kind;
+            if(kind==ExecutionKind::Main6809 && !hasPrimaryBoard_) {
+                primaryBoardIndex_=n;
+                hasPrimaryBoard_=true;
+            }
+            if(kind==ExecutionKind::Main8088 && first86==boards_.size())first86=n;
+            if(kind==ExecutionKind::MainZ80 && firstZ80==boards_.size())firstZ80=n;
+        }
+        if(!hasPrimaryBoard_ && first86<boards_.size()) {
+            primaryBoardIndex_=first86;
+            hasPrimaryBoard_=true;
+        }
+        if(firstZ80<boards_.size()) {
+            optionalBoardIndex_=firstZ80;
+            hasOptionalBoard_=true;
+        } else if(first86<boards_.size() && primaryBoardIndex_!=first86) {
+            optionalBoardIndex_=first86;
             hasOptionalBoard_=true;
         }
     }
-    executionSlots_.push_back(slot);
+    updateZ80MasterMapping();
     // Adding a board can relocate executionSlots_; always refresh the
     // current value, even if automatic FD05 selection is disabled.
     if(fd05SelectionEnabled_ && hasPrimaryBoard_ && hasOptionalBoard_)
@@ -273,7 +294,31 @@ void Machine::configureFd05Boards(std::size_t mainIndex,std::size_t optionalInde
     primaryBoardIndex_=mainIndex;
     optionalBoardIndex_=optionalIndex;
     hasPrimaryBoard_=hasOptionalBoard_=true;
+    fd05WiringExplicit_=true;
+    updateZ80MasterMapping();
     if(fd05SelectionEnabled_)synchronizeFd05Selection();
+}
+
+void Machine::updateZ80MasterMapping()
+{
+    const bool master8088=hasPrimaryBoard_ &&
+        executionSlots_[primaryBoardIndex_].kind==ExecutionKind::Main8088;
+    for(auto& board:boards_)
+        if(auto* z=dynamic_cast<MainZ80Board*>(board.get()))
+            z->set8088Master(master8088);
+}
+
+void Machine::setRamKiB(std::size_t kib)
+{
+    if(kib<128 || kib>1024 || kib%128!=0)
+        throw std::invalid_argument("FM-11 installed RAM must be 128..1024 KiB in 128 KiB steps");
+    ramKiB_=kib;
+    ramSizeExplicit_=true;
+    for(auto& board:boards_) {
+        if(auto* m=dynamic_cast<Main6809Board*>(board.get()))m->setRamKiB(kib);
+        if(auto* m=dynamic_cast<Main8088Board*>(board.get()))m->bus().setRamKiB(kib);
+        if(auto* m=dynamic_cast<MainZ80Board*>(board.get()))m->setRamKiB(kib);
+    }
 }
 
 void Machine::enableFd05Selection(bool enabled)
