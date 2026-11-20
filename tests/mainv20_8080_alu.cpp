@@ -18,12 +18,12 @@ int main()
         0x3e,0x7f, // MVI A,7F
         0xc6,0x01, // ADI 1 => 80h, S=1 AC=1
         0x06,0x01, // MVI B,1
-        0x90,      // SUB B => 7Fh
-        0xfe,0x7f, // CPI 7F => Z=1
+        0x90,      // SUB B => 7Fh, AC=0
+        0xfe,0x7f, // CPI 7F => Z=1, AC=1
         0x3e,0xff, // MVI A,FF
         0xc6,0x01, // ADI 1 => 00 CF=1 ZF=1
         0xce,0x00, // ACI 0 => 01 (CF=0)
-        0x3d,      // DCR A => 00, retain CF
+        0x3d,      // DCR A => 00, AC=1, retain CF
         0xe6,0x0f, // ANI 0F => 00, AF=1
         0x3e,0x12, // MVI A,12
         0xee,0x12, // XRI 12 => 00
@@ -37,15 +37,15 @@ int main()
     board.cpu().executeOne();board.cpu().executeOne();
     if((cpu.reg(0)&255)!=0x80 || (cpu.flags()&0x90)!=0x90)return 1;
     board.cpu().executeOne();board.cpu().executeOne();
-    if((cpu.reg(0)&255)!=0x7f)return 2;
+    if((cpu.reg(0)&255)!=0x7f || (cpu.flags()&0x11)!=0)return 2;
     board.cpu().executeOne();
-    if(!(cpu.flags()&0x40) || (cpu.reg(0)&255)!=0x7f)return 3;
+    if((cpu.flags()&0x51)!=0x50 || (cpu.reg(0)&255)!=0x7f)return 3;
     board.cpu().executeOne();board.cpu().executeOne();
     if((cpu.reg(0)&255)!=0 || (cpu.flags()&0x41)!=0x41)return 4;
     board.cpu().executeOne();
     if((cpu.reg(0)&255)!=1 || (cpu.flags()&1))return 5;
     board.cpu().executeOne();
-    if((cpu.reg(0)&255)!=0 || !(cpu.flags()&0x40))return 6;
+    if((cpu.reg(0)&255)!=0 || (cpu.flags()&0x51)!=0x50)return 6;
     board.cpu().executeOne();
     if((cpu.flags()&0x10)==0 || !(cpu.flags()&0x40))return 7;
     board.cpu().executeOne();board.cpu().executeOne();

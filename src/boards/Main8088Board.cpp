@@ -459,10 +459,12 @@ void Main8088Board::Core::executeOne()
             flags_=WORD(flags_&~(CF|PF|AF|ZF|SF));
             if(subtract ? lhs<(rhs+unsigned(carryIn))
                         : result>255u)flags_|=CF;
-            // AC is a carry/borrow across bit 3, including incoming CY.
+            // Intel 8080 compatibility: AC indicates carry out of bit 3,
+            // i.e. NO half-borrow for subtraction (unlike native x86 AF).
+            // V20 emulation-mode silicon behavior awaits reference data.
             const unsigned lowLhs=lhs&0x0fu,lowRhs=rhs&0x0fu;
             const bool auxiliary=subtract
-                ? lowLhs<(lowRhs+unsigned(carryIn))
+                ? lowLhs>=(lowRhs+unsigned(carryIn))
                 : (lowLhs+lowRhs+unsigned(carryIn))>0x0fu;
             if(auxiliary)flags_|=AF;
             if(out==0)flags_|=ZF;

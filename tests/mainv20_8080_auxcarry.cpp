@@ -16,16 +16,16 @@ int main()
     const BYTE program[]={
         0x3e,0x0f, // MVI A,0F
         0x37,      // STC
-        0xde,0x00, // SBI 00: 0F-0-1=0E, AC=0, CY=0
+        0xde,0x00, // SBI 00: 0F-0-1=0E, AC=1, CY=0
         0x3e,0x10, // MVI A,10
         0x37,      // STC
-        0xde,0x00, // SBI 00: 10-0-1=0F, AC=1, CY=0
+        0xde,0x00, // SBI 00: 10-0-1=0F, AC=0, CY=0
         0x3e,0x0f, // MVI A,0F
         0x37,      // STC
         0xce,0x00, // ACI 00: 0F+0+1=10, AC=1, CY=0
         0x3e,0x00, // MVI A,00
         0x37,      // STC
-        0xde,0x00, // SBI 00: 00-0-1=FF, AC=1, CY=1
+        0xde,0x00, // SBI 00: 00-0-1=FF, AC=0, CY=1
         0xed,0xfd  // RETEM
     };
     for(unsigned i=0;i<sizeof(program);++i)
@@ -34,13 +34,13 @@ int main()
     auto& cpu=static_cast<Main8088Board::Core&>(board.cpu());
     for(int i=0;i<3;++i)board.cpu().executeOne(); // JMP MOV SP BRKEM
     for(int i=0;i<3;++i)board.cpu().executeOne();
-    if((cpu.reg(0)&255)!=0x0e || (cpu.flags()&0x11)!=0)return 1;
+    if((cpu.reg(0)&255)!=0x0e || (cpu.flags()&0x11)!=0x10)return 1;
     for(int i=0;i<3;++i)board.cpu().executeOne();
-    if((cpu.reg(0)&255)!=0x0f || (cpu.flags()&0x11)!=0x10)return 2;
+    if((cpu.reg(0)&255)!=0x0f || (cpu.flags()&0x11)!=0)return 2;
     for(int i=0;i<3;++i)board.cpu().executeOne();
     if((cpu.reg(0)&255)!=0x10 || (cpu.flags()&0x11)!=0x10)return 3;
     for(int i=0;i<3;++i)board.cpu().executeOne();
-    if((cpu.reg(0)&255)!=0xff || (cpu.flags()&0x11)!=0x11)return 4;
+    if((cpu.reg(0)&255)!=0xff || (cpu.flags()&0x11)!=0x01)return 4;
     board.cpu().executeOne(); // RETEM
     if(cpu.emulation8080())return 5;
     return 0;

@@ -180,6 +180,25 @@ which case the captured output must contain TEXT for exit status 0.
 Normal termination alone does not mean the diagnostic passed: inspect its
 own output, including any CRC mismatches. Exit 1 means expected text was
 absent; exit 2 means runner/guest error or instruction limit reached.
-These are Intel 8080 diagnostics, not V20 hardware-reference tests, so
-investigate architectural differences before changing instruction behavior.
+These are Intel 8080 diagnostics, not V20 hardware-reference tests.
 The smoke test uses a built-in synthetic COM and requires no downloads.
+
+### Provisional 8080 compatibility policy
+
+Until hardware-generated NEC V20/V30 emulation-mode reference data becomes
+available, standard 8080 instructions target Intel 8080 behavior for CP/M
+compatibility. In particular, SUB/SBB/CMP and DCR set AC when there is no
+borrow across bit 3 (including incoming CY for SBB); ordinary CY still
+indicates borrow, and DCR preserves CY. ANA/ANI retain the Intel 8080
+operand-bit-3 OR rule. Native 8088/V20 arithmetic is unaffected.
+
+This is not a claim of exact V20/V30 silicon compatibility. AND flags,
+subtraction flags, undocumented opcode aliases, PSW/mode bits and timing
+may differ on real NEC processors. Existing NEC-specific BRKEM/CALLN/RETEM
+behavior is retained. When SingleStepTests publishes its emulation-mode
+hardware data, revisit these provisional semantics against that reference.
+
+Before the AC correction, CPUTEST reported DCR B (05h), F=46h instead of
+56h, and 8080EXM reported CRC mismatches in both ALU groups and all eight
+INR/DCR groups. The focused CTests exercise the corrected AC semantics;
+re-run the external diagnostics to establish their post-change results.
