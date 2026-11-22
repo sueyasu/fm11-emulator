@@ -1,5 +1,6 @@
 #pragma once
 #include "portable_types.h"
+#include "Intel8088BusTStates.h"
 #include <algorithm>
 #include <array>
 #include <cstdint>
@@ -39,11 +40,13 @@ public:
         instructionDemandBytes_=0;
         head_=0;
         queue_.fill(0);
+        busTStates_.reset();
     }
     void setEnabled(bool value) {
         enabled_=value;
         byteQueueEnabled_=false;
         demandStallEnabled_=false;
+        busPhaseEnabled_=false;
         reset();
     }
     bool enabled() const { return enabled_; }
@@ -62,7 +65,22 @@ public:
         enabled_=value;
         byteQueueEnabled_=value;
         demandStallEnabled_=value;
+        busPhaseEnabled_=false;
         reset();
+    }
+    // Separate opt-in: use a four-T-state byte-bus phase accumulator
+    // instead of the old per-instruction floor(cycles/4) refill budget.
+    // Instruction execution clocks and semantics are unchanged.
+    void setBusPhaseTimingEnabled(bool value) {
+        enabled_=value;
+        byteQueueEnabled_=value;
+        demandStallEnabled_=false;
+        busPhaseEnabled_=value;
+        reset();
+    }
+    bool busPhaseTimingEnabled() const {return enabled_ && busPhaseEnabled_;}
+    Intel8088BusTStates::Snapshot busPhaseSnapshot() const {
+        return busTStates_.snapshot();
     }
     bool demandStallTimingEnabled() const {
         return enabled_ && byteQueueEnabled_ && demandStallEnabled_;
@@ -140,8 +158,10 @@ public:
         const std::uint64_t available=instructionCycles>occupied
             ? instructionCycles-occupied:0;
         const unsigned free=4-state_.depth;
-        const unsigned grant=static_cast<unsigned>(
-            std::min<std::uint64_t>(free,available/4));
+        const unsigned grant=busPhaseEnabled_
+            ? busTStates_.advance(instructionCycles,instructionDataBytes_,free)
+            : static_cast<unsigned>(
+                std::min<std::uint64_t>(free,available/4));
         if(byteQueueEnabled_) {
             // A control transfer leaves the old queue invalid, and
             // prefetch restarts at the actual target CS:IP. No speculative
@@ -175,12 +195,15 @@ public:
         state_.depth=0;
         head_=0;
         validNext_=false;
+        if(busPhaseEnabled_)busTStates_.flush();
         ++state_.flushes;
     }
 private:
     bool enabled_=false;
     bool byteQueueEnabled_=false;
     bool demandStallEnabled_=false;
+    bool busPhaseEnabled_=false;
+    Intel8088BusTStates busTStates_{};
     bool validNext_=false;
     std::array<BYTE,4> queue_{};
     unsigned head_=0;
