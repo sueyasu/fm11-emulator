@@ -36,6 +36,26 @@ std::uint32_t Main8088Board::Core::pc() const
 {
     return physical(segments_[1],ip_);
 }
+BYTE Main8088Board::Core::readData8(std::uint32_t address) const
+{
+    prefetchTiming_.dataRead();
+    return bus_.readMemory(address);
+}
+void Main8088Board::Core::writeData8(std::uint32_t address,BYTE value)
+{
+    prefetchTiming_.dataWrite();
+    bus_.writeMemory(address,value);
+}
+BYTE Main8088Board::Core::readPort8(WORD port) const
+{
+    prefetchTiming_.dataRead(true);
+    return bus_.readIo(port);
+}
+void Main8088Board::Core::writePort8(WORD port,BYTE value)
+{
+    prefetchTiming_.dataWrite(true);
+    bus_.writeIo(port,value);
+}
 BYTE Main8088Board::Core::fetch8()
 {
     prefetchTiming_.consume(segments_[1],ip_);
@@ -52,13 +72,13 @@ void Main8088Board::Core::push16(WORD value)
 {
     regs_[4]=WORD(regs_[4]-2);
     const auto addr=physical(segments_[2],regs_[4]);
-    bus_.writeMemory(addr,BYTE(value));
-    bus_.writeMemory(physical(segments_[2],WORD(regs_[4]+1)),BYTE(value>>8));
+    writeData8(addr,BYTE(value));
+    writeData8(physical(segments_[2],WORD(regs_[4]+1)),BYTE(value>>8));
 }
 WORD Main8088Board::Core::pop16()
 {
     const auto addr=physical(segments_[2],regs_[4]);
-    const WORD value=WORD(bus_.readMemory(addr)|(WORD(bus_.readMemory(physical(segments_[2],WORD(regs_[4]+1))))<<8));
+    const WORD value=WORD(readData8(addr)|(WORD(readData8(physical(segments_[2],WORD(regs_[4]+1))))<<8));
     regs_[4]=WORD(regs_[4]+2);
     return value;
 }
@@ -74,8 +94,8 @@ void Main8088Board::Core::interrupt(BYTE vector)
     push16(ip_);
     flags_ &= WORD(~0x0300);
     const std::uint32_t address=std::uint32_t(vector)*4;
-    ip_=WORD(bus_.readMemory(address)|(WORD(bus_.readMemory(address+1))<<8));
-    segments_[1]=WORD(bus_.readMemory(address+2)|(WORD(bus_.readMemory(address+3))<<8));
+    ip_=WORD(readData8(address)|(WORD(readData8(address+1))<<8));
+    segments_[1]=WORD(readData8(address+2)|(WORD(readData8(address+3))<<8));
     halted_=false;
 }
 void Main8088Board::Core::irq()
@@ -139,25 +159,25 @@ void Main8088Board::Core::setReg8(unsigned index,BYTE value)
 }
 BYTE Main8088Board::Core::read8(const Operand& op) const
 {
-    return op.registerOperand ? getReg8(op.index) : bus_.readMemory(op.address);
+    return op.registerOperand ? getReg8(op.index) : readData8(op.address);
 }
 WORD Main8088Board::Core::read16(const Operand& op) const
 {
     if(op.registerOperand)return regs_[op.index];
-    const BYTE lo=bus_.readMemory(op.address);
-    const BYTE hi=bus_.readMemory(physical(segments_[op.segment],WORD(op.offset+1)));
+    const BYTE lo=readData8(op.address);
+    const BYTE hi=readData8(physical(segments_[op.segment],WORD(op.offset+1)));
     return WORD(lo|(WORD(hi)<<8));
 }
 void Main8088Board::Core::write8(const Operand& op,BYTE value)
 {
     if(op.registerOperand)setReg8(op.index,value);
-    else bus_.writeMemory(op.address,value);
+    else writeData8(op.address,value);
 }
 void Main8088Board::Core::write16(const Operand& op,WORD value)
 {
     if(op.registerOperand){regs_[op.index]=value;return;}
-    bus_.writeMemory(op.address,BYTE(value));
-    bus_.writeMemory(physical(segments_[op.segment],WORD(op.offset+1)),BYTE(value>>8));
+    writeData8(op.address,BYTE(value));
+    writeData8(physical(segments_[op.segment],WORD(op.offset+1)),BYTE(value>>8));
 }
 namespace {
 constexpr WORD CF=0x0001, PF=0x0004, AF=0x0010, ZF=0x0040;
@@ -419,6 +439,7 @@ void Main8088Board::Core::executeOne()
         return;
     }
     if(halted_)return;
+    prefetchTiming_.beginInstruction();
     if(emulation8080_) {
         lastCycles_=4; // coarse 8080-mode default; no detailed bus timing
         const BYTE instruction=fetch8();
@@ -458,7 +479,7 @@ void Main8088Board::Core::executeOne()
             case 3:return getReg8(2); // E=DL
             case 4:return getReg8(7); // H=BH
             case 5:return getReg8(3); // L=BL
-            case 6:return bus_.readMemory(physical(segments_[3],regs_[3]));
+            case 6:return readData8(physical(segments_[3],regs_[3]));
             default:return getReg8(0); // A=AL
             }
         };
@@ -470,7 +491,7 @@ void Main8088Board::Core::executeOne()
             case 3:setReg8(2,value);break;
             case 4:setReg8(7,value);break;
             case 5:setReg8(3,value);break;
-            case 6:bus_.writeMemory(physical(segments_[3],regs_[3]),value);break;
+            case 6:writeData8(physical(segments_[3],regs_[3]),value);break;
             default:setReg8(0,value);break;
             }
         };
@@ -569,12 +590,12 @@ void Main8088Board::Core::executeOne()
         // remains on SS:SP so RETEM can restore it independently.
         const auto push8080=[&](WORD value) {
             regs_[5]=WORD(regs_[5]-2);
-            bus_.writeMemory(physical(segments_[3],regs_[5]),BYTE(value));
-            bus_.writeMemory(physical(segments_[3],WORD(regs_[5]+1)),BYTE(value>>8));
+            writeData8(physical(segments_[3],regs_[5]),BYTE(value));
+            writeData8(physical(segments_[3],WORD(regs_[5]+1)),BYTE(value>>8));
         };
         const auto pop8080=[&]()->WORD {
-            const WORD lo=bus_.readMemory(physical(segments_[3],regs_[5]));
-            const WORD hi=bus_.readMemory(physical(segments_[3],WORD(regs_[5]+1)));
+            const WORD lo=readData8(physical(segments_[3],regs_[5]));
+            const WORD hi=readData8(physical(segments_[3],WORD(regs_[5]+1)));
             regs_[5]=WORD(regs_[5]+2);
             return WORD(lo|(hi<<8));
         };
@@ -663,10 +684,10 @@ void Main8088Board::Core::executeOne()
         }
         case 0xe3: { // XTHL: exchange HL with word at 8080 SP
             const WORD offset=regs_[5];
-            const BYTE lo=bus_.readMemory(physical(segments_[3],offset));
-            const BYTE hi=bus_.readMemory(physical(segments_[3],WORD(offset+1)));
-            bus_.writeMemory(physical(segments_[3],offset),BYTE(regs_[3]));
-            bus_.writeMemory(physical(segments_[3],WORD(offset+1)),BYTE(regs_[3]>>8));
+            const BYTE lo=readData8(physical(segments_[3],offset));
+            const BYTE hi=readData8(physical(segments_[3],WORD(offset+1)));
+            writeData8(physical(segments_[3],offset),BYTE(regs_[3]));
+            writeData8(physical(segments_[3],WORD(offset+1)),BYTE(regs_[3]>>8));
             regs_[3]=WORD(lo|(WORD(hi)<<8));
             return;
         }
@@ -709,12 +730,12 @@ void Main8088Board::Core::executeOne()
         case 0x3f: flags_^=CF;return; // CMC
         case 0xdb: { // IN port: 8080 immediate 8-bit port, result in A
             const BYTE port=fetch8();
-            setReg8(0,bus_.readIo(port));
+            setReg8(0,readPort8(port));
             return;
         }
         case 0xd3: { // OUT port: 8080 immediate 8-bit port, value from A
             const BYTE port=fetch8();
-            bus_.writeIo(port,getReg8(0));
+            writePort8(port,getReg8(0));
             return;
         }
         case 0xfb: flags_|=0x0200;irqInhibit_=1;return; // EI: next instruction completes before IRQ
@@ -739,32 +760,32 @@ void Main8088Board::Core::executeOne()
         case 0xfe: arithmetic(7,fetch8());return;
         case 0x02: case 0x12: { // STAX B / STAX D
             const WORD off=regs_[instruction==0x02?1u:2u];
-            bus_.writeMemory(physical(segments_[3],off),getReg8(0));
+            writeData8(physical(segments_[3],off),getReg8(0));
             return;
         }
         case 0x0a: case 0x1a: { // LDAX B / LDAX D
             const WORD off=regs_[instruction==0x0a?1u:2u];
-            setReg8(0,bus_.readMemory(physical(segments_[3],off)));
+            setReg8(0,readData8(physical(segments_[3],off)));
             return;
         }
         case 0x22: { // SHLD addr
             const WORD off=fetch16();
-            bus_.writeMemory(physical(segments_[3],off),BYTE(regs_[3]));
-            bus_.writeMemory(physical(segments_[3],WORD(off+1)),BYTE(regs_[3]>>8));
+            writeData8(physical(segments_[3],off),BYTE(regs_[3]));
+            writeData8(physical(segments_[3],WORD(off+1)),BYTE(regs_[3]>>8));
             return;
         }
         case 0x2a: { // LHLD addr
             const WORD off=fetch16();
-            const BYTE lo=bus_.readMemory(physical(segments_[3],off));
-            const BYTE hi=bus_.readMemory(physical(segments_[3],WORD(off+1)));
+            const BYTE lo=readData8(physical(segments_[3],off));
+            const BYTE hi=readData8(physical(segments_[3],WORD(off+1)));
             regs_[3]=WORD(lo|(WORD(hi)<<8));
             return;
         }
         case 0x32: // STA addr
-            bus_.writeMemory(physical(segments_[3],fetch16()),getReg8(0));
+            writeData8(physical(segments_[3],fetch16()),getReg8(0));
             return;
         case 0x3a: // LDA addr
-            setReg8(0,bus_.readMemory(physical(segments_[3],fetch16())));
+            setReg8(0,readData8(physical(segments_[3],fetch16())));
             return;
         default:
             throw std::runtime_error("NEC V20 8080 mode instruction not implemented");
@@ -992,22 +1013,22 @@ void Main8088Board::Core::executeOne()
         const WORD port=regs_[2];
         if(input) {
             const WORD value=word
-                ? WORD(bus_.readIo(port)|(WORD(bus_.readIo(WORD(port+1)))<<8))
-                : bus_.readIo(port);
+                ? WORD(readPort8(port)|(WORD(readPort8(WORD(port+1)))<<8))
+                : readPort8(port);
             const WORD offset=regs_[7];
-            bus_.writeMemory(physical(segments_[0],offset),BYTE(value));
-            if(word)bus_.writeMemory(physical(segments_[0],WORD(offset+1)),BYTE(value>>8));
+            writeData8(physical(segments_[0],offset),BYTE(value));
+            if(word)writeData8(physical(segments_[0],WORD(offset+1)),BYTE(value>>8));
             regs_[7]=WORD(offset+delta);
         } else {
             const WORD offset=regs_[6];
             const WORD segment=segments_[segmentOverride_>=0
                 ? unsigned(segmentOverride_):3u];
             const WORD value=word
-                ? WORD(bus_.readMemory(physical(segment,offset)) |
-                    (WORD(bus_.readMemory(physical(segment,WORD(offset+1))))<<8))
-                : bus_.readMemory(physical(segment,offset));
-            bus_.writeIo(port,BYTE(value));
-            if(word)bus_.writeIo(WORD(port+1),BYTE(value>>8));
+                ? WORD(readData8(physical(segment,offset)) |
+                    (WORD(readData8(physical(segment,WORD(offset+1))))<<8))
+                : readData8(physical(segment,offset));
+            writePort8(port,BYTE(value));
+            if(word)writePort8(WORD(port+1),BYTE(value>>8));
             regs_[6]=WORD(offset+delta);
         }
         if(repeat) {
@@ -1037,13 +1058,13 @@ void Main8088Board::Core::executeOne()
         const bool lods=opcode==0xac || opcode==0xad;
         const bool scas=opcode==0xae || opcode==0xaf;
         const auto readString=[&](WORD segment,WORD offset)->WORD {
-            const BYTE lo=bus_.readMemory(physical(segment,offset));
+            const BYTE lo=readData8(physical(segment,offset));
             if(!word)return lo;
-            return WORD(lo|(WORD(bus_.readMemory(physical(segment,WORD(offset+1))))<<8));
+            return WORD(lo|(WORD(readData8(physical(segment,WORD(offset+1))))<<8));
         };
         const auto writeString=[&](WORD segment,WORD offset,WORD value) {
-            bus_.writeMemory(physical(segment,offset),BYTE(value));
-            if(word)bus_.writeMemory(physical(segment,WORD(offset+1)),BYTE(value>>8));
+            writeData8(physical(segment,offset),BYTE(value));
+            if(word)writeData8(physical(segment,WORD(offset+1)),BYTE(value>>8));
         };
         WORD source=0,destination=0;
         if(mov || cmp || lods) {
@@ -1426,8 +1447,8 @@ void Main8088Board::Core::executeOne()
         } else if(op.reg==3 || op.reg==5) {
             if(op.registerOperand)throw std::runtime_error("far indirect pointer requires memory");
             const WORD offset=read16(op);
-            const WORD segment=WORD(bus_.readMemory(physical(segments_[op.segment],WORD(op.offset+2))) |
-                (WORD(bus_.readMemory(physical(segments_[op.segment],WORD(op.offset+3))))<<8));
+            const WORD segment=WORD(readData8(physical(segments_[op.segment],WORD(op.offset+2))) |
+                (WORD(readData8(physical(segments_[op.segment],WORD(op.offset+3))))<<8));
             if(op.reg==3) {
                 const WORD returnCs=segments_[1],returnIp=ip_;
                 push16(returnCs);
@@ -1468,25 +1489,25 @@ void Main8088Board::Core::executeOne()
     }
     case 0xa0: { // MOV AL,moffs8 (DS)
         const WORD off=fetch16();
-        setReg8(0,bus_.readMemory(physical(segments_[segmentOverride_>=0?unsigned(segmentOverride_):3u],off)));
+        setReg8(0,readData8(physical(segments_[segmentOverride_>=0?unsigned(segmentOverride_):3u],off)));
         break;
     }
     case 0xa1: { // MOV AX,moffs16
         const WORD off=fetch16();
-        const BYTE lo=bus_.readMemory(physical(segments_[segmentOverride_>=0?unsigned(segmentOverride_):3u],off));
-        const BYTE hi=bus_.readMemory(physical(segments_[segmentOverride_>=0?unsigned(segmentOverride_):3u],WORD(off+1)));
+        const BYTE lo=readData8(physical(segments_[segmentOverride_>=0?unsigned(segmentOverride_):3u],off));
+        const BYTE hi=readData8(physical(segments_[segmentOverride_>=0?unsigned(segmentOverride_):3u],WORD(off+1)));
         regs_[0]=WORD(lo|(WORD(hi)<<8));
         break;
     }
     case 0xa2: { // MOV moffs8,AL
         const WORD off=fetch16();
-        bus_.writeMemory(physical(segments_[segmentOverride_>=0?unsigned(segmentOverride_):3u],off),getReg8(0));
+        writeData8(physical(segments_[segmentOverride_>=0?unsigned(segmentOverride_):3u],off),getReg8(0));
         break;
     }
     case 0xa3: { // MOV moffs16,AX
         const WORD off=fetch16();
-        bus_.writeMemory(physical(segments_[segmentOverride_>=0?unsigned(segmentOverride_):3u],off),BYTE(regs_[0]));
-        bus_.writeMemory(physical(segments_[segmentOverride_>=0?unsigned(segmentOverride_):3u],WORD(off+1)),BYTE(regs_[0]>>8));
+        writeData8(physical(segments_[segmentOverride_>=0?unsigned(segmentOverride_):3u],off),BYTE(regs_[0]));
+        writeData8(physical(segments_[segmentOverride_>=0?unsigned(segmentOverride_):3u],WORD(off+1)),BYTE(regs_[0]>>8));
         break;
     }
     case 0xc4: case 0xc5: { // LES/LDS r16,m16:16
@@ -1494,8 +1515,8 @@ void Main8088Board::Core::executeOne()
         if(op.registerOperand)throw std::runtime_error("LDS/LES requires memory pointer");
         const WORD off=read16(op);
         const WORD segOff=WORD(op.offset+2);
-        const WORD segment=WORD(bus_.readMemory(physical(segments_[op.segment],segOff)) |
-            (WORD(bus_.readMemory(physical(segments_[op.segment],WORD(segOff+1))))<<8));
+        const WORD segment=WORD(readData8(physical(segments_[op.segment],segOff)) |
+            (WORD(readData8(physical(segments_[op.segment],WORD(segOff+1))))<<8));
         regs_[op.reg]=off;
         segments_[opcode==0xc4?0:3]=segment;
         break;
@@ -1503,7 +1524,7 @@ void Main8088Board::Core::executeOne()
     case 0xd7: { // XLAT: AL = byte at DS:[BX+AL], source segment overridable
         const WORD off=WORD(regs_[3]+getReg8(0));
         const unsigned seg=segmentOverride_>=0?unsigned(segmentOverride_):3u;
-        setReg8(0,bus_.readMemory(physical(segments_[seg],off)));
+        setReg8(0,readData8(physical(segments_[seg],off)));
         break;
     }
     case 0x8d: { // LEA r16,m - register operand is invalid
@@ -1569,36 +1590,36 @@ void Main8088Board::Core::executeOne()
     }
     // 8088 I/O instructions: immediate ports are zero-extended to 16 bits.
     // Word accesses use two successive byte ports (including FFFF->0000).
-    case 0xe4: setReg8(0,bus_.readIo(fetch8()));break; // IN AL,imm8
+    case 0xe4: setReg8(0,readPort8(fetch8()));break; // IN AL,imm8
     case 0xe5: { // IN AX,imm8
         const WORD port=fetch8();
-        regs_[0]=WORD(bus_.readIo(port) |
-                      (WORD(bus_.readIo(WORD(port+1)))<<8));
+        regs_[0]=WORD(readPort8(port) |
+                      (WORD(readPort8(WORD(port+1)))<<8));
         break;
     }
-    case 0xec: setReg8(0,bus_.readIo(regs_[2]));break; // IN AL,DX
+    case 0xec: setReg8(0,readPort8(regs_[2]));break; // IN AL,DX
     case 0xed: { // IN AX,DX
         const WORD port=regs_[2];
-        regs_[0]=WORD(bus_.readIo(port) |
-                      (WORD(bus_.readIo(WORD(port+1)))<<8));
+        regs_[0]=WORD(readPort8(port) |
+                      (WORD(readPort8(WORD(port+1)))<<8));
         break;
     }
     case 0xe6: { // OUT imm8,AL
         const WORD port=fetch8();
-        bus_.writeIo(port,getReg8(0));
+        writePort8(port,getReg8(0));
         break;
     }
     case 0xe7: { // OUT imm8,AX
         const WORD port=fetch8();
-        bus_.writeIo(port,BYTE(regs_[0]));
-        bus_.writeIo(WORD(port+1),BYTE(regs_[0]>>8));
+        writePort8(port,BYTE(regs_[0]));
+        writePort8(WORD(port+1),BYTE(regs_[0]>>8));
         break;
     }
-    case 0xee: bus_.writeIo(regs_[2],getReg8(0));break; // OUT DX,AL
+    case 0xee: writePort8(regs_[2],getReg8(0));break; // OUT DX,AL
     case 0xef: { // OUT DX,AX
         const WORD port=regs_[2];
-        bus_.writeIo(port,BYTE(regs_[0]));
-        bus_.writeIo(WORD(port+1),BYTE(regs_[0]>>8));
+        writePort8(port,BYTE(regs_[0]));
+        writePort8(WORD(port+1),BYTE(regs_[0]>>8));
         break;
     }
     // Intel 8088 register-only flag instructions: CLC/STC/CMC are
@@ -1713,11 +1734,11 @@ void Main8088Board::Core::executeOne()
                 const WORD offset=WORD(origin+position/8u);
                 const auto address=physical(seg,offset);
                 const unsigned mask=1u<<(position&7u);
-                const BYTE current=bus_.readMemory(address);
+                const BYTE current=readData8(address);
                 if(insert) {
                     const BYTE changed=(value&(1u<<bit))
                         ? BYTE(current|mask) : BYTE(current&~mask);
-                    bus_.writeMemory(address,changed);
+                    writeData8(address,changed);
                 } else if(current&mask) {
                     value|=1u<<bit;
                 }
@@ -1746,8 +1767,8 @@ void Main8088Board::Core::executeOne()
             for(unsigned index=0;index<bytes;++index) {
                 const WORD sourceOffset=WORD(regs_[6]+index);
                 const WORD targetOffset=WORD(regs_[7]+index);
-                const BYTE src=bus_.readMemory(physical(sourceSegment,sourceOffset));
-                const BYTE dst=bus_.readMemory(physical(targetSegment,targetOffset));
+                const BYTE src=readData8(physical(sourceSegment,sourceOffset));
+                const BYTE dst=readData8(physical(targetSegment,targetOffset));
                 // Hardware performs a binary ADC/SBB followed by a
                 // decimal-adjust (DAA/DAS). Independent base-ten
                 // nibble arithmetic gives different answers for the
@@ -1781,7 +1802,7 @@ void Main8088Board::Core::executeOne()
                 carry=adjustHigh;
                 auxCarry=adjustLow;
                 if(ext!=0x26)
-                    bus_.writeMemory(physical(targetSegment,targetOffset),adjusted);
+                    writeData8(physical(targetSegment,targetOffset),adjusted);
             }
             if(bytes!=0) {
                 // V20 instruction flags: decimal carry and the last
@@ -1883,8 +1904,8 @@ void Main8088Board::Core::executeOne()
         const auto lower=static_cast<std::int16_t>(read16(op));
         const WORD upperOffset=WORD(op.offset+2);
         const WORD upperValue=WORD(
-            bus_.readMemory(physical(segments_[op.segment],upperOffset)) |
-            (WORD(bus_.readMemory(physical(segments_[op.segment],
+            readData8(physical(segments_[op.segment],upperOffset)) |
+            (WORD(readData8(physical(segments_[op.segment],
                                           WORD(upperOffset+1))))<<8));
         const auto upper=static_cast<std::int16_t>(upperValue);
         // V20 saves the post-instruction IP on a BOUND exception.
@@ -1942,8 +1963,8 @@ void Main8088Board::Core::executeOne()
             for(unsigned i=1;i<nesting;++i) {
                 previous=WORD(previous-2);
                 const auto a=physical(segments_[2],previous);
-                const WORD value=WORD(bus_.readMemory(a)|
-                    (WORD(bus_.readMemory(physical(segments_[2],WORD(previous+1))))<<8));
+                const WORD value=WORD(readData8(a)|
+                    (WORD(readData8(physical(segments_[2],WORD(previous+1))))<<8));
                 push16(value);
             }
             push16(frame);
