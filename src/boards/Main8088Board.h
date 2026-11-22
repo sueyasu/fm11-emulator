@@ -71,6 +71,15 @@ public:
             prefetchTiming_.setDemandStallTimingEnabled(
                 enabled && variant_==CpuType::I8088);
         }
+        // Opt-in T-state phase tracking for the real-byte FIFO. Unlike
+        // the demand-stall experiment, this does not change CPU clocks.
+        void setPrefetchBusPhaseEnabled(bool enabled) {
+            prefetchTiming_.setBusPhaseTimingEnabled(
+                enabled && variant_==CpuType::I8088);
+        }
+        Intel8088BusTStates::Snapshot prefetchBusPhaseSnapshot() const {
+            return prefetchTiming_.busPhaseSnapshot();
+        }
         Intel8088PrefetchTiming::Snapshot prefetchTimingSnapshot() const {
             return prefetchTiming_.snapshot();
         }
