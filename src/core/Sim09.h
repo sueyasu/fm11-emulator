@@ -92,6 +92,8 @@ private:
 	bool ConsumeIllegalOperand();
 
 	std::uint32_t lastInstructionCycles_ = 0;
+    std::uint32_t tfmTransfers_ = 0;
+    bool nativeTimingMode_ = false;
 	std::uint32_t indexedCycleExtra_ = 0;
 	bool indexedCycleKnown_ = false;
 	BYTE stackTimingMask_ = 0;
