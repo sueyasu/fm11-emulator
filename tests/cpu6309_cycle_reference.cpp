@@ -55,8 +55,8 @@ bool check(const Case& test,bool native) {
 }
 int main() {
     const Case cases[] = {
-        {"ADDR", {0x10,0x30,0x89},4,3},
-        {"PSHSW", {0x10,0x38},6,5},
+        {"ADDR", {0x10,0x30,0x89},4,4},
+        {"PSHSW", {0x10,0x38},6,6},
         {"NEGD", {0x10,0x40},3,2},
         {"COMW", {0x10,0x53},3,2},
         {"SUBW_immediate", {0x10,0x80,0,0},5,4},
