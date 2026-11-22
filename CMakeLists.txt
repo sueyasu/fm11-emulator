@@ -732,6 +732,12 @@ if(FM11_BUILD_TESTS)
     add_executable(main6809_floppy_d88 tests/main6809_floppy_d88.cpp)
     target_link_libraries(main6809_floppy_d88 PRIVATE fm11_core)
     add_test(NAME main6809_floppy_d88 COMMAND main6809_floppy_d88)
+    # Stage 1-A: portable reference/status-aware CPU cycle regression.
+    add_executable(cpu_timing_matrix tests/cpu_timing_matrix.cpp)
+    target_link_libraries(cpu_timing_matrix PRIVATE fm11_core)
+    add_test(NAME cpu_timing_matrix COMMAND cpu_timing_matrix
+             ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/cpu_timing_cases.csv)
+
     # Keep completed CPU-component regressions available without requiring
     # all of them during ongoing display/boot subsystem development.
     # The full suite remains accessible with plain 'ctest'.
