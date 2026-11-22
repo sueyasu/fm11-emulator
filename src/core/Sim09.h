@@ -86,6 +86,10 @@ public:
 private:
 	void BeginInstructionTiming(WORD opcode);
 	void FinishInstructionTiming(WORD opcode);
+    void StepTfm(WORD opcode, BYTE postbyte);
+    void ExecuteDivD(BYTE divisor);
+    void ExecuteDivQ(WORD divisor);
+    void ExecuteMuld(WORD operand);
 	bool IsOpcodeAllowed(WORD opcode) const;
 	bool IsIndexedPostbyteAllowed(BYTE postbyte) const;
 	bool IsTransferPostbyteAllowed(BYTE postbyte) const;
