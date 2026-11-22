@@ -27,22 +27,37 @@ void	CSimZ80::SetRegs(int breg, BYTE data)
 	}
 }
 
-void	CSimZ80::z80irq()
+void CSimZ80::z80irq()
 {
-	if ( FLG_IFF1 && FLG_IFF2 ) {
-		SetIFF1(FALSE);
-		SetIFF2(FALSE);
-		REG_SP -= 2;
-		SetWord(REG_SP, REG_PC);
-		REG_PC = 0x0038;
-	}
+    // NMOS Z80 accepts maskable IRQ only with IFF1 and after the
+    // instruction following EI. IFF2 is retained across NMI.
+    if (!FLG_IFF1 || eiDelay_!=0) return;
+    SetIFF1(FALSE);
+    SetIFF2(FALSE);
+    eiDelay_=0;
+    if (halted_) { REG_PC=WORD(REG_PC+1); halted_=false; }
+    FetchRefresh(); // interrupt acknowledge M1 cycle
+    REG_SP=WORD(REG_SP-2);
+    SetWord(REG_SP,REG_PC);
+    if(interruptMode_==2) {
+        REG_PC=GetWord(WORD((WORD(REG_I)<<8)|interruptDataBus_));
+        instructionCycles_=19;
+    } else {
+        // IM0 assumes RST 38h on the data bus (FFh), matching the
+        // machine's current default pull-up behavior. IM1 is fixed.
+        REG_PC=0x0038;
+        instructionCycles_=13;
+    }
 }
 
-void	CSimZ80::z80nmi()
+void CSimZ80::z80nmi()
 {
-	SetIFF1(FALSE);
-	REG_SP -= 2;
-	SetWord(REG_SP, REG_PC);
-	REG_PC = 0x0066;
+    if(halted_) { REG_PC=WORD(REG_PC+1); halted_=false; }
+    FetchRefresh();
+    SetIFF1(FALSE); // preserve IFF2 for RETN
+    eiDelay_=0;
+    REG_SP=WORD(REG_SP-2);
+    SetWord(REG_SP,REG_PC);
+    REG_PC=0x0066;
+    instructionCycles_=11;
 }
-
