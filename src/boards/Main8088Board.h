@@ -64,6 +64,11 @@ public:
         bool emulation8080() const {return emulation8080_;}
     private:
         std::uint32_t physical(WORD seg,WORD off) const;
+        // CPU operand accesses (as distinct from instruction fetches).
+        BYTE readData8(std::uint32_t address) const;
+        void writeData8(std::uint32_t address, BYTE value);
+        BYTE readPort8(WORD port) const;
+        void writePort8(WORD port, BYTE value);
         BYTE fetch8();
         WORD fetch16();
         void interrupt(BYTE vector);
@@ -106,7 +111,7 @@ public:
         unsigned timingSignedMultiplyCycles_=0;
         unsigned timingDivideCycles_=0;
         bool timingRepeatActive_=false;
-        Intel8088PrefetchTiming prefetchTiming_{};
+        mutable Intel8088PrefetchTiming prefetchTiming_{};
         std::array<WORD,8> regs_{};
         std::array<WORD,4> segments_{}; // ES, CS, SS, DS
         WORD ip_=0;
