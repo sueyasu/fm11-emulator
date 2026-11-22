@@ -1,0 +1,12 @@
+# Baseline fixtures from repository tests; NOT a complete opcode inventory.
+# Upgrade to verified only after adding an independently checked reference.
+cpu,name,bytes,expected,status,reference
+6809,NOP,12,2,baseline,tests/main6809_cpu_timing.cpp
+6809,LDA_imm,8655,2,baseline,tests/main6809_cpu_timing.cpp
+6309,NOP_emulation,12,2,baseline,src/core/sim09/45_timing.inc
+6309-native,NOP_native,12,1,baseline,src/core/sim09/45_timing.inc
+z80,NOP,00,4,baseline,src/core/Z80Timing.h
+z80,LD_B_imm,0602,7,baseline,tests/mainz80_cycles.cpp
+8088,NOP,90,3,baseline,tests/main8088_cycles.cpp
+8088,CLC,F8,2,baseline,tests/main8088_cycles.cpp
+v20,NOP,90,3,baseline,tests/main8088_cycles.cpp
