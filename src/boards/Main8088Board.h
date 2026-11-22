@@ -88,6 +88,7 @@ public:
         CpuType variant_;
         std::uint64_t lastCycles_=0;
         bool timingModRmMemory_=false;
+        unsigned timingEaCycles_=0;
         std::array<WORD,8> regs_{};
         std::array<WORD,4> segments_{}; // ES, CS, SS, DS
         WORD ip_=0;
