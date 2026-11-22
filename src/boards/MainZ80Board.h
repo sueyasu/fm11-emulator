@@ -45,7 +45,15 @@ private:
         void SetMem(WORD addr,BYTE data) override {board_.writeMemory(addr,data);}
         BYTE GetIO(BYTE port) override {return board_.readIo(port);}
         void SetIO(BYTE port,BYTE data) override {board_.writeIo(port,data);}
-        void reset() override {regs=ZREGS{};instructionCycles_=0;}
+        void reset() override {
+            regs=ZREGS{};
+            instructionCycles_=0;
+            interruptMode_=0;
+            interruptDataBus_=0xff;
+            eiDelay_=0;
+            executionNesting_=0;
+            halted_=false;
+        }
         void executeOne() override {z80emu();}
         std::uint32_t pc() const override {return regs.PC;}
         void irq() override {z80irq();}
