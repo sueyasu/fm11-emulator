@@ -7,7 +7,7 @@ void	CSimZ80::z80emuCB(WORD *ix)
 	if ( ix != NULL )
 		ofs = (signed char)(GetOp());
 
-	op = GetOp();
+	op = ix==NULL ? FetchOpcode() : GetOp();
 	instructionCycles_=Z80Timing::cb(static_cast<BYTE>(op),ix!=NULL);
 	bit = (op & 0070) >> 3;
 
