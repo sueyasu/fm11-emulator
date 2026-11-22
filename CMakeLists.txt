@@ -738,6 +738,15 @@ if(FM11_BUILD_TESTS)
     add_test(NAME cpu_timing_matrix COMMAND cpu_timing_matrix
              ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/cpu_timing_cases.csv)
 
+    # Stage 1-B: complete Motorola Appendix C opcode map and Appendix F
+    # indexed-postbyte legality/cycle audit for the MC6809 personality.
+    add_test(NAME mc6809_opcode_coverage
+             COMMAND ${Python3_EXECUTABLE}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_mc6809_opcode_coverage.py)
+    add_executable(cpu6809_indexed_postbytes tests/cpu6809_indexed_postbytes.cpp)
+    target_link_libraries(cpu6809_indexed_postbytes PRIVATE fm11_core)
+    add_test(NAME cpu6809_indexed_postbytes COMMAND cpu6809_indexed_postbytes)
+
     # Keep completed CPU-component regressions available without requiring
     # all of them during ongoing display/boot subsystem development.
     # The full suite remains accessible with plain 'ctest'.
