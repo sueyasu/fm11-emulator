@@ -27,6 +27,7 @@ void Main8088Board::Core::reset()
     segmentOverride_=-1;
     timingRepeatActive_=false;
     prefetchTiming_.reset();
+    busEvents_.reset();
 }
 std::uint32_t Main8088Board::Core::physical(WORD seg,WORD off) const
 {
@@ -39,21 +40,27 @@ std::uint32_t Main8088Board::Core::pc() const
 BYTE Main8088Board::Core::readData8(std::uint32_t address) const
 {
     prefetchTiming_.dataRead();
-    return bus_.readMemory(address);
+    const BYTE value=bus_.readMemory(address);
+    busEvents_.record(Intel8088BusEvents::Kind::MemoryRead,address,value);
+    return value;
 }
 void Main8088Board::Core::writeData8(std::uint32_t address,BYTE value)
 {
     prefetchTiming_.dataWrite();
+    busEvents_.record(Intel8088BusEvents::Kind::MemoryWrite,address,value);
     bus_.writeMemory(address,value);
 }
 BYTE Main8088Board::Core::readPort8(WORD port) const
 {
     prefetchTiming_.dataRead(true);
-    return bus_.readIo(port);
+    const BYTE value=bus_.readIo(port);
+    busEvents_.record(Intel8088BusEvents::Kind::PortRead,port,value);
+    return value;
 }
 void Main8088Board::Core::writePort8(WORD port,BYTE value)
 {
     prefetchTiming_.dataWrite(true);
+    busEvents_.record(Intel8088BusEvents::Kind::PortWrite,port,value);
     bus_.writeIo(port,value);
 }
 BYTE Main8088Board::Core::fetch8()
@@ -63,6 +70,7 @@ BYTE Main8088Board::Core::fetch8()
         [this](WORD cs,WORD offset) {
             return bus_.readMemory(physical(cs,offset));
         });
+    busEvents_.record(Intel8088BusEvents::Kind::Fetch,pc(),result);
     ++ip_;
     return result;
 }
@@ -424,6 +432,7 @@ const std::array<unsigned,256> kV20Cycles=makeV20Cycles();
 }
 void Main8088Board::Core::executeOne()
 {
+    busEvents_.beginInstruction();
     lastCycles_=0;
     timingModRmMemory_=false;
     timingEaCycles_=0;
