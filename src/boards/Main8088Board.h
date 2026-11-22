@@ -57,6 +57,13 @@ public:
         void setPrefetchTrackingEnabled(bool enabled) {
             prefetchTiming_.setEnabled(enabled && variant_==CpuType::I8088);
         }
+        // Explicit opt-in for instruction bytes stored in the BIU FIFO.
+        // Keeps instruction-level cycle estimates unchanged; the current
+        // refill budget is still not a bus-phase accurate scheduler.
+        void setPrefetchByteQueueEnabled(bool enabled) {
+            prefetchTiming_.setByteQueueEnabled(
+                enabled && variant_==CpuType::I8088);
+        }
         Intel8088PrefetchTiming::Snapshot prefetchTimingSnapshot() const {
             return prefetchTiming_.snapshot();
         }
