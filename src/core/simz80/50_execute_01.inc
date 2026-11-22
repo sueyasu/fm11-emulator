@@ -2,7 +2,9 @@ void	CSimZ80::z80emu()
 {
 	WORD ACC_A;
 	BYTE ACC_R, ACC_C;
-	BYTE op = GetOp();
+	const bool outerInstruction=(executionNesting_++ == 0);
+	if(outerInstruction && eiDelay_!=0)--eiDelay_;
+	BYTE op = FetchOpcode();
 	instructionCycles_=Z80Timing::base(op,FLG_Z!=0,FLG_C!=0,FLG_P!=0,FLG_S!=0);
 	if(op==0x10)instructionCycles_=(REG_B!=1)?13:8;
 
@@ -323,6 +325,7 @@ void	CSimZ80::z80emu()
 		break;
 	case 0166:  		/* HALT 		*/  	/* --X-X--- */
 		REG_PC--;
+		halted_=true;
 		break;
 
 	case 0200:  		/* ADD  A,B 	*/  	/* **X*XV0* */
