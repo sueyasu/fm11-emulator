@@ -870,11 +870,11 @@ void Main8088Board::Core::executeOne()
                 }
                 if(opcode>=0x88 && opcode<=0x8b) {
                     const bool word=(opcode&1)!=0;
-                    cpu.lastCycles_=prefixCycles+(memory ? 8u+ea+(word?4u:0u) : 2u);
+                    cpu.lastCycles_=prefixCycles+(memory ? ((opcode&2)?8u:9u)+ea+(word?4u:0u) : 2u);
                     return;
                 }
                 if(opcode==0x8c || opcode==0x8e) {
-                    cpu.lastCycles_=prefixCycles+(memory ? 8u+ea+4u : 2u);
+                    cpu.lastCycles_=prefixCycles+(memory ? (opcode==0x8c?9u:8u)+ea+4u : 2u);
                     return;
                 }
                 if(opcode==0xc6 || opcode==0xc7) {
