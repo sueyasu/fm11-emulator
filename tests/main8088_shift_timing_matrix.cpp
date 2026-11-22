@@ -4,7 +4,7 @@
 
 // Intel 8088 opcode table D0-D3: single-bit shifts 2/23+EA,
 // CL-controlled shifts 8+4n / 28+EA+4n (reg/memory).
-// A word-memory RMW needs an additional 8 clocks on the 8-bit bus.
+// Published 8088 table entries already include word-memory timing.
 int main() {
     constexpr unsigned counts[]={0,1,3,31,255};
     for(unsigned extension=0;extension<8;++extension) {
@@ -32,9 +32,9 @@ int main() {
                         cpu.executeOne();
                         const unsigned count=variable?value:1u;
                         const unsigned expected=variable
-                            ? (memory?28u+5u+4u*count+(word?8u:0u):
+                            ? (memory?28u+5u+4u*count:
                                       8u+4u*count)
-                            : (memory?23u+5u+(word?8u:0u):2u);
+                            : (memory?23u+5u:2u);
                         if(cpu.lastExecutionCycles()!=expected || cpu.ip()!=2) {
                             std::cerr<<"shift/rotate op="<<std::hex
                                 <<unsigned(opcode)<<" modrm="<<unsigned(modrm)
@@ -59,6 +59,6 @@ int main() {
     auto& cpu=static_cast<Main8088Board::Core&>(board.cpu());
     cpu.setConformanceState(regs,segments,0,2);
     cpu.executeOne();
-    if(cpu.lastExecutionCycles()!=38 || cpu.ip()!=3)return 2;
+    if(cpu.lastExecutionCycles()!=30 || cpu.ip()!=3)return 2;
     return 0;
 }
