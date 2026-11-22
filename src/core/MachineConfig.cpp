@@ -115,7 +115,7 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                     if(value=="200")cfg.dipSystemDisplayLines=200;
                     else if(value=="400")cfg.dipSystemDisplayLines=400;
                     else throw std::invalid_argument("display_lines must be 200 or 400");
-                else handled=false;
+                } else handled=false;
             } else if(section=="main") {
                 if(dipswMain)throw std::invalid_argument("cannot mix [main].active with [DIPSW].main_cpu");
                 legacyMain=true;
