@@ -52,10 +52,18 @@ int main() {
     for(unsigned ext=0x10;ext<=0x1f;++ext) {
         const BYTE bit=BYTE(ext);
         const BYTE mem=0x07,reg=0xc0;
-        const bool word=ext&1,immediate=ext&8;
-        const unsigned clocksReg=immediate?5u:4u;
-        const unsigned clocksMem=word?(immediate?22u:21u)
-                                      :(immediate?14u:13u);
+        const bool word=(ext&1)!=0,immediate=(ext&8)!=0;
+        const unsigned op=(ext>>1)&3u; // TEST1 CLR1 SET1 NOT1
+        constexpr unsigned regCl[4]={3,5,4,4};
+        constexpr unsigned regImm[4]={4,6,5,5};
+        constexpr unsigned byteCl[4]={8,14,13,13};
+        constexpr unsigned byteImm[4]={9,15,14,14};
+        constexpr unsigned wordCl[4]={12,22,21,21};
+        constexpr unsigned wordImm[4]={13,23,22,22};
+        const unsigned clocksReg=immediate?regImm[op]:regCl[op];
+        const unsigned clocksMem=word
+            ?(immediate?wordImm[op]:wordCl[op])
+            :(immediate?byteImm[op]:byteCl[op]);
         if(immediate) {
             if(!check("0F bit register immediate",
                        {0x0f,bit,reg,1},clocksReg))return 13;
@@ -72,6 +80,6 @@ int main() {
     if(!check("ROL4 memory",{0x0f,0x28,0x07},28))return 18;
     if(!check("ROR4 register",{0x0f,0x2a,0xc0},17))return 19;
     if(!check("ROR4 memory",{0x0f,0x2a,0x07},32))return 20;
-    if(!check("segment override bit",{0x26,0x0f,0x18,0xc0,1},7))return 21;
+    if(!check("segment override bit",{0x26,0x0f,0x18,0xc0,1},6))return 21;
     return 0;
 }

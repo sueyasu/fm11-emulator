@@ -903,6 +903,17 @@ void Main8088Board::Core::executeOne()
                         :2u);
                     return;
                 }
+                if(opcode==0x84 || opcode==0x85) {
+                    // NEC V20 TEST r/m,reg: 2 register,
+                    // 10/14 memory clocks (byte/word).
+                    cpu.lastCycles_=prefix+(memory?(word?14u:10u):2u);
+                    return;
+                }
+                if((opcode==0xf6 || opcode==0xf7) && ext<=1) {
+                    // TEST r/m,imm: 4 register, 11/15 memory.
+                    cpu.lastCycles_=prefix+(memory?(word?15u:11u):4u);
+                    return;
+                }
                 if(opcode==0x8c || opcode==0x8e) {
                     cpu.lastCycles_=prefix+(memory
                         ? (opcode==0x8c?14u:15u):2u);
@@ -1980,6 +1991,9 @@ void Main8088Board::Core::executeOne()
                 if(zeroFlag)flags_|=ZF;
                 if(auxCarry)flags_|=AF;
             }
+            // NEC Table 2-8: ADD4S/SUB4S/CMP4S = 19*m + 7,
+            // where m is the byte count (digits rounded up / 2).
+            lastCycles_=2u*prefixCount+19u*bytes+7u;
             break;
         }
         if(ext==0x28 || ext==0x2a) { // NEC ROL4 / ROR4, r/m8
@@ -2039,14 +2053,22 @@ void Main8088Board::Core::executeOne()
                 : operation==2 ? (value|bitMask) : (value^bitMask);
             writeOperand(operand,bits,updated);
         }
-        // V20 Table 2-8: 0F10-1F CL/imm bit operations.
-        // TEST1/CLR1/SET1/NOT1 have the same reference class.
+        // NEC Table 2-8: the four bit operations have different
+        // execution times, including TEST1 (read-only).
+        // Each pair is [CL form, immediate form].
+        static constexpr unsigned regCl[4]={3,5,4,4};
+        static constexpr unsigned regImm[4]={4,6,5,5};
+        static constexpr unsigned byteCl[4]={8,14,13,13};
+        static constexpr unsigned byteImm[4]={9,15,14,14};
+        static constexpr unsigned wordCl[4]={12,22,21,21};
+        static constexpr unsigned wordImm[4]={13,23,22,22};
         const bool immediate=(ext&8u)!=0;
-        const bool memory=!operand.registerOperand;
-        lastCycles_=2u*prefixCount+(memory
-            ? (bits==16?(immediate?22u:21u)
-                       :(immediate?14u:13u))
-            : (immediate?5u:4u));
+        lastCycles_=2u*prefixCount+
+            (operand.registerOperand
+                ? (immediate?regImm[operation]:regCl[operation])
+                : (bits==16
+                    ? (immediate?wordImm[operation]:wordCl[operation])
+                    : (immediate?byteImm[operation]:byteCl[operation])));
         timingModRmMemory_=false;
         break;
     }

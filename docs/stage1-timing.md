@@ -1097,3 +1097,35 @@ The 8080 emulation-mode timings remain provisional, not copied
 blindly from native Intel 8080 T-state tables. Other NEC extended
 instructions are not yet reference-classified in this stage.
 Source: https://www.ardent-tool.com/CPU/docs/NEC/V20-V30/v_series.pdf
+
+## Stage 1-F: correction against the original NEC timing table
+
+The preceding extension-pass assumption that TEST1, CLR1,
+SET1, and NOT1 share one timing class was incorrect.
+Table 2-8 (pages 172, 177, 181, and 183) distinguishes
+their CL and immediate forms:
+
+| Operation | reg CL / imm | mem8 CL / imm | mem16 CL / imm |
+| --- | --- | --- | --- |
+| TEST1 | 3 / 4 | 8 / 9 | 12 / 13 |
+| CLR1 | 5 / 6 | 14 / 15 | 22 / 23 |
+| SET1 | 4 / 5 | 13 / 14 | 21 / 22 |
+| NOT1 | 4 / 5 | 13 / 14 | 21 / 22 |
+
+The classifier is corrected and the original timing test's
+expectations updated (including prefix cost). Native TEST
+84h/85h and F6h/F7h immediate TEST are also classified
+at the distinct V20 register / 8-bit memory / 16-bit memory
+values. ADD4S/SUB4S/CMP4S now use the documented
+`19 * ceil(CL / 2) + 7` timing rather than a generic default.
+This is native-mode V20 instruction timing only.
+
+The V20 8080-emulation mode still uses a provisional
+per-instruction estimate: the native V20 instruction table
+does not provide a verified 8080-mode instruction-by-instruction
+cycle inventory. In particular, the Intel 8080 T-state table
+must not be presented as NEC V20 clock timings without
+independent verification.
+
+Reference: NEC 16-bit V Series Instruction User's Manual,
+Table 2-8 (V20/V20HL column), pages 170-184.
