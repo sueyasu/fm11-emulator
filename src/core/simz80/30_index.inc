@@ -254,5 +254,14 @@ void	CSimZ80::z80emuIndex(WORD *ix)
 	case 0xCB:
 		z80emuCB(ix);
 		break;
+	default:
+		// DD/FD prefix is ignored for opcodes that do not address
+		// HL/H/L; execute the underlying instruction (including ED
+		// and further DD/FD prefixes), charging the prefix fetch.
+		// This avoids silently treating e.g. DD 00 as a NOP.
+		REG_PC=WORD(REG_PC-1);
+		z80emu();
+		instructionCycles_+=4;
+		break;
 	}
 }
