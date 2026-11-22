@@ -277,3 +277,48 @@ operations have been added to normal CPU instruction timing.
 
 References: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
 (F6/F7, C8–CB).
+
+## Correction: primary ALU and Group 1 published 8088 timing
+
+The earlier Stage 1-E notes were based on a **transfer-count
+heuristic** which incorrectly added 4 or 8 clocks to some
+16-bit-memory ALU forms, and treated the CMP memory
+destination as a faster read-only instruction. Although CMP
+does not write its operand, the published 8088 timing
+classification does **not** support that cycle estimate.
+
+The opcode-by-opcode **Intel 8088** reference table records:
+
+| Family/form | 8088 clocks |
+|---|---:|
+| Primary ALU 00–3B, register-only | 3 |
+| Primary ALU r/m,reg (includes CMP 38/39) | 24+EA |
+| Primary ALU reg,r/m (includes CMP 3A/3B) | 13+EA |
+| Group 1 immediate ALU 80–83, register | 4 |
+| Group 1 immediate ALU 80–83, memory | 23+EA |
+
+These entries are already for the **8088**, rather than the
+8086. They do not call for another unverified word-bus
+penalty. The C++ timing formulas now use exactly these
+reference classes for byte and word forms. The
+`main8088_alu_direction_matrix`, `main8088_ea_timing`,
+and `main8088_alu_group_timing` expected values were
+corrected at the same time; do not regard the older timing
+values in the preceding chronological audit sections as
+current.
+
+New `main8088_group1_reference_matrix` covers all eight
+immediate ALU extensions across 80h, 81h, 82h alias,
+and 83h, register and memory modes, and the prefix
+surcharge. This work introduces no extra hot-path
+allocations or cycle-level bus scheduling.
+
+Primary timing source:
+<https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
+(00h–3Bh and 80h–83h tables). Another useful
+independent Japanese-language 8088 timing discussion is
+<https://qiita.com/hdk_2/items/33b1bbdef5527d5a196366589469a>,
+though published clock listings and modelling assumptions
+are not uniform across sources. The changes here follow
+the opcode table literally, pending any hardware-based
+correction.
