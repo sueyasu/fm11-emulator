@@ -37,6 +37,21 @@ std::size_t ramKiB(const std::string& value) {
         throw std::invalid_argument("memory.ram_kib must be 128..1024 in steps of 128");
     return static_cast<std::size_t>(kib);
 }
+char dipState(const std::string& value) {
+    if(value=="x" || value=="o")return value[0];
+    throw std::invalid_argument("DIP switch state must be x or o");
+}
+unsigned dipDrive(const std::string& value) {
+    if(value.size()!=1 || value[0]<'0' || value[0]>'3')
+        throw std::invalid_argument("DIPSW.boot_drive must be 0..3");
+    return unsigned(value[0]-'0');
+}
+std::string dipBaud(const std::string& value) {
+    if(value.size()!=5 || !std::all_of(value.begin(),value.end(),
+        [](char c){return c=='x'||c=='o';}))
+        throw std::invalid_argument("DIPSW.serial_baud_sw4_8 requires five x/o characters");
+    return value;
+}
 bool exists(const std::string& path) {
     std::ifstream stream(path);
     return stream.good();
@@ -86,7 +101,27 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                     if(key=="2D_FDD")cfg.boot2dFdd=boolean(value);
                     else if(key=="2HD_FDD")cfg.boot2hdFdd=boolean(value);
                     else cfg.bootHdd=boolean(value);
-                } else handled=false;
+                } else if(key=="boot_drive")cfg.dipBootDrive=dipDrive(value);
+                else if(key=="boot_sw3")cfg.dipBootSw3=dipState(value);
+                else if(key=="boot_sw4")cfg.dipBootSw4=dipState(value);
+                else if(key=="bubble")cfg.dipBootBubble=boolean(value);
+                else if(key=="serial_sw1")cfg.dipCommSw1=dipState(value);
+                else if(key=="serial_cd") {
+                    if(value=="ignore")cfg.dipSerialCd=MachineConfig::SerialCd::Ignore;
+                    else if(value=="cd_dsr")cfg.dipSerialCd=MachineConfig::SerialCd::CdAndDsr;
+                    else throw std::invalid_argument("serial_cd must be ignore or cd_dsr");
+                } else if(key=="serial_mode") {
+                    if(value=="async")cfg.dipSerialMode=MachineConfig::SerialMode::Async;
+                    else if(value=="sync")cfg.dipSerialMode=MachineConfig::SerialMode::Sync;
+                    else throw std::invalid_argument("serial_mode must be async or sync");
+                } else if(key=="serial_baud_sw4_8")cfg.dipSerialBaudSwitches=dipBaud(value);
+                else if(key=="display_lines") {
+                    if(value=="200")cfg.dipSystemDisplayLines=200;
+                    else if(value=="400")cfg.dipSystemDisplayLines=400;
+                    else throw std::invalid_argument("display_lines must be 200 or 400");
+                } else if(key=="system_sw3")cfg.dipSystemSw3=dipState(value);
+                else if(key=="printer_sw4")cfg.dipPrinterSw4=dipState(value);
+                else handled=false;
             } else if(section=="main") {
                 if(dipswMain)throw std::invalid_argument("cannot mix [main].active with [DIPSW].main_cpu");
                 legacyMain=true;
