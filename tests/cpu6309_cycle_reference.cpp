@@ -49,8 +49,17 @@ bool check(const Case& test,bool native) {
     }
     if(test.w && test.bytes.size()>=2 && test.bytes[0]==0x11 &&
        test.bytes[1]>=0x38 && test.bytes[1]<=0x3b) {
-        if(cpu.regs.r.w.W!=0 || cpu.ram[0x2100]!=0x55)
+        // TFM R+,R overwrites one fixed destination with the final
+        // source byte; all other variants in this fixture leave its
+        // initial byte at 2100h unchanged.
+        const BYTE expectedByte =
+            test.bytes[1] == 0x3a && test.w >= 2 ? 0x66 : 0x55;
+        if(cpu.regs.r.w.W!=0 || cpu.ram[0x2100]!=expectedByte) {
+            std::fprintf(stderr,"%s %s: TFM data/W mismatch (Y0=%02X expected=%02X W=%04X)\n",
+                         test.name,native?"native":"emulation",
+                         cpu.ram[0x2100],expectedByte,cpu.regs.r.w.W);
             return false;
+        }
     }
     return true;
 }
