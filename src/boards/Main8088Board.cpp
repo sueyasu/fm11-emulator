@@ -934,8 +934,9 @@ void Main8088Board::Core::executeOne()
                         ? (word?24u:16u):2u);
                     return;
                 }
-                // Remaining V20 instructions retain provisional estimates.
-                return;
+                // For still-unclassified V20 instructions, fall
+                // through to the original provisional ModR/M memory
+                // adjustment below. Do not change their old behavior.
             }
             if(cpu.variant_==CpuType::I8088) {
                 // Keep instruction execution and timing accounting separate:
