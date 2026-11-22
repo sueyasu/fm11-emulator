@@ -33,14 +33,19 @@ int main()
     // Above: MOV AX, MOV ES, MOV SI, MOV DI, MOV CL, STC
     const WORD saved=cpu.flags();
     board.cpu().executeOne(); // ADD4S CL=0
-    if(cpu.flags()!=saved || board.bus().readMemory(0x20200)!=0)return 1;
+    // NEC V20 Table 2-8: packed-BCD string instructions
+    // take 19 * ceil(CL/2) + 7 clocks, including zero digits.
+    if(cpu.lastExecutionCycles()!=7 ||
+       cpu.flags()!=saved || board.bus().readMemory(0x20200)!=0)return 1;
     board.cpu().executeOne(); // CL=4
     board.cpu().executeOne(); // SUB4S
-    if(board.bus().readMemory(0x20200)!=0x99 ||
+    if(cpu.lastExecutionCycles()!=45 ||
+       board.bus().readMemory(0x20200)!=0x99 ||
        board.bus().readMemory(0x20201)!=0x99 ||
        (cpu.flags()&0x41)!=0x01)return 2;
     board.cpu().executeOne(); // CMP4S
-    if(board.bus().readMemory(0x20200)!=0x99 ||
+    if(cpu.lastExecutionCycles()!=45 ||
+       board.bus().readMemory(0x20200)!=0x99 ||
        board.bus().readMemory(0x20201)!=0x99 ||
        (cpu.flags()&0x41)!=0)return 3;
     if(cpu.reg(6)!=0x100 || cpu.reg(7)!=0x200 ||
