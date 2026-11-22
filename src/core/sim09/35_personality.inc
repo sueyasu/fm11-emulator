@@ -102,7 +102,7 @@ void CSim09::StepTfm(WORD opcode, BYTE postbyte)
     // Do not treat a register number outside D/X/Y/U/S as an address.
     if (srcReg > 4 || dstReg > 4) {
         REG_MD |= MD_X;
-        REG_CC |= CC_E;
+        REG_CC = (REG_CC & ~CC_Z) | CC_E;
         PushAll();
         REG_PC = GetMemWord(0xfff0);
         tfmActive_ = false;
