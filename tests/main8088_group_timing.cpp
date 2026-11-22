@@ -40,8 +40,12 @@ int main() {
     };
     const Case cases[]={
         {"FE inc reg", {0xfe,0xc0},2,3},
+        {"FE dec reg", {0xfe,0xc8},2,3},
+        {"FE inc mem8", {0xfe,0x07},2,28},
         {"FE dec mem", {0xfe,0x0f},2,28},
         {"FF inc reg", {0xff,0xc0},2,3},
+        {"FF dec reg", {0xff,0xc8},2,3},
+        {"FF inc mem16", {0xff,0x07},2,28},
         {"FF dec mem", {0xff,0x0f},2,28},
         {"FF near call reg", {0xff,0xd0},2,20},
         {"FF near call mem", {0xff,0x17},2,34},
@@ -50,6 +54,8 @@ int main() {
         {"FF near jmp mem", {0xff,0x27},2,23},
         {"FF far jmp mem", {0xff,0x2f},2,29},
         {"FF push reg", {0xff,0xf0},2,15},
+        {"FF push reg alias", {0xff,0xf8},2,15},
+        {"FF push mem alias", {0xff,0x3f},2,29},
         {"FF push mem", {0xff,0x37},2,29},
         {"POP reg rm", {0x8f,0xc0},2,12},
         {"POP mem rm", {0x8f,0x07},2,30},
