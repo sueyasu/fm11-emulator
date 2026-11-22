@@ -774,3 +774,58 @@ Next step: account for sequential and control-transfer fetch
 delays using BIU bus phases, including the exact relative
 timing of execution unit accesses, and only then make queue
 starvation affect `lastExecutionCycles()`.
+
+### Stage 1-E: experimental FIFO demand-fetch stall accounting
+
+A third **explicit opt-in** timing mode, independent of the
+passive shadow and actual-byte FIFO modes, is available on the
+8088 CPU core:
+
+```cpp
+auto& cpu=static_cast<Main8088Board::Core&>(board.cpu());
+cpu.setPrefetchStallTimingEnabled(true);
+cpu.executeOne();
+auto snapshot=cpu.prefetchTimingSnapshot();
+// snapshot.demandStallCycles is the cumulative experimental penalty
+```
+
+When an instruction needs a byte while the four-byte FIFO is
+empty, the diagnostic model charges **4 additional 8088 clocks**
+for that demand fetch. The mode retains real FIFO instruction
+bytes, prior conditional-branch flush handling and separate
+operand memory/I/O bus reservations. Only instruction-byte
+demand misses are counted, avoiding an additional penalty for
+operand transfers already present in the Intel reference times.
+
+The per-instruction reference timing remains the source of the
+postinstruction FIFO refill grant. The extra demand penalty is
+applied *after* refill, so it cannot fund another refill in the
+same instruction. The cumulative total is available as
+`demandStallCycles` in the snapshot.
+
+**Accuracy caveat:** this is an experimental lower-layer model,
+not hardware cycle-accurate timing. It assumes each empty-FIFO
+demand requires a whole four-clock fetch and that none of that
+time is included in the published instruction baseline. Real
+8088 execution can overlap BIU fetches with EU micro-operations,
+and memory/I/O transactions can interrupt or delay refills.
+Accordingly the model can overestimate execution time; it is
+disabled by default and must not be enabled for reference-
+timing tests or ordinary FM-11 execution before further validation.
+
+The `main8088_prefetch_stall_timing` CTest verifies the
+three distinct modes (passive, real-byte FIFO, FIFO+stall),
+opcode/operand demand misses, buffered bytes, jump-to-fallthrough
+flush, absence of double-counting on memory operands, and
+NEC V20 isolation.
+
+```sh
+cmake -S . -B build -DFM11_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build -R 'main8088_prefetch' --output-on-failure
+ctest --test-dir build --output-on-failure
+```
+
+Next: replace per-instruction refill grants and blunt demand penalties
+with real byte-bus arbitration at the 8088's T-state level, including
+BIU/EU phase overlap, transfer wait states and external DMA HOLD.
