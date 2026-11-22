@@ -317,7 +317,7 @@ Primary timing source:
 <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
 (00h–3Bh and 80h–83h tables). Another useful
 independent Japanese-language 8088 timing discussion is
-<https://qiita.com/hdk_2/items/33b1bbdef5527d5a196366589469a>,
+<https://qiita.com/hdk_2/items/6f8cb8a7c67342e2a32a>,
 though published clock listings and modelling assumptions
 are not uniform across sources. The changes here follow
 the opcode table literally, pending any hardware-based
