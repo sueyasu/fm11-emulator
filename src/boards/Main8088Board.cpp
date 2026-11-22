@@ -902,6 +902,7 @@ void Main8088Board::Core::executeOne()
     (void)lockPrefix;
     const bool ioString=variant_==CpuType::NECV20 && opcode>=0x6c && opcode<=0x6f;
     const bool stringOp=ioString || (opcode>=0xa4 && opcode<=0xa7) || (opcode>=0xaa && opcode<=0xaf);
+    if(variant_==CpuType::I8088 && !stringOp)timingRepeatActive_=false;
     // Both 8088 and V20 permit REP/REPNE on F6/F7 group
     // arithmetic. REP-prefixed IDIV negates the quotient without
     // repeating. On V20, REPNC/REPC (64h/65h) are valid with all
@@ -963,7 +964,13 @@ void Main8088Board::Core::executeOne()
     case 0xae: case 0xaf: {
         const bool word=(opcode&1)!=0;
         const WORD delta=WORD((flags_&0x0400)?(word?-2:-1):(word?2:1));
-        if(repeat && regs_[1]==0) {lastCycles_=2*prefixCount+2;break;}
+        if(repeat && regs_[1]==0) {
+            if(variant_==CpuType::I8088) {
+                lastCycles_=9;
+                timingRepeatActive_=false;
+            } else lastCycles_=2*prefixCount+2;
+            break;
+        }
         const bool mov=opcode==0xa4 || opcode==0xa5;
         const bool cmp=opcode==0xa6 || opcode==0xa7;
         const bool stos=opcode==0xaa || opcode==0xab;
@@ -1003,6 +1010,33 @@ void Main8088Board::Core::executeOne()
                     : (((flags_&ZF)!=0)==(repeat==0xf3)))
                 : true;
             if(regs_[1]!=0 && continueRepeat)ip_=opAddress;
+        }
+        if(variant_==CpuType::I8088) {
+            // REP is one iteration per executeOne(). The documented
+            // 9-clock REP setup is charged once, not at every rewind.
+            // The 8088 word variants include the additional byte-bus
+            // transfers for each source/destination word.
+            static constexpr unsigned normal[12]={
+                18,26,30,38,11,15,16,20,19,23,0,0
+            };
+            static constexpr unsigned perRepeat[12]={
+                17,25,30,38,10,14,13,17,15,19,0,0
+            };
+            unsigned index=0;
+            switch(opcode) {
+            case 0xa4:index=0;break;case 0xa5:index=1;break;
+            case 0xa6:index=2;break;case 0xa7:index=3;break;
+            case 0xaa:index=4;break;case 0xab:index=5;break;
+            case 0xac:index=6;break;case 0xad:index=7;break;
+            case 0xae:index=8;break;case 0xaf:index=9;break;
+            }
+            // Prefix overhead for segment override/LOCK remains separate;
+            // the REP byte is covered by the documented setup cost.
+            const unsigned extraPrefix=2*(prefixCount-(repeat?1u:0u));
+            lastCycles_=extraPrefix+(repeat
+                ? perRepeat[index]+(timingRepeatActive_?0u:9u)
+                : normal[index]);
+            timingRepeatActive_=repeat && ip_==opAddress;
         }
         break;
     }
