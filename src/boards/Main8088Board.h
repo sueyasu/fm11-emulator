@@ -92,6 +92,7 @@ public:
         unsigned timingEaCycles_=0;
         unsigned timingShiftCount_=0;
         unsigned timingModRmExtension_=0;
+        unsigned timingMultiplyCycles_=0;
         bool timingRepeatActive_=false;
         std::array<WORD,8> regs_{};
         std::array<WORD,4> segments_{}; // ES, CS, SS, DS
