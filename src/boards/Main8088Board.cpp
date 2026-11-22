@@ -899,19 +899,26 @@ void Main8088Board::Core::executeOne()
                 const unsigned ea=cpu.timingEaCycles_;
                 const unsigned ext=cpu.timingModRmExtension_;
                 if(opcode>=0x80 && opcode<=0x83) {
-                    // Register/immediate is four clocks. CMP does not
-                    // write back; the other ALU extensions perform RMW.
+                    // Register/immediate is four clocks. CMP reads only,
+                    // other ALU extensions read and write the operand.
+                    // On the byte-wide 8088, word data transfers cost
+                    // +4 clocks each: +4 for CMP, +8 for memory RMW.
+                    const bool word=opcode==0x81 || opcode==0x83;
+                    const unsigned wordExtra=memory && word
+                        ? (ext==7?4u:8u):0u;
                     cpu.lastCycles_=prefixCycles+(memory
-                        ? (ext==7 ? 14u+ea : 23u+ea) : 4u);
+                        ? (ext==7 ? 14u+ea : 23u+ea)+wordExtra : 4u);
                     return;
                 }
                 if(opcode==0xf6 || opcode==0xf7) {
                     if(ext<=1) {
-                        cpu.lastCycles_=prefixCycles+(memory?11u+ea:5u);
+                        cpu.lastCycles_=prefixCycles+(memory
+                            ? 11u+ea+(opcode==0xf7?4u:0u):5u);
                         return;
                     }
                     if(ext==2 || ext==3) {
-                        cpu.lastCycles_=prefixCycles+(memory?24u+ea:3u);
+                        cpu.lastCycles_=prefixCycles+(memory
+                            ? 24u+ea+(opcode==0xf7?8u:0u):3u);
                         return;
                     }
                     if(ext==4 && cpu.timingMultiplyCycles_!=0) {
@@ -1305,7 +1312,10 @@ void Main8088Board::Core::executeOne()
     case 0xe3: { // JCXZ, no decrement
         const auto displacement=static_cast<std::int8_t>(fetch8());
         const bool taken=regs_[1]==0;
-        if(taken)ip_=WORD(ip_+displacement);
+        if(taken) {
+            prefetchTiming_.flush();
+            ip_=WORD(ip_+displacement);
+        }
         if(variant_==CpuType::I8088)
             lastCycles_=2*prefixCount+(taken?18u:6u);
         break;
