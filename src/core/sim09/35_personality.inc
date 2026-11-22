@@ -82,6 +82,76 @@ static void Write6309TfrRegister(REGS& r, BYTE code, WORD v)
 }
 
 
+// TFM micro-operations: an individual transfer is a memory read followed
+// by a memory write. Interrupts can be accepted between these phases.
+// The read is intentionally repeated after RTI, as on the HD6309.
+// The PC is kept at the instruction while W is nonzero, so the CPU's
+// normal interrupt stack contains the TFM restart address.
+void CSim09::InterruptTfm()
+{
+    if (tfmActive_) {
+        tfmReadPending_ = false; // discarded read latch: repeat read on RTI
+        tfmNeedsSetup_ = true;
+    }
+}
+
+void CSim09::StepTfm(WORD opcode, BYTE postbyte)
+{
+    const unsigned srcReg = postbyte >> 4, dstReg = postbyte & 15;
+    // Do not treat a register number outside D/X/Y/U/S as an address.
+    if (srcReg > 4 || dstReg > 4) {
+        REG_MD |= MD_X;
+        REG_CC |= CC_E;
+        PushAll();
+        REG_PC = GetMemWord(0xfff0);
+        tfmActive_ = false;
+        return;
+    }
+    const WORD instructionPC = WORD(REG_PC - 3);
+    if (!tfmActive_ || tfmPC_ != instructionPC ||
+        tfmOpcode_ != opcode || tfmPostbyte_ != postbyte) {
+        tfmActive_ = true;
+        tfmReadPending_ = false;
+        tfmNeedsSetup_ = true;
+        tfmPC_ = instructionPC;
+        tfmOpcode_ = opcode;
+        tfmPostbyte_ = postbyte;
+    }
+    auto tfmRegister = [this](unsigned code) -> WORD& {
+        switch (code) {
+        case 0: return regs.r.w.D;
+        case 1: return regs.r.w.X;
+        case 2: return regs.r.w.Y;
+        case 3: return regs.r.w.U;
+        default: return regs.r.w.S;
+        }
+    };
+    WORD& source = tfmRegister(srcReg);
+    WORD& target = tfmRegister(dstReg);
+    if (!tfmReadPending_) {
+        tfmReadValue_ = GetMemByte(source);
+        tfmReadPending_ = true;
+        tfmStepCycles_ = tfmNeedsSetup_ ? 7u : 1u;
+        tfmNeedsSetup_ = false;
+        REG_PC = tfmPC_;
+        return;
+    }
+    SetMemByte(target,tfmReadValue_);
+    switch (opcode) {
+    case 0x1138: source = WORD(source + 1); target = WORD(target + 1); break;
+    case 0x1139: source = WORD(source - 1); target = WORD(target - 1); break;
+    case 0x113a: source = WORD(source + 1); break;
+    case 0x113b: target = WORD(target + 1); break;
+    }
+    REG_W = WORD(REG_W - 1);
+    tfmReadPending_ = false;
+    tfmStepCycles_ = 2;
+    if (REG_W != 0)
+        REG_PC = tfmPC_;
+    else
+        tfmActive_ = false;
+}
+
 void CSim09::Set6309Enabled(bool enabled)
 {
     enable6309_ = enabled;
