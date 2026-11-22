@@ -47,7 +47,7 @@ int main() {
         if(!instruction("FD DD LD IX",c,18,7))++failure;
         if(c.regs.IX!=0x1234)++failure;
         if(!instruction("DD ED NEG",c,12,10))++failure;
-        if((c.regs.r.b.R&0x7f)!=7)++failure; // 2+3+2 M1 fetches
+        if((c.regs.r.b.R&0x7f)!=8)++failure; // DD+NOP (2), FD+DD+LD (3), DD+ED+NEG (3)
     }
     {
         Cpu c;
