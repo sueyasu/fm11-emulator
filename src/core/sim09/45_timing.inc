@@ -146,7 +146,6 @@ void CSim09::FinishInstructionTiming(WORD op)
         case 0x0e: case 0x7e:
         case 0x19: case 0x1a: case 0x1d:
         case 0x3d: case 0x6d:
-        case 0xbe: case 0xbf:
             --lastInstructionCycles_;
             break;
         case 0x1e: lastInstructionCycles_ -= 3; break; // EXG
