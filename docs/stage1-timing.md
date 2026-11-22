@@ -1180,3 +1180,34 @@ operand-dependent divide timing, exception microcode, prefetch/BIU
 overlap, external WAIT and real-hardware trace validation are outside
 this stage's scope. Estimates may be revised later if measured V20
 timing data become available. This is not cycle-exact emulation.
+
+## Stage 1-G: common CPU/PTM/display timing integration
+
+The new `machine_system_timing` CTest runs the same deterministic
+system-time integration against both Intel 8088 and NEC V20. Five NOP
+instructions at 29.1 kHz must produce exactly five PTM input ticks
+(9.7 kHz), including the terminal-count interrupt. The display sub-CPU
+runs at 19.4 kHz from the *same* main-CPU elapsed intervals and executes
+its ROM instruction stream. The test also performs a one-byte 8237 DMA
+transfer between CPU instructions, checking that the existing immediate
+transfer model does not spuriously advance the PTM twice.
+
+This establishes deterministic **instruction-level** time propagation,
+not physical bus-cycle accuracy. The 6809/6309 and Z80 deterministic PTM
+tests, real-time PTM/display worker tests, and 6844/8237 DMA functional
+tests remain separate regressions. In particular, 8237/6844 disk DMA
+currently runs synchronously in device/host transaction handlers; it
+does **not** model bus stealing or charge CPU stall cycles. Therefore
+hardware-accurate DMA contention and overlap of display/PTM deadlines
+during an individual DMA burst remain outside verified Stage 1-G scope.
+SDL real-time PTM and the display worker use host time rather than a
+shared deterministic cycle counter; relative instruction ordering is
+not guaranteed in threaded mode.
+
+Run:
+
+```sh
+cmake -S . -B build -DFM11_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build -R 'machine_system_timing|machine_ptm_time|realtime_(ptm|display_cpu)|main6809_ptm_clock|main8088_dma_' --output-on-failure
+```

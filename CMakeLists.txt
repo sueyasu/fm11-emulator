@@ -142,6 +142,10 @@ if(FM11_BUILD_TESTS)
                      ${CMAKE_CURRENT_SOURCE_DIR}/tests/main8088_opcode_inventory.py
                      ${CMAKE_CURRENT_SOURCE_DIR}/src/boards/Main8088Board.cpp)
 
+    add_executable(machine_system_timing tests/machine_system_timing.cpp)
+    target_link_libraries(machine_system_timing PRIVATE fm11_core)
+    add_test(NAME machine_system_timing COMMAND machine_system_timing)
+
     add_executable(machine_z80_rom_boot tests/machine_z80_rom_boot.cpp)
     target_link_libraries(machine_z80_rom_boot PRIVATE fm11_core)
     add_test(NAME machine_z80_rom_boot COMMAND machine_z80_rom_boot)
