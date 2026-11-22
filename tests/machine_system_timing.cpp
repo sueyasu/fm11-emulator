@@ -48,7 +48,7 @@ static int check(CpuType type)
     // second time. Bus-steal timing remains an explicit model limitation.
     std::vector<BYTE> sent;
     auto& bus=card->bus();
-    bus.writeRam(0x4000,0x5a);
+    bus.writeMemory(0x4000,0x5a);
     bus.setDmaDevice(0,{},[&sent](BYTE b){sent.push_back(b);});
     bus.writeIo(0x1c,0); // clear address/count flip-flop
     bus.writeIo(0x10,0x00); bus.writeIo(0x10,0x40);
