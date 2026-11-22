@@ -832,8 +832,8 @@ void Main8088Board::Core::executeOne()
         case 0x9a: clocks=36;break; // CALL far immediate
         case 0xc2: case 0xc0: clocks=24;break; // RET near imm
         case 0xc3: case 0xc1: clocks=20;break; // RET near
-        case 0xca: case 0xc8: clocks=33;break; // RET far imm
-        case 0xcb: case 0xc9: clocks=34;break; // RET far
+        case 0xca: case 0xc8: clocks=34;break; // RET far imm
+        case 0xcb: case 0xc9: clocks=33;break; // RET far
         case 0x9c: clocks=14;break; // PUSHF
         case 0x9d: clocks=12;break; // POPF
         case 0x0f: clocks=12;break; // POP CS (8088 undocumented)
