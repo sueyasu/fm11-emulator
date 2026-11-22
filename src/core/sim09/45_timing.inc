@@ -224,8 +224,8 @@ void CSim09::FinishInstructionTiming(WORD op)
     // TFM uses 6 setup cycles plus 3 cycles per byte in either mode.
     // The interpreter currently executes each transfer atomically; the
     // interruptibility of TFM remains separate from this cycle accounting.
-    if (op >= 0x1138 && op <= 0x113b && tfmTransfers_ != 0)
-        lastInstructionCycles_ = 6u + 3u * tfmTransfers_;
+    if (op >= 0x1138 && op <= 0x113b && tfmStepCycles_ != 0)
+        lastInstructionCycles_ = tfmStepCycles_;
 
     // PSHS/PULS/PSHU/PULU: five cycles plus one per 8-bit register
     // and two per 16-bit register selected in the mask.
