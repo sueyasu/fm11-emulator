@@ -81,7 +81,12 @@ void Main8088Board::Core::irq()
     // next instruction boundary, using the PIC-programmed vector.
     bus_.requestIrq(0);
 }
-void Main8088Board::Core::nmi(){interrupt(2);}
+void Main8088Board::Core::nmi()
+{
+    interrupt(2);
+    // NMI interrupt recognition and entry, including vector fetch.
+    lastCycles_=variant_==CpuType::I8088?50u:0u;
+}
 Main8088Board::Core::Operand Main8088Board::Core::decodeModRm()
 {
     const BYTE modrm=fetch8();
@@ -404,6 +409,7 @@ void Main8088Board::Core::executeOne()
     if(irqInhibit_!=0)--irqInhibit_;
     if(!inhibited && (flags_&0x0200) && bus_.interruptPending()) {
         interrupt(bus_.acknowledgeInterrupt());
+        if(variant_==CpuType::I8088)lastCycles_=61;
         return;
     }
     if(halted_)return;
@@ -1159,7 +1165,12 @@ void Main8088Board::Core::executeOne()
     }
     case 0x9b: break; // WAIT: no 8087 or TEST pin in this CPU-card model
     case 0xcc: interrupt(3);break; // INT3
-    case 0xce: if(flags_&OF)interrupt(4);break; // INTO
+    case 0xce:
+        if(flags_&OF) {
+            interrupt(4);
+            if(variant_==CpuType::I8088)lastCycles_=73+2*prefixCount;
+        } else if(variant_==CpuType::I8088)lastCycles_=4+2*prefixCount;
+        break; // INTO
     case 0x98: // CBW: sign-extend AL into AX (FLAGS unchanged)
         regs_[0]=WORD(static_cast<std::int16_t>(static_cast<std::int8_t>(BYTE(regs_[0]))));
         break;
