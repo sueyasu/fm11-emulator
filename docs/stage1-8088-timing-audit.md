@@ -485,3 +485,29 @@ flush routine is a no-op when prefetch tracking is disabled.
 
 Reference for instruction classes and timing:
 <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>.
+
+## TEST and XCHG ModR/M width-dependent clocks
+
+A subsequent cross-check of the Intel 8088 (not 8086) timing
+table found that earlier code wrongly assigned the **word**
+memory cycle count to both byte and word TEST/XCHG variants.
+Correct reference values (plus EA on memory operands):
+
+| Opcode | Register clocks | Byte/word memory clocks |
+|---|---:|---:|
+| 84h TEST r/m8,r8 | 3 | 9+EA |
+| 85h TEST r/m16,r16 | 3 | 13+EA |
+| 86h XCHG r/m8,r8 | 4 | 17+EA |
+| 87h XCHG r/m16,r16 | 4 | 25+EA |
+
+The group timing tests were corrected; the new
+`main8088_test_xchg_timing_matrix` checks 128 combinations
+across all ModR/M addressing forms, displacement encodings
+and register/memory variants, as well as prefix overhead.
+With optional bus events enabled it also checks one/two
+operand byte reads for TEST and corresponding writes
+for XCHG. No new normal-runtime tracing overhead is added.
+
+Reference: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
+(84h–87h); earlier statements describing the same memory
+cycles for byte and word forms are superseded.

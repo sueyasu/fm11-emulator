@@ -991,11 +991,19 @@ void Main8088Board::Core::executeOne()
                     return;
                 }
                 if(opcode==0x84 || opcode==0x85) {
-                    cpu.lastCycles_=prefixCycles+(memory?13u+ea:3u);
+                    // TEST does not write back. The Intel 8088 clock
+                    // table distinguishes byte (9+EA) and word (13+EA)
+                    // memory operands; registers are always 3 clocks.
+                    cpu.lastCycles_=prefixCycles+(memory
+                        ? (opcode==0x84?9u:13u)+ea : 3u);
                     return;
                 }
                 if(opcode==0x86 || opcode==0x87) {
-                    cpu.lastCycles_=prefixCycles+(memory?25u+ea:4u);
+                    // XCHG reads and writes memory: 17+EA for a byte
+                    // and 25+EA for a word on the 8-bit 8088 bus.
+                    // Register-to-register transfers take 4 clocks.
+                    cpu.lastCycles_=prefixCycles+(memory
+                        ? (opcode==0x86?17u:25u)+ea : 4u);
                     return;
                 }
                 if(opcode>=0xd0 && opcode<=0xd3) {
