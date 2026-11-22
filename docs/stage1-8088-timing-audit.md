@@ -242,3 +242,38 @@ register targets.
 Reference: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
 (D0–D3 and FFh opcode tables). No extra work is added
 to the normal CPU execution path beyond revised arithmetic.
+
+## Follow-up: F6/F7 memory arithmetic and far returns
+
+The Intel 8088 opcode clock table specifies **+6+EA** for
+register-to-memory-source forms of MUL/IMUL/DIV/IDIV
+relative to the register forms, including 16-bit operands.
+This premium is **already part of** the F6/F7 group-specific
+clock calculation, and adding another general +4 word-bus
+adjustment would double count it. The existing successful-
+arithmetic model therefore remains unchanged.
+
+Added successful 16-bit IMUL and IDIV memory timing cases,
+and 8-bit DIV memory coverage in
+`main8088_signed_div_timing`. These cases compare actual
+8088 instruction cycles, AX/DX results, and memory/register
+source variants. Divide-error paths (zero divisor or quotient
+overflow) remain explicitly approximate and are not presented
+as verified hardware cycle timings.
+
+The far-return timing table was found reversed in the 8088
+initial opcode classification. Intel's 8088 table specifies
+**33 clocks for RETF (CBh)** and **34 clocks for RETF
+imm16 (CAh)**. The original 8088's undocumented aliases
+C9h and C8h use the matching 33/34 clock counts, while V20
+continues to decode them as LEAVE/ENTER.
+
+Updated `main8088_group_timing` and added
+`main8088_far_return_timing` to check clocks, returned CS:IP,
+SP advancement, C8/C9 aliases, and V20 decode isolation.
+
+No extra allocations, speculative bus reads, or T-state
+operations have been added to normal CPU instruction timing.
+
+References: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
+(F6/F7, C8–CB).
