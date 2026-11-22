@@ -44,13 +44,13 @@ int main() {
     if(!check("MOVSB",0,0xa4,1,{18}))return 1;
     if(!check("MOVSW",0,0xa5,1,{26}))return 2;
     if(!check("CMPSB",0,0xa6,1,{30}))return 3;
-    if(!check("CMPSW",0,0xa7,1,{38}))return 4;
+    if(!check("CMPSW",0,0xa7,1,{30}))return 4;
     if(!check("STOSB",0,0xaa,1,{11}))return 5;
     if(!check("STOSW",0,0xab,1,{15}))return 6;
     if(!check("LODSB",0,0xac,1,{16}))return 7;
-    if(!check("LODSW",0,0xad,1,{20}))return 8;
+    if(!check("LODSW",0,0xad,1,{16}))return 8;
     if(!check("SCASB",0,0xae,1,{19}))return 9;
-    if(!check("SCASW",0,0xaf,1,{23}))return 10;
+    if(!check("SCASW",0,0xaf,1,{19}))return 10;
     if(!check("REP MOVSB",0xf3,0xa4,3,{26,17,17}))return 11;
     if(!check("REP MOVSW",0xf3,0xa5,2,{34,25}))return 12;
     if(!check("REP STOSB",0xf3,0xaa,3,{19,10,10}))return 13;
