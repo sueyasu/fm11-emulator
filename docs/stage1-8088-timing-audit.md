@@ -32,7 +32,7 @@ completion gate or run in the normal machine.
 | ALU r/m↔reg | ModR/M, effective-address clocks, width, destination direction | `main8088_alu_group_timing`, `main8088_ea_timing` | Modelled; complete direction/width/EA matrix still needed |
 | Group 1 immediate ALU | Group extension, read/modify/write, EA | `main8088_alu_group_timing` | Modelled; test CMP/read-only and all subops |
 | MOV reg↔r/m; segment; immediate | Direction/EA/width corrections | `main8088_mov_bus_reference`, `main8088_ea_timing` | Modelled; ModR/M aliases tested separately |
-| MOV moffs ↔ accumulator (A0–A3) | Fixed 10/14 clocks | `main8088_missing_timing` | Corrected this audit |
+| MOV moffs ↔ accumulator (A0–A3) | Fixed 14 clocks (both widths on 8088) | `main8088_missing_timing` | Corrected this audit |
 | XLAT (D7) | Fixed 11 clocks | `main8088_missing_timing` | Corrected this audit |
 | PUSH/POP registers, segment, flags | Opcode/group and direct corrections | `main8088_group_timing` | POP CS (0F) corrected this audit |
 | Calls, returns, jumps, interrupt entry | Opcode/group and explicit adjustments | `main8088_group_timing`, `main8088_interrupt_cycles`, `main8088_dynamic_timing` | Further branch/return variant matrix needed |
@@ -84,3 +84,49 @@ corrections without enabling any production bus modelling.
 Reference: Intel *iAPX 86/88 User's Manual* (1981), instruction
 clock tables. Published clock totals are minimum/nominal instruction
 times; variable BIU queue stalls are not exhaustively represented.
+
+## Follow-up: instruction clock table cross-check
+
+A subsequent check against the 8088 instruction clock table found
+additional differences. The previous A0/A2 byte MOV estimate of
+10 clocks was an incorrect carry-over of the 8086-oriented timing:
+on the **8088**, all A0-A3 direct accumulator memory MOV encodings
+are recorded as **14 clocks**. Both production constants and the
+preceding regression have been corrected.
+
+The main string-op timing table also previously conflated the
+byte and word timings for CMPS, LODS and SCAS. The updated
+non-REP values are:
+
+| Instruction | Byte | Word |
+|---|---:|---:|
+| MOVS | 18 | 26 |
+| CMPS | 22 | 30 |
+| STOS | 11 | 15 |
+| LODS | 12 | 16 |
+| SCAS | 15 | 19 |
+
+The REP iteration values are also distinct where the reference
+specifies different timings: CMPS byte/word 22/30; LODS
+byte/word 13/17. Existing tests now check those distinctions.
+The documented setup cost remains charged once per REP
+instruction, consistent with the current one-iteration-per-
+`executeOne()` implementation.
+
+ESC D8–DF was still using a generic four-clock fallback.
+The Intel 8088 reference gives **2 clocks for a register
+ModR/M operand** and **12+EA for memory ModR/M operands**;
+the new low-cost correction uses the already decoded
+`timingModRmMemory_` and `timingEaCycles_`.
+`main8088_esc_timing` tests all eight ESC opcode values
+with register, [BX], direct, displacement and prefix cases.
+The FM-11 emulator still has no 8087 coprocessor.
+
+Source used for this pass: the Intel 8088 instruction timing
+opcode table at https://pastraiser.com/cpu/i8088/i8088_opcodes.html,
+cross-checked against Intel's 8086/8088 manual clock
+conventions. These values exclude dynamic instruction queue
+starvation and external wait states.
+
+These changes deliberately require neither the optional FIFO
+nor a per-T-state simulator in normal CPU execution.
