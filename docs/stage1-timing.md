@@ -489,3 +489,21 @@ observed individual bus T-states. Group 3 MUL/DIV operand-dependent
 timings, exceptions and externally delivered interrupts still need
 further characterization. The scheduler reports best-case
 instruction-level estimates, not a bus-cycle-exact trace.
+
+### Stage 1-E fixed Group 1 / Group 3 coverage
+
+The 8088 postinstruction classifier additionally covers 80h-83h
+immediate arithmetic (register and memory including read-only CMP)
+and F6h/F7h TEST, NOT and NEG. The ModR/M extension decides whether
+a memory operation is read-only or read/modify/write. The dedicated
+`main8088_alu_group_timing` CTest checks byte/word and
+register/memory encodings.
+
+MUL, IMUL, DIV and IDIV remain on the legacy approximate path:
+they require operand-dependent timing that cannot be represented
+by a single static opcode constant. They are not counted as
+cycle-verified instructions.
+
+```sh
+ctest --test-dir build -R 'main8088_(alu_group_timing|group_timing|string_timing|dynamic_timing|ea_timing|cycles)' --output-on-failure
+```
