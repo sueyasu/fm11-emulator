@@ -201,9 +201,14 @@ cmake --build build
 ctest --test-dir build -R 'cpu6309_|cpu6809_|main6809_.*timing|mc6809_opcode_coverage|cpu_timing_matrix' --output-on-failure
 ```
 
+Ordinary-case base cycles for DIVD/DIVQ/MULD have also been added
+for immediate, direct, indexed and extended forms. The reference tests
+cover those 12 encodings in both modes; **operand-dependent adjustments**
+(e.g. signed and overflow variants) still require dedicated checks.
+
 **Still outside verified Stage 1-C coverage:** a complete reference
 enumeration of every HD6309 opcode, every indexed postbyte across every
-opcode, operand-dependent DIVD/DIVQ/MULD cycle counts, TFM
+opcode, operand-dependent DIVD/DIVQ/MULD cycle variations, TFM
 interruptibility, detailed illegal-instruction timing, and the entire
 native-mode interrupt/stack permutation matrix. A completed focused
 CTest suite does not imply cycle-exact implementation of these cases.
