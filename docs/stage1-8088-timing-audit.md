@@ -167,3 +167,43 @@ note (four clocks for each 16-bit memory access).
 Normal CPU execution still performs only a few small integer
 operations. These changes do not allocate event buffers
 or perform speculative bus reads.
+
+## Follow-up: primary ALU direction and width matrix
+
+Compared the 00h–3Bh primary arithmetic/logic encodings
+(ADD, OR, ADC, SBB, AND, SUB, XOR and CMP) against the 8088
+opcode timing tables, distinguishing register-only operands,
+a register destination with a memory source, and a memory
+destination that must be read/modified/written.
+
+The earlier implementation used the same base (9+EA) for
+register-destination **and** CMP, and 16+EA for modifying
+memory destinations. The new 8088 classification uses:
+
+| Form | Base clocks (plus EA) | 16-bit memory access adjustment |
+|---|---:|---:|
+| register / register | 3 | none |
+| register destination, memory source | 13 | +4 |
+| memory destination, modifying ALU | 24 | +8 |
+| CMP with a memory operand (read only) | 13 | +4 |
+
+The read-only CMP classification is intentional: CMP updates
+flags but does not write the memory operand. Exact scheduling
+of instruction fetch stalls remains out of scope; the adjustment
+is a low-cost, whole-instruction approximation consistent with
+the existing word-bus-counting design.
+
+New `main8088_alu_direction_matrix` checks all eight ALU
+families across both widths, both direction bits, and
+register/memory ModR/M forms (64 cases), as well as a segment
+override. The preexisting EA timing test was updated, and
+the FE/FF group timing suite now covers additional register
+and memory INC/DEC cases and the undocumented FF /7 PUSH
+aliases. These tests do not enable experimental FIFO or
+T-state execution.
+
+Source: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>,
+plus the Intel 8086/8088 instruction-clock convention for
+additional byte-bus transfers. The remaining group-specific
+timing rules must be checked individually: do not apply the
+general ALU destination rule to all grouped opcodes.
