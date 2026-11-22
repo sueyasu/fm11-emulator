@@ -899,15 +899,12 @@ void Main8088Board::Core::executeOne()
                 const unsigned ea=cpu.timingEaCycles_;
                 const unsigned ext=cpu.timingModRmExtension_;
                 if(opcode>=0x80 && opcode<=0x83) {
-                    // Register/immediate is four clocks. CMP reads only,
-                    // other ALU extensions read and write the operand.
-                    // On the byte-wide 8088, word data transfers cost
-                    // +4 clocks each: +4 for CMP, +8 for memory RMW.
-                    const bool word=opcode==0x81 || opcode==0x83;
-                    const unsigned wordExtra=memory && word
-                        ? (ext==7?4u:8u):0u;
-                    cpu.lastCycles_=prefixCycles+(memory
-                        ? (ext==7 ? 14u+ea : 23u+ea)+wordExtra : 4u);
+                    // The 8088 Group 1 timing entry is 4 clocks for
+                    // registers, 23+EA for memory, including CMP and
+                    // both byte/word variants. The reference value
+                    // already accounts for its byte-wide bus; adding
+                    // an inferred width penalty double counts cycles.
+                    cpu.lastCycles_=prefixCycles+(memory?23u+ea:4u);
                     return;
                 }
                 if(opcode==0xf6 || opcode==0xf7) {
@@ -1020,15 +1017,15 @@ void Main8088Board::Core::executeOne()
                     const bool word=(opcode&1)!=0;
                     const bool destReg=(opcode&2)!=0;
                     const bool cmp=(opcode&0x38)==0x38;
-                    // 8088: register destination / CMP only read
-                    // memory (13+EA), whereas an ALU memory destination
-                    // reads and writes it (24+EA). CMP never writes.
-                    // A word adds one extra byte transfer per bus access.
-                    const bool readOnly=destReg || cmp;
-                    const unsigned base=readOnly?13u:24u;
+                    // Intel 8088 timing table: every r/m,reg form
+                    // (including CMP) is 24+EA for memory; reg,r/m
+                    // is 13+EA. These published 8088 totals already
+                    // include the word-bus behavior, so do not add
+                    // an unverified per-byte supplement here.
+                    (void)word;
+                    (void)cmp;
                     cpu.lastCycles_=prefixCycles+(memory
-                        ? base+ea+(word ? (readOnly?4u:8u) : 0u)
-                        : 3u);
+                        ? (destReg?13u:24u)+ea : 3u);
                     return;
                 }
             }
