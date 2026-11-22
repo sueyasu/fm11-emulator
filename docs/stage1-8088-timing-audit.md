@@ -207,3 +207,38 @@ plus the Intel 8086/8088 instruction-clock convention for
 additional byte-bus transfers. The remaining group-specific
 timing rules must be checked individually: do not apply the
 general ALU destination rule to all grouped opcodes.
+
+## Follow-up: Group 2 shift/rotate and FF indirect CALL
+
+Cross-checking D0h–D3h against the 8088 opcode timing table
+identified a uniform eight-clock undercount in **memory**
+shift/rotate operations. The corrected reference calculations are:
+
+| Instruction | Register | Memory |
+|---|---:|---:|
+| D0/D1 (count 1) | 2 | 23+EA |
+| D2/D3 (count CL) | 8+4×CL | 28+EA+4×CL |
+
+In the emulator's existing 8-bit-bus cost model, 16-bit memory
+read/modify/write adds 8 clocks on top of these entries. The
+count is the original 8088 eight-bit CL (not a 5-bit count
+mask); a CL value of zero still uses the variable-count timing
+formula. The timing calculation is constant-time; no T-state
+simulation or instruction-event allocation has been enabled.
+
+The `main8088_shift_timing_matrix` regression exercises all
+eight D0h–D3h ModR/M extensions, register/memory modes,
+byte/word widths, CL 0/1/3/31/255 and a segment override.
+`main8088_dynamic_timing` has updated memory reference clocks.
+
+The FFh /2 **near indirect CALL** had a register-mode base
+of 20 clocks, whereas the 8088 opcode table specifies
+24 register clocks, or 29+EA with a memory operand.
+Only the register-mode constant changed; other FF group
+timings already match their instruction-class references.
+`main8088_group_timing` now covers both AX and BX
+register targets.
+
+Reference: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
+(D0–D3 and FFh opcode tables). No extra work is added
+to the normal CPU execution path beyond revised arithmetic.
