@@ -41,6 +41,15 @@ bool check(const Case& test,bool native) {
     cpu.ram[0x2002]=0x77;
     cpu.SimONE();
     unsigned got=cpu.LastInstructionCycles();
+    // TFM exposes read and write boundaries for interrupt delivery.
+    // Accumulate cycles across both phases of each transferred byte.
+    if(test.w && test.bytes.size()>=2 && test.bytes[0]==0x11 &&
+       test.bytes[1]>=0x38 && test.bytes[1]<=0x3b) {
+        for(unsigned step=1;step<test.w*2;++step) {
+            cpu.SimONE();
+            got+=cpu.LastInstructionCycles();
+        }
+    }
     const unsigned expected=native?test.native:test.emulation;
     if(got!=expected) {
         std::fprintf(stderr,"%s %s expected=%u got=%u\n",
