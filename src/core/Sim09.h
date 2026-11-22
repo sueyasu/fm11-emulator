@@ -96,7 +96,6 @@ private:
 	bool ConsumeIllegalOperand();
 
 	std::uint32_t lastInstructionCycles_ = 0;
-    std::uint32_t tfmTransfers_ = 0;
     std::uint32_t tfmStepCycles_ = 0;
     WORD tfmPC_ = 0;
     WORD tfmOpcode_ = 0;
