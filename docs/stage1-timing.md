@@ -940,3 +940,66 @@ Next: map instruction micro-operation events to validated relative
 T-state offsets, then let the BIU scheduler arbitrate prefetch
 against the ordered memory/I/O transactions. WAIT and DMA HOLD
 remain independent future additions.
+
+### Stage 1-E: replay verified operand-event T-state offsets
+
+The optional `Intel8088BusEventSchedule` now takes the ordered
+byte bus events from `Intel8088BusEvents` together with **explicit
+relative T-state offsets** for each *operand* memory or I/O
+transaction. These offsets must come from independent reference
+timing data or a deliberately constructed test trace; the emulator
+does **not** guess them from event order. Fetch events are EU
+consumption events and do not automatically reserve external bus
+time, because the byte may already be in the prefetch FIFO.
+
+The scheduler validates event count, monotonic positions, no
+overlapping four-T-state operand transactions, and the instruction
+time budget **before** modifying its bus phase accounting. Only
+a valid trace reserves the byte-bus intervals, applies prefetch
+grants in their gaps, and carries incomplete speculative phases
+between instructions. Invalid traces return a status instead
+of silently using an invented "operand transfers first" timeline.
+
+For isolated 8088 diagnostic tests:
+
+```cpp
+auto& cpu=static_cast<Main8088Board::Core&>(board.cpu());
+cpu.setBusEventScheduleOffsets({5,9}); // supplied test data, NOT measured!
+cpu.executeOne();
+const auto result=cpu.busEventScheduleResult();
+// result.status, result.operandEvents,
+// result.prefetchGrants, result.bus.elapsed, result.bus.partial
+```
+
+The replay runs after the main CPU instruction and its existing
+timing finalizers. It is a **diagnostic sidecar**: it does not
+replace the established FIFO refill algorithm, read guest
+devices speculatively, change register state, or modify
+`lastExecutionCycles()`. No schedule runs when none is supplied.
+The input applies to one instruction only; the core clears it
+after use and on conformance-state reset. Currently this API
+assumes a known non-overlapping schedule within the published
+instruction clock estimate; verified per-instruction offsets are
+not yet available across the full opcode set.
+
+Tests:
+- `main8088_bus_event_schedule`: missing timestamps, count
+  mismatch, overlap, out-of-range, valid byte reservations,
+  phase carry, reset and invalid-input nonmutation
+- `main8088_bus_event_cpu_schedule`: CPU event emission and
+  supplied timing replay, missing data rejection, one-shot
+  metadata and conformance reset
+
+```sh
+cmake -S . -B build -DFM11_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build -R 'main8088_(bus_event_schedule|bus_event_cpu_schedule|bus_event_order|bus_tstates)' --output-on-failure
+ctest --test-dir build --output-on-failure
+```
+
+**Next:** obtain grounded micro-operation timing offsets for
+selected instructions, and use them to replace the existing
+"operand first" FIFO scheduling model *incrementally*. Exact
+T-state arbitration is still not established for all 8088
+opcodes; WAIT and DMA bus ownership are separate outstanding
+timing work.
