@@ -280,79 +280,11 @@
     if ( REG_D == 0 ) REG_CC |= CC_Z;		\
     if ((REG_B & 0x80) != 0 ) REG_CC |= CC_C;
 
-#define	W_MUL					\
-    divisionCycleAdjustment_ = ((REG_D & 0x8000) || (ACC_BX & 0x8000)) ? 2 : 0; \
-    REG_Q = (LONG)REG_D * (LONG)ACC_BX;		\
-    REG_CC &= ~(CC_Z | CC_N);			\
-    if ( REG_Q == 0L ) REG_CC |= CC_Z;		\
-    if ((REG_Q & 0x80000000L) != 0 ) REG_CC |= CC_N;
-
-#define	B_DIV							\
-    { \
-        const int dividend = static_cast<std::int16_t>(REG_D); \
-        const int divisor = static_cast<std::int8_t>(ACC_BL); \
-        divisionCycleAdjustment_ = 0; \
-        if (divisor == 0) { \
-            divisionCycleAdjustment_ = nativeTimingMode_ ? 0 : -2; \
-        } else { \
-            const unsigned magDividend = unsigned(dividend < 0 ? -dividend : dividend); \
-            const unsigned magDivisor = unsigned(divisor < 0 ? -divisor : divisor); \
-            const unsigned quotient = magDividend / magDivisor; \
-            divisionCycleAdjustment_ = int(dividend < 0) + int(divisor < 0); \
-            if (quotient > 255u) divisionCycleAdjustment_ -= 13; \
-            else if (quotient >= 128u) --divisionCycleAdjustment_; \
-        } \
-    } \
-    if ( ACC_BL == 0 ) {				\
-		REG_MD |= MD_D;					\
-		REG_CC |= CC_E;					\
-		PushAll();						\
-		REG_PC = GetMemWord(0xFFF0); 	\
-	} else {							\
-		int d, m;						\
-		d = REG_D / ACC_BL;				\
-	    m = REG_D % ACC_BL;				\
-		REG_B = (BYTE)d;				\
-		REG_A = (BYTE)m;				\
-		REG_CC &= (CC_C | CC_V | CC_Z | CC_N);		\
-		if ( (REG_B & 1) != 0 ) REG_CC |= CC_C;		\
-		if ( -128 > d || d > 127 ) REG_CC |= CC_V;	\
-		if ( REG_B == 0 ) REG_CC |= CC_Z;			\
-		if ( (REG_B & 0x80) != 0 ) REG_CC |= CC_N;	\
-	}
-
-#define	W_DIV							\
-    { \
-        const std::int64_t dividend = static_cast<std::int32_t>(REG_Q); \
-        const int divisor = static_cast<std::int16_t>(ACC_BX); \
-        divisionCycleAdjustment_ = 0; \
-        if (divisor == 0) { \
-            divisionCycleAdjustment_ = nativeTimingMode_ ? -8 : -10; \
-        } else { \
-            const std::uint64_t magDividend = std::uint64_t(dividend < 0 ? -dividend : dividend); \
-            const unsigned magDivisor = unsigned(divisor < 0 ? -divisor : divisor); \
-            const std::uint64_t quotient = magDividend / magDivisor; \
-            divisionCycleAdjustment_ = int(dividend < 0) + int(divisor < 0); \
-            if (quotient > 65535u) divisionCycleAdjustment_ -= 21; \
-        } \
-    } \
-    if ( ACC_BX == 0 ) {				\
-		REG_MD |= MD_D;					\
-		REG_CC |= CC_E;					\
-		PushAll();						\
-		REG_PC = GetMemWord(0xFFF0);	\
-	} else {							\
-		long d, m;						\
-		d = REG_Q / ACC_BX;				\
-		m = REG_Q % ACC_BX;				\
-		REG_W = (WORD)d;				\
-		REG_D = (WORD)m;				\
-		REG_CC &= (CC_C | CC_V | CC_Z | CC_N);				\
-		if ( (REG_W & 1) != 0 ) REG_CC |= CC_C;				\
-		if ( -32768L > d || d > 32767L ) REG_CC |= CC_V;	\
-		if ( REG_W == 0 ) REG_CC |= CC_Z;					\
-		if ( (REG_W & 0x8000) != 0 ) REG_CC |= CC_N;		\
-	}
+// Both HD6309 division instructions are signed. Centralize normal,
+// quotient-overflow, division-by-zero and CC handling.
+#define W_MUL ExecuteMuld(ACC_BX);
+#define B_DIV ExecuteDivD(ACC_BL);
+#define W_DIV ExecuteDivQ(ACC_BX);
 
 #define	O_SWI					\
     REG_CC |= CC_E;				\
