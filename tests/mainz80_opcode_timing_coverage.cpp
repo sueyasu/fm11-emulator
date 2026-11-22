@@ -20,7 +20,7 @@ constexpr unsigned baseExpected[256]={
   12,10,13, 6,11,11,10, 4,   7,11,13, 6, 4, 4, 7, 4,
    4, 4, 4, 4, 4, 4, 7, 4,   4, 4, 4, 4, 4, 4, 7, 4,
    4, 4, 4, 4, 4, 4, 7, 4,   4, 4, 4, 4, 4, 4, 7, 4,
-   7, 7, 7, 7, 7, 7, 4, 7,   7, 7, 7, 7, 7, 7, 7, 7,
+   4, 4, 4, 4, 4, 4, 7, 4,   4, 4, 4, 4, 4, 4, 7, 4,
    7, 7, 7, 7, 7, 7, 4, 7,   4, 4, 4, 4, 4, 4, 7, 4,
    4, 4, 4, 4, 4, 4, 7, 4,   4, 4, 4, 4, 4, 4, 7, 4,
    4, 4, 4, 4, 4, 4, 7, 4,   4, 4, 4, 4, 4, 4, 7, 4,
@@ -86,7 +86,16 @@ unsigned run(unsigned op,unsigned prefix,bool indexedBit=false) {
     c.regs.SP=0x4000;
     c.regs.IX=0x2000;c.regs.IY=0x2100;
     c.regs.r.w.HL=0x2200;c.regs.r.w.BC=1;
-    c.regs.r.b.B=prefix==0xed ? 1 : 2; // DJNZ taken; ED repeat final
+    // LDIR/CPIR use BC as a 16-bit repeat counter; INIR/OTIR use B.
+    // Set each to one iteration so the final pass takes 16 T-states.
+    if(prefix==0xed) {
+        if(op==0xb0 || op==0xb1 || op==0xb8 || op==0xb9)
+            c.regs.r.w.BC=1;
+        else
+            c.regs.r.b.B=1;
+    } else {
+        c.regs.r.b.B=2; // DJNZ taken
+    }
     c.regs.r.b.A=1; // make CPI/CPIR zero comparison false/true by memory defaults
     c.mem[0]=BYTE(prefix);
     c.mem[1]=BYTE(op);
