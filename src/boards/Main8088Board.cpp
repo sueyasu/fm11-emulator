@@ -404,6 +404,8 @@ void Main8088Board::Core::executeOne()
     timingShiftCount_=0;
     timingModRmExtension_=0;
     timingMultiplyCycles_=0;
+    timingSignedMultiplyCycles_=0;
+    timingDivideCycles_=0;
     // 8088 recognizes maskable IRQs at instruction boundaries. STI and
     // MOV SS defer recognition until the following instruction completes.
     const bool inhibited=irqInhibit_!=0;
@@ -850,8 +852,19 @@ void Main8088Board::Core::executeOne()
                                         +(memory?6u+ea:0u);
                         return;
                     }
-                    // IMUL/DIV/IDIV still require separate microcode
-                    // branch-path and divide-exception characterization.
+                    if(ext==5 && cpu.timingSignedMultiplyCycles_!=0) {
+                        cpu.lastCycles_=prefixCycles+cpu.timingSignedMultiplyCycles_
+                                       +(memory?6u+ea:0u);
+                        return;
+                    }
+                    if((ext==6 || ext==7) && cpu.timingDivideCycles_!=0) {
+                        cpu.lastCycles_=prefixCycles+cpu.timingDivideCycles_
+                                       +(memory?6u+ea:0u);
+                        return;
+                    }
+                    // Divide-error exceptions still need hardware trace
+                    // characterization: they deliberately retain the
+                    // previous approximate exception path here.
                 }
                 if(opcode==0xfe && ext<=1) {
                     cpu.lastCycles_=prefixCycles+(memory?23u+ea:3u);
@@ -1278,6 +1291,27 @@ void Main8088Board::Core::executeOne()
             break;
         }
         case 5: { // IMUL: signed
+            if(variant_==CpuType::I8088) {
+                // PREIMUL takes the absolute values of both signed
+                // operands before invoking the shared CORX loop.
+                // Account for conditional adds and sign corrections.
+                // Bounded timing estimate, NOT an exact microcode trace.
+                const int ax=bits==8
+                    ? int(static_cast<std::int8_t>(getReg8(0)))
+                    : int(static_cast<std::int16_t>(regs_[0]));
+                const int source=bits==8
+                    ? int(static_cast<std::int8_t>(BYTE(operand)))
+                    : int(static_cast<std::int16_t>(WORD(operand)));
+                unsigned magnitude=unsigned(ax<0?-ax:ax);
+                const unsigned mask=bits==8?0x7fu:0x7fffu;
+                unsigned tested=magnitude&mask;
+                unsigned additions=0;
+                while(tested){additions+=tested&1u;tested>>=1;}
+                const unsigned signCost=(ax<0?3u:0u)
+                    +(source<0?3u:0u)+((ax<0)!=(source<0)?3u:0u);
+                timingSignedMultiplyCycles_=(bits==8?80u:128u)
+                    +additions+signCost;
+            }
             if(bits==8) {
                 const int product=int(static_cast<std::int8_t>(getReg8(0)))*
                                   int(static_cast<std::int8_t>(BYTE(operand)));
@@ -1301,11 +1335,21 @@ void Main8088Board::Core::executeOne()
                 const unsigned quotient=regs_[0]/operand;
                 if(quotient>0xff){interrupt(0);break;}
                 const unsigned remainder=regs_[0]%operand;
+                if(variant_==CpuType::I8088) {
+                    unsigned q=quotient,ones=0;
+                    while(q){ones+=q&1u;q>>=1;}
+                    timingDivideCycles_=80u+ones;
+                }
                 regs_[0]=WORD((remainder<<8)|quotient);
             } else {
                 const std::uint32_t dividend=(std::uint32_t(regs_[2])<<16)|regs_[0];
                 const std::uint32_t quotient=dividend/operand;
                 if(quotient>0xffff){interrupt(0);break;}
+                if(variant_==CpuType::I8088) {
+                    unsigned q=quotient,ones=0;
+                    while(q){ones+=q&1u;q>>=1;}
+                    timingDivideCycles_=144u+ones;
+                }
                 regs_[0]=WORD(quotient);
                 regs_[2]=WORD(dividend%operand);
             }
@@ -1324,6 +1368,14 @@ void Main8088Board::Core::executeOne()
                 const int minimum=variant_==CpuType::I8088?-127:-128;
                 if(quotient < minimum || quotient > 127){interrupt(0);break;}
                 const int remainder=dividend%divisor;
+                if(variant_==CpuType::I8088) {
+                    unsigned q=unsigned(quotient<0?-quotient:quotient);
+                    unsigned ones=0;
+                    while(q){ones+=q&1u;q>>=1;}
+                    const unsigned signCost=(dividend<0?2u:0u)
+                        +(divisor<0?1u:0u);
+                    timingDivideCycles_=101u+ones+signCost;
+                }
                 regs_[0]=WORD((unsigned(BYTE(remainder))<<8)|BYTE(quotient));
             } else {
                 const std::uint32_t raw=(std::uint32_t(regs_[2])<<16)|regs_[0];
@@ -1336,6 +1388,14 @@ void Main8088Board::Core::executeOne()
                 // signed 16-bit quotient (-32768).
                 const std::int64_t minimum=variant_==CpuType::I8088?-32767:-32768;
                 if(quotient < minimum || quotient > 32767){interrupt(0);break;}
+                if(variant_==CpuType::I8088) {
+                    unsigned q=unsigned(quotient<0?-quotient:quotient);
+                    unsigned ones=0;
+                    while(q){ones+=q&1u;q>>=1;}
+                    const unsigned signCost=(dividend<0?2u:0u)
+                        +(divisor<0?1u:0u);
+                    timingDivideCycles_=165u+ones+signCost;
+                }
                 regs_[0]=WORD(quotient);
                 regs_[2]=WORD(dividend%divisor);
             }
