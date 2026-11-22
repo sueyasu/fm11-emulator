@@ -1047,3 +1047,30 @@ wrap boundary behavior need separate event/address
 validation. Later work can add validated per-instruction
 T-state placement without changing the 8088 instruction
 timing baseline.
+
+## Stage 1-F: NEC V20 native instruction timing (major first pass)
+
+The native-mode V20 no longer derives its key execution clocks from
+uniform 75%-of-8088 estimates. Based on NEC *16-Bit V Series
+Microprocessors Instruction User's Manual*, Table 2-8 (V20/V20HL
+column, pages 170-184), the V20 now has separately classified
+instruction clocks for arithmetic/logic ModR/M (including CMP
+read-only), Group 1 immediate ALU, register and memory MOV, segment
+MOV, LEA/LDS/LES, INC/DEC and NOT/NEG memory forms, direct-memory
+accumulator MOV, register stack operations, flag/decimal operations,
+conditional jumps, LOOP/LOOPE/LOOPNE/JCXZ, calls/returns, I/O and
+simple fixed-clock instructions.
+
+Notably, V20 native timings are complete instruction execution times
+with 8-bit bus width, not the Intel 8088 timing category plus Intel
+EA cost. This stage therefore **does not add 8088 EA** to these V20
+reference values. The special instruction sequences and as-yet
+unclassified V20 extended opcodes retain their prior provisional
+timings until the 8080-mode and remainder audit is completed.
+
+The single `mainv20_native_timing` regression covers the above
+families together. No diagnostic queues, trace recorders or
+microbenchmarks have been added. Intel 8088 timing paths are unchanged.
+
+NEC source:
+https://datasheets.chipdb.org/NEC/V20-V30/U11301EJ5V0UMJ1.PDF

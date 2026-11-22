@@ -418,7 +418,31 @@ std::array<unsigned,256> makeV20Cycles() {
     // V20 generally executes simple native instructions faster. Exact
     // per-opcode and prefetch behavior remains outside this model.
     for(auto& clocks:t)clocks=clocks>3 ? (clocks*3+3)/4 : clocks;
+    // V20 execution-unit clocks, NEC uPD70108 manual Table 2-8.
+    // Unclassified instructions retain the previous provisional values.
+    for(unsigned op=0x40;op<=0x4f;++op)t[op]=2;
+    for(unsigned op=0x50;op<=0x5f;++op)t[op]=12;
+    for(unsigned op=0x70;op<=0x7f;++op)t[op]=4;
+    for(unsigned op=0xb0;op<=0xbf;++op)t[op]=4;
+    for(unsigned op=0;op<8;++op){t[op*8+4]=4;t[op*8+5]=4;}
     t[0x90]=3;
+    t[0x98]=2;t[0x99]=4;
+    t[0x27]=7;t[0x2f]=7;
+    t[0x37]=3;t[0x3f]=3;
+    t[0x9e]=3;t[0x9f]=2;
+    t[0x9c]=12;t[0x9d]=12;
+    t[0x06]=12;t[0x0e]=12;t[0x16]=12;t[0x1e]=12;
+    t[0x07]=12;t[0x17]=12;t[0x1f]=12;
+    t[0xa8]=4;t[0xa9]=4;
+    t[0xa0]=10;t[0xa1]=14;t[0xa2]=9;t[0xa3]=13;
+    t[0xe4]=9;t[0xe5]=13;t[0xec]=8;t[0xed]=12;
+    t[0xe6]=8;t[0xe7]=12;t[0xee]=8;t[0xef]=12;
+    t[0xe8]=20;t[0x9a]=29;
+    t[0xe9]=13;t[0xeb]=12;t[0xea]=15;
+    t[0xc3]=19;t[0xcb]=29;t[0xc2]=24;t[0xca]=32;
+    t[0xce]=3;t[0xf4]=2;
+    t[0xf5]=2;t[0xf8]=2;t[0xf9]=2;
+    t[0xfa]=2;t[0xfb]=2;t[0xfc]=2;t[0xfd]=2;
     return t;
 }
 const std::array<unsigned,256> kV20Cycles=makeV20Cycles();
@@ -850,6 +874,69 @@ void Main8088Board::Core::executeOne()
         BYTE opcode;
         unsigned prefixes;
         ~TimingFinalize() {
+            if(cpu.variant_==CpuType::NECV20) {
+                // V20 Table 2-8 gives full instruction clocks for
+                // an 8-bit bus: unlike 8088, do not add Intel EA.
+                const unsigned prefix=2u*prefixes;
+                const bool memory=cpu.timingModRmMemory_;
+                const bool word=(opcode&1u)!=0;
+                const unsigned ext=cpu.timingModRmExtension_;
+                if(opcode<=0x3b && (opcode&7)<=3 && (opcode&4)==0) {
+                    const bool cmp=(opcode&0x38)==0x38;
+                    const bool regDest=(opcode&2)!=0;
+                    cpu.lastCycles_=prefix+(memory
+                        ? ((cmp||regDest)?(word?15u:11u):(word?24u:16u))
+                        :2u);
+                    return;
+                }
+                if(opcode>=0x80 && opcode<=0x83) {
+                    const bool wide=opcode==0x81 || opcode==0x83;
+                    const bool cmp=ext==7;
+                    cpu.lastCycles_=prefix+(memory
+                        ? (cmp?(wide?17u:13u):(wide?26u:18u))
+                        :4u);
+                    return;
+                }
+                if(opcode>=0x88 && opcode<=0x8b) {
+                    cpu.lastCycles_=prefix+(memory
+                        ? ((opcode&2)?(word?15u:11u):(word?13u:9u))
+                        :2u);
+                    return;
+                }
+                if(opcode==0x8c || opcode==0x8e) {
+                    cpu.lastCycles_=prefix+(memory
+                        ? (opcode==0x8c?14u:15u):2u);
+                    return;
+                }
+                if(opcode==0xc6 || opcode==0xc7) {
+                    cpu.lastCycles_=prefix+(memory?(word?15u:11u):4u);
+                    return;
+                }
+                if(opcode==0xc4 || opcode==0xc5) {
+                    cpu.lastCycles_=prefix+26u;
+                    return;
+                }
+                if(opcode==0x8d) {
+                    cpu.lastCycles_=prefix+4u;
+                    return;
+                }
+                if(opcode==0xfe && ext<=1) {
+                    cpu.lastCycles_=prefix+(memory?16u:2u);
+                    return;
+                }
+                if(opcode==0xff && ext<=1) {
+                    cpu.lastCycles_=prefix+(memory?24u:2u);
+                    return;
+                }
+                if((opcode==0xf6 || opcode==0xf7) &&
+                   (ext==2 || ext==3)) {
+                    cpu.lastCycles_=prefix+(memory
+                        ? (word?24u:16u):2u);
+                    return;
+                }
+                // Remaining V20 instructions retain provisional estimates.
+                return;
+            }
             if(cpu.variant_==CpuType::I8088) {
                 // Keep instruction execution and timing accounting separate:
                 // EA is charged once, byte transfers are included in the
@@ -1261,7 +1348,7 @@ void Main8088Board::Core::executeOne()
         if(flags_&OF) {
             interrupt(4);
             if(variant_==CpuType::I8088)lastCycles_=73+2*prefixCount;
-        } else if(variant_==CpuType::I8088)lastCycles_=4+2*prefixCount;
+        } else lastCycles_=(variant_==CpuType::I8088?4u:3u)+2*prefixCount;
         break; // INTO
     case 0x98: // CBW: sign-extend AL into AX (FLAGS unchanged)
         regs_[0]=WORD(static_cast<std::int16_t>(static_cast<std::int8_t>(BYTE(regs_[0]))));
@@ -1292,6 +1379,8 @@ void Main8088Board::Core::executeOne()
         if(variant_==CpuType::I8088)
             lastCycles_=2*prefixCount+(opcode==0xe2
                 ? (taken?17u:5u) : (taken?18u:6u));
+        else lastCycles_=2*prefixCount+(opcode==0xe2
+            ? (taken?13u:5u) : (taken?14u:5u));
         break;
     }
     case 0xe3: { // JCXZ, no decrement
@@ -1303,6 +1392,7 @@ void Main8088Board::Core::executeOne()
         }
         if(variant_==CpuType::I8088)
             lastCycles_=2*prefixCount+(taken?18u:6u);
+        else lastCycles_=2*prefixCount+(taken?13u:5u);
         break;
     }
     case 0xd0: case 0xd1: case 0xd2: case 0xd3: {
@@ -2063,7 +2153,7 @@ void Main8088Board::Core::executeOne()
             if(jumpCondition(opcode&15)) {
                 
                 ip_=WORD(ip_+displacement);
-                lastCycles_+=variant_==CpuType::I8088?12:6;
+                lastCycles_+=variant_==CpuType::I8088?12:10;
             }
             break;
         }
