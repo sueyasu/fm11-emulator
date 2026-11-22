@@ -58,8 +58,11 @@ void Main8088Board::Core::writePort8(WORD port,BYTE value)
 }
 BYTE Main8088Board::Core::fetch8()
 {
-    prefetchTiming_.consume(segments_[1],ip_);
-    const BYTE result=bus_.readMemory(pc());
+    const BYTE result=prefetchTiming_.fetch(
+        segments_[1],ip_,
+        [this](WORD cs,WORD offset) {
+            return bus_.readMemory(physical(cs,offset));
+        });
     ++ip_;
     return result;
 }
@@ -843,7 +846,11 @@ void Main8088Board::Core::executeOne()
     struct PrefetchFinalize {
         Core& cpu;
         ~PrefetchFinalize() {
-            cpu.prefetchTiming_.finish(cpu.segments_[1],cpu.ip_,cpu.lastCycles_);
+            cpu.prefetchTiming_.finish(
+                cpu.segments_[1],cpu.ip_,cpu.lastCycles_,
+                [&cpu=cpu](WORD cs,WORD offset) {
+                    return cpu.bus_.readMemory(cpu.physical(cs,offset));
+                });
         }
     } prefetchFinalize{*this};
     struct TimingFinalize {
