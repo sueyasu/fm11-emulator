@@ -11,6 +11,8 @@ cmake -S . -B build -DFM11_BUILD_TESTS=ON
 cmake --build build --target cpu_timing_matrix
 ctest --test-dir build -R '^cpu_timing_matrix$' --output-on-failure
 ./build/cpu_timing_matrix tests/data/cpu_timing_cases.csv
+python3 tests/report_cpu_timing.py
+python3 tests/report_cpu_timing.py --missing
 ```
 
 Every CSV record contains:
@@ -27,6 +29,10 @@ Every CSV record contains:
 - Each case runs only **one** instruction. Multi-instruction state, taken
   branches, interrupts, bus wait states and string/block repetitions require
   dedicated fixtures and are not covered by this runner.
+
+The reporter counts registered fixtures per CPU, including independently verified
+versus baseline cases; its optional missing-byte list is **not** a list of
+missing valid instructions (prefixes and invalid encodings are included).
 
 The new test intentionally records only a few known, stable cases; it must
 not be mistaken for comprehensive coverage. Existing focused CTests remain
