@@ -156,10 +156,15 @@ void	CSimZ80::z80emuED()
 
 	case 0x4E: case 0x66: case 0x6E:
 	case 0x46:  		/* IM   0   	*/
+		interruptMode_=0;
+		break;
 	case 0x76:
 	case 0x56:  		/* IM   1   	*/
+		interruptMode_=1;
+		break;
 	case 0x7E:
 	case 0x5E:  		/* IM   2   	*/
+		interruptMode_=2;
 		break;
 
 	case 0x47:  		/* LD   I,A 	*/
