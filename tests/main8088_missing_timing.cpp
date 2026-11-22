@@ -32,17 +32,17 @@ bool check(const char* label,std::initializer_list<BYTE> instruction,
 }
 }
 int main() {
-    // Intel iAPX 86/88: accumulator memory MOV is 10 cycles for
-    // byte, and +4 for a 16-bit 8088 transfer. XLAT is 11 cycles.
-    if(!check("MOV AL,moffs",{0xa0,0x00,0x02},10))return 1;
+    // Intel 8088 opcode timings: direct accumulator memory MOV is
+    // 14 cycles in both byte and word forms. XLAT is 11 cycles.
+    if(!check("MOV AL,moffs",{0xa0,0x00,0x02},14))return 1;
     if(!check("MOV AX,moffs",{0xa1,0x00,0x02},14))return 2;
-    if(!check("MOV moffs,AL",{0xa2,0x00,0x02},10))return 3;
+    if(!check("MOV moffs,AL",{0xa2,0x00,0x02},14))return 3;
     if(!check("MOV moffs,AX",{0xa3,0x00,0x02},14))return 4;
     if(!check("XLAT",{0xd7},11))return 5;
     if(!check("POP CS",{0x0f},12))return 6;
     // Prefix decoding still charges the existing two-clock
     // surcharge; no speculative bus/queue timing is enabled.
-    if(!check("ES MOV AL,moffs",{0x26,0xa0,0x00,0x02},12))return 7;
+    if(!check("ES MOV AL,moffs",{0x26,0xa0,0x00,0x02},16))return 7;
     if(!check("ES XLAT",{0x26,0xd7},13))return 8;
 
     // The original 8088 accepts 60h-6Fh as conditional branch
