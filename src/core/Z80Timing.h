@@ -2,8 +2,9 @@
 #include <cstdint>
 
 // Documented NMOS Z80 T-states. Timings include opcode/prefix fetches.
-// The interpreter executes block-repeat instructions atomically; its caller
-// adds 21 T-states for each repetition before the final 16-T-state pass.
+// ED block-repeat instructions execute one iteration per interpreter call:
+// 21 T-states on a repeat with PC rewound, 16 on the final iteration.
+// This exposes interrupt boundaries between iterations.
 namespace Z80Timing {
 inline unsigned base(std::uint8_t op,bool z,bool c,bool p,bool s) {
     const unsigned x=op>>6, y=(op>>3)&7, zz=op&7;
