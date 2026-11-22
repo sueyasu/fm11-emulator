@@ -370,3 +370,41 @@ the default FFh bus response rather than arbitrary injected opcode
 execution; peripheral daisy-chain RETI signalling and hardware
 WAIT/BUSREQ subcycles remain outside Stage 1-D. Independent
 testing on real hardware would further improve confidence.
+
+## Stage 1-E: Intel 8088 EA and memory transfer timing (initial pass)
+
+The 8088 decoder now records the ModR/M effective-address cost separately:
+BX+SI=7, BX+DI=8, BP+SI=8, BP+DI=7, SI/DI/BP/BX=5,
+direct disp16=6; disp8/disp16 adds 4 except for the direct case.
+Register-only ModR/M operands have no EA charge.
+
+Reference-classified native 8088 MOV and basic binary ALU/CMP ModR/M
+instructions now use distinct register, memory-read, and memory
+read/modify/write baselines. Each 16-bit memory read or write adds
+four clocks for the 8088's 8-bit external bus compared with byte
+access; the EA component is charged once. This is instruction-level
+accounting, not a model of the BIU instruction-prefetch queue.
+
+Tests:
+```sh
+cmake -S . -B build -DFM11_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build -R 'main8088_(ea_timing|cycles)' --output-on-failure
+ctest --test-dir build --output-on-failure
+```
+
+`main8088_ea_timing` covers all eight ModR/M addressing bases,
+8- and 16-bit memory transfer cases, displacement costs, register
+operands, memory ALU direction, CMP, immediate MOV, and segment
+override. Existing `main8088_cycles` expectations for register
+and word-memory MOV are updated.
+
+**Remaining Stage 1-E work:** apply reference-backed instruction
+baselines to the remaining opcode families (RMW groups, shifts,
+stack, calls/returns, strings and I/O); validate taken/not-taken
+control flow and REP iterations; model prefetch queue refill,
+overlap, and external bus wait states where needed. In particular,
+the non-classified instructions retain the older coarse timing
+heuristic; V20 uses its separate provisional model and is not
+claimed to be Intel 8088 cycle-compatible. Stage 1-E is not yet
+complete at whole-CPU coverage level.
