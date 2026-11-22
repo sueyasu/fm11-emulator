@@ -103,3 +103,61 @@ record additional reference-backed fixtures for all currently uncovered
 variants. Completing this inventory is separate from the corrections
 above; the runner's case count is not a completeness metric. The 6309
 native-mode cycle audit belongs to Stage 1-C.
+
+## Stage 1-B: complete MC6809 opcode and indexed-postbyte audit
+
+The legal MC6809 instruction set has been transcribed independently from
+Motorola **M6809PM/AD Appendix C, Table C-1**, into
+`tests/data/mc6809_reference.csv`. It contains **268 legal opcode
+encodings**: 221 primary, 38 page-2 (`10` prefix), and 9 page-3
+(`11` prefix). Prefixes are not counted as standalone instructions.
+This inventory excludes HD6309-only opcodes.
+
+The new audit tests are:
+
+- `mc6809_opcode_coverage` (Python): compare the complete reference
+  inventory with the interpreter's `OPDEF` dispatch and all three timing
+  tables. A missing handler or mismatched base cycle is a test failure.
+- `cpu6809_opcode_cycles` (C++): execute each of those 268 legal
+  opcodes in **MC6809 personality**, with known reset state, and compare
+  the measured cycles to the reference. Indexed instructions use zero
+  five-bit displacement (one extra clock). Long conditional branches use
+  reset CC=0 to derive taken/not-taken costs.
+- `cpu6809_indexed_postbytes` (C++): exercise **all 256** possible
+  postbytes across eight instruction families (LEAX, NEG, JMP, LDA,
+  STA, STB, LDY, CMPU). Appendix F, Table F-2 gives **217 legal** and
+  **39 invalid** encodings in the MC6809 personality. Invalid operands
+  must report unknown/invalid timing (zero), never plausible base cycles.
+
+Two other MC6809 base-cycle mismatches found by the full audit have
+been corrected: `DAA` (`19`) is 2 clocks (was 3), and extended
+`JMP` (`7E`) is 4 clocks (was 3). The postbyte validity filter now
+rejects indirect auto-increment/decrement-by-one and the duplicate or
+6309-only extended-indirect encodings. Illegal indexed postbytes no
+longer leak a nonzero instruction-cycle count after fault handling.
+
+Reference documents:
+
+- Opcode/cycle inventory:
+  https://www.maddes.net/m6809pm/appendix_c.htm
+- Indexed postbyte modes and cycle adjustments:
+  https://www.maddes.net/m6809pm/appendix_f.htm
+
+Run:
+
+```sh
+cmake -S . -B build -DFM11_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build -R 'mc6809_opcode_coverage|cpu6809_(opcode_cycles|indexed_postbytes)|main6809_.*timing|cpu_timing_matrix' --output-on-failure
+```
+
+These checks establish complete *opcode enumeration*, baseline-cycle
+coverage and exhaustive *postbyte encoding* coverage. They do **not**
+exhaustively exercise every combination of flags, indexed postbyte and
+instruction, all 256 push/pull register masks, interrupt permutations,
+or physical bus wait-state timing. Focused dynamic tests cover selected
+branch, stack and interrupt cases. Those dimensions should not be
+mistaken for a full cycle-by-cycle physical hardware model.
+
+The MC6809 reference CSV is independent of the shared HD6309 timing
+implementation; the native HD6309 audit remains Stage 1-C.
