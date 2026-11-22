@@ -64,6 +64,13 @@ public:
             prefetchTiming_.setByteQueueEnabled(
                 enabled && variant_==CpuType::I8088);
         }
+        // Explicit experimental mode: actual 4-byte FIFO plus 4 clocks
+        // for every byte demanded while empty. The reference timing
+        // table is not a verified EU/BIU overlap trace.
+        void setPrefetchStallTimingEnabled(bool enabled) {
+            prefetchTiming_.setDemandStallTimingEnabled(
+                enabled && variant_==CpuType::I8088);
+        }
         Intel8088PrefetchTiming::Snapshot prefetchTimingSnapshot() const {
             return prefetchTiming_.snapshot();
         }
