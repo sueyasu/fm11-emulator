@@ -71,6 +71,7 @@
     WORD *ws = (WORD *)RegOfs(ACC_BL >> 4);	\
     WORD *wd = (WORD *)RegOfs(ACC_BL & 0x0F);	\
     if ( ACC_BL <= 0x44 ) {			\
+        tfmTransfers_ = REG_W ? REG_W : 65536u; \
     	do {					\
 	    c = GetMemByte(*ws); *ws += 1;	\
 	    SetMemByte(*wd, c);  *wd += 1;	\
@@ -84,6 +85,7 @@
     WORD *ws = (WORD *)RegOfs(ACC_BL >> 4);	\
     WORD *wd = (WORD *)RegOfs(ACC_BL & 0x0F);	\
     if ( ACC_BL <= 0x44 ) {			\
+        tfmTransfers_ = REG_W ? REG_W : 65536u; \
     	do {					\
 	    c = GetMemByte(*ws); *ws -= 1;	\
 	    SetMemByte(*wd, c);  *wd -= 1;	\
@@ -97,6 +99,7 @@
     WORD *ws = (WORD *)RegOfs(ACC_BL >> 4);	\
     WORD *wd = (WORD *)RegOfs(ACC_BL & 0x0F);	\
     if ( ACC_BL <= 0x44 ) {			\
+        tfmTransfers_ = REG_W ? REG_W : 65536u; \
     	do {					\
 	    c = GetMemByte(*ws); *ws += 1;	\
 	    SetMemByte(*wd, c);			\
@@ -110,6 +113,7 @@
     WORD *ws = (WORD *)RegOfs(ACC_BL >> 4);	\
     WORD *wd = (WORD *)RegOfs(ACC_BL & 0x0F);	\
     if ( ACC_BL <= 0x44 ) {			\
+        tfmTransfers_ = REG_W ? REG_W : 65536u; \
     	do {					\
 	    c = GetMemByte(*ws);		\
 	    SetMemByte(*wd, c);  *wd += 1;	\
