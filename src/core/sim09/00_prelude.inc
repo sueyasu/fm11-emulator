@@ -167,6 +167,10 @@ WORD	CSim09::GetAddrInd()
     }
     if (!IsIndexedPostbyteAllowed(op)) {
         illegalOperand_ = true;
+        // ConsumeIllegalOperand() clears the fault before the timing
+        // finalizer runs. Preserve an independent unknown-timing marker
+        // so an invalid MC6809 postbyte cannot return base cycles.
+        indexedCycleKnown_ = false;
         return 0;
     }
 
