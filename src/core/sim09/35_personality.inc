@@ -152,6 +152,103 @@ void CSim09::StepTfm(WORD opcode, BYTE postbyte)
         tfmActive_ = false;
 }
 
+// Signed HD6309 math and condition codes. Source: Atkinson 6x09
+// Instruction Sets and hoglet67's hardware-verified 6309 behaviours.
+void CSim09::ExecuteMuld(WORD operand)
+{
+    divisionCycleAdjustment_ =
+        ((REG_D & 0x8000) || (operand & 0x8000)) ? 2 : 0;
+    const std::int32_t product =
+        std::int32_t(std::int16_t(REG_D)) * std::int32_t(std::int16_t(operand));
+    REG_Q = std::uint32_t(product);
+    REG_CC &= ~(CC_Z | CC_N);
+    if ((REG_Q & 0xffff0000u) == 0) REG_CC |= CC_Z;
+    if ((REG_Q & 0x80000000u) != 0) REG_CC |= CC_N;
+}
+
+void CSim09::ExecuteDivD(BYTE operand)
+{
+    const int dividend = std::int16_t(REG_D);
+    const int divisor = std::int8_t(operand);
+    const unsigned magnitude = unsigned(dividend < 0 ? -dividend : dividend);
+    divisionCycleAdjustment_ = 0;
+    if (divisor == 0) {
+        divisionCycleAdjustment_ = nativeTimingMode_ ? 0 : -2;
+        REG_CC = (REG_CC & ~(CC_N | CC_V)) | CC_Z | CC_E;
+        REG_MD |= MD_D;
+        PushAll();
+        REG_PC = GetMemWord(0xfff0);
+        return;
+    }
+    const unsigned absDivisor = unsigned(divisor < 0 ? -divisor : divisor);
+    const unsigned quotientMagnitude = magnitude / absDivisor;
+    divisionCycleAdjustment_ = int(dividend < 0) + int(divisor < 0);
+    REG_CC &= ~(CC_N | CC_Z | CC_V | CC_C);
+    if (quotientMagnitude > 255u) {
+        divisionCycleAdjustment_ -= 13;
+        REG_D = WORD(magnitude);
+        REG_CC |= CC_V;
+        if (dividend < 0) REG_CC |= CC_N;
+        return;
+    }
+    const int signedQuotient = dividend / divisor;
+    const int remainder = dividend % divisor;
+    if (quotientMagnitude >= 128u) {
+        --divisionCycleAdjustment_;
+        REG_B = BYTE(quotientMagnitude);
+        REG_A = BYTE(remainder);
+        REG_CC |= CC_V;
+        // Hardware clears N/Z on signed-representation overflow.
+    } else {
+        REG_B = BYTE(signedQuotient);
+        REG_A = BYTE(remainder);
+        if (REG_B == 0) REG_CC |= CC_Z;
+        if ((REG_B & 0x80) != 0) REG_CC |= CC_N;
+    }
+    if ((quotientMagnitude & 1u) != 0) REG_CC |= CC_C;
+}
+
+void CSim09::ExecuteDivQ(WORD operand)
+{
+    const std::int64_t dividend = std::int32_t(REG_Q);
+    const int divisor = std::int16_t(operand);
+    const std::uint64_t magnitude =
+        std::uint64_t(dividend < 0 ? -dividend : dividend);
+    divisionCycleAdjustment_ = 0;
+    if (divisor == 0) {
+        divisionCycleAdjustment_ = nativeTimingMode_ ? -8 : -10;
+        REG_CC = (REG_CC & ~(CC_N | CC_V)) | CC_Z | CC_E;
+        REG_MD |= MD_D;
+        PushAll();
+        REG_PC = GetMemWord(0xfff0);
+        return;
+    }
+    const unsigned absDivisor = unsigned(divisor < 0 ? -divisor : divisor);
+    const std::uint64_t quotientMagnitude = magnitude / absDivisor;
+    divisionCycleAdjustment_ = int(dividend < 0) + int(divisor < 0);
+    REG_CC &= ~(CC_N | CC_Z | CC_V | CC_C);
+    if (quotientMagnitude > 65535u) {
+        divisionCycleAdjustment_ -= 21;
+        REG_Q = std::uint32_t(magnitude);
+        REG_CC |= CC_V;
+        if (dividend < 0) REG_CC |= CC_N;
+        return;
+    }
+    const std::int64_t quotient = dividend / divisor;
+    const std::int64_t remainder = dividend % divisor;
+    if (quotientMagnitude >= 32768u) {
+        REG_W = WORD(quotientMagnitude);
+        REG_D = WORD(remainder);
+        REG_CC |= CC_V;
+    } else {
+        REG_W = WORD(quotient);
+        REG_D = WORD(remainder);
+        if (REG_W == 0) REG_CC |= CC_Z;
+        if ((REG_W & 0x8000) != 0) REG_CC |= CC_N;
+    }
+    if ((quotientMagnitude & 1u) != 0) REG_CC |= CC_C;
+}
+
 void CSim09::Set6309Enabled(bool enabled)
 {
     enable6309_ = enabled;
