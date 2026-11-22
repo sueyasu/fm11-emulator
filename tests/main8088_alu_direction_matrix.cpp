@@ -3,8 +3,8 @@
 #include <iostream>
 
 // Exercise every primary ALU ModR/M family: ADD, OR, ADC, SBB,
-// AND, SUB, XOR, CMP. Memory forms have distinct read-only versus
-// read/modify/write costs; register forms always take three clocks.
+// AND, SUB, XOR, CMP. Memory forms use the documented direction-based 8088
+// totals; the word bus cost is already included in those values.
 // BX addressing has EA=5. No optional FIFO or T-state scheduler.
 int main() {
     const unsigned families[]={0x00,0x08,0x10,0x18,0x20,0x28,0x30,0x38};
@@ -27,10 +27,8 @@ int main() {
                     auto& core=static_cast<Main8088Board::Core&>(board.cpu());
                     core.setConformanceState(regs,segments,0,2);
                     core.executeOne();
-                    const bool readOnly=direction!=0 || family==0x38;
                     const unsigned expected=!memory?3u:
-                        (readOnly?13u:24u)+5u+
-                        (word?(readOnly?4u:8u):0u);
+                        (direction?13u:24u)+5u;
                     if(core.lastExecutionCycles()!=expected || core.ip()!=2) {
                         std::cerr<<"ALU opcode "<<std::hex<<unsigned(opcode)
                             <<" modrm "<<unsigned(modrm)<<std::dec
@@ -55,6 +53,6 @@ int main() {
     auto& cpu=static_cast<Main8088Board::Core&>(board.cpu());
     cpu.setConformanceState(regs,segments,0,2);
     cpu.executeOne();
-    if(cpu.lastExecutionCycles()!=39 || cpu.ip()!=3)return 2;
+    if(cpu.lastExecutionCycles()!=31 || cpu.ip()!=3)return 2;
     return 0;
 }
