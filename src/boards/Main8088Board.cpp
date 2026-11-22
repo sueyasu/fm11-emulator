@@ -1017,11 +1017,14 @@ void Main8088Board::Core::executeOne()
                     const bool word=(opcode&1)!=0;
                     const bool destReg=(opcode&2)!=0;
                     const bool cmp=(opcode&0x38)==0x38;
-                    const unsigned base=destReg || cmp ? 9u : 16u;
-                    // Read only: one word transfer; read/modify/write:
-                    // two word transfers. Register operands take 3 clocks.
+                    // 8088: register destination / CMP only read
+                    // memory (13+EA), whereas an ALU memory destination
+                    // reads and writes it (24+EA). CMP never writes.
+                    // A word adds one extra byte transfer per bus access.
+                    const bool readOnly=destReg || cmp;
+                    const unsigned base=readOnly?13u:24u;
                     cpu.lastCycles_=prefixCycles+(memory
-                        ? base+ea+(word ? (destReg||cmp?4u:8u) : 0u)
+                        ? base+ea+(word ? (readOnly?4u:8u) : 0u)
                         : 3u);
                     return;
                 }
