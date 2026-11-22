@@ -217,3 +217,52 @@ Do not classify Stage 1-C as fully complete until those gaps are closed.
 References:
 - https://colorcomputerarchive.com/repo/Documents/Microprocessors/HD6309/HD63B09EP%20Technical%20Reference%20Guide.pdf
 - https://colorcomputerarchive.com/repo/Documents/Books/Motorola%206809%20and%20Hitachi%206309%20Programming%20Reference%20%28Darren%20Atkinson%29.pdf
+
+## Stage 1-C follow-up: HD6309 coverage and variable timing
+
+The HD6309 opcode dispatch inventory is captured as
+`tests/data/hd6309_opcode_baseline.csv` and checked by
+`hd6309_opcode_coverage`. There are **436 executable opcode forms**
+(235 primary / 118 page-10 / 83 page-11), plus two prefix bytes.
+Of the three 256-byte opcode pages, 330 encodings are undefined.
+This manifest is **source-derived**, not a 436-entry independent
+datasheet transcription. The audit prevents silent opcode loss and
+new zero-cycle entries. It found and corrected the missing five-cycle
+`LDQ #imm` base timing ($CD).
+
+`cpu6309_indexed_cycles` now also checks the legality of all 256
+postbytes in both modes. The seven illegal HD6309 postbytes are $92,
+$B2, $BF, $D2, $DF, $F2, and $FF; representative legal postbytes
+continue to have explicit reference-backed cycle tests.
+
+`cpu6309_math_variable_cycles` covers both modes of DIVD/DIVQ/MULD
+with positive and negative operands, hard/soft quotient overflow and
+zero divisors. The cycle correction rules follow the hardware-based
+findings of hoglet67's 6809Decoder project. Note that these additions
+are *timing accounting*, not a comprehensive validation of the
+existing DIV instruction result registers and condition codes.
+
+`cpu6309_stack_masks` covers every one of the 256 push/pull masks
+for PSHS/PSHU/PULS/PULU in both execution modes. The existing
+`cpu6309_interrupt_timing` continues to cover short/full FIRQ and
+IRQ/NMI frames with MD[FM,N] combinations.
+
+```sh
+cmake -S . -B build -DFM11_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build -R 'hd6309_opcode_coverage|cpu6309_|cpu6809_' --output-on-failure
+```
+
+**Remaining architectural work:** TFM interruptibility cannot be
+modelled by the present atomic TFM macro: an interrupt can be
+recognized partway through the transfer, after a source read but
+before the destination write, and the transfer resumes following
+RTI. Supporting that behaviour requires a resumable instruction
+state and coordination with the interrupt delivery/scheduler, not
+just a cycle table change. Full validation of signed division
+results/flags and additional native-mode interrupt edge cases
+also remains to be done before claiming complete HD6309 accuracy.
+
+References:
+- https://github.com/hoglet67/6809Decoder/wiki/Undocumented-6309-Behaviours
+- https://colorcomputerarchive.com/repo/Documents/Books/Motorola%206809%20and%20Hitachi%206309%20Programming%20Reference%20%28Darren%20Atkinson%29.pdf
