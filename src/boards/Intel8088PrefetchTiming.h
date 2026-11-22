@@ -26,6 +26,9 @@ public:
         std::uint64_t ioReadBytes=0;
         std::uint64_t ioWriteBytes=0;
         std::uint64_t operandBusCycles=0;
+        // Optional experimental demand-fetch penalty (four T states per
+        // missed byte); never included in passive/FIFO-only mode.
+        std::uint64_t demandStallCycles=0;
     };
 
     void reset() {
@@ -33,12 +36,14 @@ public:
         validNext_=false;
         nextCs_=nextIp_=0;
         instructionDataBytes_=0;
+        instructionDemandBytes_=0;
         head_=0;
         queue_.fill(0);
     }
     void setEnabled(bool value) {
         enabled_=value;
         byteQueueEnabled_=false;
+        demandStallEnabled_=false;
         reset();
     }
     bool enabled() const { return enabled_; }
@@ -47,7 +52,20 @@ public:
     void setByteQueueEnabled(bool value) {
         byteQueueEnabled_=value;
         enabled_=value;
+        demandStallEnabled_=false;
         reset();
+    }
+    // Experimental opt-in: a missed byte in the FIFO is one 8088
+    // four-clock demand bus cycle. This is a deliberately conservative
+    // additive approximation, NOT bus-phase-accurate EU/BIU overlap.
+    void setDemandStallTimingEnabled(bool value) {
+        enabled_=value;
+        byteQueueEnabled_=value;
+        demandStallEnabled_=value;
+        reset();
+    }
+    bool demandStallTimingEnabled() const {
+        return enabled_ && byteQueueEnabled_ && demandStallEnabled_;
     }
     bool byteQueueEnabled() const { return enabled_ && byteQueueEnabled_; }
     Snapshot snapshot() const { return state_; }
@@ -58,6 +76,7 @@ public:
     // timing and independent DMA bus ownership are not yet observable.
     void beginInstruction() {
         instructionDataBytes_=0;
+        instructionDemandBytes_=0;
     }
     void dataRead(bool io=false) {
         if(!enabled_)return;
@@ -104,6 +123,7 @@ public:
             return value; // Do not reread modified guest memory.
         }
         ++state_.demandBytes;
+        if(demandStallEnabled_)++instructionDemandBytes_;
         return read(cs,ip);
     }
     template<class ReadByte>
@@ -139,6 +159,17 @@ public:
         } else state_.depth+=grant;
         state_.refillBytes+=grant;
     }
+    // Called *after* finish() by the CPU timing finalizer. Refill
+    // grants are derived from the reference instruction clocks, never
+    // from these additional demand-stall clocks, so no second refill
+    // can be charged for the same demand fetch.
+    unsigned consumeDemandStallCycles() {
+        if(!demandStallTimingEnabled())return 0;
+        const unsigned cycles=instructionDemandBytes_*4u;
+        state_.demandStallCycles+=cycles;
+        instructionDemandBytes_=0;
+        return cycles;
+    }
     void flush() {
         if(!enabled_)return;
         state_.depth=0;
@@ -149,11 +180,13 @@ public:
 private:
     bool enabled_=false;
     bool byteQueueEnabled_=false;
+    bool demandStallEnabled_=false;
     bool validNext_=false;
     std::array<BYTE,4> queue_{};
     unsigned head_=0;
     WORD nextCs_=0;
     WORD nextIp_=0;
     unsigned instructionDataBytes_=0;
+    unsigned instructionDemandBytes_=0;
     Snapshot state_{};
 };
