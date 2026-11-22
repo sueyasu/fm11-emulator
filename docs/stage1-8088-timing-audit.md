@@ -521,3 +521,24 @@ memory. CPU and opcode decoding remain unchanged.
 
 Reference: Intel 8088 opcode table, REP string timing and prefix
 costs. <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>.
+
+## Correction: byte TEST/XCHG clocks on the original Intel 8088
+
+The earlier byte/word split for ModR/M TEST and XCHG was
+incorrect: it mixed 8086 byte-memory values with the published
+**8088-specific** opcode timings. The authoritative reference
+lists identical clocks for both widths:
+
+| Opcode | Register | Memory |
+|---|---:|---:|
+| 84h TEST r/m8,r8 | 3 | 13+EA |
+| 85h TEST r/m16,r16 | 3 | 13+EA |
+| 86h XCHG r/m8,r8 | 4 | 25+EA |
+| 87h XCHG r/m16,r16 | 4 | 25+EA |
+
+The production timing finalizer and both affected regression
+tests have been corrected. The previous section claiming byte
+memory TEST=9+EA and XCHG=17+EA is superseded.
+
+Reference: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
+(opcode rows 84h–87h).

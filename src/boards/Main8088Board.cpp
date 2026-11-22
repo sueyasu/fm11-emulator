@@ -931,19 +931,17 @@ void Main8088Board::Core::executeOne()
                     return;
                 }
                 if(opcode==0x84 || opcode==0x85) {
-                    // TEST does not write back. The Intel 8088 clock
-                    // table distinguishes byte (9+EA) and word (13+EA)
-                    // memory operands; registers are always 3 clocks.
-                    cpu.lastCycles_=prefixCycles+(memory
-                        ? (opcode==0x84?9u:13u)+ea : 3u);
+                    // The Intel 8088-specific opcode table lists
+                    // TEST r/m8,r8 and TEST r/m16,r16 alike:
+                    // 3 clocks (register), 13+EA (memory).
+                    cpu.lastCycles_=prefixCycles+(memory?13u+ea:3u);
                     return;
                 }
                 if(opcode==0x86 || opcode==0x87) {
-                    // XCHG reads and writes memory: 17+EA for a byte
-                    // and 25+EA for a word on the 8-bit 8088 bus.
-                    // Register-to-register transfers take 4 clocks.
-                    cpu.lastCycles_=prefixCycles+(memory
-                        ? (opcode==0x86?17u:25u)+ea : 4u);
+                    // The 8088-specific XCHG table likewise gives
+                    // 4 register or 25+EA memory clocks for either
+                    // operand width. Do not use 8086 byte timings.
+                    cpu.lastCycles_=prefixCycles+(memory?25u+ea:4u);
                     return;
                 }
                 if(opcode>=0xd0 && opcode<=0xd3) {

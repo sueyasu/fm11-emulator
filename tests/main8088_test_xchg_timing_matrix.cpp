@@ -3,6 +3,7 @@
 #include <iostream>
 
 // Intel 8088 ModR/M TEST/XCHG: 84/85 read-only; 86/87 RMW.
+// All four forms have the same 8088 reference memory clocks by width.
 // Exercise all EA forms, displacements, register operands, and both
 // widths, keeping clock and instruction-address checks.
 int main() {
@@ -50,8 +51,9 @@ int main() {
                 const bool memory=mod!=3;
                 const unsigned ea=(mod==0 && rm==6)
                     ?6u:eaBase[rm]+(mod==0||mod==3?0u:4u);
-                const unsigned base=exchange
-                    ?(word?25u:17u):(word?13u:9u);
+                // Original Intel 8088 reference clocks apply to
+                // both operand widths (not the 8086 byte values).
+                const unsigned base=exchange?25u:13u;
                 const unsigned expected=memory
                     ?base+ea:(exchange?4u:3u);
                 if(cpu.lastExecutionCycles()!=expected ||
@@ -81,8 +83,8 @@ int main() {
         auto& cpu=static_cast<Main8088Board::Core&>(board.cpu());
         cpu.setConformanceState(regs,seg,0,2);
         cpu.executeOne();
-        const unsigned expected=(opcode==0x84?9u:
-            opcode==0x85?13u:opcode==0x86?17u:25u)+5u+2u;
+        const unsigned expected=(opcode==0x84 || opcode==0x85
+            ?13u:25u)+5u+2u;
         if(cpu.lastExecutionCycles()!=expected || cpu.ip()!=3)return 2;
     }
     return 0;
