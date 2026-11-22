@@ -50,6 +50,14 @@ public:
 
 public:
 	BYTE *Memory;
+	// NMOS Z80 interrupt/refresh state; kept separate from register ABI.
+	BYTE interruptMode_ = 0;
+	BYTE interruptDataBus_ = 0xff;
+	unsigned eiDelay_ = 0;
+	unsigned executionNesting_ = 0;
+	void FetchRefresh() { regs.r.b.R = BYTE((regs.r.b.R & 0x80) |
+	                            ((regs.r.b.R + 1) & 0x7f)); }
+	BYTE FetchOpcode() { FetchRefresh(); return GetOp(); }
 	std::uint64_t instructionCycles_=0;
 	ZREGS regs;
 	union {
