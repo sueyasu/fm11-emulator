@@ -57,7 +57,8 @@ unsigned run(unsigned op,unsigned prefix) {
     Cpu c;
     c.regs.SP=0x4000;
     c.regs.IX=0x2000;c.regs.IY=0x2100;
-    c.regs.r.w.HL=0x2200;c.regs.r.w.BC=1;c.regs.r.b.B=1;
+    c.regs.r.w.HL=0x2200;c.regs.r.w.BC=1;
+    c.regs.r.b.B=prefix==0 ? 2 : 1; // DJNZ taken; ED repeat final
     c.regs.r.b.A=1; // make CPI/CPIR zero comparison false/true by memory defaults
     c.mem[0]=BYTE(prefix);
     c.mem[1]=BYTE(op);
