@@ -48,6 +48,7 @@ public:
             interruptModeStack_.clear();
             irqInhibit_=0;
             segmentOverride_=-1;
+            timingRepeatActive_=false;
         }
         bool halted() const {return halted_;}
         bool emulation8080() const {return emulation8080_;}
