@@ -62,11 +62,11 @@ int main() {
     z.writeMemory(0x2001,2);
     z.writeMemory(0x2002,3);
     if(!run(z,{0x21,0x00,0x20,0x11,0x00,0x21,0x01,0x03,0x00,
-               0xed,0xb0},{10,10,10,58},"LDIR"))return 6;
+               0xed,0xb0},{10,10,10,21,21,16},"LDIR"))return 6;
     if(z.readMemory(0x2100)!=1 || z.readMemory(0x2101)!=2 ||
        z.readMemory(0x2102)!=3)return 7;
     if(!run(z,{0x3e,0x02,0x21,0x00,0x21,0x01,0x03,0x00,0xed,0xb1},
-               {7,10,10,37},"CPIR match second"))return 8;
+               {7,10,10,21,16},"CPIR match second"))return 8;
 
     if(!run(z,{0xdd,0x21,0x00,0x20,0xdd,0x36,0x01,0x5a,
                0xdd,0xcb,0x01,0x46,0xdd,0xcb,0x01,0xc6},
@@ -107,8 +107,11 @@ int main() {
     port.regs.r.b.B=2;
     port.transmitted.clear();
     port.z80emu();
+    if(port.LastInstructionCycles()!=21 || port.regs.PC!=0 ||
+       port.transmitted!=std::vector<BYTE>{0x5a})return 15;
+    port.z80emu();
     if(port.transmitted!=std::vector<BYTE>{0x5a,0x7c} ||
        port.regs.r.w.HL!=0x1ffe || port.regs.r.b.B!=0 ||
-       port.LastInstructionCycles()!=37)return 15;
+       port.LastInstructionCycles()!=16)return 15;
     return 0;
 }
