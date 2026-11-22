@@ -6,8 +6,6 @@ void	CSimZ80::z80emuED()
 
 	op = GetOp();
 	instructionCycles_=Z80Timing::ed(op);
-	const WORD beforeBC=REG_BC;
-	const BYTE beforeB=REG_B;
 
 	switch(op & 0070) {
 	case 0000: reg = &(REG_B); break;
@@ -203,12 +201,11 @@ void	CSimZ80::z80emuED()
 		SetNf(FALSE);
 		break;
 	case 0xB0:  		/* LDIR 		*/
-		do {
-			ACC_B = GetByte(REG_HL);
-			SetByte(REG_DE, ACC_B);
-			REG_DE++;
-			REG_HL++;
-		} while ( --REG_BC != 0 );
+		ACC_B = GetByte(REG_HL);
+		SetByte(REG_DE, ACC_B);
+		REG_DE++;
+		REG_HL++;
+		--REG_BC;
 		SetPf(FALSE);
 		SetHf(FALSE);
 		SetNf(FALSE);
@@ -224,12 +221,11 @@ void	CSimZ80::z80emuED()
 		SetNf(FALSE);
 		break;
 	case 0xB8:  		/* LDDR 		*/
-		do {
-			ACC_B = GetByte(REG_HL);
-			SetByte(REG_DE, ACC_B);
-			REG_DE--;
-			REG_HL--;
-		} while ( --REG_BC != 0 );
+		ACC_B = GetByte(REG_HL);
+		SetByte(REG_DE, ACC_B);
+		REG_DE--;
+		REG_HL--;
+		--REG_BC;
 		SetPf(FALSE);
 		SetHf(FALSE);
 		SetNf(FALSE);
@@ -245,10 +241,9 @@ void	CSimZ80::z80emuED()
 		SetPf(--REG_BC != 0);
 		break;
 	case 0xB1:  		/* CPIR 		*/
-		do {
-			ACC_R = GetByte(REG_HL++);
-			ACC_W = REG_A - ACC_R;
-		} while ( --REG_BC != 0 && ACC_B != 0 );
+		ACC_R = GetByte(REG_HL++);
+		ACC_W = REG_A - ACC_R;
+		--REG_BC;
 		SetSf(ACC_B & 0x80);
 		SetZf(ACC_B == 0);
 		SetHVSub(ACC_B, REG_A, ACC_R);
@@ -266,10 +261,9 @@ void	CSimZ80::z80emuED()
 		SetPf(--REG_BC != 0);
 		break;
 	case 0xB9:  		/* CPDR 		*/
-		do {
-			ACC_R = GetByte(REG_HL--);
-			ACC_W = REG_A - ACC_R;
-		} while ( --REG_BC != 0 && ACC_B != 0 );
+		ACC_R = GetByte(REG_HL--);
+		ACC_W = REG_A - ACC_R;
+		--REG_BC;
 		SetSf(ACC_B & 0x80);
 		SetZf(ACC_B == 0);
 		SetHVSub(ACC_B, REG_A, ACC_R);
@@ -284,10 +278,9 @@ void	CSimZ80::z80emuED()
 		SetNf(TRUE);
 		break;  
 	case 0xB2:  		/* INIR 		*/
-		do {
-			SetByte(REG_HL, GetIO(REG_C));
-			REG_HL++;
-		} while ( --REG_B != 0 );
+		SetByte(REG_HL, GetIO(REG_C));
+		REG_HL++;
+		--REG_B;
 		SetZf(TRUE);
 		SetNf(TRUE);
 		break;  
@@ -299,10 +292,9 @@ void	CSimZ80::z80emuED()
 		SetNf(TRUE);
 		break;  
 	case 0xBA:  		/* INDR 		*/
-		do {
-			SetByte(REG_HL, GetIO(REG_C));
-			REG_HL--;
-		} while ( --REG_B != 0 );
+		SetByte(REG_HL, GetIO(REG_C));
+		REG_HL--;
+		--REG_B;
 		SetZf(TRUE);
 		SetNf(TRUE);
 		break;  
@@ -313,9 +305,8 @@ void	CSimZ80::z80emuED()
 		SetNf(TRUE);
 		break;  
 	case 0xB3:  		/* OTIR 		*/
-		do {
-			SetIO(REG_C, GetByte(REG_HL++));
-		} while ( --REG_B != 0 );
+		SetIO(REG_C, GetByte(REG_HL++));
+		--REG_B;
 		SetZf(TRUE);
 		SetNf(TRUE);
 		break;  
@@ -325,21 +316,23 @@ void	CSimZ80::z80emuED()
 		SetNf(TRUE);
 		break;
 	case 0xBB:  		/* OTDR: repeat until B reaches zero */
-		do {
-			SetIO(REG_C, GetByte(REG_HL--));
-		} while ( --REG_B != 0 );
+		SetIO(REG_C, GetByte(REG_HL--));
+		--REG_B;
 		SetZf(TRUE);
 		SetNf(TRUE);
 		break;
 	}
-	// Block-repeat ED opcodes run to completion in one legacy interpreter call.
-	// Sum all passes: 21 T-states for each repeat, 16 for the final pass.
+	// Expose every repeated ED instruction as an interruptible boundary.
+	// The Z80 re-fetches ED xx at the same PC on the next iteration,
+	// charging 21 T-states on repeat and 16 on the final iteration.
 	if(Z80Timing::blockRepeat(op)) {
-		const bool byteCount=(op&0x07)==2 || (op&0x07)==3;
-		unsigned iterations=byteCount
-			?static_cast<BYTE>(beforeB-REG_B)
-			:static_cast<WORD>(beforeBC-REG_BC);
-		if(iterations==0)iterations=byteCount?256u:65536u;
-		instructionCycles_+=21ull*(iterations-1);
+		const bool ioRepeat=(op&0x07)==2 || (op&0x07)==3;
+		const bool compareRepeat=(op&0x07)==1;
+		const bool repeat=ioRepeat ? REG_B!=0 :
+			(REG_BC!=0 && (!compareRepeat || !FLG_Z));
+		if(repeat) {
+			REG_PC=WORD(REG_PC-2);
+			instructionCycles_=21;
+		}
 	}
 }
