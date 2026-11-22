@@ -538,3 +538,40 @@ These are instruction/event-level reference timing totals. PIC
 acknowledge bus-cycle phase, prefetch overlap, external wait-state
 timing, DMA HOLD and full TF trap boundaries are not modelled.
 MUL/IMUL/DIV/IDIV still lack operand-dependent timing verification.
+
+### Stage 1-E: unsigned MUL microcode-derived variable-clock model
+
+The 8088 `F6 /4` and `F7 /4` (unsigned MUL) paths now
+calculate a per-instruction clock estimate from the original
+8086/8088 `CORX` conditional-add loop. For the Intel-published
+register ranges 70-77 (byte) and 118-133 (word), the current
+bounded model adds one clock for each set multiplier bit in the
+lower 7 / 15 positions of AL / AX. Memory sources add six clocks
+plus the already decoded effective-address cost. The multiplier
+is captured *before* AX is overwritten with the product.
+
+This is **not yet a hardware-verified exact timing formula**:
+the bounds and branch dependence are grounded in Intel's tables
+and the published microcode analysis, but the precise boundary
+alignment of the conditional branches and BIU prefetch remains to
+be verified with real-hardware cycle traces. The test
+`main8088_mul_timing` verifies the implemented model's endpoints,
+bit dependence, memory EA, and resulting product; it is a
+**model regression**, not an independent measured timing oracle.
+
+IMUL signed sign-adjustment branches and DIV/IDIV quotient and
+exception-dependent timings remain separate outstanding tasks.
+The existing NEC V20 provisional timing remains unchanged.
+
+References:
+- Intel iAPX 86/88 timing tables:
+  https://ardent-tool.com/CPU/docs/Intel/808x/manuals/210912-001.pdf
+- Ken Shirriff, reverse-engineering the original 8086 MUL microcode:
+  https://www.righto.com/2023/03/8086-multiplication-microcode.html
+
+```sh
+cmake -S . -B build -DFM11_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build -R 'main8088_(mul_timing|interrupt_cycles|alu_group_timing)' --output-on-failure
+ctest --test-dir build --output-on-failure
+```
