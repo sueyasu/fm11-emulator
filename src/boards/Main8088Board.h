@@ -1,13 +1,9 @@
 #pragma once
 #include "CpuBoard.h"
 #include "Main8088Bus.h"
-#include "Intel8088PrefetchTiming.h"
-#include "Intel8088BusEvents.h"
-#include "Intel8088BusEventSchedule.h"
 #include <array>
 #include <cstdint>
 #include <stdexcept>
-#include <vector>
 
 // First-stage execution adapter for the original Sim86-style register layout.
 // Only ROM bring-up instructions are implemented here; unimplemented opcodes
@@ -52,61 +48,6 @@ public:
             irqInhibit_=0;
             segmentOverride_=-1;
             timingRepeatActive_=false;
-            prefetchTiming_.reset();
-            busEvents_.reset();
-            eventSchedule_.reset();
-            scheduleRequested_=false;
-            scheduledOperandOffsets_.clear();
-        }
-        // Opt-in BIU timing diagnostics. No effect on guest semantics or
-        // CPU cycle reporting until a bus-aware scheduler is introduced.
-        void setPrefetchTrackingEnabled(bool enabled) {
-            prefetchTiming_.setEnabled(enabled && variant_==CpuType::I8088);
-        }
-        // Explicit opt-in for instruction bytes stored in the BIU FIFO.
-        // Keeps instruction-level cycle estimates unchanged; the current
-        // refill budget is still not a bus-phase accurate scheduler.
-        void setPrefetchByteQueueEnabled(bool enabled) {
-            prefetchTiming_.setByteQueueEnabled(
-                enabled && variant_==CpuType::I8088);
-        }
-        // Explicit experimental mode: actual 4-byte FIFO plus 4 clocks
-        // for every byte demanded while empty. The reference timing
-        // table is not a verified EU/BIU overlap trace.
-        void setPrefetchStallTimingEnabled(bool enabled) {
-            prefetchTiming_.setDemandStallTimingEnabled(
-                enabled && variant_==CpuType::I8088);
-        }
-        // Opt-in T-state phase tracking for the real-byte FIFO. Unlike
-        // the demand-stall experiment, this does not change CPU clocks.
-        void setPrefetchBusPhaseEnabled(bool enabled) {
-            prefetchTiming_.setBusPhaseTimingEnabled(
-                enabled && variant_==CpuType::I8088);
-        }
-        Intel8088BusTStates::Snapshot prefetchBusPhaseSnapshot() const {
-            return prefetchTiming_.busPhaseSnapshot();
-        }
-        Intel8088PrefetchTiming::Snapshot prefetchTimingSnapshot() const {
-            return prefetchTiming_.snapshot();
-        }
-        // CPU-visible bus access order within the last instruction.
-        // Diagnostic only: the order is known, exact T-state positions are not.
-        void setBusEventTrackingEnabled(bool enabled) {
-            busEvents_.setEnabled(enabled && variant_==CpuType::I8088);
-        }
-        const std::vector<Intel8088BusEvents::Event>& busEvents() const {
-            return busEvents_.events();
-        }
-        // Verified offsets are supplied per instruction, one start
-        // T-state for each operand (non-fetch) byte bus event.
-        // They are NOT inferred from the opcode's reference clocks.
-        void setBusEventScheduleOffsets(std::vector<unsigned> starts) {
-            scheduledOperandOffsets_=std::move(starts);
-            scheduleRequested_=true;
-            busEvents_.setEnabled(variant_==CpuType::I8088);
-        }
-        Intel8088BusEventSchedule::Result busEventScheduleResult() const {
-            return eventSchedule_.lastResult();
         }
         bool halted() const {return halted_;}
         bool emulation8080() const {return emulation8080_;}
@@ -159,11 +100,6 @@ public:
         unsigned timingSignedMultiplyCycles_=0;
         unsigned timingDivideCycles_=0;
         bool timingRepeatActive_=false;
-        mutable Intel8088PrefetchTiming prefetchTiming_{};
-        mutable Intel8088BusEvents busEvents_{};
-        Intel8088BusEventSchedule eventSchedule_{};
-        std::vector<unsigned> scheduledOperandOffsets_{};
-        bool scheduleRequested_=false;
         std::array<WORD,8> regs_{};
         std::array<WORD,4> segments_{}; // ES, CS, SS, DS
         WORD ip_=0;

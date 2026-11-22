@@ -51,7 +51,6 @@ bool check(const Case& t) {
     }
     auto& cpu=static_cast<Main8088Board::Core&>(board.cpu());
     cpu.setConformanceState(regs,segments,0,2);
-    cpu.setBusEventTrackingEnabled(true);
     cpu.executeOne();
 
     const unsigned ea=t.addressMode==0?5u:
@@ -83,19 +82,6 @@ bool check(const Case& t) {
         if((t.opcode==0x8c || segment!=(t.ext&3)) &&
             cpu.segment(segment)!=kOriginalSeg[segment])return false;
 
-    unsigned reads=0,writes=0;
-    for(const auto& e:cpu.busEvents()) {
-        if(e.kind==Intel8088BusEvents::Kind::MemoryRead) {
-            if(!memory || e.address!=address+reads)return false;
-            ++reads;
-        }
-        if(e.kind==Intel8088BusEvents::Kind::MemoryWrite) {
-            if(!memory || e.address!=address+writes)return false;
-            ++writes;
-        }
-    }
-    if(reads!=(memory && t.opcode==0x8e?2u:0u) ||
-       writes!=(memory && t.opcode==0x8c?2u:0u))return false;
     return true;
 }
 }

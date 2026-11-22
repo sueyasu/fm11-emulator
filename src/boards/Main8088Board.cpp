@@ -26,8 +26,6 @@ void Main8088Board::Core::reset()
     irqInhibit_=0;
     segmentOverride_=-1;
     timingRepeatActive_=false;
-    prefetchTiming_.reset();
-    busEvents_.reset();
 }
 std::uint32_t Main8088Board::Core::physical(WORD seg,WORD off) const
 {
@@ -39,46 +37,23 @@ std::uint32_t Main8088Board::Core::pc() const
 }
 BYTE Main8088Board::Core::readData8(std::uint32_t address) const
 {
-    prefetchTiming_.dataRead();
-    const BYTE value=bus_.readMemory(address);
-    busEvents_.record(Intel8088BusEvents::Kind::MemoryRead,address,value);
-    return value;
+    return bus_.readMemory(address);
 }
 void Main8088Board::Core::writeData8(std::uint32_t address,BYTE value)
 {
-    prefetchTiming_.dataWrite();
-    busEvents_.record(Intel8088BusEvents::Kind::MemoryWrite,address,value);
     bus_.writeMemory(address,value);
 }
 BYTE Main8088Board::Core::readPort8(WORD port) const
 {
-    prefetchTiming_.dataRead(true);
-    const BYTE value=bus_.readIo(port);
-    busEvents_.record(Intel8088BusEvents::Kind::PortRead,port,value);
-    return value;
+    return bus_.readIo(port);
 }
 void Main8088Board::Core::writePort8(WORD port,BYTE value)
 {
-    prefetchTiming_.dataWrite(true);
-    busEvents_.record(Intel8088BusEvents::Kind::PortWrite,port,value);
     bus_.writeIo(port,value);
 }
 BYTE Main8088Board::Core::fetch8()
 {
-    // Default machine execution has neither diagnostics enabled.
-    // Bypass the prefetch tracker and event recorder entirely in that
-    // hot path; retain the existing path for each opt-in mode.
-    if(!prefetchTiming_.enabled() && !busEvents_.enabled()) {
-        const BYTE result=bus_.readMemory(physical(segments_[1],ip_));
-        ++ip_;
-        return result;
-    }
-    const BYTE result=prefetchTiming_.fetch(
-        segments_[1],ip_,
-        [this](WORD cs,WORD offset) {
-            return bus_.readMemory(physical(cs,offset));
-        });
-    busEvents_.record(Intel8088BusEvents::Kind::Fetch,pc(),result);
+    const BYTE result=bus_.readMemory(physical(segments_[1],ip_));
     ++ip_;
     return result;
 }
@@ -104,7 +79,7 @@ WORD Main8088Board::Core::pop16()
 void Main8088Board::Core::interrupt(BYTE vector)
 {
     timingRepeatActive_=false;
-    prefetchTiming_.flush();
+    
     interruptModeStack_.push_back(emulation8080_ ? ModeFrame::EmulationInterrupt
                                                  : ModeFrame::NativeInterrupt);
     emulation8080_=false; // NEC interrupt handlers execute native V20 code.
@@ -447,9 +422,6 @@ const std::array<unsigned,256> kV20Cycles=makeV20Cycles();
 }
 void Main8088Board::Core::executeOne()
 {
-    // Bus-event capture is a diagnostic opt-in. Avoid clearing its
-    // vector on every normally emulated instruction.
-    if(busEvents_.enabled())busEvents_.beginInstruction();
     lastCycles_=0;
     timingModRmMemory_=false;
     timingEaCycles_=0;
@@ -468,7 +440,6 @@ void Main8088Board::Core::executeOne()
         return;
     }
     if(halted_)return;
-    if(prefetchTiming_.enabled())prefetchTiming_.beginInstruction();
     if(emulation8080_) {
         lastCycles_=4; // coarse 8080-mode default; no detailed bus timing
         const BYTE instruction=fetch8();
@@ -871,37 +842,6 @@ void Main8088Board::Core::executeOne()
         }
         if(clocks)lastCycles_=clocks+2*prefixCount;
     }
-    // This diagnostic finalizer runs after timing and prefetch
-    // finalizers: validated offsets refer to the reference instruction
-    // clock budget, not the transient opcode default.
-    struct BusEventFinalize {
-        Core& cpu;
-        ~BusEventFinalize() {
-            if(!cpu.scheduleRequested_)return;
-            cpu.eventSchedule_.evaluate(cpu.busEvents_.events(),
-                                        cpu.lastCycles_,
-                                        cpu.scheduledOperandOffsets_);
-            cpu.scheduleRequested_=false;
-            cpu.scheduledOperandOffsets_.clear();
-        }
-    } busEventFinalize{*this};
-    // Construct before the existing timing finalizer: destructor order
-    // makes this observer see the final clock count for every opcode.
-    struct PrefetchFinalize {
-        Core& cpu;
-        ~PrefetchFinalize() {
-            if(!cpu.prefetchTiming_.enabled())return;
-            cpu.prefetchTiming_.finish(
-                cpu.segments_[1],cpu.ip_,cpu.lastCycles_,
-                [&cpu=cpu](WORD cs,WORD offset) {
-                    return cpu.bus_.readMemory(cpu.physical(cs,offset));
-                });
-            // Preserve the legacy reference clocks in the passive and
-            // FIFO-only modes. The experimental mode adds only observed
-            // empty-FIFO demand fetches, after reference-time refill.
-            cpu.lastCycles_+=cpu.prefetchTiming_.consumeDemandStallCycles();
-        }
-    } prefetchFinalize{*this};
     struct TimingFinalize {
         Core& cpu;
         BYTE opcode;
@@ -1090,7 +1030,7 @@ void Main8088Board::Core::executeOne()
     if(variant_==CpuType::I8088 && opcode>=0x60 && opcode<=0x6f) {
         const auto displacement=static_cast<std::int8_t>(fetch8());
         if(jumpCondition(opcode&15)) {
-            prefetchTiming_.flush();
+            
             ip_=WORD(ip_+displacement);
             lastCycles_+=12;
         }
@@ -1306,7 +1246,7 @@ void Main8088Board::Core::executeOne()
         const WORD returnCs=segments_[1],returnIp=ip_;
         push16(returnCs);
         push16(returnIp);
-        prefetchTiming_.flush();
+        
         segments_[1]=segment;
         ip_=offset;
         break;
@@ -1342,7 +1282,7 @@ void Main8088Board::Core::executeOne()
         const bool zf=(flags_&0x0040)!=0;
         const bool taken=regs_[1]!=0 && (opcode==0xe2 || (opcode==0xe1?zf:!zf));
         if(taken) {
-            prefetchTiming_.flush();
+            
             ip_=WORD(ip_+displacement);
         }
         if(variant_==CpuType::I8088)
@@ -1354,7 +1294,7 @@ void Main8088Board::Core::executeOne()
         const auto displacement=static_cast<std::int8_t>(fetch8());
         const bool taken=regs_[1]==0;
         if(taken) {
-            prefetchTiming_.flush();
+            
             ip_=WORD(ip_+displacement);
         }
         if(variant_==CpuType::I8088)
@@ -1555,17 +1495,17 @@ void Main8088Board::Core::executeOne()
                 push16(returnCs);
                 push16(returnIp);
             }
-            prefetchTiming_.flush();
+            
             segments_[1]=segment;
             ip_=offset;
         } else {
             const WORD target=read16(op);
             if(op.reg==2) {
                 push16(ip_);
-                prefetchTiming_.flush();
+                
                 ip_=target;
             } else if(op.reg==4) {
-                prefetchTiming_.flush();
+                
                 ip_=target;
             } else { // /6 PUSH r/m16
                 // FF /6 with a register SP operand follows PUSH SP (54h)
@@ -1689,7 +1629,6 @@ void Main8088Board::Core::executeOne()
         const unsigned segment=op.reg&3u;
         // Original 8088 also permits MOV CS,r/m16, unlike later x86 CPUs.
         const WORD value=read16(op);
-        if(segment==1)prefetchTiming_.flush();
         segments_[segment]=value;
         if(segment==2)irqInhibit_=1;
         break;
@@ -1748,25 +1687,25 @@ void Main8088Board::Core::executeOne()
     case 0xfd: flags_ |= 0x0400;break; // STD
     case 0xea: { // JMP far ptr16:16
         const WORD off=fetch16(),seg=fetch16();
-        prefetchTiming_.flush();
+        
         ip_=off;segments_[1]=seg;
         break;
     }
     case 0xeb: { // JMP rel8
         const auto disp=static_cast<std::int8_t>(fetch8());
-        prefetchTiming_.flush(); // Even JMP +0 discards prefetched bytes.
+         // Even JMP +0 discards prefetched bytes.
         ip_=WORD(ip_+disp);
         break;
     }
     case 0xe9: { // JMP rel16
         const WORD disp=fetch16();
-        prefetchTiming_.flush();
+        
         ip_=WORD(ip_+disp);
         break;
     }
     case 0xcd: interrupt(fetch8());break; // INT imm8
     case 0xcf: // IRET
-        prefetchTiming_.flush();
+        
         ip_=pop16();
         segments_[1]=pop16();
         flags_=WORD(pop16()|0x0002);
@@ -1782,7 +1721,7 @@ void Main8088Board::Core::executeOne()
     case 0xe8: { // CALL rel16
         const WORD offset=fetch16();
         push16(ip_);
-        prefetchTiming_.flush();
+        
         ip_=WORD(ip_+offset);
         if(variant_==CpuType::I8088)lastCycles_=2*prefixCount+23;
         break;
@@ -1796,8 +1735,8 @@ void Main8088Board::Core::executeOne()
             break;
         }
         [[fallthrough]];
-    case 0xc3: prefetchTiming_.flush();ip_=pop16();break; // RET near
-    case 0xcb: prefetchTiming_.flush();ip_=pop16();segments_[1]=pop16();break; // RET far
+    case 0xc3: ip_=pop16();break; // RET near
+    case 0xcb: ip_=pop16();segments_[1]=pop16();break; // RET far
     case 0xc0: // V20 Group 2 imm8 byte; Intel 8088 alias of RET imm16
         if(variant_==CpuType::NECV20) {
             const auto op=decodeModRm();
@@ -1807,11 +1746,11 @@ void Main8088Board::Core::executeOne()
             break;
         }
         [[fallthrough]];
-    case 0xc2: { const WORD adjustment=fetch16(); prefetchTiming_.flush();ip_=pop16();regs_[4]=WORD(regs_[4]+adjustment);break; }
-    case 0xca: { const WORD adjustment=fetch16(); prefetchTiming_.flush();ip_=pop16();segments_[1]=pop16();regs_[4]=WORD(regs_[4]+adjustment);break; }
+    case 0xc2: { const WORD adjustment=fetch16(); ip_=pop16();regs_[4]=WORD(regs_[4]+adjustment);break; }
+    case 0xca: { const WORD adjustment=fetch16(); ip_=pop16();segments_[1]=pop16();regs_[4]=WORD(regs_[4]+adjustment);break; }
     case 0x0f: { // POP CS on 8088; V20 bit manipulation escape
         if(variant_==CpuType::I8088) {
-            prefetchTiming_.flush();
+            
             segments_[1]=pop16();
             break;
         }
@@ -2067,7 +2006,7 @@ void Main8088Board::Core::executeOne()
     case 0xc8: { // 8088 alias of CAh (RETF imm16); NEC V20 ENTER
         if(variant_==CpuType::I8088) {
             const WORD adjustment=fetch16();
-            prefetchTiming_.flush();
+            
             ip_=pop16();
             segments_[1]=pop16();
             regs_[4]=WORD(regs_[4]+adjustment);
@@ -2094,7 +2033,7 @@ void Main8088Board::Core::executeOne()
     }
     case 0xc9: // 8088 alias of CBh (RETF); NEC V20 LEAVE
         if(variant_==CpuType::I8088) {
-            prefetchTiming_.flush();
+            
             ip_=pop16();
             segments_[1]=pop16();
             break;
@@ -2118,7 +2057,7 @@ void Main8088Board::Core::executeOne()
         if(opcode>=0x70 && opcode<=0x7f) {
             const auto displacement=static_cast<std::int8_t>(fetch8());
             if(jumpCondition(opcode&15)) {
-                prefetchTiming_.flush();
+                
                 ip_=WORD(ip_+displacement);
                 lastCycles_+=variant_==CpuType::I8088?12:6;
             }

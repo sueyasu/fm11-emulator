@@ -393,34 +393,6 @@ Reference: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
 No new FIFO, bus-event logging, or T-state simulation is
 enabled in normal execution.
 
-## Default CPU execution path and optional diagnostics
-
-The instruction-timing audit also identified a low-cost performance
-improvement independent of reference clock corrections: the normal
-(non-instrumented) CPU previously entered the prefetch tracker and bus
-event recorder for every instruction fetch, even though both features
-are disabled by default.
-
-`fetch8()` now reads the instruction byte directly from the emulated
-bus when **both opt-in diagnostics are disabled**. When either is
-enabled, it retains the original prefetch/event path. The per-
-instruction event-vector clear and shadow-prefetch setup/finalizer
-are skipped in default execution as well. No speculative reads,
-extra allocations or instruction-clock changes are introduced.
-
-The `main8088_diagnostic_fastpath` regression executes MOV from
-memory, immediate ADD, unconditional JMP and NOP with diagnostics
-disabled, event capture enabled, prefetch shadow enabled, and both
-enabled; it compares clocks, IP and register effects and checks that
-optional counters/events work only when requested. The existing
-`main8088_bus_event_order` and `main8088_prefetch_shadow`
-regressions remain applicable.
-
-This is a structural reduction of work on the hot path, not a
-measured throughput claim. Before Stage 1-E completion, compare
-emulated instruction throughput in a repeatable representative
-workload.
-
 ## Stage 1-E: explicit fixed-clock instruction families
 
 The opcode inventory was cross-checked with the 8088 instruction
@@ -463,28 +435,6 @@ case and no additional diagnostic work.
 
 Reference: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
 (D6h *SALC*, two clocks).
-
-## Control transfers and optional prefetch invalidation
-
-During the ModR/M timing audit, the 8Ch/8Eh segment-MOV,
-84h/85h TEST and 86h/87h XCHG timing formulas matched the
-8088 reference table, so no cycle constants were modified.
-
-However, several transfers of control did not explicitly
-flush the optional 8088 prefetch shadow/FIFO. Added flush
-calls for MOV CS,r/m16, POP CS, far immediate CALL, FFh
-indirect near/far CALL and JMP, near/far RET including
-8088 aliases and immediate variants, and IRET.
-
-The new `main8088_control_prefetch_flush` verifies each
-transfer flushes exactly once, that CS:IP and instruction
-clocks are preserved, and that ordinary MOV DS,AX does not
-flush. There is no speculative guest memory read or change
-to the CPU clock model in normal execution. The diagnostic
-flush routine is a no-op when prefetch tracking is disabled.
-
-Reference for instruction classes and timing:
-<https://pastraiser.com/cpu/i8088/i8088_opcodes.html>.
 
 ## TEST and XCHG ModR/M width-dependent clocks
 
@@ -536,30 +486,17 @@ Reference: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
 (8Ch / 8Eh). This is a representation/coverage improvement;
 no hot-path instrumentation or extra timing work is enabled.
 
-## Explicit, non-gating CPU throughput measurement
 
-A manually invoked `main8088_throughput_benchmark` now
-measures one reproducible CPU-only workload: 8088 NOPs
-over a full 64-KiB code segment, with a fixed initial
-register state and exactly the same instruction count.
-It separately reports elapsed wall time and MIPS for:
+## Scope cleanup: remove unused 8088 diagnostic infrastructure
 
-1. Normal default execution, diagnostics disabled.
-2. Passive prefetch shadow enabled.
-3. CPU-visible bus event recording enabled.
+The optional instruction-prefetch shadow/FIFO, experimental demand-stall
+and bus-phase tracking, CPU-visible bus-event recorder, event schedule
+validator, and NOP throughput microbenchmark have been removed from the
+8088 core and build. They were not necessary to meet the Stage 1-E
+instruction-cycle timing objective and added complexity outside its scope.
 
-All paths are checked against three reference CPU
-clocks per NOP, the expected final IP (including
-16-bit wraparound), and an unchanged AX value.
-The benchmark itself is **not** a CTest target;
-there is no environment-dependent performance threshold
-and no automatic CI trigger or scheduled execution.
-
-Build using `cmake --build build --target
-main8088_throughput_benchmark`, then run
-`./build/main8088_throughput_benchmark 1000000`
-(adjust the executable path for your CMake generator).
-For meaningful before/after comparisons use the same
-host, build type, CPU governor and background load.
-This workload isolates CPU dispatch/diagnostic overhead;
-it does not claim to benchmark FDD/HDD, SDL or PTM scheduling.
+The CPU now fetches instructions and reads/writes memory and I/O directly.
+Existing instruction-cycle accounting, conditional timing, interrupt
+delivery, and instruction semantics are preserved. Functional timing and
+opcode regression tests remain; any diagnostic counter-only expectations
+have been removed from those tests.

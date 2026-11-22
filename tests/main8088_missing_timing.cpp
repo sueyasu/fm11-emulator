@@ -55,26 +55,21 @@ int main() {
     const std::array<WORD,4> seg{0,0x1000,0,0};
     auto& cpu=static_cast<Main8088Board::Core&>(board.cpu());
     cpu.setConformanceState(regs,seg,0,3); // CF=1
-    cpu.setPrefetchTrackingEnabled(true);
     cpu.executeOne();
-    if(cpu.lastExecutionCycles()!=16 || cpu.ip()!=2 ||
-       cpu.prefetchTimingSnapshot().flushes!=1)return 9;
+    if(cpu.lastExecutionCycles()!=16 || cpu.ip()!=2)return 9;
     cpu.setConformanceState(regs,seg,0,2); // CF=0
     cpu.executeOne();
-    if(cpu.lastExecutionCycles()!=4 || cpu.ip()!=2 ||
-       cpu.prefetchTimingSnapshot().flushes!=0)return 10;
+    if(cpu.lastExecutionCycles()!=4 || cpu.ip()!=2)return 10;
     // JCXZ +0 takes a branch even though IP equals fall-through.
     board.bus().writeMemory(0x10000,0xe3);
     board.bus().writeMemory(0x10001,0x00);
     regs[1]=0; // CX
     cpu.setConformanceState(regs,seg,0,2);
     cpu.executeOne();
-    if(cpu.lastExecutionCycles()!=18 || cpu.ip()!=2 ||
-       cpu.prefetchTimingSnapshot().flushes!=1)return 11;
+    if(cpu.lastExecutionCycles()!=18 || cpu.ip()!=2)return 11;
     regs[1]=1;
     cpu.setConformanceState(regs,seg,0,2);
     cpu.executeOne();
-    if(cpu.lastExecutionCycles()!=6 || cpu.ip()!=2 ||
-       cpu.prefetchTimingSnapshot().flushes!=0)return 12;
+    if(cpu.lastExecutionCycles()!=6 || cpu.ip()!=2)return 12;
     return 0;
 }
