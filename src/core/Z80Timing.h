@@ -18,8 +18,9 @@ inline unsigned base(std::uint8_t op,bool z,bool c,bool p,bool s) {
             return condition[y-4]?12:7;
         case 1:return (y&1)?11:10;
         case 2:
-            if(pair<2)return 7;
-            return pair==2?16:13;
+            if(y<2)return 7;   // (BC)/(DE) register-indirect LD
+            if(y<4)return 16;  // LD (nn),HL / LD HL,(nn)
+            return 13;         // LD (nn),A / LD A,(nn)
         case 3:return 6;
         case 4:case 5:return y==6?11:4;
         case 6:return y==6?10:7;
