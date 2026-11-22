@@ -10,3 +10,43 @@ z80,LD_B_imm,0602,7,baseline,tests/mainz80_cycles.cpp
 8088,NOP,90,3,baseline,tests/main8088_cycles.cpp
 8088,CLC,F8,2,baseline,tests/main8088_cycles.cpp
 v20,NOP,90,3,baseline,tests/main8088_cycles.cpp
+
+# MC6809 reference-backed single-instruction cases; Motorola M6809PM Appendix F.
+6809,NEG_idx_zero,6084,6,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,NEG_idx_5bit,6000,7,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,NEG_idx_8bit,608800,7,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,NEG_idx_16bit,60890000,10,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,NEG_idx_indirect,6094,9,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,JMP_idx_zero,6E84,3,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,CLR_idx_zero,6F84,6,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,STA_idx_zero,A784,4,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,STB_idx_zero,E784,4,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,LDA_idx_pcr16,A68D0000,9,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,LDA_idx_pcr16_ind,A69D0000,12,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,LDA_idx_extended_ind,A69F2000,9,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,LDA_idx_16bit_ind,A6992000,11,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,LDA_idx_5bit,A600,5,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,LDY_imm,108E1234,4,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,LDY_dir,109E00,6,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,LDY_idx,10AE84,6,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,LDY_ext,10BE2000,7,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,STY_dir,109F00,6,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,STY_idx,10AF84,6,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,STY_ext,10BF2000,7,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,LDS_imm,10CE1234,4,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,LDS_dir,10DE00,6,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,LDS_idx,10EE84,6,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,LDS_ext,10FE2000,7,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,STS_idx,10EF84,6,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,CMPD_imm,10830000,5,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,CMPD_dir,109300,7,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,CMPD_idx,10A384,7,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,CMPD_ext,10B32000,8,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,CMPY_imm,108C0000,5,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,CMPY_idx,10AC84,7,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,CMPU_imm,11830000,5,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,CMPU_idx,11A384,7,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,CMPS_imm,118C0000,5,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,CMPS_idx,11AC84,7,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,LEAX_idx_5bit,3000,5,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,LEAX_idx_pcr16,308D0000,9,verified,Motorola M6809PM Appendix F Tables F-1 F-2
