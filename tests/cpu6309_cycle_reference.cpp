@@ -55,6 +55,20 @@ bool check(const Case& test,bool native) {
 }
 int main() {
     const Case cases[] = {
+        {"NEG_direct", {0x00,0x10},6,5},
+        {"TST_direct", {0x0d,0x10},6,4},
+        {"JMP_direct", {0x0e,0x10},3,2},
+        {"SEXW", {0x14},4,4},
+        {"DAA", {0x19},2,1},
+        {"EXG", {0x1e,0x12},8,5},
+        {"TFR", {0x1f,0x12},6,4},
+        {"NEGA", {0x40},2,1},
+        {"TSTB", {0x5d},2,1},
+        {"TST_indexed", {0x6d,0x84},6,5},
+        {"COM_extended", {0x73,0x20,0x00},7,6},
+        {"TST_extended", {0x7d,0x20,0x00},7,5},
+        {"JMP_extended", {0x7e,0x20,0x00},4,3},
+        {"STX_extended", {0xbf,0x20,0x00},6,5},
         {"ADDR", {0x10,0x30,0x89},4,4},
         {"PSHSW", {0x10,0x38},6,6},
         {"NEGD", {0x10,0x40},3,2},
