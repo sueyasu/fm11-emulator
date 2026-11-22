@@ -259,8 +259,7 @@ void	CSimZ80::z80emuIndex(WORD *ix)
 		// HL/H/L; execute the underlying instruction (including ED
 		// and further DD/FD prefixes), charging the prefix fetch.
 		// This avoids silently treating e.g. DD 00 as a NOP.
-		REG_PC=WORD(REG_PC-1);
-		z80emu();
+		ExecuteOpcode(op,true);
 		instructionCycles_+=4;
 		break;
 	}
