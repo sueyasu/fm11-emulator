@@ -420,3 +420,25 @@ This is a structural reduction of work on the hot path, not a
 measured throughput claim. Before Stage 1-E completion, compare
 emulated instruction throughput in a repeatable representative
 workload.
+
+## Stage 1-E: explicit fixed-clock instruction families
+
+The opcode inventory was cross-checked with the 8088 instruction
+clock table for fixed-clock instructions. Previously, the 04h–3Dh
+accumulator-immediate ALU forms and A8h/A9h TEST immediate
+happened to receive the correct four cycles by inheriting the
+generic four-clock default. They are now assigned **explicit**
+four-cycle entries in the existing baseline table, at no
+additional per-instruction cost.
+
+The new `main8088_fixed_timing_matrix` independently exercises
+all eight ALU immediate families in byte and word forms,
+TEST accumulator immediate in both widths, all 90h–97h
+NOP/XCHG AX encodings, fixed flag/convert/decimal instructions,
+AAM/AAD, and prefix overhead. This is a regression and coverage
+improvement, **not a claim** that all primary opcodes are now
+timing-verified. Grouped ModR/M, exception/fault timing and
+memory/BIU contention are separate coverage requirements.
+
+Reference: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
+(04h–3Dh, 90h–9Fh, A8h/A9h, D4h/D5h and F5h–FDh).

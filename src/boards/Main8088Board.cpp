@@ -406,6 +406,13 @@ std::array<unsigned,256> make8088Cycles() {
     t.fill(4); // typical short instruction fallback
     for(unsigned op=0x00;op<=0x3b;++op)
         if((op&7)<=3)t[op]=3; // ALU: register case; memory adds below
+    // Accumulator-immediate ALU opcodes have an intentional four-clock
+    // baseline; they must not rely on the generic fallback.
+    for(unsigned operation=0;operation<8;++operation) {
+        t[operation*8+4]=4; // AL,imm8
+        t[operation*8+5]=4; // AX,imm16
+    }
+    t[0xa8]=4; t[0xa9]=4; // TEST accumulator, immediate
     for(unsigned op=0x40;op<=0x4f;++op)t[op]=3;
     for(unsigned op=0x50;op<=0x57;++op)t[op]=15;
     for(unsigned op=0x58;op<=0x5f;++op)t[op]=12;
