@@ -92,6 +92,7 @@ void CSim09::InterruptTfm()
     if (tfmActive_) {
         tfmReadPending_ = false; // discarded read latch: repeat read on RTI
         tfmNeedsSetup_ = true;
+        REG_CC &= ~CC_Z; // interrupted TFM clears Z
     }
 }
 
@@ -136,20 +137,27 @@ void CSim09::StepTfm(WORD opcode, BYTE postbyte)
         REG_PC = tfmPC_;
         return;
     }
+    // The source update precedes the destination write. If the two
+    // register codes are identical (e.g. TFM X+,X+), the destination
+    // therefore sees the updated value of the shared register.
+    if (opcode == 0x1138 || opcode == 0x113a)
+        source = WORD(source + 1);
+    else if (opcode == 0x1139)
+        source = WORD(source - 1);
     SetMemByte(target,tfmReadValue_);
-    switch (opcode) {
-    case 0x1138: source = WORD(source + 1); target = WORD(target + 1); break;
-    case 0x1139: source = WORD(source - 1); target = WORD(target - 1); break;
-    case 0x113a: source = WORD(source + 1); break;
-    case 0x113b: target = WORD(target + 1); break;
-    }
+    if (opcode == 0x1138 || opcode == 0x113b)
+        target = WORD(target + 1);
+    else if (opcode == 0x1139)
+        target = WORD(target - 1);
     REG_W = WORD(REG_W - 1);
     tfmReadPending_ = false;
     tfmStepCycles_ = 2;
     if (REG_W != 0)
         REG_PC = tfmPC_;
-    else
+    else {
         tfmActive_ = false;
+        REG_CC |= CC_Z; // successful TFM sets Z
+    }
 }
 
 // Signed HD6309 math and condition codes. Source: Atkinson 6x09
