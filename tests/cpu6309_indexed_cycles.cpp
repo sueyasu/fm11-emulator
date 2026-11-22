@@ -57,6 +57,26 @@ int main() {
             }
         }
     }
+    // All 256 postbytes are independently classified for HD6309:
+    // the seven reserved forms trigger illegal-instruction handling,
+    // while every other encoding is assigned non-zero timing.
+    // The precise cycle values of representative legal forms are
+    // checked by the fixed cases above.
+    for (unsigned postbyte=0;postbyte<256;++postbyte) {
+        const bool invalid =
+            postbyte==0x92 || postbyte==0xb2 || postbyte==0xbf ||
+            postbyte==0xd2 || postbyte==0xdf || postbyte==0xf2 ||
+            postbyte==0xff;
+        for (unsigned mode=0;mode<2;++mode) {
+            const auto actual=run(BYTE(postbyte),mode!=0);
+            if ((actual==0)!=invalid) {
+                ++bad;
+                std::fprintf(stderr,"HD6309 postbyte=%02X native=%u "
+                    "expected %s got=%u\\n",
+                    postbyte,mode,invalid?"illegal":"valid",actual);
+            }
+        }
+    }
     std::printf("HD6309 indexed timing: %zu postbytes x 2 modes, mismatches=%u\n",
                 sizeof(cases)/sizeof(cases[0]),bad);
     return bad?1:0;
