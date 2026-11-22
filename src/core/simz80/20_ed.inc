@@ -150,6 +150,9 @@ void	CSimZ80::z80emuED()
 		REG_SP += 2;
 		break;
 	case 0x4D:  		/* RETI 		*/
+		// RETI restores IFF1 from IFF2 like RETN, and signals the
+		// external interrupt daisy chain (not yet modelled here).
+		SetIFF1(FLG_IFF2);
 		REG_PC = GetWord(REG_SP);
 		REG_SP += 2;
 		break;
