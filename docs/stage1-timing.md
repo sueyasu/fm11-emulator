@@ -161,3 +161,54 @@ mistaken for a full cycle-by-cycle physical hardware model.
 
 The MC6809 reference CSV is independent of the shared HD6309 timing
 implementation; the native HD6309 audit remains Stage 1-C.
+
+## Stage 1-C: HD6309 cycle accuracy
+
+Reference: HD63B09EP Technical Reference Guide, opcode tables
+(pp. 11-18), and Darren Atkinson, *Motorola 6809 and Hitachi 6309
+Programming Reference*, indexed addressing table (p. 150) and TFM.
+
+The MC6809 personality remains distinct from the HD6309 personality.
+
+Implemented here:
+
+- The native-mode timing pass runs after resolving the full 16-bit
+  prefixed opcode, preserving the mode active at instruction entry
+  (important for LDMD), instead of losing mode corrections when page
+  10/11 tables overwrite the initial value.
+- HD6309 extension tables for register, word, E/F accumulator, BITMD
+  and LDMD instructions now use documented emulation-mode counts.
+  Reference-backed native-mode adjustments cover these opcode
+  families and selected non-prefixed instructions.
+- All four TFM forms now charge **6 + 3 * bytes transferred** clocks,
+  in both HD6309 modes. The interpreter still runs TFM atomically, so
+  interrupt delivery *during* a transfer is not yet accurate.
+- HD6309 long conditional branches take five clocks, whether taken or
+  not, unlike MC6809's six clocks when taken.
+- HD6309 indexed addressing supports E/F/W displacement forms and the
+  special ,W, [,W], n,W, [n,W], ,W++, [ ,W++ ], ,--W and
+  [ ,--W ] encodings. Native indexed-address timing reductions are
+  applied separately; unrecognized postbytes are rejected.
+- `cpu6309_cycle_reference` compares representative instructions in
+  emulation/native modes, including mode-invariant instructions,
+  prefixed arithmetic, TFM transfers and long branches.
+  `cpu6309_indexed_cycles` checks indexed cycle differences and
+  illegal postbytes in both modes.
+
+```sh
+cmake -S . -B build -DFM11_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build -R 'cpu6309_|cpu6809_|main6809_.*timing|mc6809_opcode_coverage|cpu_timing_matrix' --output-on-failure
+```
+
+**Still outside verified Stage 1-C coverage:** a complete reference
+enumeration of every HD6309 opcode, every indexed postbyte across every
+opcode, operand-dependent DIVD/DIVQ/MULD cycle counts, TFM
+interruptibility, detailed illegal-instruction timing, and the entire
+native-mode interrupt/stack permutation matrix. A completed focused
+CTest suite does not imply cycle-exact implementation of these cases.
+Do not classify Stage 1-C as fully complete until those gaps are closed.
+
+References:
+- https://colorcomputerarchive.com/repo/Documents/Microprocessors/HD6309/HD63B09EP%20Technical%20Reference%20Guide.pdf
+- https://colorcomputerarchive.com/repo/Documents/Books/Motorola%206809%20and%20Hitachi%206309%20Programming%20Reference%20%28Darren%20Atkinson%29.pdf
