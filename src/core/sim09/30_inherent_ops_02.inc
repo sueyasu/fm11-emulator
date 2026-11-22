@@ -66,62 +66,12 @@
     PushAll();					\
     REG_PC = GetMemWord(0xFFF0);
 
-#define	O_TFMI					\
-{   BYTE c;					\
-    WORD *ws = (WORD *)RegOfs(ACC_BL >> 4);	\
-    WORD *wd = (WORD *)RegOfs(ACC_BL & 0x0F);	\
-    if ( ACC_BL <= 0x44 ) {			\
-        tfmTransfers_ = REG_W ? REG_W : 65536u; \
-    	do {					\
-	    c = GetMemByte(*ws); *ws += 1;	\
-	    SetMemByte(*wd, c);  *wd += 1;	\
-        } while ( --REG_W != 0 );		\
-    } else {					\
-	O_ERR;					\
-    }						\
-}
-#define	O_TFMD					\
-{   BYTE c;					\
-    WORD *ws = (WORD *)RegOfs(ACC_BL >> 4);	\
-    WORD *wd = (WORD *)RegOfs(ACC_BL & 0x0F);	\
-    if ( ACC_BL <= 0x44 ) {			\
-        tfmTransfers_ = REG_W ? REG_W : 65536u; \
-    	do {					\
-	    c = GetMemByte(*ws); *ws -= 1;	\
-	    SetMemByte(*wd, c);  *wd -= 1;	\
-        } while ( --REG_W != 0 );		\
-    } else {					\
-	O_ERR;					\
-    }						\
-}
-#define	O_TFMS					\
-{   BYTE c;					\
-    WORD *ws = (WORD *)RegOfs(ACC_BL >> 4);	\
-    WORD *wd = (WORD *)RegOfs(ACC_BL & 0x0F);	\
-    if ( ACC_BL <= 0x44 ) {			\
-        tfmTransfers_ = REG_W ? REG_W : 65536u; \
-    	do {					\
-	    c = GetMemByte(*ws); *ws += 1;	\
-	    SetMemByte(*wd, c);			\
-        } while ( --REG_W != 0 );		\
-    } else {					\
-	O_ERR;					\
-    }						\
-}
-#define	O_TFML					\
-{   BYTE c;					\
-    WORD *ws = (WORD *)RegOfs(ACC_BL >> 4);	\
-    WORD *wd = (WORD *)RegOfs(ACC_BL & 0x0F);	\
-    if ( ACC_BL <= 0x44 ) {			\
-        tfmTransfers_ = REG_W ? REG_W : 65536u; \
-    	do {					\
-	    c = GetMemByte(*ws);		\
-	    SetMemByte(*wd, c);  *wd += 1;	\
-        } while ( --REG_W != 0 );		\
-    } else {					\
-	O_ERR;					\
-    }						\
-}
+// Each SimONE call performs one TFM read or write micro-operation.
+// The original do/while loops hid interrupt boundaries from the scheduler.
+#define O_TFMI StepTfm(op,ACC_BL);
+#define O_TFMD StepTfm(op,ACC_BL);
+#define O_TFMS StepTfm(op,ACC_BL);
+#define O_TFML StepTfm(op,ACC_BL);
 
 #define	DIR	ACC_PT = ((REG_DP << 8) | GetOpByte());
 #define	IND	ACC_PT = GetAddrInd();
