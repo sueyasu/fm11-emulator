@@ -33,8 +33,8 @@ int main() {
     if(!run("LOOPE untaken",{0xe1,0x02},2,2,2,6,2))return 4;
     if(!run("LOOPNE taken",{0xe0,0x02},2,2,2,19,4))return 5;
     if(!run("LOOPNE untaken",{0xe0,0x02},2,2,0x42,7,2))return 6;
-    if(!run("JCXZ taken",{0xe3,0x02},2,0,2,16,4))return 7;
-    if(!run("JCXZ untaken",{0xe3,0x02},2,1,2,4,2))return 8;
+    if(!run("JCXZ taken",{0xe3,0x02},2,0,2,18,4))return 7;
+    if(!run("JCXZ untaken",{0xe3,0x02},2,1,2,6,2))return 8;
     // D0-D3: implicit one-bit versus variable CL count.
     if(!run("ROL reg 1",{0xd0,0xc0},2,0,2,2,2))return 9;
     if(!run("ROL reg CL=3",{0xd2,0xc0},2,3,2,20,2))return 10;
