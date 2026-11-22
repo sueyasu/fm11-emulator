@@ -38,6 +38,7 @@ public:
     }
     void setEnabled(bool value) {
         enabled_=value;
+        byteQueueEnabled_=false;
         reset();
     }
     bool enabled() const { return enabled_; }
@@ -45,7 +46,7 @@ public:
     // This mode retains actual prefetched instruction bytes.
     void setByteQueueEnabled(bool value) {
         byteQueueEnabled_=value;
-        enabled_=value || enabled_;
+        enabled_=value;
         reset();
     }
     bool byteQueueEnabled() const { return enabled_ && byteQueueEnabled_; }
