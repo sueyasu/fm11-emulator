@@ -56,6 +56,7 @@ public:
         byteQueueEnabled_=value;
         enabled_=value;
         demandStallEnabled_=false;
+        busPhaseEnabled_=false;
         reset();
     }
     // Experimental opt-in: a missed byte in the FIFO is one 8088
