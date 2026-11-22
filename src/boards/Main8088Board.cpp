@@ -25,6 +25,7 @@ void Main8088Board::Core::reset()
     interruptModeStack_.clear();
     irqInhibit_=0;
     segmentOverride_=-1;
+    timingRepeatActive_=false;
 }
 std::uint32_t Main8088Board::Core::physical(WORD seg,WORD off) const
 {
@@ -61,6 +62,7 @@ WORD Main8088Board::Core::pop16()
 }
 void Main8088Board::Core::interrupt(BYTE vector)
 {
+    timingRepeatActive_=false;
     interruptModeStack_.push_back(emulation8080_ ? ModeFrame::EmulationInterrupt
                                                  : ModeFrame::NativeInterrupt);
     emulation8080_=false; // NEC interrupt handlers execute native V20 code.
