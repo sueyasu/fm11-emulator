@@ -34,6 +34,8 @@ bool check(const Case& test,bool native) {
     cpu.regs.MD=native?1:0;
     for(std::size_t i=0;i<test.bytes.size();++i)
         cpu.ram[0x1000+i]=test.bytes[i];
+    cpu.ram[0]=1; // nonzero direct operand for division reference cases
+    cpu.ram[1]=1;
     cpu.ram[0x2000]=0x55;
     cpu.ram[0x2001]=0x66;
     cpu.ram[0x2002]=0x77;
@@ -100,6 +102,18 @@ int main() {
         {"SUBE_direct", {0x11,0x90,0},5,4},
         {"SUBE_indexed", {0x11,0xa0,0x84},5,5},
         {"SUBE_extended", {0x11,0xb0,0x20,0},6,5},
+        {"DIVD_imm", {0x11,0x8d,0x01},25,25},
+        {"DIVQ_imm", {0x11,0x8e,0,1},36,36},
+        {"MULD_imm", {0x11,0x8f,0,1},28,28},
+        {"DIVD_direct", {0x11,0x9d,0},27,26},
+        {"DIVQ_direct", {0x11,0x9e,0},36,35},
+        {"MULD_direct", {0x11,0x9f,0},30,29},
+        {"DIVD_indexed", {0x11,0xad,0x84},27,27},
+        {"DIVQ_indexed", {0x11,0xae,0x84},36,36},
+        {"MULD_indexed", {0x11,0xaf,0x84},30,30},
+        {"DIVD_extended", {0x11,0xbd,0x20,0},28,27},
+        {"DIVQ_extended", {0x11,0xbe,0x20,0},37,36},
+        {"MULD_extended", {0x11,0xbf,0x20,0},31,30},
         {"TFM_1_byte", {0x11,0x38,0x12},9,9,1},
         {"TFM_3_bytes", {0x11,0x38,0x12},15,15,3},
         {"TFM_decrement", {0x11,0x39,0x12},12,12,2},
