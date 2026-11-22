@@ -104,6 +104,23 @@ static bool maskedInterruptKeepsLatch(bool native) {
            c.LastInstructionCycles()==2 && c.regs.r.w.PC==0x1003;
 }
 
+static bool illegalRegisterTrap(bool native) {
+    Cpu c;
+    c.Set6309Enabled(true);
+    c.regs.r.w.PC=0x1000;
+    c.regs.r.w.S=0x4000;
+    c.regs.r.w.W=1;
+    c.regs.CC=0x04; // Z set: abnormal completion must clear it
+    c.regs.MD=native?1:0;
+    c.mem[0x1000]=0x11;c.mem[0x1001]=0x38;
+    c.mem[0x1002]=0x55; // TFM illegal register indices
+    c.mem[0xfff0]=0x12;c.mem[0xfff1]=0x00;
+    c.SimONE();
+    return c.regs.r.w.PC==0x1200 &&
+           (c.regs.MD&0x40)!=0 && (c.regs.CC&0x04)==0 &&
+           c.regs.r.w.W==1;
+}
+
 int main() {
     unsigned failures=0;
     for(unsigned kind=0;kind<3;++kind)
@@ -118,6 +135,7 @@ int main() {
     for(unsigned native=0;native<2;++native) {
         if(!sameRegisterAndZ(native!=0)) { ++failures; std::fprintf(stderr,"TFM same-register/Z failed native=%u\n",native); }
         if(!maskedInterruptKeepsLatch(native!=0)) { ++failures; std::fprintf(stderr,"TFM masked IRQ failed native=%u\n",native); }
+        if(!illegalRegisterTrap(native!=0)) { ++failures; std::fprintf(stderr,"TFM illegal register failed native=%u\n",native); }
     }
     std::printf("HD6309 TFM IRQ/FIRQ/NMI read/write restart: %u failures\n",failures);
     return failures?1:0;
