@@ -65,6 +65,38 @@ int main() {
     cpu.executeOne();
     if(!cpu.halted() || cpu.ip()!=3)return 7; // direct fetch sees HLT
 
+    // A taken JMP +0 still flushes the queue, even though the
+    // resulting IP equals the sequential fall-through address.
+    Main8088Board sameTarget(CpuType::I8088);
+    prepare(sameTarget);
+    auto& same=static_cast<Main8088Board::Core&>(sameTarget.cpu());
+    sameTarget.bus().writeMemory(0x10000,0xeb);
+    sameTarget.bus().writeMemory(0x10001,0x00);
+    same.setPrefetchByteQueueEnabled(true);
+    same.executeOne();
+    auto jump=same.prefetchTimingSnapshot();
+    if(same.ip()!=2 || jump.flushes!=1 || jump.depth!=3)return 9;
+
+    // An untaken Jcc +0 does not invalidate the queue, but a
+    // taken Jcc +0 must invalidate it.
+    Main8088Board taken(CpuType::I8088);
+    prepare(taken);
+    auto& conditional=static_cast<Main8088Board::Core&>(taken.cpu());
+    taken.bus().writeMemory(0x10000,0x72); // JC +0
+    taken.bus().writeMemory(0x10001,0x00);
+    std::array<WORD,8> initial{};
+    initial[4]=0x8000;
+    const std::array<WORD,4> seg{0,0x1000,0,0};
+    conditional.setConformanceState(initial,seg,0,3);
+    conditional.setPrefetchByteQueueEnabled(true);
+    conditional.executeOne();
+    if(conditional.ip()!=2 ||
+       conditional.prefetchTimingSnapshot().flushes!=1)return 10;
+    conditional.setConformanceState(initial,seg,0,2);
+    conditional.executeOne();
+    if(conditional.ip()!=2 ||
+       conditional.prefetchTimingSnapshot().flushes!=0)return 11;
+
     // The opt-in real FIFO is unavailable for NEC V20.
     Main8088Board v20(CpuType::NECV20);
     prepare(v20);
