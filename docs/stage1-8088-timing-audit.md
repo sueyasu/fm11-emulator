@@ -130,3 +130,40 @@ starvation and external wait states.
 
 These changes deliberately require neither the optional FIFO
 nor a per-T-state simulator in normal CPU execution.
+
+## Follow-up: 8088 Group 1/3 memory-word transfers
+
+The instruction-cycle audit found that the immediate Group 1
+(80h/81h/82h/83h) and unary/test Group 3 (F6h/F7h)
+timing overrides applied identical memory-cycle totals to
+byte and word operands. On an 8088 byte-wide bus, each
+additional 16-bit memory read or write requires four clocks.
+These formulas now distinguish word operands without enabling
+prefetch or a per-cycle event scheduler:
+
+| Family | Byte-memory formula | Word-memory formula |
+|---|---|---|
+| Group 1 CMP immediate (read-only) | 14 + EA | 18 + EA |
+| Group 1 modifying ALU (RMW) | 23 + EA | 31 + EA |
+| Group 3 TEST immediate | 11 + EA | 15 + EA |
+| Group 3 NOT/NEG (RMW) | 24 + EA | 32 + EA |
+
+The existing test constants use [BX] with EA=5, so 8088
+word Group 1 ADD expects 36 clocks, CMP expects 23,
+word TEST expects 20, and NOT/NEG expect 37. Further
+cases cover short sign-extended immediate (83h) and
+Group 3 TEST alias /1.
+
+The conditional jump JCXZ now explicitly invalidates its
+optional diagnostic prefetch queue when *taken*, even when
+the relative displacement is zero. Reference instruction
+clocks (18 taken, 6 untaken) are unchanged.
+
+Reference clock methodology: Intel *8086 Family User's
+Manual*, instruction-clock tables and 8088 word-transfer
+note (four clocks for each 16-bit memory access).
+<https://www.inf.pucrs.br/~calazans/undergrad/orgcomp_EC/mat_microproc/intel-8086_family_Users_Manual.pdf>
+
+Normal CPU execution still performs only a few small integer
+operations. These changes do not allocate event buffers
+or perform speculative bus reads.
