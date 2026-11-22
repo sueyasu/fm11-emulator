@@ -675,3 +675,49 @@ Next: track actual instruction/data bus transfers and prefetch
 queue ownership, synchronize wait-states and DMA, and only then
 apply starvation/refill timing penalties. Instruction timing
 baselines and V20 execution must remain independently testable.
+
+### Stage 1-E: data/IO bus reservations in the passive 8088 shadow
+
+The 8088 core now distinguishes **instruction-byte fetches** from
+**explicit operand data transfers** through four CPU-local access
+wrappers: `readData8`, `writeData8`, `readPort8`, and
+`writePort8`. They still call the unchanged Main8088Bus interfaces,
+so guest memory, I/O devices and CPU architectural behavior are not
+altered. The instrumentation is opt-in and is disabled for the V20.
+
+The diagnostic snapshot now exposes memory read/write and I/O
+read/write byte totals, plus `operandBusCycles`. Every observed
+byte reserves a minimum of **4 bus clocks**; a word occupies two
+byte transfers on the 8088. For the provisional per-instruction
+refill allowance, the shadow subtracts this occupied budget
+from `lastExecutionCycles()`, clamps at zero, and grants at most
+four queue bytes at one grant per four remaining clocks.
+For example, `MOV [BX],AX` takes 18 instruction clocks and
+records two memory writes (8 reserved bus clocks), allowing two
+provisional refill slots rather than four.
+
+These reservations are **not added to CPU execution clocks**:
+the Intel instruction timing baseline already includes data
+transfers. Adding them again would double-charge the bus.
+The model still assumes that unused instruction time is
+available to prefetch, which is not generally true on hardware.
+It does not yet resolve exact ordering of instruction fetch and
+operand transfer, queue stalls, DMA, WAIT, refresh or bus phases;
+the queue is still a passive accounting shadow, not a FIFO
+containing real instruction bytes.
+
+The new `main8088_prefetch_bus_budget` CTest covers memory word
+read/write, 16-bit IN, 8-bit OUT, cumulative reservations,
+bounded refill, disabled tracking and V20 isolation.
+
+```sh
+cmake -S . -B build -DFM11_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build -R 'main8088_(prefetch_shadow|prefetch_bus_budget)' --output-on-failure
+ctest --test-dir build --output-on-failure
+```
+
+**Next:** integrate real byte-addressed instruction prefetch data,
+bus-arbitration phase timing and cache invalidation/flush semantics;
+only after hardware-equivalent queue stall behavior is verified
+should the prefetch model affect reported instruction clocks.
