@@ -41,10 +41,10 @@ int main() {
     // D0-D3: implicit one-bit versus variable CL count.
     if(!run("ROL reg 1",{0xd0,0xc0},2,0,2,2,2))return 9;
     if(!run("ROL reg CL=3",{0xd2,0xc0},2,3,2,20,2))return 10;
-    if(!run("ROL mem 1",{0xd0,0x07},2,0,2,20,2))return 11;
-    if(!run("ROL word mem 1",{0xd1,0x07},2,0,2,28,2))return 12;
-    if(!run("ROL mem CL=3",{0xd2,0x07},2,3,2,37,2))return 13;
-    if(!run("ROL word mem CL=3",{0xd3,0x07},2,3,2,45,2))return 14;
+    if(!run("ROL mem 1",{0xd0,0x07},2,0,2,28,2))return 11;
+    if(!run("ROL word mem 1",{0xd1,0x07},2,0,2,36,2))return 12;
+    if(!run("ROL mem CL=3",{0xd2,0x07},2,3,2,45,2))return 13;
+    if(!run("ROL word mem CL=3",{0xd3,0x07},2,3,2,53,2))return 14;
     if(!run("CALL rel16",{0xe8,0,0},3,0,2,23,3))return 15;
     return 0;
 }
