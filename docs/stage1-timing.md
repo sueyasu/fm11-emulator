@@ -575,3 +575,53 @@ cmake --build build
 ctest --test-dir build -R 'main8088_(mul_timing|interrupt_cycles|alu_group_timing)' --output-on-failure
 ctest --test-dir build --output-on-failure
 ```
+
+### Stage 1-E: signed multiply and division timing estimates
+
+The Intel 8088 signed `F6/F7 /5` (IMUL), unsigned `/6`
+(DIV), and signed `/7` (IDIV) normal-result paths now report
+bounded **operand-sensitive estimates** rather than the four-clock
+fallback. In IMUL the model uses the absolute accumulator multiplier
+(the input to the shared CORX loop), counts conditional additions in
+the lower seven/fifteen bits, and adds a small sign-processing
+allowance for negative multiplicand, operand and result.
+The normal-result estimates remain inside Intel's published
+register timing intervals: IMUL8 80–98, IMUL16 128–154.
+
+DIV/IDIV use the number of set quotient bits as a deterministic
+proxy for the subtract/no-subtract decisions of the CORD
+restoring-division microcode. Signed forms also include a small
+sign-normalization allowance. The output falls inside the documented
+ranges (DIV8 80–90; DIV16 144–162; IDIV8 101–112;
+IDIV16 165–184); memory operands add six clocks plus EA.
+
+**Important:** These are intentionally **heuristic, bounded
+estimates**, not datasheet-verified values for each operand and
+not a microcode-cycle-exact implementation. The count of subtraction
+branches and the exact sign normalization cost must be traced
+against real 8088 hardware before those values are considered
+verified. Divide-by-zero/overflow still follows the existing INT 0
+functional path without a verified exception latency.
+
+`main8088_signed_div_timing` is a regression test for this
+interim model, result registers, signs and a divide-by-zero
+transition. It is NOT an external timing oracle.
+
+```sh
+cmake -S . -B build -DFM11_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build -R 'main8088_(mul_timing|signed_div_timing|interrupt_cycles)' --output-on-failure
+ctest --test-dir build --output-on-failure
+```
+
+References:
+- Intel iAPX 86/88 instruction timing table:
+  https://www2.math.uni-wuppertal.de/~fpf/Uebungen/GdR-SS02/opcode_i.html
+- Ken Shirriff, original 8086 division microcode:
+  https://www.righto.com/2023/04/reverse-engineering-8086-divide-microcode.html
+- Ken Shirriff, original 8086 multiplication microcode:
+  https://www.righto.com/2023/03/8086-multiplication-microcode.html
+
+Remaining Stage 1-E: real-8088-verified operand timing and exception
+microcode, 4-byte prefetch queue/BIU-EU overlap, external WAIT,
+and shared-bus DMA contention.
