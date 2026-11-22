@@ -158,8 +158,28 @@ bool CSim09::IsOpcodeAllowed(WORD opcode) const
 
 bool CSim09::IsIndexedPostbyteAllowed(BYTE postbyte) const
 {
-    if (enable6309_ || (postbyte & 0x80) == 0)
+    if ((postbyte & 0x80) == 0)
         return true;
+    if (enable6309_) {
+        // HD6309 indexed-postbyte map (Darren Atkinson, table p. 150).
+        // Nine named W/extended-indirect forms replace reserved 6809
+        // encodings. Unlisted encodings must trap instead of silently
+        // executing with a fabricated effective address.
+        switch (postbyte) {
+        case 0x8f: case 0x90: case 0x9f: case 0xaf: case 0xb0:
+        case 0xcf: case 0xd0: case 0xef: case 0xf0:
+            return true;
+        default: break;
+        }
+        switch (postbyte & 0x0f) {
+        case 0x00: case 0x02:
+            return (postbyte & 0x10) == 0; // indirect single-step illegal
+        case 0x0f:
+            return false; // only the special encodings above are legal
+        default:
+            return true; // includes E/F/W indexed offsets
+        }
+    }
 
     // Motorola M6809PM/AD, Appendix F, Table F-2:
     // the four register selectors use identical forms except for the
