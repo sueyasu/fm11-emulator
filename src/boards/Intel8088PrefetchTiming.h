@@ -1,6 +1,7 @@
 #pragma once
 #include "portable_types.h"
 #include <algorithm>
+#include <array>
 #include <cstdint>
 
 // 8088 BIU *timing shadow*, not an instruction-byte cache.
@@ -32,12 +33,22 @@ public:
         validNext_=false;
         nextCs_=nextIp_=0;
         instructionDataBytes_=0;
+        head_=0;
+        queue_.fill(0);
     }
     void setEnabled(bool value) {
         enabled_=value;
         reset();
     }
     bool enabled() const { return enabled_; }
+    // An explicit opt-in separate from the historical shadow counters.
+    // This mode retains actual prefetched instruction bytes.
+    void setByteQueueEnabled(bool value) {
+        byteQueueEnabled_=value;
+        enabled_=value || enabled_;
+        reset();
+    }
+    bool byteQueueEnabled() const { return enabled_ && byteQueueEnabled_; }
     Snapshot snapshot() const { return state_; }
 
     // Instrument only explicit CPU data transactions, never fetch8().
@@ -60,9 +71,7 @@ public:
         else ++state_.memoryWriteBytes;
     }
 
-    // Called for every instruction byte, including prefix, ModR/M,
-    // displacement and immediate bytes. The CPU's real fetch still reads
-    // memory; this is only a record of how it would consume BIU slots.
+    // Called for every instruction byte in passive shadow mode.
     void consume(WORD cs, WORD ip) {
         if(!enabled_)return;
         if(validNext_ && (nextCs_!=cs || nextIp_!=ip))flush();
@@ -75,7 +84,30 @@ public:
             ++state_.bufferedBytes;
         } else ++state_.demandBytes;
     }
-    void finish(WORD cs, WORD ip, std::uint64_t instructionCycles) {
+    template<class ReadByte>
+    BYTE fetch(WORD cs, WORD ip, ReadByte&& read) {
+        if(!byteQueueEnabled()) {
+            consume(cs,ip);
+            return read(cs,ip);
+        }
+        if(validNext_ && (nextCs_!=cs || nextIp_!=ip))flush();
+        validNext_=true;
+        nextCs_=cs;
+        nextIp_=WORD(ip+1);
+        ++state_.instructionBytes;
+        if(state_.depth) {
+            const BYTE value=queue_[head_];
+            head_=(head_+1u)%4u;
+            --state_.depth;
+            ++state_.bufferedBytes;
+            return value; // Do not reread modified guest memory.
+        }
+        ++state_.demandBytes;
+        return read(cs,ip);
+    }
+    template<class ReadByte>
+    void finish(WORD cs, WORD ip, std::uint64_t instructionCycles,
+                ReadByte&& read) {
         if(!enabled_)return;
         if(validNext_ && (cs!=nextCs_ || ip!=nextIp_))flush();
         // One observed operand byte consumes at least four bus clocks.
@@ -89,18 +121,36 @@ public:
         const unsigned free=4-state_.depth;
         const unsigned grant=static_cast<unsigned>(
             std::min<std::uint64_t>(free,available/4));
-        state_.depth+=grant;
+        if(byteQueueEnabled_) {
+            // A control transfer leaves the old queue invalid, and
+            // prefetch restarts at the actual target CS:IP. No speculative
+            // memory reads occur in passive-shadow mode.
+            if(!validNext_) {
+                validNext_=true;
+                nextCs_=cs;
+                nextIp_=ip;
+            }
+            for(unsigned i=0;i<grant;++i) {
+                const WORD offset=WORD(nextIp_+state_.depth);
+                queue_[(head_+state_.depth)%4u]=read(nextCs_,offset);
+                ++state_.depth;
+            }
+        } else state_.depth+=grant;
         state_.refillBytes+=grant;
     }
     void flush() {
         if(!enabled_)return;
         state_.depth=0;
+        head_=0;
         validNext_=false;
         ++state_.flushes;
     }
 private:
     bool enabled_=false;
+    bool byteQueueEnabled_=false;
     bool validNext_=false;
+    std::array<BYTE,4> queue_{};
+    unsigned head_=0;
     WORD nextCs_=0;
     WORD nextIp_=0;
     unsigned instructionDataBytes_=0;
