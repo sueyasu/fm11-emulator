@@ -269,10 +269,12 @@
 	case 0363:  		/* DI   		*/  	/* --X-X--- */
 		SetIFF1(FALSE);
 		SetIFF2(FALSE);
+		eiDelay_=0;
 		break;
 	case 0373:  		/* EI   		*/  	/* --X-X--- */
 		SetIFF1(TRUE);
 		SetIFF2(TRUE);
+		eiDelay_=1;
 		break;
 
 	case 0304:  		/* CALL NZ,nn   */  	/* --X-X--- */
@@ -412,5 +414,6 @@
 		REG_PC = ((op >> 3) & 7) * 8;
 		break;
 	}
+	--executionNesting_;
 
 }
