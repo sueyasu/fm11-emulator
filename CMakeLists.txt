@@ -733,6 +733,10 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(main6809_floppy_d88 PRIVATE fm11_core)
     add_test(NAME main6809_floppy_d88 COMMAND main6809_floppy_d88)
     # Stage 1-D: Z80 instruction fetch, prefixes, block and interrupt timing.
+    add_executable(mainz80_opcode_timing_coverage tests/mainz80_opcode_timing_coverage.cpp)
+    target_link_libraries(mainz80_opcode_timing_coverage PRIVATE fm11_core)
+    add_test(NAME mainz80_opcode_timing_coverage COMMAND mainz80_opcode_timing_coverage)
+
     add_executable(mainz80_timing_boundaries tests/mainz80_timing_boundaries.cpp)
     target_link_libraries(mainz80_timing_boundaries PRIVATE fm11_core)
     add_test(NAME mainz80_timing_boundaries COMMAND mainz80_timing_boundaries)
