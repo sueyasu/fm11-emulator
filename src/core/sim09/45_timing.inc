@@ -137,8 +137,8 @@ void CSim09::FinishInstructionTiming(WORD op)
     // Apply native-mode timing to the fully decoded opcode. The prefixed
     // page-2/page-3 tables must not overwrite these adjustments.
     if (enable6309_ && nativeTimingMode_) {
-        if (op >= 0x1030 && op <= 0x1037) --lastInstructionCycles_;
-        if (op >= 0x1038 && op <= 0x103b) --lastInstructionCycles_;
+        // ADDR..CMPR (4 clocks) and PSHSW..PULUW (6 clocks) use
+        // the same timing in both HD6309 execution modes.
         if (op == 0x103f || op == 0x113f) lastInstructionCycles_ += 2;
         // Page-2 word ALU and page-3 extended register instructions.
         // Reductions are relative to the HD6309 emulation-mode table
