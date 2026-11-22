@@ -4,7 +4,7 @@ void	CSimZ80::z80emuED()
 	BYTE *reg = NULL;
 	WORD ACC_R, ACC_C;
 
-	op = GetOp();
+	op = FetchOpcode();
 	instructionCycles_=Z80Timing::ed(op);
 
 	switch(op & 0070) {
@@ -128,6 +128,8 @@ void	CSimZ80::z80emuED()
 		REG_SP = GetWord(ACC_W);
 		break;
 
+	case 0x4C: case 0x54: case 0x5C:
+	case 0x64: case 0x6C: case 0x74: case 0x7C:
 	case 0x44:  		/* NEG  		*/
 		ACC_SW = 0 - REG_A;
 		SetCf(ACC_SW < 0);
@@ -140,6 +142,8 @@ void	CSimZ80::z80emuED()
 		REG_A = ACC_B;
 		break;
 
+	case 0x55: case 0x65: case 0x75:
+	case 0x5D: case 0x6D: case 0x7D:
 	case 0x45:  		/* RETN 		*/
 		SetIFF1(FLG_IFF2);
 		REG_PC = GetWord(REG_SP);
@@ -150,8 +154,11 @@ void	CSimZ80::z80emuED()
 		REG_SP += 2;
 		break;
 
+	case 0x4E: case 0x66: case 0x6E:
 	case 0x46:  		/* IM   0   	*/
+	case 0x76:
 	case 0x56:  		/* IM   1   	*/
+	case 0x7E:
 	case 0x5E:  		/* IM   2   	*/
 		break;
 
