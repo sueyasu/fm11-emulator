@@ -180,9 +180,9 @@ Implemented here:
   and LDMD instructions now use documented emulation-mode counts.
   Reference-backed native-mode adjustments cover these opcode
   families and selected non-prefixed instructions.
-- All four TFM forms now charge **6 + 3 * bytes transferred** clocks,
-  in both HD6309 modes. The interpreter still runs TFM atomically, so
-  interrupt delivery *during* a transfer is not yet accurate.
+- All four TFM forms charge **6 + 3 * bytes transferred** clocks in
+  both HD6309 modes. The follow-up now splits each byte into source-read
+  and destination-write micro-steps to expose interrupt boundaries.
 - HD6309 long conditional branches take five clocks, whether taken or
   not, unlike MC6809's six clocks when taken.
 - HD6309 indexed addressing supports E/F/W displacement forms and the
@@ -203,8 +203,9 @@ ctest --test-dir build -R 'cpu6309_|cpu6809_|main6809_.*timing|mc6809_opcode_cov
 
 Ordinary-case base cycles for DIVD/DIVQ/MULD have also been added
 for immediate, direct, indexed and extended forms. The reference tests
-cover those 12 encodings in both modes; **operand-dependent adjustments**
-(e.g. signed and overflow variants) still require dedicated checks.
+cover those 12 encodings in both modes. The later
+`cpu6309_math_variable_cycles` and `cpu6309_math_results` tests
+cover signed/overflow cases and the resulting registers/flags.
 
 **Still outside verified Stage 1-C coverage:** a complete reference
 enumeration of every HD6309 opcode, every indexed postbyte across every
@@ -253,16 +254,59 @@ cmake --build build
 ctest --test-dir build -R 'hd6309_opcode_coverage|cpu6309_|cpu6809_' --output-on-failure
 ```
 
-**Remaining architectural work:** TFM interruptibility cannot be
-modelled by the present atomic TFM macro: an interrupt can be
-recognized partway through the transfer, after a source read but
-before the destination write, and the transfer resumes following
-RTI. Supporting that behaviour requires a resumable instruction
-state and coordination with the interrupt delivery/scheduler, not
-just a cycle table change. Full validation of signed division
-results/flags and additional native-mode interrupt edge cases
-also remains to be done before claiming complete HD6309 accuracy.
+**Follow-up:** TFM now uses resumable read/write micro-steps.
+Accepted IRQ/FIRQ/NMI discards a pending source read, restarts the
+same TFM opcode after RTI, and preserves the remaining W count.
+The implementation handles a shared source/destination register
+(e.g. TFM X+,X+) and clears Z on interruption, setting Z after
+normal completion. The `cpu6309_tfm_interrupt` CTest exercises
+these conditions in both modes, including an ignored/masked IRQ.
+
+Signed DIVD/DIVQ now compute signed quotient/remainder, update the
+N/Z/V/C bits, preserve the right state on zero-divide, and distinguish
+two's-complement overflow from range overflow. MULD computes a signed
+32-bit product and reproduces the hardware-observed high-word Z flag.
+`cpu6309_math_results` tests registers, flags, and traps in both
+execution modes.
+
+The opcode manifest is still source-derived rather than a fully
+independent reference for all 436 instructions, and further
+hardware-level differential testing of unusual operand/interrupt
+conditions remains useful.
 
 References:
 - https://github.com/hoglet67/6809Decoder/wiki/Undocumented-6309-Behaviours
 - https://colorcomputerarchive.com/repo/Documents/Books/Motorola%206809%20and%20Hitachi%206309%20Programming%20Reference%20%28Darren%20Atkinson%29.pdf
+
+## Stage 1-C TFM and signed arithmetic follow-up
+
+The TFM core now runs at two interruptible execution boundaries per
+byte: **source read** (7 clocks on instruction start, then 1 clock
+for later reads), followed by **destination write** (2 clocks).
+The sum remains 6+3n clocks if no interrupt is taken. When interrupted
+between read and write, the latched byte is discarded and read again
+following RTI; timing setup is repeated upon restart. An accepted
+interrupt clears Z; normal completion sets Z. A masked interrupt
+does not reset the latch. All four directions, identical source/dest
+register selection, and wraparound of W are supported.
+
+DIVD/DIVQ/MULD helpers use signed arithmetic and implement the
+hard- versus soft-overflow, divide-by-zero and unusual MULD Z-flag
+semantics described by Atkinson and hoglet67.
+
+Tests:
+- `cpu6309_tfm_interrupt`: IRQ/FIRQ/NMI, each HD6309 mode, interruption
+  before or after a destination write, shared registers, masked IRQ.
+- `cpu6309_math_results`: signed normal and overflow outcomes, zero
+  divisors, divide remainder and CC flags in both modes.
+- `cpu6309_cycle_reference`: accumulates split TFM microcycles to
+  preserve its preexisting whole-instruction timing assertions.
+
+```sh
+ctest --test-dir build -R '^cpu6309_' --output-on-failure
+```
+
+Important architectural scope: the CPU exposes a TFM read/write
+boundary at each `SimONE()` call, which allows the existing board
+interrupt scheduler to accept interrupts at the correct point.
+The exact bus subcycle timing inside those micro-steps is not modelled.
