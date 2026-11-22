@@ -507,3 +507,34 @@ cycle-verified instructions.
 ```sh
 ctest --test-dir build -R 'main8088_(alu_group_timing|group_timing|string_timing|dynamic_timing|ea_timing|cycles)' --output-on-failure
 ```
+
+### Stage 1-E: 8088 interrupt entry and exception timing
+
+The external interrupt entry paths now report the 8088 hardware
+response costs independently of the currently decoded opcode:
+**61** clocks for PIC-acknowledged INTR and **50** for NMI.
+Both values include the reference processor's interrupt-entry
+sequence; no second stack/vector transfer charge is added.
+The software INTO instruction now accounts for **73** clocks
+when overflow is set and **4** when clear.
+
+Existing opcode timing remains 72 for INT3, 71 for INT imm8
+and 44 for IRET. The new `main8088_interrupt_cycles` CTest
+checks these seven paths, including vector transfer, stack
+push/pop, IF clearing and IRET restoration.
+
+```sh
+cmake -S . -B build -DFM11_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build -R 'main8088_(interrupt_cycles|alu_group_timing|group_timing|string_timing)' --output-on-failure
+ctest --test-dir build --output-on-failure
+```
+
+Reference: Intel, *iAPX 86/88 User's Manual*, interrupt timings
+and interrupt-response sequence
+(https://ardent-tool.com/CPU/docs/Intel/808x/manuals/210912-001.pdf).
+
+These are instruction/event-level reference timing totals. PIC
+acknowledge bus-cycle phase, prefetch overlap, external wait-state
+timing, DMA HOLD and full TF trap boundaries are not modelled.
+MUL/IMUL/DIV/IDIV still lack operand-dependent timing verification.
