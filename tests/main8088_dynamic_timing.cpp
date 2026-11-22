@@ -35,6 +35,9 @@ int main() {
     if(!run("LOOPNE untaken",{0xe0,0x02},2,2,0x42,7,2))return 6;
     if(!run("JCXZ taken",{0xe3,0x02},2,0,2,18,4))return 7;
     if(!run("JCXZ untaken",{0xe3,0x02},2,1,2,6,2))return 8;
+    // A taken JCXZ with displacement zero still invalidates prefetch;
+    // timing remains the documented 18 clocks.
+    if(!run("JCXZ +0 taken",{0xe3,0x00},2,0,2,18,2))return 16;
     // D0-D3: implicit one-bit versus variable CL count.
     if(!run("ROL reg 1",{0xd0,0xc0},2,0,2,2,2))return 9;
     if(!run("ROL reg CL=3",{0xd2,0xc0},2,3,2,20,2))return 10;
