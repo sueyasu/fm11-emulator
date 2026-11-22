@@ -446,6 +446,64 @@ std::array<unsigned,256> makeV20Cycles() {
     return t;
 }
 const std::array<unsigned,256> kV20Cycles=makeV20Cycles();
+
+// The V20 8080-emulation interpreter previously returned four CPU
+// clocks for virtually every opcode. This is an intentionally coarse
+// instruction-level estimate based on the decoded V20 microcode
+// paths 348h-3FFh, NOT Intel 8080 T-states or measured V20 cycles.
+// Values allow for the micro-operations and byte bus transfers
+// (V20 has an 8-bit bus), including approximate decode/BIU cost.
+// Variable-flow instructions are finalized in the 8080 interpreter.
+std::array<unsigned,256> makeV20EmulationCycles() {
+    std::array<unsigned,256> t{};
+    t.fill(4); // rare/unclassified cases; not a claim of accuracy
+    for(unsigned op=0x00;op<=0x38;op+=8)t[op]=3; // 8080 NOP aliases
+    for(unsigned op=0x40;op<=0x7f;++op) {
+        if(op==0x76) {t[op]=3;continue;} // HLT
+        t[op]=((op&7)==6 || ((op>>3)&7)==6)?9u:5u;
+    }
+    for(unsigned op=0x80;op<=0xbf;++op)t[op]=(op&7)==6?9u:5u;
+    for(unsigned r=0;r<8;++r) {
+        t[8*r+4]=r==6?13u:5u; // INR
+        t[8*r+5]=r==6?13u:5u; // DCR
+        t[8*r+6]=r==6?10u:5u; // MVI
+    }
+    for(unsigned r=0;r<4;++r) {
+        t[0x01+16*r]=7;  // LXI
+        t[0x03+16*r]=4;  // INX
+        t[0x0b+16*r]=4;  // DCX
+        t[0x09+16*r]=5;  // DAD
+        t[0xc1+16*r]=15; // POP, including PSW
+        t[0xc5+16*r]=15; // PUSH, including PSW
+    }
+    // The 8080 Ccc/Rcc/Jcc encodings share three selector masks.
+    for(unsigned cc=0;cc<8;++cc) {
+        t[0xc0+8*cc]=6; // Rcc not taken
+        t[0xc2+8*cc]=8; // Jcc not taken
+        t[0xc4+8*cc]=8; // Ccc not taken
+        t[0xc7+8*cc]=18; // RST n
+    }
+    for(unsigned i=0;i<8;++i)t[0xc6+8*i]=5; // ALU immediate
+    t[0x02]=9;t[0x12]=9; // STAX
+    t[0x0a]=9;t[0x1a]=9; // LDAX
+    t[0x22]=18;t[0x2a]=18; // SHLD/LHLD
+    t[0x32]=13;t[0x3a]=13; // STA/LDA
+    t[0x07]=6;t[0x0f]=6;t[0x17]=6;t[0x1f]=6; // rotates
+    t[0x27]=6;t[0x2f]=4; // DAA/CMA
+    t[0x37]=3;t[0x3f]=3; // STC/CMC
+    t[0xe3]=20;t[0xeb]=5; // XTHL/XCHG
+    t[0xe9]=8;t[0xf9]=3; // PCHL/SPHL
+    t[0xc3]=12;t[0xcb]=12; // JMP and alias
+    t[0xcd]=22;t[0xdd]=22;t[0xfd]=22; // CALL and aliases
+    t[0xc9]=17;t[0xd9]=17; // RET and alias
+    t[0xd3]=12;t[0xdb]=12; // OUT/IN
+    t[0xfb]=3;t[0xf3]=3; // EI/DI
+    // ED xx is mode control, not an ordinary 8080 instruction.
+    // Its two concrete forms receive their own explicit estimates.
+    t[0xed]=4;
+    return t;
+}
+const std::array<unsigned,256> kV20EmulationCycles=makeV20EmulationCycles();
 }
 void Main8088Board::Core::executeOne()
 {
@@ -468,8 +526,8 @@ void Main8088Board::Core::executeOne()
     }
     if(halted_)return;
     if(emulation8080_) {
-        lastCycles_=4; // coarse 8080-mode default; no detailed bus timing
         const BYTE instruction=fetch8();
+        lastCycles_=kV20EmulationCycles[instruction];
         // On the 8080 these unused opcodes behave as one-byte NOPs.
         // They must not consume an immediate operand or alter flags.
         if(instruction==0x00 || instruction==0x08 || instruction==0x10 ||
@@ -478,11 +536,13 @@ void Main8088Board::Core::executeOne()
         if(instruction==0xed) {
             const BYTE subopcode=fetch8();
             if(subopcode==0xed) { // CALLN imm8: invoke native interrupt routine
+                lastCycles_=42; // microcoded entry plus interrupt frame
                 const BYTE vector=fetch8();
                 interrupt(vector);
                 return;
             }
             if(subopcode==0xfd) { // RETEM: restore the native frame
+                lastCycles_=28; // microcoded return plus frame restore
                 if(interruptModeStack_.empty() ||
                    interruptModeStack_.back()!=ModeFrame::Brkem)
                     throw std::runtime_error("RETEM without matching BRKEM");
@@ -640,19 +700,26 @@ void Main8088Board::Core::executeOne()
         };
         if((instruction&0xc7)==0xc2) { // Jcc addr
             const WORD target=fetch16();
-            if(condition8080(instruction>>3))ip_=target;
+            if(condition8080(instruction>>3)) {
+                lastCycles_=13; // taken: extra PC write and queue flush
+                ip_=target;
+            }
             return;
         }
         if((instruction&0xc7)==0xc4) { // Ccc addr
             const WORD target=fetch16();
             if(condition8080(instruction>>3)) {
+                lastCycles_=22; // taken: stack write + control transfer
                 push8080(ip_);
                 ip_=target;
             }
             return;
         }
         if((instruction&0xc7)==0xc0) { // Rcc
-            if(condition8080(instruction>>3))ip_=pop8080();
+            if(condition8080(instruction>>3)) {
+                lastCycles_=17; // taken: stack read + control transfer
+                ip_=pop8080();
+            }
             return;
         }
         if((instruction&0xc7)==0xc7) { // RST n

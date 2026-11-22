@@ -1129,3 +1129,54 @@ independent verification.
 
 Reference: NEC 16-bit V Series Instruction User's Manual,
 Table 2-8 (V20/V20HL column), pages 170-184.
+
+## Stage 1-F: V20 8080-emulation instruction-time estimates and exit scope
+
+Source: dbalsom's die-derived V20 microcode disassembly and PLA analysis,
+`v20/v20_disassembly.txt` at 348h-3FFh, and the clock-by-clock
+`XTCE-Blue/src/core/generated_VX0/GeneratedCpu.h` reference core.
+
+- https://github.com/dbalsom/x86_microcode/tree/main/v20
+- https://github.com/dbalsom/XTCE-Blue/tree/main/src/core/generated_VX0
+
+**Estimation method:** the executed microcode path (including the
+conditional +4 entry variants), instruction fetch length, ordinary
+8-bit operand memory transfers and approximate control-transfer
+prefetch penalty define the instruction-class budget. The values are
+rounded instruction-level best-case estimates under a nonstarved
+prefetch queue, **not** measured V20 CPU clocks and **not** the
+Intel 8080 T-state table. Conditional branch/call/return timing is
+separated by actual taken/not-taken behavior. The V20 instruction
+timing framework, rather than a BIU emulation, consumes these clocks.
+
+| 8080 family | Estimated V20 clocks |
+| --- | --- |
+| NOP aliases / HLT | 3 |
+| MOV register,register / MOV involving M | 5 / 9 |
+| MVI register / MVI M / LXI | 5 / 10 / 7 |
+| ALU register or immediate / ALU M | 5 / 9 |
+| INR or DCR register / M | 5 / 13 |
+| INX, DCX / DAD | 4 / 5 |
+| LDA, STA / LHLD, SHLD / LDAX, STAX | 13 / 18 / 9 |
+| DAA / rotate A / CMA | 6 / 6 / 4 |
+| Jcc not taken / taken | 8 / 13 |
+| Ccc not taken / taken | 8 / 22 |
+| Rcc not taken / taken | 6 / 17 |
+| JMP / CALL / RET / RST | 12 / 22 / 17 / 18 |
+| PUSH / POP / XTHL / XCHG | 15 / 15 / 20 / 5 |
+| IN, OUT / EI, DI, STC, CMC | 12 / 3 |
+| CALLN / RETEM | 42 / 28 (provisional shared-interrupt paths) |
+
+The `mainv20_8080_timing` CTest exercises representative instruction
+families through a real BRKEM transition; existing 8080 functional
+and diagnostics tests remain unchanged. Native V20 timings retain the
+NEC instruction manual values from the preceding Stage 1-F commits.
+The 8088 personality and its instruction timing are untouched.
+
+**Stage 1-F completion standard:** instruction-level native and
+8080-emulation *approximate* timing, including major dynamic branch
+and memory cases. The remaining coarse native edge cases, precise
+operand-dependent divide timing, exception microcode, prefetch/BIU
+overlap, external WAIT and real-hardware trace validation are outside
+this stage's scope. Estimates may be revised later if measured V20
+timing data become available. This is not cycle-exact emulation.
