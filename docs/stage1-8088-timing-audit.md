@@ -322,3 +322,44 @@ though published clock listings and modelling assumptions
 are not uniform across sources. The changes here follow
 the opcode table literally, pending any hardware-based
 correction.
+
+## Stage 1-E audit: Group 2/3 extra word penalties corrected
+
+Cross-checking the opcode-level 8088 table revealed that
+the earlier byte-transfer heuristic was applied again on top
+of some published **8088** instruction clock totals.
+This affected Group 3 TEST/NOT/NEG (F6/F7) and Group 2
+shift/rotate (D0-D3) word-memory forms. The prior audit
+entries that recommend additional +4/+8 clocks for these
+specific forms are superseded by the following reference
+values:
+
+| Instruction group | Register | Memory |
+|---|---|---|
+| F6/F7 TEST /0 or /1 | 5 | 11+EA |
+| F6/F7 NOT and NEG /2 or /3 | 3 | 24+EA |
+| D0/D1 shift/rotate count 1 | 2 | 23+EA |
+| D2/D3 shift/rotate count CL | 8+4*CL | 28+EA+4*CL |
+
+For these specific groups, the timing table does **not**
+distinguish byte and word widths. Do not add a further
+per-transfer charge to these published totals. This is
+consistent with the recent ALU correction, without
+discarding word-width corrections in *other* instruction
+families whose tables explicitly differ.
+
+The production implementation uses constant-time
+instruction arithmetic only; it neither models bus
+T-states nor performs speculative memory fetches.
+Updated `main8088_alu_group_timing`,
+`main8088_dynamic_timing` and
+`main8088_shift_timing_matrix`. Added
+`main8088_group3_reference_matrix` covering all /0-/3
+extensions, 8/16-bit widths, register/memory and segment
+override. Multiply and divide timing remain on their
+existing separately modelled paths.
+
+Source: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
+(groups D0-D3 and F6-F7). The table values are
+best-case instruction timings; they do not characterize
+queue starvation or external WAIT.
