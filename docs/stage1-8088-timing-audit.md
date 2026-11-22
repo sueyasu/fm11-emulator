@@ -535,3 +535,31 @@ or writes. The BP-relative EA cost is **9** clocks, not
 Reference: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
 (8Ch / 8Eh). This is a representation/coverage improvement;
 no hot-path instrumentation or extra timing work is enabled.
+
+## Explicit, non-gating CPU throughput measurement
+
+A manually invoked `main8088_throughput_benchmark` now
+measures one reproducible CPU-only workload: 8088 NOPs
+over a full 64-KiB code segment, with a fixed initial
+register state and exactly the same instruction count.
+It separately reports elapsed wall time and MIPS for:
+
+1. Normal default execution, diagnostics disabled.
+2. Passive prefetch shadow enabled.
+3. CPU-visible bus event recording enabled.
+
+All paths are checked against three reference CPU
+clocks per NOP, the expected final IP (including
+16-bit wraparound), and an unchanged AX value.
+The benchmark itself is **not** a CTest target;
+there is no environment-dependent performance threshold
+and no automatic CI trigger or scheduled execution.
+
+Build using `cmake --build build --target
+main8088_throughput_benchmark`, then run
+`./build/main8088_throughput_benchmark 1000000`
+(adjust the executable path for your CMake generator).
+For meaningful before/after comparisons use the same
+host, build type, CPU governor and background load.
+This workload isolates CPU dispatch/diagnostic overhead;
+it does not claim to benchmark FDD/HDD, SDL or PTM scheduling.
