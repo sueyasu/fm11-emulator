@@ -47,7 +47,7 @@ int main() {
         {"IMUL8 positive",0xf6,0xeb,3,0,4,82,false,12,0},
         {"IMUL8 negative AX",0xf6,0xeb,0xfffd,0,4,88,false,0xfff4,0},
         {"IMUL8 negative source",0xf6,0xeb,3,0,0xfffc,88,false,0xfff4,0},
-        {"IMUL8 both negative",0xf6,0xeb,0xfffd,0,0xfffc,91,false,12,0},
+        {"IMUL8 both negative",0xf6,0xeb,0xfffd,0,0xfffc,88,false,12,0},
         {"IMUL16 positive",0xf7,0xeb,7,0,3,131,false,21,0},
         {"IMUL16 negative",0xf7,0xeb,0xfff9,0,3,137,false,0xffeb,0xffff},
         {"IMUL8 memory",0xf6,0x2f,3,0,4,93,true,12,0},
