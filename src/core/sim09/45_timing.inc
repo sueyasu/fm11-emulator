@@ -140,6 +140,34 @@ void CSim09::FinishInstructionTiming(WORD op)
         if (op >= 0x1030 && op <= 0x1037) --lastInstructionCycles_;
         if (op >= 0x1038 && op <= 0x103b) --lastInstructionCycles_;
         if (op == 0x103f || op == 0x113f) lastInstructionCycles_ += 2;
+        // Page-2 word ALU and page-3 extended register instructions.
+        // Reductions are relative to the HD6309 emulation-mode table
+        // (Technical Reference Guide, opcode tables pp. 15-18).
+        if (op >= 0x1080 && op <= 0x108c && lastInstructionCycles_ == 5)
+            --lastInstructionCycles_;
+        if (op >= 0x1090 && op <= 0x109f && lastInstructionCycles_ != 0)
+            lastInstructionCycles_ -= (lastInstructionCycles_ == 7 ? 2 : 1);
+        if (op >= 0x10a0 && op <= 0x10af && lastInstructionCycles_ == 7)
+            --lastInstructionCycles_;
+        if (op >= 0x10b0 && op <= 0x10bf && lastInstructionCycles_ != 0)
+            lastInstructionCycles_ -= (lastInstructionCycles_ == 8 ? 2 : 1);
+        if ((op == 0x10de || op == 0x10df || op == 0x10fe || op == 0x10ff))
+            --lastInstructionCycles_;
+
+        if (op >= 0x1130 && op <= 0x1137) --lastInstructionCycles_;
+        if (op == 0x1183 || op == 0x118c) --lastInstructionCycles_;
+        if (op == 0x1193 || op == 0x119c) lastInstructionCycles_ -= 2;
+        if ((op >= 0x1190 && op <= 0x119f) ||
+            (op >= 0x11d0 && op <= 0x11df)) {
+            if (lastInstructionCycles_ == 5) --lastInstructionCycles_;
+        }
+        if (op == 0x11a3 || op == 0x11ac) --lastInstructionCycles_;
+        if (op == 0x11b3 || op == 0x11bc) lastInstructionCycles_ -= 2;
+        if ((op >= 0x11b0 && op <= 0x11bf) ||
+            (op >= 0x11f0 && op <= 0x11ff)) {
+            if (lastInstructionCycles_ == 6) --lastInstructionCycles_;
+        }
+
         if ((op >= 0x1040 && op <= 0x105f) ||
             (op >= 0x1140 && op <= 0x115f)) {
             if (lastInstructionCycles_ != 0) --lastInstructionCycles_;
