@@ -65,6 +65,14 @@ void Main8088Board::Core::writePort8(WORD port,BYTE value)
 }
 BYTE Main8088Board::Core::fetch8()
 {
+    // Default machine execution has neither diagnostics enabled.
+    // Bypass the prefetch tracker and event recorder entirely in that
+    // hot path; retain the existing path for each opt-in mode.
+    if(!prefetchTiming_.enabled() && !busEvents_.enabled()) {
+        const BYTE result=bus_.readMemory(physical(segments_[1],ip_));
+        ++ip_;
+        return result;
+    }
     const BYTE result=prefetchTiming_.fetch(
         segments_[1],ip_,
         [this](WORD cs,WORD offset) {
@@ -432,7 +440,9 @@ const std::array<unsigned,256> kV20Cycles=makeV20Cycles();
 }
 void Main8088Board::Core::executeOne()
 {
-    busEvents_.beginInstruction();
+    // Bus-event capture is a diagnostic opt-in. Avoid clearing its
+    // vector on every normally emulated instruction.
+    if(busEvents_.enabled())busEvents_.beginInstruction();
     lastCycles_=0;
     timingModRmMemory_=false;
     timingEaCycles_=0;
@@ -451,7 +461,7 @@ void Main8088Board::Core::executeOne()
         return;
     }
     if(halted_)return;
-    prefetchTiming_.beginInstruction();
+    if(prefetchTiming_.enabled())prefetchTiming_.beginInstruction();
     if(emulation8080_) {
         lastCycles_=4; // coarse 8080-mode default; no detailed bus timing
         const BYTE instruction=fetch8();
@@ -873,6 +883,7 @@ void Main8088Board::Core::executeOne()
     struct PrefetchFinalize {
         Core& cpu;
         ~PrefetchFinalize() {
+            if(!cpu.prefetchTiming_.enabled())return;
             cpu.prefetchTiming_.finish(
                 cpu.segments_[1],cpu.ip_,cpu.lastCycles_,
                 [&cpu=cpu](WORD cs,WORD offset) {

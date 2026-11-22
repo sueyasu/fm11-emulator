@@ -392,3 +392,31 @@ Reference: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
 
 No new FIFO, bus-event logging, or T-state simulation is
 enabled in normal execution.
+
+## Default CPU execution path and optional diagnostics
+
+The instruction-timing audit also identified a low-cost performance
+improvement independent of reference clock corrections: the normal
+(non-instrumented) CPU previously entered the prefetch tracker and bus
+event recorder for every instruction fetch, even though both features
+are disabled by default.
+
+`fetch8()` now reads the instruction byte directly from the emulated
+bus when **both opt-in diagnostics are disabled**. When either is
+enabled, it retains the original prefetch/event path. The per-
+instruction event-vector clear and shadow-prefetch setup/finalizer
+are skipped in default execution as well. No speculative reads,
+extra allocations or instruction-clock changes are introduced.
+
+The `main8088_diagnostic_fastpath` regression executes MOV from
+memory, immediate ADD, unconditional JMP and NOP with diagnostics
+disabled, event capture enabled, prefetch shadow enabled, and both
+enabled; it compares clocks, IP and register effects and checks that
+optional counters/events work only when requested. The existing
+`main8088_bus_event_order` and `main8088_prefetch_shadow`
+regressions remain applicable.
+
+This is a structural reduction of work on the hot path, not a
+measured throughput claim. Before Stage 1-E completion, compare
+emulated instruction throughput in a repeatable representative
+workload.
