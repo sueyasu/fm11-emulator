@@ -62,6 +62,7 @@ static constexpr unsigned char k6309Page11Cycles[256] = {
 // MC6809/HD6309 timing lookup and variable-cycle correction.
 void CSim09::BeginInstructionTiming(WORD op)
 {
+    nativeTimingMode_ = enable6309_ && (REG_MD & MD_N) != 0;
     lastInstructionCycles_ = op < 0x100 ? k6809BaseCycles[op] :
         op < 0x1100 ? k6809Page10Cycles[op & 0xff] :
         op < 0x1200 ? k6309Page11Cycles[op & 0xff] : 0;
@@ -70,11 +71,24 @@ void CSim09::BeginInstructionTiming(WORD op)
         lastInstructionCycles_ = (stackedCc & CC_E) != 0 ?
             (enable6309_ && (REG_MD & MD_N) != 0 ? 17 : 15) : 6;
     }
+
+}
+
+
+void CSim09::FinishInstructionTiming(WORD op)
+{
+    // A prefixed opcode is fetched inside the instruction dispatcher.
+    // Its complete 16-bit key becomes available only after dispatch.
+    if (op >= 0x1000 && op < 0x1200)
+        lastInstructionCycles_ = op < 0x1100 ?
+            k6809Page10Cycles[op & 0xff] : k6309Page11Cycles[op & 0xff];
     // The HD6309 enters emulation mode on reset (MD.N=0). Only
     // established native-mode differences are applied here. Other
     // instructions retain their existing MC6809 timing until verified.
-    if (enable6309_ && (REG_MD & MD_N) != 0 &&
+    if (enable6309_ && nativeTimingMode_ &&
         lastInstructionCycles_ != 0) {
+        // All corrections run after full prefix decoding, using the MD mode
+        // captured at instruction entry rather than the mode after LDMD.
         // The documented native-mode word ALU improvements differ by
         // addressing mode; loads/stores are unchanged for immediate/indexed.
         switch (op) {
@@ -120,16 +134,17 @@ void CSim09::BeginInstructionTiming(WORD op)
             break;
         }
     }
-}
-
-
-void CSim09::FinishInstructionTiming(WORD op)
-{
-    // A prefixed opcode is fetched inside the instruction dispatcher.
-    // Its complete 16-bit key becomes available only after dispatch.
-    if (op >= 0x1000 && op < 0x1200)
-        lastInstructionCycles_ = op < 0x1100 ?
-            k6809Page10Cycles[op & 0xff] : k6309Page11Cycles[op & 0xff];
+    // Apply native-mode timing to the fully decoded opcode. The prefixed
+    // page-2/page-3 tables must not overwrite these adjustments.
+    if (enable6309_ && nativeTimingMode_) {
+        if (op >= 0x1030 && op <= 0x1037) --lastInstructionCycles_;
+        if (op >= 0x1038 && op <= 0x103b) --lastInstructionCycles_;
+        if (op == 0x103f || op == 0x113f) lastInstructionCycles_ += 2;
+        if ((op >= 0x1040 && op <= 0x105f) ||
+            (op >= 0x1140 && op <= 0x115f)) {
+            if (lastInstructionCycles_ != 0) --lastInstructionCycles_;
+        }
+    }
     // PSHS/PULS/PSHU/PULU: five cycles plus one per 8-bit register
     // and two per 16-bit register selected in the mask.
     if (op >= 0x34 && op <= 0x37) {
