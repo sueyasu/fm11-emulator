@@ -63,6 +63,47 @@ static bool run(unsigned kind,bool native,bool interruptAfterWrite) {
     }
     return c.regs.r.w.X==0x2002 && c.regs.r.w.Y==0x2102;
 }
+static bool sameRegisterAndZ(bool native) {
+    Cpu c;
+    c.Set6309Enabled(true);
+    c.regs.r.w.PC=0x1000;
+    c.regs.r.w.S=0x4000;
+    c.regs.r.w.X=0x2000;
+    c.regs.r.w.W=2;
+    c.regs.MD=native?1:0;
+    c.mem[0x1000]=0x11;c.mem[0x1001]=0x38;
+    c.mem[0x1002]=0x11; // TFM X+,X+
+    c.mem[0x2000]=0x52;c.mem[0x2002]=0x64;
+    unsigned total=0;
+    for(int i=0;i<4;++i) {
+        c.SimONE();
+        total+=c.LastInstructionCycles();
+    }
+    return total==12 && c.regs.r.w.W==0 &&
+           c.regs.r.w.X==0x2004 && c.regs.r.w.PC==0x1003 &&
+           c.mem[0x2001]==0x52 && c.mem[0x2003]==0x64 &&
+           (c.regs.CC&0x04)!=0;
+}
+static bool maskedInterruptKeepsLatch(bool native) {
+    Cpu c;
+    c.Set6309Enabled(true);
+    c.regs.r.w.PC=0x1000;
+    c.regs.r.w.S=0x4000;
+    c.regs.r.w.X=0x2000;
+    c.regs.r.w.Y=0x2100;
+    c.regs.r.w.W=1;
+    c.regs.MD=native?1:0;
+    c.regs.CC=0x10; // IRQ masked
+    c.mem[0x1000]=0x11;c.mem[0x1001]=0x38;c.mem[0x1002]=0x12;
+    c.mem[0x2000]=0x52;
+    c.SimONE();
+    c.SimIRQ();
+    c.mem[0x2000]=0x64; // do NOT repeat the read for masked IRQ
+    c.SimONE();
+    return c.readCount==1 && c.mem[0x2100]==0x52 &&
+           c.LastInstructionCycles()==2 && c.regs.r.w.PC==0x1003;
+}
+
 int main() {
     unsigned failures=0;
     for(unsigned kind=0;kind<3;++kind)
@@ -74,6 +115,10 @@ int main() {
                                  kind,native,after);
                 }
             }
+    for(unsigned native=0;native<2;++native) {
+        if(!sameRegisterAndZ(native!=0)) { ++failures; std::fprintf(stderr,"TFM same-register/Z failed native=%u\n",native); }
+        if(!maskedInterruptKeepsLatch(native!=0)) { ++failures; std::fprintf(stderr,"TFM masked IRQ failed native=%u\n",native); }
+    }
     std::printf("HD6309 TFM IRQ/FIRQ/NMI read/write restart: %u failures\n",failures);
     return failures?1:0;
 }
