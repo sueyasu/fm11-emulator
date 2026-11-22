@@ -1039,7 +1039,11 @@ void Main8088Board::Core::executeOne()
                     return;
                 }
                 if(opcode==0x8c || opcode==0x8e) {
-                    cpu.lastCycles_=prefixCycles+(memory ? (opcode==0x8c?9u:8u)+ea+4u : 2u);
+                    // 8088-specific reference clocks already include
+                    // the word transfer: MOV r/m16,Sreg = 13+EA,
+                    // MOV Sreg,r/m16 = 12+EA; register forms = 2.
+                    cpu.lastCycles_=prefixCycles+(memory
+                        ? (opcode==0x8c?13u:12u)+ea : 2u);
                     return;
                 }
                 if(opcode==0xc6 || opcode==0xc7) {

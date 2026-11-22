@@ -511,3 +511,27 @@ for XCHG. No new normal-runtime tracing overhead is added.
 Reference: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
 (84h–87h); earlier statements describing the same memory
 cycles for byte and word forms are superseded.
+
+## Segment MOV matrix and explicit 8088 memory clocks
+
+The existing segment-register MOV finalizer used an 8086-style
+base plus an extra word-transfer cost. Its result was already
+correct for the byte-wide 8088: opcode 8Ch uses **13+EA**
+for a memory destination; 8Eh uses **12+EA** for a memory
+source; register-only forms each take **2 clocks**.
+The finalizer now states those published 8088 totals directly,
+avoiding the easy-to-misread intermediate `9/8 + 4`
+expression. This preserves all previously reported clocks.
+
+`main8088_segment_mov_timing_matrix` adds 128 combinations:
+both opcodes, all eight segment ModR/M extension encodings
+(including 8088 aliases /4–/7), register [BX] and
+[BP+disp8/disp16] addressing, and ES overrides. It checks
+clock budgets, architectural segment/register effects,
+instruction length, and optional two-byte operand bus reads
+or writes. The BP-relative EA cost is **9** clocks, not
+**10**, consistent with the earlier corrected test.
+
+Reference: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
+(8Ch / 8Eh). This is a representation/coverage improvement;
+no hot-path instrumentation or extra timing work is enabled.
