@@ -161,29 +161,23 @@ bool CSim09::IsIndexedPostbyteAllowed(BYTE postbyte) const
     if (enable6309_ || (postbyte & 0x80) == 0)
         return true;
 
-    // HD6309 adds E,R / F,R / W,R forms, with direct and indirect variants.
-    switch (postbyte & 0x0f) {
-    case 0x07:
-    case 0x0a:
-    case 0x0e:
-        return false;
-    default:
-        break;
-    }
-
-    // HD6309 also reuses otherwise invalid MC6809 postbytes for W-based modes.
-    switch (postbyte) {
-    case 0x8f:
-    case 0x90:
-    case 0xaf:
-    case 0xb0:
-    case 0xcf:
-    case 0xd0:
-    case 0xef:
-    case 0xf0:
-        return false;
-    default:
+    // Motorola M6809PM/AD, Appendix F, Table F-2:
+    // the four register selectors use identical forms except for the
+    // extended indirect [nn], which has exactly one encoding (9Fh).
+    // In indirect mode, one-byte auto increment/decrement is illegal.
+    const BYTE mode = postbyte & 0x0f;
+    const bool indirect = (postbyte & 0x10) != 0;
+    switch (mode) {
+    case 0x00: case 0x02:
+        return !indirect; // ,R+ / ,-R; indirect requires ++ / --
+    case 0x01: case 0x03: case 0x04: case 0x05: case 0x06:
+    case 0x08: case 0x09: case 0x0b: case 0x0c: case 0x0d:
         return true;
+    case 0x0f:
+        return postbyte == 0x9f; // extended indirect [nn]
+    default:
+        // 07/0A/0E: HD6309 E/F/W indexed modes; all invalid on 6809.
+        return false;
     }
 }
 
