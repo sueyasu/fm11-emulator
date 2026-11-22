@@ -43,21 +43,23 @@ bool check(const char* label, BYTE prefix, BYTE opcode, WORD cx,
 int main() {
     if(!check("MOVSB",0,0xa4,1,{18}))return 1;
     if(!check("MOVSW",0,0xa5,1,{26}))return 2;
-    if(!check("CMPSB",0,0xa6,1,{30}))return 3;
+    if(!check("CMPSB",0,0xa6,1,{22}))return 3;
     if(!check("CMPSW",0,0xa7,1,{30}))return 4;
     if(!check("STOSB",0,0xaa,1,{11}))return 5;
     if(!check("STOSW",0,0xab,1,{15}))return 6;
-    if(!check("LODSB",0,0xac,1,{16}))return 7;
+    if(!check("LODSB",0,0xac,1,{12}))return 7;
     if(!check("LODSW",0,0xad,1,{16}))return 8;
-    if(!check("SCASB",0,0xae,1,{19}))return 9;
+    if(!check("SCASB",0,0xae,1,{15}))return 9;
     if(!check("SCASW",0,0xaf,1,{19}))return 10;
     if(!check("REP MOVSB",0xf3,0xa4,3,{26,17,17}))return 11;
     if(!check("REP MOVSW",0xf3,0xa5,2,{34,25}))return 12;
     if(!check("REP STOSB",0xf3,0xaa,3,{19,10,10}))return 13;
     if(!check("REP LODSB",0xf3,0xac,2,{22,13}))return 14;
-    if(!check("REPE CMPSB",0xf3,0xa6,3,{39,30,30}))return 15;
+    if(!check("REPE CMPSB",0xf3,0xa6,3,{31,22,22}))return 15;
     if(!check("REPNE SCASB",0xf2,0xae,3,{24}))return 16;
     if(!check("REPE SCASB mismatch",0xf3,0xae,3,{24,15},true))return 17;
-    if(!check("REP CX=0",0xf3,0xa4,0,{9}))return 18;
+    if(!check("REP LODSW",0xf3,0xad,2,{26,17}))return 18;
+    if(!check("REPE CMPSW",0xf3,0xa7,2,{39,30}))return 19;
+    if(!check("REP CX=0",0xf3,0xa4,0,{9}))return 20;
     return 0;
 }
