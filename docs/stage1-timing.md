@@ -408,3 +408,39 @@ the non-classified instructions retain the older coarse timing
 heuristic; V20 uses its separate provisional model and is not
 claimed to be Intel 8088 cycle-compatible. Stage 1-E is not yet
 complete at whole-CPU coverage level.
+
+## Stage 1-E follow-up: dynamic shift and branch timing
+
+The 8088 timing pass now handles the D0-D3 shift/rotate family by
+distinguishing implicit one-bit operations from CL-count forms.
+The latter charge 4 clocks per iteration beyond a register or memory
+base, and memory forms include EA plus 8 additional clocks for a
+16-bit read/modify/write over the 8088's 8-bit external data bus.
+The CPU captures the original count before the shift is executed;
+the V20 model remains independent.
+
+LOOP, LOOPE, LOOPNE and JCXZ now distinguish taken and untaken:
+LOOP 17/5, LOOPE 18/6, LOOPNE 19/7, JCXZ 16/4
+clocks. Near relative CALL now charges 23 clocks on the 8088,
+including the additional byte-wide stack transfer.
+
+The `main8088_dynamic_timing` CTest covers these cases, along with
+both byte and word memory shifts, register shifts and CALL.
+These tests validate instruction-level accounting only, not a
+prefetch-queue or bus-cycle trace.
+
+```sh
+cmake -S . -B build -DFM11_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build -R 'main8088_(cycles|ea_timing|dynamic_timing)' --output-on-failure
+ctest --test-dir build --output-on-failure
+```
+
+Reference: Intel, *iAPX 86/88 User's Manual*, Instruction Set
+Reference Data (execution clock tables):
+https://ardent-tool.com/CPU/docs/Intel/808x/manuals/210912-001.pdf
+
+Remaining work includes indirect CALL/JMP, FF/FE and other RMW groups,
+RET/IRET/interrupt path, REP-string timing, I/O and prefetch/bus
+overlap. Stage 1-E remains incomplete; no claim of physical 8088
+cycle-exact timing is made.
