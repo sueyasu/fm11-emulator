@@ -88,6 +88,11 @@ Main8088Board::Core::Operand Main8088Board::Core::decodeModRm()
     op.reg=BYTE((modrm>>3)&7);
     if(mod==3) {op.registerOperand=true;op.index=BYTE(rm);return op;}
     timingModRmMemory_=true;
+    // Intel 8086/8088 effective-address cycles (before memory transfers).
+    // BX+SI and BP+DI are one clock faster than BX+DI and BP+SI.
+    static constexpr unsigned eaBase[8]={7,8,8,7,5,5,5,5};
+    timingEaCycles_=(mod==0 && rm==6) ? 6u
+                    : eaBase[rm]+(mod==0 ? 0u : 4u);
     WORD base=0;
     bool stack=false;
     switch(rm) {
@@ -387,6 +392,7 @@ void Main8088Board::Core::executeOne()
 {
     lastCycles_=0;
     timingModRmMemory_=false;
+    timingEaCycles_=0;
     // 8088 recognizes maskable IRQs at instruction boundaries. STI and
     // MOV SS defer recognition until the following instruction completes.
     const bool inhibited=irqInhibit_!=0;
@@ -770,11 +776,48 @@ void Main8088Board::Core::executeOne()
     lastCycles_+=2*prefixCount; // approximate prefix decoding overhead
     struct TimingFinalize {
         Core& cpu;
+        BYTE opcode;
+        unsigned prefixes;
         ~TimingFinalize() {
+            if(cpu.variant_==CpuType::I8088) {
+                // Keep instruction execution and timing accounting separate:
+                // EA is charged once, byte transfers are included in the
+                // per-instruction memory baseline, and an 8088 word memory
+                // transfer needs a second 8-bit bus cycle (+4 clocks).
+                const unsigned prefixCycles=2*prefixes;
+                const bool memory=cpu.timingModRmMemory_;
+                const unsigned ea=cpu.timingEaCycles_;
+                if(opcode>=0x88 && opcode<=0x8b) {
+                    const bool word=(opcode&1)!=0;
+                    cpu.lastCycles_=prefixCycles+(memory ? 8u+ea+(word?4u:0u) : 2u);
+                    return;
+                }
+                if(opcode==0x8c || opcode==0x8e) {
+                    cpu.lastCycles_=prefixCycles+(memory ? 8u+ea+4u : 2u);
+                    return;
+                }
+                if(opcode==0xc6 || opcode==0xc7) {
+                    cpu.lastCycles_=prefixCycles+(memory ? 10u+ea+(opcode==0xc7?4u:0u) : 4u);
+                    return;
+                }
+                if(opcode<=0x3b && (opcode&7)<=3 && (opcode&4)==0) {
+                    const bool word=(opcode&1)!=0;
+                    const bool destReg=(opcode&2)!=0;
+                    const bool cmp=(opcode&0x38)==0x38;
+                    const unsigned base=destReg || cmp ? 9u : 16u;
+                    // Read only: one word transfer; read/modify/write:
+                    // two word transfers. Register operands take 3 clocks.
+                    cpu.lastCycles_=prefixCycles+(memory
+                        ? base+ea+(word ? (destReg||cmp?4u:8u) : 0u)
+                        : 3u);
+                    return;
+                }
+            }
+            // Not yet reference-classified: retain the previous estimate.
             if(cpu.timingModRmMemory_)
                 cpu.lastCycles_+=cpu.variant_==CpuType::I8088?8:5;
         }
-    } timingFinalize{*this};
+    } timingFinalize{*this,opcode,prefixCount};
     // The emulated bus executes one instruction at a time; LOCK imposes
     // no additional atomicity until concurrent bus masters are modeled.
     (void)lockPrefix;
