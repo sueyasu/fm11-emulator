@@ -169,16 +169,17 @@ void CSim09::FinishInstructionTiming(WORD op)
         lastInstructionCycles_ = taken ? 6 : 5;
     }
     // Postbyte timing is valid only if the indexed operand was decoded.
-    const bool indexedByte = ((op >= 0xa0 && op <= 0xab) ||
-                              (op >= 0xe0 && op <= 0xeb)) &&
-                             (op & 0x0f) != 0x03 && (op & 0x0f) != 0x07;
-    const bool indexedWord = op == 0xa3 || op == 0xac || op == 0xae ||
-                             op == 0xaf || op == 0xe3 || op == 0xec ||
-                             op == 0xed || op == 0xee || op == 0xef;
-    const bool otherIndexed = op >= 0x1000 && op < 0x1200 &&
-        ((op & 0xf0) == 0xa0 || (op & 0xf0) == 0xe0);
-    if (indexedByte || indexedWord || otherIndexed || op == 0xad ||
-        (op >= 0x30 && op <= 0x33)) {
+    // All indexed operations use the same postbyte timing, including
+    // memory RMW ($60), stores and JMP. Skip unclassified opcodes: zero
+    // denotes unknown/unsupported timing rather than zero elapsed cycles.
+    const bool indexedOpcode =
+        (op >= 0x30 && op <= 0x33) ||
+        (op >= 0x60 && op <= 0x6f) ||
+        (op >= 0xa0 && op <= 0xaf) ||
+        (op >= 0xe0 && op <= 0xef) ||
+        (op >= 0x1000 && op < 0x1200 &&
+         (((op & 0xf0) == 0xa0) || ((op & 0xf0) == 0xe0)));
+    if (indexedOpcode && lastInstructionCycles_ != 0) {
         if (indexedCycleKnown_ && !illegalOperand_)
             lastInstructionCycles_ += indexedCycleExtra_;
         else
