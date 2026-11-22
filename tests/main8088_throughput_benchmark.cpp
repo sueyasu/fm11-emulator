@@ -45,8 +45,8 @@ Measurement run(const char* label,std::uint64_t count,
     return {label,elapsed,cycles,cpu.ip(),cpu.reg(0)};
 }
 void usage(const char* executable) {
-    std::cerr<<"Usage: "<<executable<<" [instruction-count]\\n"
-             <<"  Default: 1000000; explicit benchmark, not CTest.\\n";
+    std::cerr<<"Usage: "<<executable<<" [instruction-count]\n"
+             <<"  Default: 1000000; explicit benchmark, not CTest.\n";
 }
 }
 int main(int argc,char** argv) {
@@ -73,19 +73,19 @@ int main(int argc,char** argv) {
         if(m.cycles!=iterations*3 || m.finalIp!=ip || m.ax!=0x1234) {
             std::cerr<<"Incorrect instruction result in "<<m.label
                      <<": cycles="<<m.cycles
-                     <<" IP="<<m.finalIp<<" AX="<<m.ax<<"\\n";
+                     <<" IP="<<m.finalIp<<" AX="<<m.ax<<"\n";
             return 1;
         }
     }
     std::cout<<std::fixed<<std::setprecision(3)
-             <<"8088 NOP throughput, "<<iterations<<" instructions\\n";
+             <<"8088 NOP throughput, "<<iterations<<" instructions\n";
     for(const auto& m:{normal,shadow,tracing}) {
         std::cout<<std::setw(16)<<m.label<<": "
                  <<m.seconds<<" s, "
                  <<double(iterations)/m.seconds/1000000.0<<" MIPS, "
-                 <<m.seconds/normal.seconds<<"x baseline time\\n";
+                 <<m.seconds/normal.seconds<<"x baseline time\n";
     }
     std::cout<<"No absolute speed threshold: compare measurements on the"
-                " same machine, build type and load.\\n";
+                " same machine, build type and load.\n";
     return 0;
 }
