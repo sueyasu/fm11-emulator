@@ -500,3 +500,24 @@ Existing instruction-cycle accounting, conditional timing, interrupt
 delivery, and instruction semantics are preserved. Functional timing and
 opcode regression tests remain; any diagnostic counter-only expectations
 have been removed from those tests.
+
+## REP zero-count instruction timing with extra prefixes
+
+The REP string fast path for CX=0 previously returned nine clocks
+unconditionally, even when additional segment override or LOCK
+prefixes were present. The ordinary nonzero iteration path already
+charged each additional prefix. This left the zero-count path
+inconsistent with the existing prefix timing convention.
+
+The zero-count timing is now `9 + 2 * (prefixCount - 1)`
+clocks on the Intel 8088, counting the REP prefix in the nine-clock
+startup cost. This change does not add bus diagnostics, affects
+no V20 timing paths, and executes only on the zero-count branch.
+
+The `main8088_rep_zero_prefix_timing` regression checks both REP
+prefixes across all ten 8088 string opcodes and zero, one, or two
+extra prefixes, including unchanged IP, registers, and operand
+memory. CPU and opcode decoding remain unchanged.
+
+Reference: Intel 8088 opcode table, REP string timing and prefix
+costs. <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>.

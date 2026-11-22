@@ -1081,7 +1081,10 @@ void Main8088Board::Core::executeOne()
         const WORD delta=WORD((flags_&0x0400)?(word?-2:-1):(word?2:1));
         if(repeat && regs_[1]==0) {
             if(variant_==CpuType::I8088) {
-                lastCycles_=9;
+                // REP setup is nine clocks even when CX is zero.
+                // The REP prefix itself is included; preserve the
+                // two-clock cost of any other accepted prefixes.
+                lastCycles_=9u+2u*(prefixCount-1u);
                 timingRepeatActive_=false;
             } else lastCycles_=2*prefixCount+2;
             break;
