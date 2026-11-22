@@ -248,7 +248,9 @@ void CSim09::FinishInstructionTiming(WORD op)
         case 0x2e: taken = !z && (n == v); break;
         case 0x2f: taken = z || (n != v); break;
         }
-        lastInstructionCycles_ = taken ? 6 : 5;
+        // Only MC6809 charges the sixth clock for a taken long
+        // conditional branch. HD6309 is five clocks in either mode.
+        lastInstructionCycles_ = !enable6309_ && taken ? 6 : 5;
     }
     // Postbyte timing is valid only if the indexed operand was decoded.
     // All indexed operations use the same postbyte timing, including
