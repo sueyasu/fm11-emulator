@@ -829,3 +829,62 @@ ctest --test-dir build --output-on-failure
 Next: replace per-instruction refill grants and blunt demand penalties
 with real byte-bus arbitration at the 8088's T-state level, including
 BIU/EU phase overlap, transfer wait states and external DMA HOLD.
+
+### Stage 1-E: optional byte-bus T-state phase accounting
+
+An independent `Intel8088BusTStates` component now models the
+8088's minimum **T1–T4 sequence per byte-wide bus transaction**.
+Unlike the previous per-instruction `floor(available_cycles/4)`
+budget, it carries incomplete prefetch phases across consecutive
+instructions. Two three-clock idle windows, for example, can
+complete one four-clock fetch and retain two pending T states.
+A register-only instruction can thus contribute to prefetch
+without losing its trailing one-to-three clocks at the
+instruction boundary.
+
+Memory and I/O operand byte transfers reserve four T states
+each before any spare time is allocated to speculative prefetch.
+When such a transaction intervenes, an incomplete speculative
+prefetch phase is discarded; taken control transfers also
+cancel an incomplete phase. A full four-byte queue does not
+accumulate unused time for later instructions.
+
+**Deliberate limitation:** operand transfers are reserved at
+the start of each instruction's time budget, because the
+existing executor is instruction-atomic and does not expose
+EU micro-operation timing. This is a useful approximation for
+tracking bus availability, not a pin-level 8088 bus schedule.
+WAIT states, DMA HOLD/HLDA, refresh, exact fetch/operand
+ordering and demand-fetch overlap are not implemented. No
+additional clock cycles are reported to the machine in this
+mode; it remains distinct from the earlier experimental
+additive demand-stall mode.
+
+This stage is explicitly opt-in:
+
+```cpp
+auto& cpu=static_cast<Main8088Board::Core&>(board.cpu());
+cpu.setPrefetchBusPhaseEnabled(true);
+cpu.executeOne();
+auto t=cpu.prefetchBusPhaseSnapshot();
+// t.elapsed, t.operand, t.prefetch, t.partial, t.interrupted
+```
+
+New regression tests:
+- `main8088_bus_tstates` — phase accumulation, word-transfer
+  reservation, interrupted partial prefetch and queue-full idle
+- `main8088_prefetch_bus_phase` — four consecutive NOPs,
+  subsequent MOV word store, CPU-level FIFO refill, unchanged
+  reference clocks, reset and NEC V20 isolation
+
+```sh
+cmake -S . -B build -DFM11_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build -R 'main8088_(bus_tstates|prefetch_bus_phase|prefetch_stall_timing|prefetch_fifo)' --output-on-failure
+ctest --test-dir build --output-on-failure
+```
+
+Next, replace the provisional “data transfers first” assumption
+with a micro-operation event timeline and verify exact prefetch
+availability against observed real-8088 bus traces before
+enabling a phase-aware stall penalty in normal execution.
