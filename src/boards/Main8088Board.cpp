@@ -86,6 +86,7 @@ Main8088Board::Core::Operand Main8088Board::Core::decodeModRm()
     const unsigned mod=modrm>>6, rm=modrm&7;
     Operand op{};
     op.reg=BYTE((modrm>>3)&7);
+    timingModRmExtension_=op.reg;
     if(mod==3) {op.registerOperand=true;op.index=BYTE(rm);return op;}
     timingModRmMemory_=true;
     // Intel 8086/8088 effective-address cycles (before memory transfers).
@@ -394,6 +395,7 @@ void Main8088Board::Core::executeOne()
     timingModRmMemory_=false;
     timingEaCycles_=0;
     timingShiftCount_=0;
+    timingModRmExtension_=0;
     // 8088 recognizes maskable IRQs at instruction boundaries. STI and
     // MOV SS defer recognition until the following instruction completes.
     const bool inhibited=irqInhibit_!=0;
@@ -775,6 +777,32 @@ void Main8088Board::Core::executeOne()
     }
     lastCycles_=(variant_==CpuType::NECV20 ? kV20Cycles : k8088Cycles)[opcode];
     lastCycles_+=2*prefixCount; // approximate prefix decoding overhead
+    if(variant_==CpuType::I8088) {
+        // Intel 8088 instruction-level best-case timing; bus prefetch and
+        // external WAIT remain outside the instruction scheduler.
+        unsigned clocks=0;
+        switch(opcode) {
+        case 0x9a: clocks=36;break; // CALL far immediate
+        case 0xc2: case 0xc0: clocks=24;break; // RET near imm
+        case 0xc3: case 0xc1: clocks=20;break; // RET near
+        case 0xca: case 0xc8: clocks=33;break; // RET far imm
+        case 0xcb: case 0xc9: clocks=34;break; // RET far
+        case 0x9c: clocks=14;break; // PUSHF
+        case 0x9d: clocks=12;break; // POPF
+        case 0xe4: case 0xe5: case 0xe6: case 0xe7: clocks=14;break;
+        case 0xec: case 0xed: case 0xee: case 0xef: clocks=12;break;
+        case 0x9b: clocks=4;break; // WAIT
+        case 0x9e: clocks=4;break; // SAHF
+        case 0x9f: clocks=4;break; // LAHF
+        case 0xea: case 0xe9: case 0xeb: clocks=15;break;
+        case 0x27: case 0x2f: clocks=4;break;
+        case 0x37: case 0x3f: clocks=8;break;
+        case 0xd4: clocks=83;break;
+        case 0xd5: clocks=60;break;
+        default:break;
+        }
+        if(clocks)lastCycles_=clocks+2*prefixCount;
+    }
     struct TimingFinalize {
         Core& cpu;
         BYTE opcode;
@@ -788,6 +816,44 @@ void Main8088Board::Core::executeOne()
                 const unsigned prefixCycles=2*prefixes;
                 const bool memory=cpu.timingModRmMemory_;
                 const unsigned ea=cpu.timingEaCycles_;
+                const unsigned ext=cpu.timingModRmExtension_;
+                if(opcode==0xfe && ext<=1) {
+                    cpu.lastCycles_=prefixCycles+(memory?23u+ea:3u);
+                    return;
+                }
+                if(opcode==0xff) {
+                    unsigned clocks=0;
+                    switch(ext) {
+                    case 0: case 1: clocks=memory?23u+ea:3u;break;
+                    case 2: clocks=memory?29u+ea:20u;break;
+                    case 3: clocks=53u+ea;break;
+                    case 4: clocks=memory?18u+ea:11u;break;
+                    case 5: clocks=24u+ea;break;
+                    case 6: case 7: clocks=memory?24u+ea:15u;break;
+                    }
+                    cpu.lastCycles_=prefixCycles+clocks;
+                    return;
+                }
+                if(opcode==0x8f && ext==0) {
+                    cpu.lastCycles_=prefixCycles+(memory?25u+ea:12u);
+                    return;
+                }
+                if(opcode==0x8d) {
+                    cpu.lastCycles_=prefixCycles+2u+ea;
+                    return;
+                }
+                if(opcode==0xc4 || opcode==0xc5) {
+                    cpu.lastCycles_=prefixCycles+24u+ea;
+                    return;
+                }
+                if(opcode==0x84 || opcode==0x85) {
+                    cpu.lastCycles_=prefixCycles+(memory?13u+ea:3u);
+                    return;
+                }
+                if(opcode==0x86 || opcode==0x87) {
+                    cpu.lastCycles_=prefixCycles+(memory?25u+ea:4u);
+                    return;
+                }
                 if(opcode>=0xd0 && opcode<=0xd3) {
                     const bool word=(opcode&1)!=0;
                     const bool variable=(opcode&2)!=0;
@@ -1071,7 +1137,7 @@ void Main8088Board::Core::executeOne()
         const bool taken=regs_[1]==0;
         if(taken)ip_=WORD(ip_+displacement);
         if(variant_==CpuType::I8088)
-            lastCycles_=2*prefixCount+(taken?16u:4u);
+            lastCycles_=2*prefixCount+(taken?18u:6u);
         break;
     }
     case 0xd0: case 0xd1: case 0xd2: case 0xd3: {
