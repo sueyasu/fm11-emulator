@@ -48,7 +48,7 @@ NEC_EXTENSIONS = {
     0x64: "REPNC (NEC V20)", 0x65: "REPC (NEC V20)",
 }
 UNDOCUMENTED_OR_RESERVED = {
-    0x66, 0x67, 0x9b, 0xd6, 0xf1,
+    0x66, 0x67, 0x9b, 0xf1,
 }
 # The 9B WAIT instruction is already implemented; do not mistake it for
 # an uncovered opcode. 66/67 are later x86 prefixes, not 8088 instructions.
@@ -71,7 +71,7 @@ def main():
     args = parser.parse_args()
     direct, ranged, prefixes = collect(args.source.read_text(encoding="utf-8"))
     # Guards against accidentally dropping already supported instruction families.
-    for op in (0x04, 0x27, 0x2f, 0x37, 0x3f, 0x80, 0x81,
+    for op in (0x04, 0x27, 0x2f, 0x37, 0x3f, 0x80, 0x81, 0xd6,
                0xc4, 0xc5, 0xd0, 0xd3, 0xd4, 0xd5, 0xd7, 0xf6, 0xf7, 0xfe, 0xff):
         assert op in direct, f"missing explicit opcode {op:02X}"
     # V20-only instructions share the decoder's switch with 8088.

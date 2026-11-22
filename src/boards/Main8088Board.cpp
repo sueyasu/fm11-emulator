@@ -1713,6 +1713,12 @@ void Main8088Board::Core::executeOne()
     // Intel 8088 register-only flag instructions: CLC/STC/CMC are
     // 2 clocks; CLI/STI/CLD/STD are also 2. No prefix surcharge
     // is modeled, and V20 timing must be characterized separately.
+    case 0xd6: // Intel 8088 undocumented SALC: AL=CF ? FFh : 00h
+        if(variant_!=CpuType::I8088)
+            throw std::runtime_error("SALC requires Intel 8088");
+        setReg8(0,(flags_&CF)?0xff:0x00); // FLAGS are unchanged
+        lastCycles_=2+2*prefixCount;
+        break;
     case 0x90: // NOP
         break;
     case 0xf4: // HLT

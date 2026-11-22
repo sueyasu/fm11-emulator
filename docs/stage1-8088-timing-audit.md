@@ -442,3 +442,24 @@ memory/BIU contention are separate coverage requirements.
 
 Reference: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
 (04h–3Dh, 90h–9Fh, A8h/A9h, D4h/D5h and F5h–FDh).
+
+## Intel 8088 undocumented SALC (D6h)
+
+The primary-opcode inventory identified a real 8088 dispatch gap:
+D6h SALC (Set AL on Carry). The published original 8088
+opcode listing records two clocks. Execution writes AL=FFh
+when CF=1, otherwise AL=00h; AH and FLAGS remain unchanged.
+A segment prefix is accepted under the existing prefix
+overhead convention. The instruction does not use ModR/M.
+
+The 8088-only handler, `main8088_salc_timing` regression,
+and opcode inventory were updated together. Tests cover
+CF clear/set, unchanged status flags, unchanged AH, IP,
+prefix overhead, and isolation from the V20 variant.
+No assertion is made about the V20's undocumented D6h
+semantics; that CPU remains unsupported for this opcode.
+The 8088 fast execution path adds only a single opcode
+case and no additional diagnostic work.
+
+Reference: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
+(D6h *SALC*, two clocks).
