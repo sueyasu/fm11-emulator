@@ -986,10 +986,13 @@ void Main8088Board::Core::executeOne()
                     const unsigned count=cpu.timingShiftCount_;
                     // 8088 word memory RMW needs two additional byte bus
                     // transfers versus the 8086 reference timing table.
+                    // Intel 8088 reference: memory shift/rotate by 1
+                    // is 23+EA; by CL is 28+EA+4*CL. A word-memory
+                    // RMW needs two additional byte transfers (+8).
                     cpu.lastCycles_=prefixCycles+(variable
-                        ? (memory ? 20u+ea+4u*count+(word?8u:0u)
+                        ? (memory ? 28u+ea+4u*count+(word?8u:0u)
                                   : 8u+4u*count)
-                        : (memory ? 15u+ea+(word?8u:0u) : 2u));
+                        : (memory ? 23u+ea+(word?8u:0u) : 2u));
                     return;
                 }
                 if(opcode>=0xd8 && opcode<=0xdf) {
