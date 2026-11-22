@@ -747,6 +747,11 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(cpu6809_indexed_postbytes PRIVATE fm11_core)
     add_test(NAME cpu6809_indexed_postbytes COMMAND cpu6809_indexed_postbytes)
 
+    # Stage 1-C: HD6309 emulation/native reference cycle regression.
+    add_executable(cpu6309_cycle_reference tests/cpu6309_cycle_reference.cpp)
+    target_link_libraries(cpu6309_cycle_reference PRIVATE fm11_core)
+    add_test(NAME cpu6309_cycle_reference COMMAND cpu6309_cycle_reference)
+
     add_executable(cpu6809_opcode_cycles tests/cpu6809_opcode_cycles.cpp)
     target_link_libraries(cpu6809_opcode_cycles PRIVATE fm11_core)
     add_test(NAME cpu6809_opcode_cycles COMMAND cpu6809_opcode_cycles
