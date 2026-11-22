@@ -26,6 +26,7 @@ void Main8088Board::Core::reset()
     irqInhibit_=0;
     segmentOverride_=-1;
     timingRepeatActive_=false;
+    prefetchTiming_.reset();
 }
 std::uint32_t Main8088Board::Core::physical(WORD seg,WORD off) const
 {
@@ -37,6 +38,7 @@ std::uint32_t Main8088Board::Core::pc() const
 }
 BYTE Main8088Board::Core::fetch8()
 {
+    prefetchTiming_.consume(segments_[1],ip_);
     const BYTE result=bus_.readMemory(pc());
     ++ip_;
     return result;
@@ -63,6 +65,7 @@ WORD Main8088Board::Core::pop16()
 void Main8088Board::Core::interrupt(BYTE vector)
 {
     timingRepeatActive_=false;
+    prefetchTiming_.flush();
     interruptModeStack_.push_back(emulation8080_ ? ModeFrame::EmulationInterrupt
                                                  : ModeFrame::NativeInterrupt);
     emulation8080_=false; // NEC interrupt handlers execute native V20 code.
@@ -814,6 +817,14 @@ void Main8088Board::Core::executeOne()
         }
         if(clocks)lastCycles_=clocks+2*prefixCount;
     }
+    // Construct before the existing timing finalizer: destructor order
+    // makes this observer see the final clock count for every opcode.
+    struct PrefetchFinalize {
+        Core& cpu;
+        ~PrefetchFinalize() {
+            cpu.prefetchTiming_.finish(cpu.segments_[1],cpu.ip_,cpu.lastCycles_);
+        }
+    } prefetchFinalize{*this};
     struct TimingFinalize {
         Core& cpu;
         BYTE opcode;
