@@ -53,12 +53,40 @@ unsigned edExpected(unsigned op) {
     default:return 8;
     }
 }
+unsigned indexExpected(unsigned op) {
+    // Times include one DD/FD fetch. Where the prefix is ignored,
+    // it adds exactly four T-states to the ordinary opcode time.
+    switch(op) {
+    case 0x09:case 0x19:case 0x29:case 0x39:return 15;
+    case 0x21:return 14;
+    case 0x22:case 0x2a:return 20;
+    case 0x23:case 0x2b:return 10;
+    case 0x34:case 0x35:return 23;
+    case 0x36:return 19;
+    case 0x46:case 0x4e:case 0x56:case 0x5e:
+    case 0x66:case 0x6e:case 0x7e:
+    case 0x70:case 0x71:case 0x72:case 0x73:
+    case 0x74:case 0x75:case 0x77:
+    case 0x86:case 0x8e:case 0x96:case 0x9e:
+    case 0xa6:case 0xae:case 0xb6:case 0xbe:return 19;
+    case 0xe1:return 14;
+    case 0xe3:return 23;
+    case 0xe5:return 15;
+    case 0xe9:return 8;
+    case 0xf9:return 10;
+    case 0xdd:case 0xfd:return 12; // following NOP
+    case 0xed:return 12; // ED 00, ignored DD/FD plus two NOP fetches
+    case 0xcb:return 23; // indexed RLC B: DD CB 00 00
+    default:return 4+baseExpected[op];
+    }
+}
+
 unsigned run(unsigned op,unsigned prefix) {
     Cpu c;
     c.regs.SP=0x4000;
     c.regs.IX=0x2000;c.regs.IY=0x2100;
     c.regs.r.w.HL=0x2200;c.regs.r.w.BC=1;
-    c.regs.r.b.B=prefix==0 ? 2 : 1; // DJNZ taken; ED repeat final
+    c.regs.r.b.B=prefix==0xed ? 1 : 2; // DJNZ taken; ED repeat final
     c.regs.r.b.A=1; // make CPI/CPIR zero comparison false/true by memory defaults
     c.mem[0]=BYTE(prefix);
     c.mem[1]=BYTE(op);
@@ -90,6 +118,8 @@ int main() {
         compare("ED",op,edExpected(op),run(op,0xed));
         compare("DDCB",op,cbExpected(op,true),run(op,0xdd));
         compare("FDCB",op,cbExpected(op,true),run(op,0xfd));
+        compare("DD",op,indexExpected(op),run(op,0xdd));
+        compare("FD",op,indexExpected(op),run(op,0xfd));
     }
     std::printf("Z80 opcode timing: %u cases, %u failed\n",cases,failed);
     return failed?1:0;
