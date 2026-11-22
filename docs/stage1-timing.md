@@ -310,3 +310,63 @@ Important architectural scope: the CPU exposes a TFM read/write
 boundary at each `SimONE()` call, which allows the existing board
 interrupt scheduler to accept interrupts at the correct point.
 The exact bus subcycle timing inside those micro-steps is not modelled.
+
+## Stage 1-D: NMOS Z80 instruction and interrupt timing
+
+Reference: [Zilog Z80 CPU User Manual](https://www.zilog.com/docs/z80/z80cpu_um.pdf)
+(Instruction Set and Interrupt Response tables). The project models
+ordinary NMOS Z80 timings, excluding external WAIT/BUSREQ contention.
+
+Changes:
+
+- The ED block-repeat family (LDIR/LDDR/CPIR/CPDR/INIR/INDR/OTIR/OTDR)
+  executes **one iteration per `z80emu()`**, not the entire block
+  atomically. When repeating, PC is rewound by two bytes and the
+  iteration consumes 21 T-states; the final iteration consumes 16.
+  IRQ/NMI can now be accepted between iterations. Older tests which
+  expected summed T-states from one call have been updated.
+- A DD/FD prefix ignored by an instruction now executes the
+  underlying opcode and adds four T-states. Consecutive DD/FD
+  prefixes and DD/FD before ED instructions are supported. The
+  already-fetched opcode is passed to the decoder without another
+  M1 fetch, preserving the correct R refresh increment.
+- R low seven bits advance once for every M1 opcode/prefix fetch;
+  DD/FD CB d op refreshes R twice, not once per instruction byte.
+  R bit 7 is retained. HALT repeats the opcode fetch without
+  advancing PC.
+- Z80 IRQ acceptance now observes IFF1 and the instruction delay
+  following EI, counts 13 T-states for IM0/IM1 (IM0 assumes an FFh
+  interrupt data bus) and 19 for IM2, and exits HALT correctly.
+  NMI takes 11 T-states, preserves IFF2, and RETN/RETI restore IFF1.
+  IM0/1/2 aliases decode their mode; IM2 forms its vector through I
+  and the external bus byte (default FFh).
+- Indexed ADD IX/IY and LD H,(IX/IY+d) implementation defects found
+  during timing validation were corrected.
+
+Regression tests:
+
+- `mainz80_cycles` remains the existing focused test suite. Its
+  LDIR/CPIR/OTDR assertions now use individual 21/16-T-state passes.
+- `mainz80_timing_boundaries` validates absolute memory loads,
+  ignored and nested prefixes, R increments, interrupt response,
+  EI delay, HALT, IM2 and NMI/RETN.
+- `mainz80_opcode_timing_coverage` exercises all 252 non-prefix
+  base opcodes and 256 each of CB, ED, DD CB, FD CB, DD, and FD
+  (1788 total timing executions) under specified initial flags
+  and registers, comparing against an independent manual-based
+  timing matrix.
+
+```sh
+cmake -S . -B build -DFM11_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build -R 'mainz80_|cpu_timing_matrix' --output-on-failure
+ctest --test-dir build --output-on-failure
+```
+
+Scope and limitations: this is T-state and interrupt-boundary
+validation, not a complete semantic conformance suite for every
+undocumented IXH/IYL or DD/FD CB register-copy behavior. IM0 uses
+the default FFh bus response rather than arbitrary injected opcode
+execution; peripheral daisy-chain RETI signalling and hardware
+WAIT/BUSREQ subcycles remain outside Stage 1-D. Independent
+testing on real hardware would further improve confidence.
