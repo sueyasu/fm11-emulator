@@ -1,10 +1,15 @@
-void	CSimZ80::z80emu()
+void CSimZ80::z80emu()
+{
+	ExecuteOpcode(0,false);
+}
+
+void CSimZ80::ExecuteOpcode(BYTE opcode,bool alreadyFetched)
 {
 	WORD ACC_A;
 	BYTE ACC_R, ACC_C;
 	const bool outerInstruction=(executionNesting_++ == 0);
 	if(outerInstruction && eiDelay_!=0)--eiDelay_;
-	BYTE op = FetchOpcode();
+	BYTE op = alreadyFetched ? opcode : FetchOpcode();
 	instructionCycles_=Z80Timing::base(op,FLG_Z!=0,FLG_C!=0,FLG_P!=0,FLG_S!=0);
 	if(op==0x10)instructionCycles_=(REG_B!=1)?13:8;
 
