@@ -20,12 +20,18 @@ public:
         std::uint64_t bufferedBytes=0;
         std::uint64_t refillBytes=0;
         std::uint64_t flushes=0;
+        std::uint64_t memoryReadBytes=0;
+        std::uint64_t memoryWriteBytes=0;
+        std::uint64_t ioReadBytes=0;
+        std::uint64_t ioWriteBytes=0;
+        std::uint64_t operandBusCycles=0;
     };
 
     void reset() {
         state_={};
         validNext_=false;
         nextCs_=nextIp_=0;
+        instructionDataBytes_=0;
     }
     void setEnabled(bool value) {
         enabled_=value;
@@ -33,6 +39,26 @@ public:
     }
     bool enabled() const { return enabled_; }
     Snapshot snapshot() const { return state_; }
+
+    // Instrument only explicit CPU data transactions, never fetch8().
+    // The 8088 bus is eight bits wide, so every observed byte transfer
+    // reserves at least one four-clock bus cycle. External WAIT/HOLD
+    // timing and independent DMA bus ownership are not yet observable.
+    void beginInstruction() {
+        instructionDataBytes_=0;
+    }
+    void dataRead(bool io=false) {
+        if(!enabled_)return;
+        ++instructionDataBytes_;
+        if(io)++state_.ioReadBytes;
+        else ++state_.memoryReadBytes;
+    }
+    void dataWrite(bool io=false) {
+        if(!enabled_)return;
+        ++instructionDataBytes_;
+        if(io)++state_.ioWriteBytes;
+        else ++state_.memoryWriteBytes;
+    }
 
     // Called for every instruction byte, including prefix, ModR/M,
     // displacement and immediate bytes. The CPU's real fetch still reads
@@ -52,12 +78,17 @@ public:
     void finish(WORD cs, WORD ip, std::uint64_t instructionCycles) {
         if(!enabled_)return;
         if(validNext_ && (cs!=nextCs_ || ip!=nextIp_))flush();
-        // Tentative free-bus grant: one 8088 prefetch byte per four
-        // clocks, capped to 4 queue entries. This DOES NOT account
-        // for operand bus transfers, DMA, WAIT or fetch overlap yet.
+        // One observed operand byte consumes at least four bus clocks.
+        // Subtract these bus reservations before granting *provisional*
+        // prefetch slots. This is a per-instruction budget, not an
+        // accurate bus phase scheduler or a true prefetch FIFO.
+        const std::uint64_t occupied=std::uint64_t(instructionDataBytes_)*4;
+        state_.operandBusCycles+=occupied;
+        const std::uint64_t available=instructionCycles>occupied
+            ? instructionCycles-occupied:0;
         const unsigned free=4-state_.depth;
         const unsigned grant=static_cast<unsigned>(
-            std::min<std::uint64_t>(free,instructionCycles/4));
+            std::min<std::uint64_t>(free,available/4));
         state_.depth+=grant;
         state_.refillBytes+=grant;
     }
@@ -72,5 +103,6 @@ private:
     bool validNext_=false;
     WORD nextCs_=0;
     WORD nextIp_=0;
+    unsigned instructionDataBytes_=0;
     Snapshot state_{};
 };
