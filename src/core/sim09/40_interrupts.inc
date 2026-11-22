@@ -1,10 +1,16 @@
 void	CSim09::SimRESET()
 {
 	memset(&regs, 0, sizeof(REGS));
+    tfmActive_ = false;
+    tfmReadPending_ = false;
+    tfmNeedsSetup_ = true;
+    tfmStepCycles_ = 0;
 	REG_PC = GetMemWord(0xFFFE);
 }
 void	CSim09::SimFIRQ()
 {
+    // Preserve the TFM restart address; its interrupted read is retried.
+    InterruptTfm();
     REG_ST &= ~0004;
     if ( (REG_CC & CC_F) != 0 )
 		return;
@@ -25,6 +31,8 @@ void	CSim09::SimFIRQ()
 }
 void	CSim09::SimIRQ()
 {
+    // Preserve the TFM restart address; its interrupted read is retried.
+    InterruptTfm();
     REG_ST &= ~0004;
     if ( (REG_CC & CC_I) != 0 )
 		return;
@@ -38,6 +46,8 @@ void	CSim09::SimIRQ()
 }
 void	CSim09::SimNMI()
 {
+    // Preserve the TFM restart address; its interrupted read is retried.
+    InterruptTfm();
     REG_ST &= ~0004;
     if ( (REG_ST & ST_N) != 0 )
 		return;
