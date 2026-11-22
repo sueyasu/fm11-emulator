@@ -81,7 +81,7 @@ unsigned indexExpected(unsigned op) {
     }
 }
 
-unsigned run(unsigned op,unsigned prefix) {
+unsigned run(unsigned op,unsigned prefix,bool indexedBit=false) {
     Cpu c;
     c.regs.SP=0x4000;
     c.regs.IX=0x2000;c.regs.IY=0x2100;
@@ -92,7 +92,7 @@ unsigned run(unsigned op,unsigned prefix) {
     c.mem[1]=BYTE(op);
     if(prefix==0) {
         c.mem[0]=BYTE(op);c.mem[1]=0;c.mem[2]=0;
-    } else if(prefix==0xdd || prefix==0xfd) {
+    } else if(indexedBit && (prefix==0xdd || prefix==0xfd)) {
         // DD CB d op sequence
         c.mem[1]=0xcb;c.mem[2]=0;c.mem[3]=BYTE(op);
     }
@@ -116,8 +116,8 @@ int main() {
             compare("base",op,baseExpected[op],run(op,0));
         compare("CB",op,cbExpected(op,false),run(op,0xcb));
         compare("ED",op,edExpected(op),run(op,0xed));
-        compare("DDCB",op,cbExpected(op,true),run(op,0xdd));
-        compare("FDCB",op,cbExpected(op,true),run(op,0xfd));
+        compare("DDCB",op,cbExpected(op,true),run(op,0xdd,true));
+        compare("FDCB",op,cbExpected(op,true),run(op,0xfd,true));
         compare("DD",op,indexExpected(op),run(op,0xdd));
         compare("FD",op,indexExpected(op),run(op,0xfd));
     }
