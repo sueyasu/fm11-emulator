@@ -20,34 +20,32 @@ bool rejected(const std::string& settings) {
 }
 int main() {
     struct Cleanup {~Cleanup(){std::remove(path);}} cleanup;
-    auto cfg=parse("boot_drive=3\nboot_sw3=x\nboot_sw4=x\nbubble=true\n"
+    auto cfg=parse("boot_drive=3\nbubble=true\n"
         "2D_FDD=false\n2HD_FDD=true\nHDD=true\n"
-        "serial_sw1=x\nserial_cd=cd_dsr\nserial_mode=sync\n"
-        "serial_baud_sw4_8=xxoxo\ndisplay_lines=200\n"
-        "system_sw3=x\nprinter_sw4=o\n");
-    if(cfg.dipBootDrive!=3 || cfg.dipBootSw3!='x' || cfg.dipBootSw4!='x' ||
-       !cfg.dipBootBubble || cfg.dipCommSw1!='x' ||
+        "serial_cd=cd_dsr\nserial_mode=sync\n"
+        "serial_baud_sw4_8=26\ndisplay_lines=200\n"
+        "");
+    if(cfg.dipBootDrive!=3 || !cfg.dipBootBubble ||
        cfg.dipSerialCd!=MachineConfig::SerialCd::CdAndDsr ||
        cfg.dipSerialMode!=MachineConfig::SerialMode::Sync ||
-       cfg.dipSerialBaudSwitches!="xxoxo" || cfg.dipSystemDisplayLines!=200 ||
-       cfg.dipSystemSw3!='x' || cfg.dipPrinterSw4!='o' ||
+       cfg.dipSerialBaudSwitches!=26 || cfg.dipSystemDisplayLines!=200 ||
        cfg.boot2dFdd || !cfg.boot2hdFdd || !cfg.bootHdd)return 1;
     // New settings must not affect existing FD23 or SDL display settings.
     if(cfg.bootDip()!=0x3f || cfg.displayHeight!=400)return 2;
     auto defaults=parse("");
     if(defaults.dipBootDrive!=0 || defaults.dipBootBubble ||
-       defaults.dipSerialBaudSwitches!="ooooo" ||
+       defaults.dipSerialBaudSwitches!=0 ||
        defaults.dipSystemDisplayLines!=400 || defaults.bootDip()!=0x9f)return 3;
     for(unsigned n=0;n<32;++n) {
-        std::string switches;
-        for(int bit=4;bit>=0;--bit)switches.push_back((n&(1u<<bit))?'x':'o');
-        if(parse("serial_baud_sw4_8="+switches+"\n").dipSerialBaudSwitches!=switches)return 4;
+        if(parse("serial_baud_sw4_8="+std::to_string(n)+"\n").dipSerialBaudSwitches!=n)return 4;
     }
     const char* invalid[]={"boot_drive=-1\n","boot_drive=4\n","boot_drive=3x\n",
-      "boot_sw3=on\n","boot_sw4=\n","bubble=yes\n","serial_sw1=z\n",
-      "serial_cd=dsr\n","serial_mode=other\n","serial_baud_sw4_8=xxxx\n",
-      "serial_baud_sw4_8=xxxxxx\n","serial_baud_sw4_8=xxqxo\n",
-      "display_lines=300\n","system_sw3=1\n","printer_sw4=true\n"};
+      "boot_sw3=true\n","boot_sw4=false\n","bubble=yes\n",
+      "serial_sw1=true\n","serial_cd=dsr\n","serial_mode=other\n",
+      "serial_baud_sw4_8=-1\n","serial_baud_sw4_8=32\n",
+      "serial_baud_sw4_8=xxxxx\n","serial_baud_sw4_8=0x1f\n",
+      "serial_baud_sw4_8=999999999999999999999\n",
+      "display_lines=300\n","system_sw3=false\n","printer_sw4=true\n"};
     for(const char* s:invalid)if(!rejected(s))return 5;
     return 0;
 }

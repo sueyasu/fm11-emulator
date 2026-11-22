@@ -39,17 +39,13 @@ struct MachineConfig {
     bool bootHdd=false;
     // Stage 2-A physical switch settings; not yet wired to hardware.
     unsigned dipBootDrive=0; // BootLoader SW1-2
-    char dipBootSw3='o', dipBootSw4='o'; // reserved
     bool dipBootBubble=false; // SW5
-    char dipCommSw1='o'; // Communication SW1 reserved
     enum class SerialCd { Ignore, CdAndDsr };
     enum class SerialMode { Async, Sync };
     SerialCd dipSerialCd=SerialCd::Ignore; // Communication SW2
     SerialMode dipSerialMode=SerialMode::Async; // SW3
-    std::string dipSerialBaudSwitches="ooooo"; // SW4..8
+    unsigned dipSerialBaudSwitches=0; // SW4..8, decimal 0..31 (x=1, o=0)
     unsigned dipSystemDisplayLines=400; // System Select SW1
-    char dipSystemSw3='o'; // reserved
-    char dipPrinterSw4='o'; // manual: always o
     std::uint8_t bootDip() const {
         return static_cast<std::uint8_t>(0x1f |
             (boot2dFdd?0:0x20) |

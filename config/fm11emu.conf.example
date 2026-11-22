@@ -10,16 +10,11 @@ main_cpu = 6809
 HDD = false
 # Stage 2-A additional physical DIP settings: parsed only, not yet applied.
 boot_drive = 0          # BootLoader SW1-2: 0..3
-boot_sw3 = o            # reserved
-boot_sw4 = o            # reserved
 bubble = false          # BootLoader SW5 (128 KiB bubble)
-serial_sw1 = o          # Communication SW1 reserved
 serial_cd = ignore      # Communication SW2: ignore | cd_dsr
 serial_mode = async     # Communication SW3: async | sync
-serial_baud_sw4_8 = ooooo # Communication SW4-8: literal x/o sequence
+serial_baud_sw4_8 = 4    # Communication SW4-8: 00100 (ooxoo), ASYNC 4800 baud
 display_lines = 400     # System Select SW1: 200 | 400
-system_sw3 = o          # System Select SW3 reserved
-printer_sw4 = o         # System Select SW4: manual specifies o
 
 # Main RAM fitted to the computer, used by both CPU cards and the
 # optional Z80. Valid: 128,256,384,512,640,768,896,1024 KiB.
