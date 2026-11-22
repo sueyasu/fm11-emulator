@@ -151,9 +151,10 @@ WORD	CSim09::GetAddrInd()
             // when indirect), unlike 16-bit X/Y/U/S displacement.
             indexedCycleExtra_ = 5; indexedCycleKnown_ = true; break;
         case 0x0f:
-            // MC6809 [nn] extended indirect: five extra clocks, not four.
-            // HD6309 non-indirect W-index forms are deferred to Stage 1-C.
-            indexedCycleExtra_ = (op & 0x10) ? 5 : 4;
+            // Extended indirect [nn] costs five extra clocks TOTAL. The
+            // common indirect adjustment below adds three, so start at two.
+            // HD6309's non-indirect W forms are left for Stage 1-C.
+            indexedCycleExtra_ = (op & 0x10) ? 2 : 4;
             indexedCycleKnown_ = true; break;
         default: break;
         }
