@@ -851,6 +851,10 @@ void Main8088Board::Core::executeOne()
                 [&cpu=cpu](WORD cs,WORD offset) {
                     return cpu.bus_.readMemory(cpu.physical(cs,offset));
                 });
+            // Preserve the legacy reference clocks in the passive and
+            // FIFO-only modes. The experimental mode adds only observed
+            // empty-FIFO demand fetches, after reference-time refill.
+            cpu.lastCycles_+=cpu.prefetchTiming_.consumeDemandStallCycles();
         }
     } prefetchFinalize{*this};
     struct TimingFinalize {
