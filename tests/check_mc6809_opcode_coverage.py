@@ -54,11 +54,11 @@ def read_cycle_tables():
         ("k6809Page10Cycles", 0x1000),
         ("k6309Page11Cycles", 0x1100),
     ):
-        m = re.search(r"\\b" + name + r"\\[256\\]\\s*=\\s*\\{(.*?)\\};",
+        m = re.search(r"\b" + name + r"\[256\]\s*=\s*\{(.*?)\};",
                       source, re.S)
         if not m:
             raise ValueError(f"missing cycle table {name}")
-        text = re.sub(r"//[^\\n]*", "", m.group(1))
+        text = re.sub(r"//[^\n]*", "", m.group(1))
         values = [int(v.strip()) for v in text.split(",") if v.strip()]
         if len(values) != 256:
             raise ValueError(f"{name}: expected 256 entries, got {len(values)}")
@@ -70,7 +70,7 @@ def read_dispatch():
     for path in DISPATCH:
         source = path.read_text(encoding="utf-8")
         dispatch.update(int(op, 16) for op in
-                        re.findall(r"\\bOPDEF\\(0x([0-9a-fA-F]+)", source))
+                        re.findall(r"\bOPDEF\(0x([0-9a-fA-F]+)", source))
     return dispatch
 
 def main():
