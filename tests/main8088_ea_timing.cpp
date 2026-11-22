@@ -46,8 +46,8 @@ int main() {
     if(!check("MOV imm16 memory",{0xc7,0x07,0x42,0x12,0,0},4,regs,14+5))return 6;
     if(!check("ADD memory,reg",{0x00,0x07,0,0,0,0},2,regs,24+5))return 7;
     if(!check("ADD reg,memory",{0x02,0x07,0,0,0,0},2,regs,13+5))return 8;
-    if(!check("ADD memory16,reg16",{0x01,0x07,0,0,0,0},2,regs,32+5))return 9;
-    if(!check("CMP memory,reg",{0x38,0x07,0,0,0,0},2,regs,13+5))return 10;
+    if(!check("ADD memory16,reg16",{0x01,0x07,0,0,0,0},2,regs,24+5))return 9;
+    if(!check("CMP memory,reg",{0x38,0x07,0,0,0,0},2,regs,24+5))return 10;
     if(!check("segment override MOV",{0x26,0x8a,0x07,0,0,0},3,regs,2+8+5))return 11;
     if(!check("MOV byte memory destination",{0x88,0x07,0,0,0,0},2,regs,9+5))return 12;
     if(!check("MOV word memory destination",{0x89,0x07,0,0,0,0},2,regs,13+5))return 13;
