@@ -920,6 +920,19 @@ void Main8088Board::Core::executeOne()
                     cpu.lastCycles_=prefix+4u;
                     return;
                 }
+                if((opcode>=0xd0 && opcode<=0xd3) ||
+                   opcode==0xc0 || opcode==0xc1) {
+                    // V20 ROL/ROR/RCL/RCR/SHL/SHR/SAR:
+                    // one-bit: reg=6, memory=16/24 clocks.
+                    // CL or immediate: reg=7+n, mem=19/27+n.
+                    // n is the unmasked V20 shift count.
+                    const bool single=(opcode==0xd0 || opcode==0xd1);
+                    const unsigned n=cpu.timingShiftCount_;
+                    cpu.lastCycles_=prefix+(single
+                        ? (memory?(word?24u:16u):6u)
+                        : (memory?(word?27u:19u)+n:7u+n));
+                    return;
+                }
                 if(opcode==0xfe && ext<=1) {
                     cpu.lastCycles_=prefix+(memory?16u:2u);
                     return;
@@ -1825,6 +1838,7 @@ void Main8088Board::Core::executeOne()
         if(variant_==CpuType::NECV20) {
             const auto op=decodeModRm();
             const unsigned count=fetch8();
+            timingShiftCount_=count;
             if(count!=0)
                 writeOperand(op,16,shiftRotate(op.reg,readOperand(op,16),16,count));
             break;
@@ -1836,6 +1850,7 @@ void Main8088Board::Core::executeOne()
         if(variant_==CpuType::NECV20) {
             const auto op=decodeModRm();
             const unsigned count=fetch8();
+            timingShiftCount_=count;
             if(count!=0)
                 writeOperand(op,8,shiftRotate(op.reg,readOperand(op,8),8,count));
             break;
@@ -1989,6 +2004,13 @@ void Main8088Board::Core::executeOne()
                 ? BYTE(newValue&0xf0) : BYTE(al&0xf0);
             setReg8(0,BYTE(upper|newLow));
             // Neither operation modifies FLAGS.
+            // Reference V20 clocks include the complete r/m transfer.
+            lastCycles_=2u*prefixCount+(ext==0x28
+                ? (operand.registerOperand?13u:28u)
+                : (operand.registerOperand?17u:32u));
+            // Prevent the generic V20 memory adjustment from
+            // double-counting the operand transfer.
+            timingModRmMemory_=false;
             break;
         }
         if(ext<0x10 || ext>0x1f)
@@ -2017,6 +2039,15 @@ void Main8088Board::Core::executeOne()
                 : operation==2 ? (value|bitMask) : (value^bitMask);
             writeOperand(operand,bits,updated);
         }
+        // V20 Table 2-8: 0F10-1F CL/imm bit operations.
+        // TEST1/CLR1/SET1/NOT1 have the same reference class.
+        const bool immediate=(ext&8u)!=0;
+        const bool memory=!operand.registerOperand;
+        lastCycles_=2u*prefixCount+(memory
+            ? (bits==16?(immediate?22u:21u)
+                       :(immediate?14u:13u))
+            : (immediate?5u:4u));
+        timingModRmMemory_=false;
         break;
     }
     case 0xd8: case 0xd9: case 0xda: case 0xdb:

@@ -1074,3 +1074,26 @@ microbenchmarks have been added. Intel 8088 timing paths are unchanged.
 
 NEC source:
 https://datasheets.chipdb.org/NEC/V20-V30/U11301EJ5V0UMJ1.PDF
+
+## Stage 1-F: NEC V20 extension and shift clocks
+
+NEC *16-Bit V-Series Microprocessors Instruction User's Manual*,
+Table 2-8, V20/V20HL column, is used for the D0-D3 and C0-C1
+rotate/shift families, 0F10-0F1F TEST1/CLR1/SET1/NOT1,
+and 0F28/0F2A ROL4/ROR4.
+The V20 native timing finalizer uses count-dependent 7+n and
+19/27+n classes (CL/imm8 shifts) and the constant 6 or 16/24
+classes (single-bit shifts). The extension handler accounts for
+4/5-register, 13/14-byte-memory, 21/22-word-memory bit operations,
+plus ROL4=13/28 and ROR4=17/32, without an Intel 8088 EA surcharge.
+
+The single `mainv20_extension_timing` CTest covers the eight
+shift extensions in both widths and all three count formats,
+all sixteen bit subopcodes in register/memory forms, and ROL4/ROR4.
+The existing 8088 timing path is unchanged. No speculative bus model
+or diagnostics are introduced.
+
+The 8080 emulation-mode timings remain provisional, not copied
+blindly from native Intel 8080 T-state tables. Other NEC extended
+instructions are not yet reference-classified in this stage.
+Source: https://www.ardent-tool.com/CPU/docs/NEC/V20-V30/v_series.pdf
