@@ -2,6 +2,7 @@ void	CSim09::SimONE()
 {
     lastInstructionCycles_ = 0;
     tfmTransfers_ = 0;
+    divisionCycleAdjustment_ = 0;
     indexedCycleKnown_ = false;
     indexedCycleExtra_ = 0;
     stackTimingMask_ = 0;
