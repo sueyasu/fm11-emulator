@@ -403,6 +403,7 @@ void Main8088Board::Core::executeOne()
     timingEaCycles_=0;
     timingShiftCount_=0;
     timingModRmExtension_=0;
+    timingMultiplyCycles_=0;
     // 8088 recognizes maskable IRQs at instruction boundaries. STI and
     // MOV SS defer recognition until the following instruction completes.
     const bool inhibited=irqInhibit_!=0;
@@ -841,9 +842,16 @@ void Main8088Board::Core::executeOne()
                         cpu.lastCycles_=prefixCycles+(memory?24u+ea:3u);
                         return;
                     }
-                    // MUL/IMUL/DIV/IDIV depend on operands, not merely
-                    // the opcode. Keep their fallback pending a separate
-                    // variable-cycle implementation.
+                    if(ext==4 && cpu.timingMultiplyCycles_!=0) {
+                        // MUL is microcoded: account for the tested
+                        // multiplier bits rather than a constant cost.
+                        // Memory variants add six clocks plus EA.
+                        cpu.lastCycles_=prefixCycles+cpu.timingMultiplyCycles_
+                                        +(memory?6u+ea:0u);
+                        return;
+                    }
+                    // IMUL/DIV/IDIV still require separate microcode
+                    // branch-path and divide-exception characterization.
                 }
                 if(opcode==0xfe && ext<=1) {
                     cpu.lastCycles_=prefixCycles+(memory?23u+ea:3u);
@@ -1239,6 +1247,24 @@ void Main8088Board::Core::executeOne()
             break;
         }
         case 4: { // MUL: unsigned
+            if(variant_==CpuType::I8088) {
+                // CORX in the original 8086/8088 microcode performs one
+                // conditional add per multiplier bit. The short branch
+                // is one clock slower when the add is performed. The
+                // published register timings span 70-77 / 118-133.
+                // This is a bounded microcode-derived approximation:
+                // exact instruction boundary and queue interaction
+                // still require hardware trace validation.
+                const unsigned multiplier=bits==8?getReg8(0):regs_[0];
+                const unsigned variableMask=bits==8?0x7fu:0x7fffu;
+                unsigned testedBits=multiplier&variableMask;
+                unsigned additions=0;
+                while(testedBits) {
+                    additions+=testedBits&1u;
+                    testedBits>>=1;
+                }
+                timingMultiplyCycles_=(bits==8?70u:118u)+additions;
+            }
             if(bits==8) {
                 const unsigned product=getReg8(0)*operand;
                 regs_[0]=WORD(product);
