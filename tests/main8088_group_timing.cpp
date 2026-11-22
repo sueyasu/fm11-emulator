@@ -75,9 +75,11 @@ int main() {
         {"OUT DX,AX", {0xef},1,12},
         {"CALL far imm", {0x9a,0x04,0,0,0x10},5,36},
         {"RETN", {0xc3},1,20},
-        {"RETF", {0xcb},1,34},
+        {"RETF", {0xcb},1,33},
         {"RETN imm", {0xc2,0x02,0},3,24},
-        {"RETF imm", {0xca,0x02,0},3,33}
+        {"RETF imm", {0xca,0x02,0},3,34},
+        {"RETF alias C9", {0xc9},1,33},
+        {"RETF imm alias C8", {0xc8,0x02,0},3,34}
     };
     for(unsigned i=0;i<sizeof(cases)/sizeof(cases[0]);++i)
         if(!check(cases[i].name,cases[i].bytes,cases[i].length,cases[i].clocks))
