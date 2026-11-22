@@ -144,9 +144,17 @@ WORD	CSim09::GetAddrInd()
         case 0x04: indexedCycleKnown_ = true; break;
         case 0x05: case 0x06: case 0x08: case 0x0c:
             indexedCycleExtra_ = 1; indexedCycleKnown_ = true; break;
-        case 0x09: case 0x0b: case 0x0d:
+        case 0x09: case 0x0b:
             indexedCycleExtra_ = 4; indexedCycleKnown_ = true; break;
-        case 0x0f: indexedCycleExtra_ = 4; indexedCycleKnown_ = true; break;
+        case 0x0d:
+            // 16-bit PCR displacement costs five extra clocks (eight
+            // when indirect), unlike 16-bit X/Y/U/S displacement.
+            indexedCycleExtra_ = 5; indexedCycleKnown_ = true; break;
+        case 0x0f:
+            // MC6809 [nn] extended indirect: five extra clocks, not four.
+            // HD6309 non-indirect W-index forms are deferred to Stage 1-C.
+            indexedCycleExtra_ = (op & 0x10) ? 5 : 4;
+            indexedCycleKnown_ = true; break;
         default: break;
         }
         // These extra modes are specific to 6309 and require separate timing.
