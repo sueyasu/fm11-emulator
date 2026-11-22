@@ -888,3 +888,55 @@ Next, replace the provisional “data transfers first” assumption
 with a micro-operation event timeline and verify exact prefetch
 availability against observed real-8088 bus traces before
 enabling a phase-aware stall penalty in normal execution.
+
+### Stage 1-E: ordered CPU bus micro-operation events
+
+Added an explicitly enabled `Intel8088BusEvents` recorder.
+For each completed `executeOne()`, it records **CPU-visible
+program order** of instruction-byte consumption, data-memory reads
+and writes, and I/O reads and writes. Each event contains
+the type, byte address (20-bit memory or 16-bit port), byte value
+and zero-based order index. Multi-byte stack and memory operands
+are represented as separate byte transfers; prefetch queue reads
+remain distinguished conceptually from explicit operand accesses.
+The event buffer resets at the start of the next instruction and
+on conformance-state reset, and does not accumulate indefinitely.
+The event stream is disabled by default and also disabled for V20.
+
+```cpp
+auto& core=static_cast<Main8088Board::Core&>(board.cpu());
+core.setBusEventTrackingEnabled(true);
+core.executeOne();
+for(const auto& event:core.busEvents()) {
+    // event.kind, event.address, event.value, event.order
+}
+```
+
+`main8088_bus_event_order` checks 8- and 16-bit instruction
+fetches, byte order of MOV word load/store, I/O writes, stack
+PUSH byte ordering, per-instruction reset, disabled mode and
+V20 isolation. Normal CPU cycles and 8088 FIFO scheduling are
+unchanged.
+
+**The event sequence is NOT a T-state trace**: instruction-byte
+events describe what the execution unit consumes, even if the
+byte came from a prefetch FIFO. Speculative BIU refill operations
+are not emitted as executed opcode events, and the present
+instruction-at-once CPU does not expose actual time offsets for
+the operand accesses. This gives the next stage an ordered event
+stream but not yet accurate BIU/EU arbitration. Deriving exact
+bus phases will require microcode-supported timing offsets or
+verified cycle traces; arbitrarily distributing events over the
+instruction budget would create false precision.
+
+```sh
+cmake -S . -B build -DFM11_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build -R 'main8088_(bus_event_order|bus_tstates|prefetch_bus_phase)' --output-on-failure
+ctest --test-dir build --output-on-failure
+```
+
+Next: map instruction micro-operation events to validated relative
+T-state offsets, then let the BIU scheduler arbitrate prefetch
+against the ordered memory/I/O transactions. WAIT and DMA HOLD
+remain independent future additions.
