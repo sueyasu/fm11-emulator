@@ -51,13 +51,16 @@ int main() {
         {"IMUL16 positive",0xf7,0xeb,7,0,3,131,false,21,0},
         {"IMUL16 negative",0xf7,0xeb,0xfff9,0,3,137,false,0xffeb,0xffff},
         {"IMUL8 memory",0xf6,0x2f,3,0,4,93,true,12,0},
+        {"IMUL16 memory",0xf7,0x2f,7,0,3,142,true,21,0},
         {"DIV8 quotient6",0xf6,0xf3,36,0,6,82,false,6,0},
         {"DIV8 quotient7",0xf6,0xf3,42,0,6,83,false,7,0},
+        {"DIV8 memory",0xf6,0x37,36,0,6,93,true,6,0},
         {"DIV16 quotient6",0xf7,0xf3,36,0,6,146,false,6,0},
         {"DIV16 memory",0xf7,0x37,36,0,6,157,true,6,0},
         {"IDIV8 negative dividend",0xf6,0xfb,0xffdc,0,6,105,false,0x00fa,0},
         {"IDIV16 negative divisor",0xf7,0xfb,36,0,0xfffa,168,false,0xfffa,0},
         {"IDIV16 positive",0xf7,0xfb,36,0,6,167,false,6,0},
+        {"IDIV16 memory",0xf7,0x3f,36,0,6,178,true,6,0},
         {"IDIV8 memory",0xf6,0x3f,36,0,6,114,true,6,0}
     };
     for(const auto& t:cases)
