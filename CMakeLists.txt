@@ -748,6 +748,14 @@ if(FM11_BUILD_TESTS)
     add_test(NAME cpu6809_indexed_postbytes COMMAND cpu6809_indexed_postbytes)
 
     # Stage 1-C: HD6309 emulation/native reference cycle regression.
+    add_test(NAME hd6309_opcode_coverage
+             COMMAND ${Python3_EXECUTABLE}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_hd6309_opcode_coverage.py)
+
+    add_executable(cpu6309_math_variable_cycles tests/cpu6309_math_variable_cycles.cpp)
+    target_link_libraries(cpu6309_math_variable_cycles PRIVATE fm11_core)
+    add_test(NAME cpu6309_math_variable_cycles COMMAND cpu6309_math_variable_cycles)
+
     add_executable(cpu6309_cycle_reference tests/cpu6309_cycle_reference.cpp)
     target_link_libraries(cpu6309_cycle_reference PRIVATE fm11_core)
     add_test(NAME cpu6309_cycle_reference COMMAND cpu6309_cycle_reference)
