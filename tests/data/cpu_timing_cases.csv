@@ -50,3 +50,5 @@ v20,NOP,90,3,baseline,tests/main8088_cycles.cpp
 6809,CMPS_idx,11AC84,7,verified,Motorola M6809PM Appendix F Tables F-1 F-2
 6809,LEAX_idx_5bit,3000,5,verified,Motorola M6809PM Appendix F Tables F-1 F-2
 6809,LEAX_idx_pcr16,308D0000,9,verified,Motorola M6809PM Appendix F Tables F-1 F-2
+6809,DAA,19,2,verified,Motorola M6809PM Appendix C Table C-1
+6809,JMP_extended,7E2000,4,verified,Motorola M6809PM Appendix C Table C-1
