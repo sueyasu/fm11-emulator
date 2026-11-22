@@ -747,6 +747,11 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(cpu6809_indexed_postbytes PRIVATE fm11_core)
     add_test(NAME cpu6809_indexed_postbytes COMMAND cpu6809_indexed_postbytes)
 
+    add_executable(cpu6809_opcode_cycles tests/cpu6809_opcode_cycles.cpp)
+    target_link_libraries(cpu6809_opcode_cycles PRIVATE fm11_core)
+    add_test(NAME cpu6809_opcode_cycles COMMAND cpu6809_opcode_cycles
+             ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/mc6809_reference.csv)
+
     # Keep completed CPU-component regressions available without requiring
     # all of them during ongoing display/boot subsystem development.
     # The full suite remains accessible with plain 'ctest'.
