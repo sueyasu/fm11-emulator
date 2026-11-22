@@ -444,3 +444,48 @@ Remaining work includes indirect CALL/JMP, FF/FE and other RMW groups,
 RET/IRET/interrupt path, REP-string timing, I/O and prefetch/bus
 overlap. Stage 1-E remains incomplete; no claim of physical 8088
 cycle-exact timing is made.
+
+## Stage 1-E follow-up: FF/FE groups, stack, I/O and strings
+
+The Intel 8088 timing pass now records the ModR/M extension field.
+The same FF opcode is classified separately for INC/DEC, near/far
+indirect CALL, near/far indirect JMP, and PUSH. FE INC/DEC byte,
+8F POP r/m16, LEA, LDS/LES, TEST and XCHG are also classified by
+register versus memory operand and EA cost. The 8088 timing table
+for immediate/indirect IN/OUT, PUSHF/POPF, near/far returns,
+far immediate CALL and several fixed-clock instructions replaces
+the old four-clock fallback where these cases were unclassified.
+
+String timing handles MOVS, CMPS, STOS, LODS and SCAS byte and word
+operations. Each REP iteration remains one `executeOne()` invocation:
+the first iteration includes the nine-clock setup, subsequent
+iterations only the per-element charge. REP CX=0 charges only setup.
+The repeating state is discarded on interrupt entry and reset.
+The independent NEC V20 timing model is unchanged.
+
+The earlier JCXZ model was corrected from 16/4 to **18/6**
+clocks for taken/not taken (8088 reference).
+
+New tests:
+- `main8088_group_timing`: FF/FE extension cases, register/memory
+  operands, LEA/LES/LDS, TEST/XCHG, PUSHF/POPF, IN/OUT and returns.
+- `main8088_string_timing`: all ten string width/opcode combinations,
+  REP iteration totals, REP stopping on ZF changes and zero CX.
+- `main8088_dynamic_timing`: updated JCXZ 18/6 reference cases.
+
+```sh
+cmake -S . -B build -DFM11_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build -R 'main8088_(group_timing|string_timing|dynamic_timing|ea_timing|cycles)' --output-on-failure
+ctest --test-dir build --output-on-failure
+```
+
+Reference values: Intel iAPX 86/88 instruction timing tables as
+reproduced at https://www2.math.uni-wuppertal.de/~fpf/Uebungen/GdR-SS02/opcode_i.html .
+
+**Not modeled:** the hardware BIU prefetch queue, concurrent fetch
+and operand bus cycles, DRAM wait states, DMA contention or externally
+observed individual bus T-states. Group 3 MUL/DIV operand-dependent
+timings, exceptions and externally delivered interrupts still need
+further characterization. The scheduler reports best-case
+instruction-level estimates, not a bus-cycle-exact trace.
