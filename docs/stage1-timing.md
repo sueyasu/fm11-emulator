@@ -625,3 +625,53 @@ References:
 Remaining Stage 1-E: real-8088-verified operand timing and exception
 microcode, 4-byte prefetch queue/BIU-EU overlap, external WAIT,
 and shared-bus DMA contention.
+
+### Stage 1-E: opt-in 8088 BIU prefetch timing shadow (foundation)
+
+Added `Intel8088PrefetchTiming` and integrated it with the 8088
+instruction-byte fetch path and postinstruction timing finalizer.
+It observes up to **four abstract byte slots**: prefix, opcode,
+ModR/M, displacement and immediate fetches all consume slots.
+At the end of an instruction a provisional one-byte-per-four-clock
+refill budget is applied (capped at four slots). A non-sequential
+CS:IP transfer clears the queue. Hardware interrupt entry also
+clears it. Snapshot diagnostics expose depth, total instruction
+bytes, demand bytes, buffered bytes, provisional refills and
+flushes.
+
+**Important limitation:** this is a **passive timing-only shadow**,
+not a functioning prefetch FIFO: the CPU continues to read each
+instruction byte from the bus as executed; this observer does not
+speculatively read or hold the bytes. Thus it does not yet model
+self-modifying code hazards, exact BIU/EU overlap, data-transfer
+bus contention, WAIT, DMA HOLD, or queue stall additions to CPU
+clocks. In particular, its refill grant of `cycles/4` is a
+diagnostic placeholder, **not a verified free-bus scheduler**.
+Some taken branches returning to their sequential fall-through
+address cannot be detected by the CS:IP comparison alone.
+All reported `lastExecutionCycles()` values remain unchanged.
+
+The feature is OFF by default. To enable during an isolated test:
+```cpp
+auto& cpu=static_cast<Main8088Board::Core&>(board.cpu());
+cpu.setPrefetchTrackingEnabled(true);
+cpu.executeOne();
+const auto counters=cpu.prefetchTimingSnapshot();
+```
+
+`main8088_prefetch_shadow` validates the opt-in default, length
+accounting, bounded refill, jump-induced flush, conformance-state
+reset and lack of V20 instrumentation. It does **not** claim
+physical cycle exactness.
+
+```sh
+cmake -S . -B build -DFM11_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build -R 'main8088_(prefetch_shadow|cycles|interrupt_cycles)' --output-on-failure
+ctest --test-dir build --output-on-failure
+```
+
+Next: track actual instruction/data bus transfers and prefetch
+queue ownership, synchronize wait-states and DMA, and only then
+apply starvation/refill timing penalties. Instruction timing
+baselines and V20 execution must remain independently testable.
