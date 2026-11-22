@@ -1,6 +1,7 @@
 #pragma once
 #include "CpuBoard.h"
 #include "Main8088Bus.h"
+#include "Intel8088PrefetchTiming.h"
 #include <array>
 #include <cstdint>
 #include <stdexcept>
@@ -49,6 +50,15 @@ public:
             irqInhibit_=0;
             segmentOverride_=-1;
             timingRepeatActive_=false;
+            prefetchTiming_.reset();
+        }
+        // Opt-in BIU timing diagnostics. No effect on guest semantics or
+        // CPU cycle reporting until a bus-aware scheduler is introduced.
+        void setPrefetchTrackingEnabled(bool enabled) {
+            prefetchTiming_.setEnabled(enabled && variant_==CpuType::I8088);
+        }
+        Intel8088PrefetchTiming::Snapshot prefetchTimingSnapshot() const {
+            return prefetchTiming_.snapshot();
         }
         bool halted() const {return halted_;}
         bool emulation8080() const {return emulation8080_;}
@@ -96,6 +106,7 @@ public:
         unsigned timingSignedMultiplyCycles_=0;
         unsigned timingDivideCycles_=0;
         bool timingRepeatActive_=false;
+        Intel8088PrefetchTiming prefetchTiming_{};
         std::array<WORD,8> regs_{};
         std::array<WORD,4> segments_{}; // ES, CS, SS, DS
         WORD ip_=0;
