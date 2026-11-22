@@ -93,6 +93,15 @@ private:
 
 	std::uint32_t lastInstructionCycles_ = 0;
     std::uint32_t tfmTransfers_ = 0;
+    std::uint32_t tfmStepCycles_ = 0;
+    WORD tfmPC_ = 0;
+    WORD tfmOpcode_ = 0;
+    BYTE tfmPostbyte_ = 0;
+    BYTE tfmReadValue_ = 0;
+    bool tfmActive_ = false;
+    bool tfmReadPending_ = false;
+    bool tfmNeedsSetup_ = true;
+    void InterruptTfm();
     int divisionCycleAdjustment_ = 0;
     bool nativeTimingMode_ = false;
 	std::uint32_t indexedCycleExtra_ = 0;
