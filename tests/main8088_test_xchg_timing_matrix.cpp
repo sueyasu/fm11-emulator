@@ -6,7 +6,9 @@
 // Exercise all EA forms, displacements, register operands, and both
 // widths. The optional bus-event collector is enabled only in tests.
 int main() {
-    constexpr unsigned eaBase[8]={7,8,8,7,5,5,6,5};
+    // r/m=6 is [BP] when mod=01/10 (base EA=5); only mod=00
+    // selects direct disp16 with EA=6, handled separately below.
+    constexpr unsigned eaBase[8]={7,8,8,7,5,5,5,5};
     const BYTE opcodes[]={0x84,0x85,0x86,0x87};
     for(BYTE opcode:opcodes) {
         const bool word=(opcode&1)!=0;
@@ -72,7 +74,7 @@ int main() {
                         <<", IP "<<cpu.ip()<<" expected "<<length
                         <<", read/write "<<reads<<"/"<<writes
                         <<" expected "<<expectedBytes<<"/"
-                        <<(exchange?expectedBytes:0u)<<"\\n";
+                        <<(exchange?expectedBytes:0u)<<"\n";
                     return 1;
                 }
             }
