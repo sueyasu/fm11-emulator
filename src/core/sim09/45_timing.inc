@@ -209,6 +209,18 @@ void CSim09::FinishInstructionTiming(WORD op)
             if (lastInstructionCycles_ != 0) --lastInstructionCycles_;
         }
     }
+    // Operand-dependent signed division and multiply timing (hardware-
+    // verified corrections from hoglet67 6809Decoder tests). The base
+    // addressing-mode value and native delta were calculated above.
+    if (enable6309_ && ((op >= 0x118d && op <= 0x118f) ||
+                        (op >= 0x119d && op <= 0x119f) ||
+                        (op >= 0x11ad && op <= 0x11af) ||
+                        (op >= 0x11bd && op <= 0x11bf))) {
+        const int adjusted = int(lastInstructionCycles_) +
+                             divisionCycleAdjustment_;
+        lastInstructionCycles_ = adjusted > 0 ? unsigned(adjusted) : 0u;
+    }
+
     // TFM uses 6 setup cycles plus 3 cycles per byte in either mode.
     // The interpreter currently executes each transfer atomically; the
     // interruptibility of TFM remains separate from this cycle accounting.
