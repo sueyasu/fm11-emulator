@@ -752,6 +752,10 @@ if(FM11_BUILD_TESTS)
              COMMAND ${Python3_EXECUTABLE}
                      ${CMAKE_CURRENT_SOURCE_DIR}/tests/check_hd6309_opcode_coverage.py)
 
+    add_executable(cpu6309_math_results tests/cpu6309_math_results.cpp)
+    target_link_libraries(cpu6309_math_results PRIVATE fm11_core)
+    add_test(NAME cpu6309_math_results COMMAND cpu6309_math_results)
+
     add_executable(cpu6309_tfm_interrupt tests/cpu6309_tfm_interrupt.cpp)
     target_link_libraries(cpu6309_tfm_interrupt PRIVATE fm11_core)
     add_test(NAME cpu6309_tfm_interrupt COMMAND cpu6309_tfm_interrupt)
