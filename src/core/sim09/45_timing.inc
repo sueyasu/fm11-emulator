@@ -188,13 +188,17 @@ void CSim09::FinishInstructionTiming(WORD op)
         if (op == 0x1193 || op == 0x119c) lastInstructionCycles_ -= 2;
         if ((op >= 0x1190 && op <= 0x119f) ||
             (op >= 0x11d0 && op <= 0x11df)) {
-            if (lastInstructionCycles_ == 5) --lastInstructionCycles_;
+            if (lastInstructionCycles_ == 5 &&
+                op != 0x1193 && op != 0x119c)
+                --lastInstructionCycles_;
         }
         if (op == 0x11a3 || op == 0x11ac) --lastInstructionCycles_;
         if (op == 0x11b3 || op == 0x11bc) lastInstructionCycles_ -= 2;
         if ((op >= 0x11b0 && op <= 0x11bf) ||
             (op >= 0x11f0 && op <= 0x11ff)) {
-            if (lastInstructionCycles_ == 6) --lastInstructionCycles_;
+            if (lastInstructionCycles_ == 6 &&
+                op != 0x11b3 && op != 0x11bc)
+                --lastInstructionCycles_;
         }
 
         if ((op >= 0x1040 && op <= 0x105f) ||
