@@ -406,13 +406,6 @@ std::array<unsigned,256> make8088Cycles() {
     t.fill(4); // typical short instruction fallback
     for(unsigned op=0x00;op<=0x3b;++op)
         if((op&7)<=3)t[op]=3; // ALU: register case; memory adds below
-    // Accumulator-immediate ALU opcodes have an intentional four-clock
-    // baseline; they must not rely on the generic fallback.
-    for(unsigned operation=0;operation<8;++operation) {
-        t[operation*8+4]=4; // AL,imm8
-        t[operation*8+5]=4; // AX,imm16
-    }
-    t[0xa8]=4; t[0xa9]=4; // TEST accumulator, immediate
     for(unsigned op=0x40;op<=0x4f;++op)t[op]=3;
     for(unsigned op=0x50;op<=0x57;++op)t[op]=15;
     for(unsigned op=0x58;op<=0x5f;++op)t[op]=12;
@@ -432,6 +425,13 @@ std::array<unsigned,256> make8088Cycles() {
     t[0x88]=3;t[0x89]=3;t[0x8a]=3;t[0x8b]=3;t[0x8c]=3;t[0x8e]=3;
     t[0xc6]=4;t[0xc7]=4;t[0x80]=4;t[0x81]=4;t[0x83]=4;
     t[0xec]=8;t[0xed]=8;t[0xee]=8;t[0xef]=8;
+    // Specific four-clock cases come AFTER the broad A4h-AFh
+    // baseline so TEST A8h/A9h cannot be overwritten with 14.
+    for(unsigned operation=0;operation<8;++operation) {
+        t[operation*8+4]=4; // AL,imm8
+        t[operation*8+5]=4; // AX,imm16
+    }
+    t[0xa8]=4; t[0xa9]=4; // TEST accumulator, immediate
     return t;
 }
 const std::array<unsigned,256> k8088Cycles=make8088Cycles();
