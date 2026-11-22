@@ -1063,7 +1063,7 @@ void Main8088Board::Core::executeOne()
         if(taken)ip_=WORD(ip_+displacement);
         if(variant_==CpuType::I8088)
             lastCycles_=2*prefixCount+(opcode==0xe2
-                ? (taken?17u:5u) : (taken?18u:6u));
+                ? (taken?17u:5u) : (opcode==0xe0 ? (taken?19u:7u) : (taken?18u:6u)));
         break;
     }
     case 0xe3: { // JCXZ, no decrement
