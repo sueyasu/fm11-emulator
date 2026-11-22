@@ -55,6 +55,7 @@ public:
 	BYTE interruptDataBus_ = 0xff;
 	unsigned eiDelay_ = 0;
 	unsigned executionNesting_ = 0;
+	bool halted_ = false;
 	void FetchRefresh() { regs.r.b.R = BYTE((regs.r.b.R & 0x80) |
 	                            ((regs.r.b.R + 1) & 0x7f)); }
 	BYTE FetchOpcode() { FetchRefresh(); return GetOp(); }
