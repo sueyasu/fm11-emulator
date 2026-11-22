@@ -837,8 +837,8 @@ void Main8088Board::Core::executeOne()
         case 0x9c: clocks=14;break; // PUSHF
         case 0x9d: clocks=12;break; // POPF
         case 0x0f: clocks=12;break; // POP CS (8088 undocumented)
-        case 0xa0: case 0xa2: clocks=10;break; // MOV AL,moffs / moffs,AL
-        case 0xa1: case 0xa3: clocks=14;break; // 8088 word: 10 + 4
+        case 0xa0: case 0xa2: clocks=14;break; // 8088 MOV direct byte memory
+        case 0xa1: case 0xa3: clocks=14;break; // 8088 MOV direct word memory
         case 0xd7: clocks=11;break; // XLAT
         case 0xe4: case 0xe5: case 0xe6: case 0xe7: clocks=14;break;
         case 0xec: case 0xed: case 0xee: case 0xef: clocks=12;break;
@@ -983,6 +983,14 @@ void Main8088Board::Core::executeOne()
                         ? (memory ? 20u+ea+4u*count+(word?8u:0u)
                                   : 8u+4u*count)
                         : (memory ? 15u+ea+(word?8u:0u) : 2u));
+                    return;
+                }
+                if(opcode>=0xd8 && opcode<=0xdf) {
+                    // ESC instruction handoff: register form consumes
+                    // no data bus cycle; memory form includes EA time.
+                    // The 8087 itself is not emulated here.
+                    cpu.lastCycles_=prefixCycles+
+                        (memory?12u+ea:2u);
                     return;
                 }
                 if(opcode>=0x88 && opcode<=0x8b) {
@@ -1137,10 +1145,10 @@ void Main8088Board::Core::executeOne()
             // The 8088 word variants include the additional byte-bus
             // transfers for each source/destination word.
             static constexpr unsigned normal[12]={
-                18,26,30,30,11,15,16,16,19,19,0,0
+                18,26,22,30,11,15,12,16,15,19,0,0
             };
             static constexpr unsigned perRepeat[12]={
-                17,25,30,30,10,14,13,13,15,19,0,0
+                17,25,22,30,10,14,13,17,15,19,0,0
             };
             unsigned index=0;
             switch(opcode) {
