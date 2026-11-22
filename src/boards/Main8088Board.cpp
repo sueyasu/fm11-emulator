@@ -1294,6 +1294,7 @@ void Main8088Board::Core::executeOne()
         const WORD returnCs=segments_[1],returnIp=ip_;
         push16(returnCs);
         push16(returnIp);
+        prefetchTiming_.flush();
         segments_[1]=segment;
         ip_=offset;
         break;
@@ -1542,14 +1543,17 @@ void Main8088Board::Core::executeOne()
                 push16(returnCs);
                 push16(returnIp);
             }
+            prefetchTiming_.flush();
             segments_[1]=segment;
             ip_=offset;
         } else {
             const WORD target=read16(op);
             if(op.reg==2) {
                 push16(ip_);
+                prefetchTiming_.flush();
                 ip_=target;
             } else if(op.reg==4) {
+                prefetchTiming_.flush();
                 ip_=target;
             } else { // /6 PUSH r/m16
                 // FF /6 with a register SP operand follows PUSH SP (54h)
@@ -1672,7 +1676,9 @@ void Main8088Board::Core::executeOne()
         const auto op=decodeModRm();
         const unsigned segment=op.reg&3u;
         // Original 8088 also permits MOV CS,r/m16, unlike later x86 CPUs.
-        segments_[segment]=read16(op);
+        const WORD value=read16(op);
+        if(segment==1)prefetchTiming_.flush();
+        segments_[segment]=value;
         if(segment==2)irqInhibit_=1;
         break;
     }
@@ -1748,6 +1754,7 @@ void Main8088Board::Core::executeOne()
     }
     case 0xcd: interrupt(fetch8());break; // INT imm8
     case 0xcf: // IRET
+        prefetchTiming_.flush();
         ip_=pop16();
         segments_[1]=pop16();
         flags_=WORD(pop16()|0x0002);
@@ -1777,8 +1784,8 @@ void Main8088Board::Core::executeOne()
             break;
         }
         [[fallthrough]];
-    case 0xc3: ip_=pop16();break; // RET near
-    case 0xcb: ip_=pop16();segments_[1]=pop16();break; // RET far
+    case 0xc3: prefetchTiming_.flush();ip_=pop16();break; // RET near
+    case 0xcb: prefetchTiming_.flush();ip_=pop16();segments_[1]=pop16();break; // RET far
     case 0xc0: // V20 Group 2 imm8 byte; Intel 8088 alias of RET imm16
         if(variant_==CpuType::NECV20) {
             const auto op=decodeModRm();
@@ -1788,10 +1795,11 @@ void Main8088Board::Core::executeOne()
             break;
         }
         [[fallthrough]];
-    case 0xc2: { const WORD adjustment=fetch16(); ip_=pop16();regs_[4]=WORD(regs_[4]+adjustment);break; }
-    case 0xca: { const WORD adjustment=fetch16(); ip_=pop16();segments_[1]=pop16();regs_[4]=WORD(regs_[4]+adjustment);break; }
+    case 0xc2: { const WORD adjustment=fetch16(); prefetchTiming_.flush();ip_=pop16();regs_[4]=WORD(regs_[4]+adjustment);break; }
+    case 0xca: { const WORD adjustment=fetch16(); prefetchTiming_.flush();ip_=pop16();segments_[1]=pop16();regs_[4]=WORD(regs_[4]+adjustment);break; }
     case 0x0f: { // POP CS on 8088; V20 bit manipulation escape
         if(variant_==CpuType::I8088) {
+            prefetchTiming_.flush();
             segments_[1]=pop16();
             break;
         }
@@ -2047,6 +2055,7 @@ void Main8088Board::Core::executeOne()
     case 0xc8: { // 8088 alias of CAh (RETF imm16); NEC V20 ENTER
         if(variant_==CpuType::I8088) {
             const WORD adjustment=fetch16();
+            prefetchTiming_.flush();
             ip_=pop16();
             segments_[1]=pop16();
             regs_[4]=WORD(regs_[4]+adjustment);
@@ -2073,6 +2082,7 @@ void Main8088Board::Core::executeOne()
     }
     case 0xc9: // 8088 alias of CBh (RETF); NEC V20 LEAVE
         if(variant_==CpuType::I8088) {
+            prefetchTiming_.flush();
             ip_=pop16();
             segments_[1]=pop16();
             break;

@@ -463,3 +463,25 @@ case and no additional diagnostic work.
 
 Reference: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
 (D6h *SALC*, two clocks).
+
+## Control transfers and optional prefetch invalidation
+
+During the ModR/M timing audit, the 8Ch/8Eh segment-MOV,
+84h/85h TEST and 86h/87h XCHG timing formulas matched the
+8088 reference table, so no cycle constants were modified.
+
+However, several transfers of control did not explicitly
+flush the optional 8088 prefetch shadow/FIFO. Added flush
+calls for MOV CS,r/m16, POP CS, far immediate CALL, FFh
+indirect near/far CALL and JMP, near/far RET including
+8088 aliases and immediate variants, and IRET.
+
+The new `main8088_control_prefetch_flush` verifies each
+transfer flushes exactly once, that CS:IP and instruction
+clocks are preserved, and that ordinary MOV DS,AX does not
+flush. There is no speculative guest memory read or change
+to the CPU clock model in normal execution. The diagnostic
+flush routine is a no-op when prefetch tracking is disabled.
+
+Reference for instruction classes and timing:
+<https://pastraiser.com/cpu/i8088/i8088_opcodes.html>.
