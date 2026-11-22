@@ -89,6 +89,7 @@ public:
 	void z80emuED();
 	void z80emuIndex(WORD *ix);
 	void z80emu();
+	void ExecuteOpcode(BYTE opcode,bool alreadyFetched);
 	std::uint64_t LastInstructionCycles() const {return instructionCycles_;}
 	void z80irq();
 	void z80nmi();
