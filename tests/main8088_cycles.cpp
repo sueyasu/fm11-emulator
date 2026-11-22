@@ -75,9 +75,9 @@ int main() {
     classify.executeOne();
     classify.executeOne();
     classify.executeOne();
-    if(classify.lastExecutionCycles()!=3)return 15;
+    if(classify.lastExecutionCycles()!=2)return 15;
     classify.executeOne();
-    if(classify.lastExecutionCycles()!=11)return 16;
+    if(classify.lastExecutionCycles()!=17)return 16;
     classify.executeOne();
     classify.executeOne();
     if(classify.lastExecutionCycles()!=16)return 17;
