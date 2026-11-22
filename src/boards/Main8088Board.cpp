@@ -850,6 +850,20 @@ void Main8088Board::Core::executeOne()
         }
         if(clocks)lastCycles_=clocks+2*prefixCount;
     }
+    // This diagnostic finalizer runs after timing and prefetch
+    // finalizers: validated offsets refer to the reference instruction
+    // clock budget, not the transient opcode default.
+    struct BusEventFinalize {
+        Core& cpu;
+        ~BusEventFinalize() {
+            if(!cpu.scheduleRequested_)return;
+            cpu.eventSchedule_.evaluate(cpu.busEvents_.events(),
+                                        cpu.lastCycles_,
+                                        cpu.scheduledOperandOffsets_);
+            cpu.scheduleRequested_=false;
+            cpu.scheduledOperandOffsets_.clear();
+        }
+    } busEventFinalize{*this};
     // Construct before the existing timing finalizer: destructor order
     // makes this observer see the final clock count for every opcode.
     struct PrefetchFinalize {
