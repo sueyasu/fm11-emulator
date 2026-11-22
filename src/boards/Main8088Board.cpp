@@ -1253,7 +1253,10 @@ void Main8088Board::Core::executeOne()
         regs_[1]=WORD(regs_[1]-1);
         const bool zf=(flags_&0x0040)!=0;
         const bool taken=regs_[1]!=0 && (opcode==0xe2 || (opcode==0xe1?zf:!zf));
-        if(taken)ip_=WORD(ip_+displacement);
+        if(taken) {
+            prefetchTiming_.flush();
+            ip_=WORD(ip_+displacement);
+        }
         if(variant_==CpuType::I8088)
             lastCycles_=2*prefixCount+(opcode==0xe2
                 ? (taken?17u:5u) : (opcode==0xe0 ? (taken?19u:7u) : (taken?18u:6u)));
@@ -1643,16 +1646,19 @@ void Main8088Board::Core::executeOne()
     case 0xfd: flags_ |= 0x0400;break; // STD
     case 0xea: { // JMP far ptr16:16
         const WORD off=fetch16(),seg=fetch16();
+        prefetchTiming_.flush();
         ip_=off;segments_[1]=seg;
         break;
     }
     case 0xeb: { // JMP rel8
         const auto disp=static_cast<std::int8_t>(fetch8());
+        prefetchTiming_.flush(); // Even JMP +0 discards prefetched bytes.
         ip_=WORD(ip_+disp);
         break;
     }
     case 0xe9: { // JMP rel16
         const WORD disp=fetch16();
+        prefetchTiming_.flush();
         ip_=WORD(ip_+disp);
         break;
     }
@@ -1673,6 +1679,7 @@ void Main8088Board::Core::executeOne()
     case 0xe8: { // CALL rel16
         const WORD offset=fetch16();
         push16(ip_);
+        prefetchTiming_.flush();
         ip_=WORD(ip_+offset);
         if(variant_==CpuType::I8088)lastCycles_=2*prefixCount+23;
         break;
@@ -2005,6 +2012,7 @@ void Main8088Board::Core::executeOne()
         if(opcode>=0x70 && opcode<=0x7f) {
             const auto displacement=static_cast<std::int8_t>(fetch8());
             if(jumpCondition(opcode&15)) {
+                prefetchTiming_.flush();
                 ip_=WORD(ip_+displacement);
                 lastCycles_+=variant_==CpuType::I8088?12:6;
             }
