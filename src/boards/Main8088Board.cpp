@@ -909,13 +909,16 @@ void Main8088Board::Core::executeOne()
                 }
                 if(opcode==0xf6 || opcode==0xf7) {
                     if(ext<=1) {
-                        cpu.lastCycles_=prefixCycles+(memory
-                            ? 11u+ea+(opcode==0xf7?4u:0u):5u);
+                        // F6/F7 TEST: the published 8088 memory
+                        // timing is 11+EA for either operand width.
+                        cpu.lastCycles_=prefixCycles+(memory?11u+ea:5u);
                         return;
                     }
                     if(ext==2 || ext==3) {
-                        cpu.lastCycles_=prefixCycles+(memory
-                            ? 24u+ea+(opcode==0xf7?8u:0u):3u);
+                        // NOT/NEG: 24+EA for both r/m8 and r/m16.
+                        // The 8088-specific reference already includes
+                        // the word transfer time.
+                        cpu.lastCycles_=prefixCycles+(memory?24u+ea:3u);
                         return;
                     }
                     if(ext==4 && cpu.timingMultiplyCycles_!=0) {
