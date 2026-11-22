@@ -1003,3 +1003,47 @@ selected instructions, and use them to replace the existing
 T-state arbitration is still not established for all 8088
 opcodes; WAIT and DMA bus ownership are separate outstanding
 timing work.
+
+### Stage 1-E: Intel-reference MOV data bus transfer validation
+
+Added `Intel8088MovBusReference` for unprefixed 88h–8Bh MOV
+register/memory forms. Intel's 8086/8088 manual specifies MOV
+register-from-memory at `8+EA` clocks and MOV
+memory-from-register at `9+EA`, with **four additional clocks
+on the 8088 for a 16-bit memory word**. Register-to-register
+MOV is two clocks. These are published total instruction
+times (not operand access start offsets).
+
+The validator checks the reported instruction clocks,
+the observed opcode and ModR/M fetch, register-only versus
+memory transfer count, and the direction of byte-wide memory
+accesses. For a normal adjacent memory word it also checks
+the ascending byte address order. It returns a **permitted
+start window**, not an invented exact T-state position:
+between the instruction start and the latest start leaving
+four clocks for each observed transfer. Actual placement within
+this window requires independent bus/microcode observations.
+
+`main8088_mov_bus_reference` runs four MOV byte/word
+read/write cases against actual CPU execution and the
+published timing table, plus register-only and deliberately
+inconsistent diagnostic events.
+
+```sh
+cmake -S . -B build -DFM11_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build -R 'main8088_(mov_bus_reference|bus_event_schedule|bus_event_cpu_schedule)' --output-on-failure
+ctest --test-dir build --output-on-failure
+```
+
+Reference: Intel, *iAPX 86/88 User's Manual* (1981),
+Table 2-21 (MOV clock timings and 8088 word-transfer note):
+https://bitsavers.trailing-edge.com/components/intel/8086/1981_iAPX_86_88_Users_Manual.pdf
+
+This is a timing **constraint** check, not a claim of exact
+EU/BIU memory-cycle ordering. It is currently limited to
+unprefixed 88h–8Bh encodings; segment prefix and address
+wrap boundary behavior need separate event/address
+validation. Later work can add validated per-instruction
+T-state placement without changing the 8088 instruction
+timing baseline.
