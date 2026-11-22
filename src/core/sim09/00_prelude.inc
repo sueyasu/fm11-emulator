@@ -158,12 +158,44 @@ WORD	CSim09::GetAddrInd()
             indexedCycleKnown_ = true; break;
         default: break;
         }
-        // These extra modes are specific to 6309 and require separate timing.
-        if (Is6309Enabled() && ((op & 0x0f) == 0x07 ||
-            (op & 0x0f) == 0x0a || (op & 0x0f) == 0x0e))
-            indexedCycleKnown_ = false;
         if ((op & 0x10) != 0 && indexedCycleKnown_)
             indexedCycleExtra_ += 3;
+        if (Is6309Enabled()) {
+            // HD6309 additions from the indexed addressing mode table:
+            // E/F/W offsets and special W-based indexed encodings.
+            const BYTE mode = op & 0x0f;
+            if (mode == 0x07 || mode == 0x0a || mode == 0x0e) {
+                indexedCycleExtra_ = (op & 0x10) ? 4 : 1;
+                indexedCycleKnown_ = true;
+            }
+            switch (op) {
+            case 0x8f: indexedCycleExtra_ = 0; break; // ,W
+            case 0x90: indexedCycleExtra_ = 3; break; // [,W]
+            case 0xaf: indexedCycleExtra_ = 2; break; // n,W
+            case 0xb0: indexedCycleExtra_ = 5; break; // [n,W]
+            case 0xcf: case 0xef:
+                indexedCycleExtra_ = 1; break; // ,W++ / ,--W
+            case 0xd0: case 0xf0:
+                indexedCycleExtra_ = 4; break; // [,W++] / [,--W]
+            default: break;
+            }
+            // The native 6309 shortens a subset of indexed-address
+            // calculation cycles; these deltas are *in addition* to the
+            // opcode-specific native base-cycle corrections.
+            if (nativeTimingMode_) {
+                if (op == 0x9f)
+                    --indexedCycleExtra_; // extended indirect [nn]
+                else if (mode == 0x09 || mode == 0x01 ||
+                         mode == 0x03 || mode == 0x00 || mode == 0x02) {
+                    // W-based forms have their own fixed timing above.
+                    if (op != 0x8f && op != 0x90 && op != 0xaf &&
+                        op != 0xb0 && op != 0xcf && op != 0xd0 &&
+                        op != 0xef && op != 0xf0)
+                        --indexedCycleExtra_;
+                } else if (mode == 0x0b || mode == 0x0d)
+                    indexedCycleExtra_ -= 2;
+            }
+        }
     }
     if (!IsIndexedPostbyteAllowed(op)) {
         illegalOperand_ = true;
