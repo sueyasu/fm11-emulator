@@ -2,6 +2,7 @@
 #include "CpuBoard.h"
 #include "Main8088Bus.h"
 #include "Intel8088PrefetchTiming.h"
+#include "Intel8088BusEvents.h"
 #include <array>
 #include <cstdint>
 #include <stdexcept>
@@ -51,6 +52,7 @@ public:
             segmentOverride_=-1;
             timingRepeatActive_=false;
             prefetchTiming_.reset();
+            busEvents_.reset();
         }
         // Opt-in BIU timing diagnostics. No effect on guest semantics or
         // CPU cycle reporting until a bus-aware scheduler is introduced.
@@ -82,6 +84,14 @@ public:
         }
         Intel8088PrefetchTiming::Snapshot prefetchTimingSnapshot() const {
             return prefetchTiming_.snapshot();
+        }
+        // CPU-visible bus access order within the last instruction.
+        // Diagnostic only: the order is known, exact T-state positions are not.
+        void setBusEventTrackingEnabled(bool enabled) {
+            busEvents_.setEnabled(enabled && variant_==CpuType::I8088);
+        }
+        const std::vector<Intel8088BusEvents::Event>& busEvents() const {
+            return busEvents_.events();
         }
         bool halted() const {return halted_;}
         bool emulation8080() const {return emulation8080_;}
@@ -135,6 +145,7 @@ public:
         unsigned timingDivideCycles_=0;
         bool timingRepeatActive_=false;
         mutable Intel8088PrefetchTiming prefetchTiming_{};
+        mutable Intel8088BusEvents busEvents_{};
         std::array<WORD,8> regs_{};
         std::array<WORD,4> segments_{}; // ES, CS, SS, DS
         WORD ip_=0;
