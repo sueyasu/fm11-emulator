@@ -819,6 +819,26 @@ void Main8088Board::Core::executeOne()
                 const bool memory=cpu.timingModRmMemory_;
                 const unsigned ea=cpu.timingEaCycles_;
                 const unsigned ext=cpu.timingModRmExtension_;
+                if(opcode>=0x80 && opcode<=0x83) {
+                    // Register/immediate is four clocks. CMP does not
+                    // write back; the other ALU extensions perform RMW.
+                    cpu.lastCycles_=prefixCycles+(memory
+                        ? (ext==7 ? 14u+ea : 23u+ea) : 4u);
+                    return;
+                }
+                if(opcode==0xf6 || opcode==0xf7) {
+                    if(ext<=1) {
+                        cpu.lastCycles_=prefixCycles+(memory?11u+ea:5u);
+                        return;
+                    }
+                    if(ext==2 || ext==3) {
+                        cpu.lastCycles_=prefixCycles+(memory?24u+ea:3u);
+                        return;
+                    }
+                    // MUL/IMUL/DIV/IDIV depend on operands, not merely
+                    // the opcode. Keep their fallback pending a separate
+                    // variable-cycle implementation.
+                }
                 if(opcode==0xfe && ext<=1) {
                     cpu.lastCycles_=prefixCycles+(memory?23u+ea:3u);
                     return;
