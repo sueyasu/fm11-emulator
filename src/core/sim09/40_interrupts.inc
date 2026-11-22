@@ -9,11 +9,10 @@ void	CSim09::SimRESET()
 }
 void	CSim09::SimFIRQ()
 {
-    // Preserve the TFM restart address; its interrupted read is retried.
-    InterruptTfm();
     REG_ST &= ~0004;
     if ( (REG_CC & CC_F) != 0 )
 		return;
+    InterruptTfm();
     if ( (REG_ST & ST_W) == 0 ) {
         if (Is6309Enabled() && (REG_MD & MD_F) != 0) {
             REG_CC |= CC_E;
@@ -31,11 +30,10 @@ void	CSim09::SimFIRQ()
 }
 void	CSim09::SimIRQ()
 {
-    // Preserve the TFM restart address; its interrupted read is retried.
-    InterruptTfm();
     REG_ST &= ~0004;
     if ( (REG_CC & CC_I) != 0 )
 		return;
+    InterruptTfm();
     if ( (REG_ST & ST_W) == 0 ) {
     	REG_CC |= CC_E;
     	PushAll();
@@ -46,11 +44,10 @@ void	CSim09::SimIRQ()
 }
 void	CSim09::SimNMI()
 {
-    // Preserve the TFM restart address; its interrupted read is retried.
-    InterruptTfm();
     REG_ST &= ~0004;
     if ( (REG_ST & ST_N) != 0 )
 		return;
+    InterruptTfm();
     if ( (REG_ST & ST_W) == 0 ) {
 		REG_CC |= CC_E;
 		PushAll();
