@@ -951,7 +951,7 @@ void Main8088Board::Core::executeOne()
                     unsigned clocks=0;
                     switch(ext) {
                     case 0: case 1: clocks=memory?23u+ea:3u;break;
-                    case 2: clocks=memory?29u+ea:20u;break;
+                    case 2: clocks=memory?29u+ea:24u;break; // near indirect CALL
                     case 3: clocks=53u+ea;break;
                     case 4: clocks=memory?18u+ea:11u;break;
                     case 5: clocks=24u+ea;break;
