@@ -393,6 +393,7 @@ void Main8088Board::Core::executeOne()
     lastCycles_=0;
     timingModRmMemory_=false;
     timingEaCycles_=0;
+    timingShiftCount_=0;
     // 8088 recognizes maskable IRQs at instruction boundaries. STI and
     // MOV SS defer recognition until the following instruction completes.
     const bool inhibited=irqInhibit_!=0;
@@ -787,6 +788,18 @@ void Main8088Board::Core::executeOne()
                 const unsigned prefixCycles=2*prefixes;
                 const bool memory=cpu.timingModRmMemory_;
                 const unsigned ea=cpu.timingEaCycles_;
+                if(opcode>=0xd0 && opcode<=0xd3) {
+                    const bool word=(opcode&1)!=0;
+                    const bool variable=(opcode&2)!=0;
+                    const unsigned count=cpu.timingShiftCount_;
+                    // 8088 word memory RMW needs two additional byte bus
+                    // transfers versus the 8086 reference timing table.
+                    cpu.lastCycles_=prefixCycles+(variable
+                        ? (memory ? 20u+ea+4u*count+(word?8u:0u)
+                                  : 8u+4u*count)
+                        : (memory ? 15u+ea+(word?8u:0u) : 2u));
+                    return;
+                }
                 if(opcode>=0x88 && opcode<=0x8b) {
                     const bool word=(opcode&1)!=0;
                     cpu.lastCycles_=prefixCycles+(memory ? 8u+ea+(word?4u:0u) : 2u);
@@ -1046,13 +1059,19 @@ void Main8088Board::Core::executeOne()
         const auto displacement=static_cast<std::int8_t>(fetch8());
         regs_[1]=WORD(regs_[1]-1);
         const bool zf=(flags_&0x0040)!=0;
-        if(regs_[1]!=0 && (opcode==0xe2 || (opcode==0xe1?zf:!zf)))
-            ip_=WORD(ip_+displacement);
+        const bool taken=regs_[1]!=0 && (opcode==0xe2 || (opcode==0xe1?zf:!zf));
+        if(taken)ip_=WORD(ip_+displacement);
+        if(variant_==CpuType::I8088)
+            lastCycles_=2*prefixCount+(opcode==0xe2
+                ? (taken?17u:5u) : (taken?18u:6u));
         break;
     }
     case 0xe3: { // JCXZ, no decrement
         const auto displacement=static_cast<std::int8_t>(fetch8());
-        if(regs_[1]==0)ip_=WORD(ip_+displacement);
+        const bool taken=regs_[1]==0;
+        if(taken)ip_=WORD(ip_+displacement);
+        if(variant_==CpuType::I8088)
+            lastCycles_=2*prefixCount+(taken?16u:4u);
         break;
     }
     case 0xd0: case 0xd1: case 0xd2: case 0xd3: {
@@ -1060,6 +1079,7 @@ void Main8088Board::Core::executeOne()
         const auto op=decodeModRm();
         const unsigned bits=(opcode&1)?16u:8u;
         const unsigned count=(opcode&2)?getReg8(1):1u; // CL or implicit 1
+        timingShiftCount_=count;
         if(count!=0) {
             const unsigned value=shiftRotate(op.reg,readOperand(op,bits),bits,count);
             writeOperand(op,bits,value);
@@ -1396,6 +1416,7 @@ void Main8088Board::Core::executeOne()
         const WORD offset=fetch16();
         push16(ip_);
         ip_=WORD(ip_+offset);
+        if(variant_==CpuType::I8088)lastCycles_=2*prefixCount+23;
         break;
     }
     case 0xc1: // V20 Group 2 imm8 word; Intel 8088 alias of RET near
