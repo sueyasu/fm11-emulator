@@ -384,7 +384,10 @@ std::array<unsigned,256> make8088Cycles() {
     for(unsigned op=0x40;op<=0x4f;++op)t[op]=3;
     for(unsigned op=0x50;op<=0x57;++op)t[op]=15;
     for(unsigned op=0x58;op<=0x5f;++op)t[op]=12;
-    for(unsigned op=0x70;op<=0x7f;++op)t[op]=4; // untaken conditional
+    // 8088 decodes 60h-6Fh as aliases of 70h-7Fh: both Jcc
+    // families are 4 clocks not taken, 16 clocks taken.
+    // Explicitly classify the aliases instead of inheriting t.fill(4).
+    for(unsigned op=0x60;op<=0x7f;++op)t[op]=4; // untaken conditional
     for(unsigned op=0x90;op<=0x97;++op)t[op]=3;
     for(unsigned op=0xb0;op<=0xbf;++op)t[op]=4;
     for(unsigned op=0xa4;op<=0xaf;++op)t[op]=14;

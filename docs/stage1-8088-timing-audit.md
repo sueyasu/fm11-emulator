@@ -542,3 +542,21 @@ memory TEST=9+EA and XCHG=17+EA is superseded.
 
 Reference: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
 (opcode rows 84h–87h).
+
+## Explicit Jcc clock classification for the 8088 alias opcodes
+
+The 8088's undocumented 60h-6Fh conditional-branch aliases
+previously inherited the generic four-clock fallback for an
+untaken branch, while canonical 70h-7Fh were explicitly
+classified. The common base clock table now explicitly covers
+both primary-opcode ranges (60h-7Fh). A taken branch
+still adds twelve clocks, for the published 16/4 split.
+No numeric CPU clock change or extra runtime work is needed.
+
+The new `main8088_jcc_timing_matrix` independently verifies
+16 condition codes across both opcode encodings, twelve
+FLAGS patterns, three displacements (-7/0/+7), and with/without
+segment override, including final IP, FLAGS, CS, AX and
+reference cycles (2304 cases). This prevents the alias
+timings from accidentally reverting to generic fallback.
+Reference: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>.
