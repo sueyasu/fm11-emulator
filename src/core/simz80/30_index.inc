@@ -21,7 +21,7 @@ void	CSimZ80::z80emuIndex(WORD *ix)
 		ACC_L = *ix + ACC_W;
 		SetCf(ACC_L > 0xFFFF);
 		SetNf(FALSE);
-		*ix = ACC_W;
+		*ix = WORD(ACC_L);
 		break;
 
 	case 0x21:  		/* LD   IX,nn   */
@@ -90,7 +90,7 @@ void	CSimZ80::z80emuIndex(WORD *ix)
 		break;
 	case 0x66:  		/* LD   H,(IX+d)*/
 		ACC_O = (signed char)GetOp();
-		REG_L = GetByte(*ix + ACC_O);
+		REG_H = GetByte(*ix + ACC_O);
 		break;
 	case 0x6E:  		/* LD   L,(IX+d)*/
 		ACC_O = (signed char)GetOp();
