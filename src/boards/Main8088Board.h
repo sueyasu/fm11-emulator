@@ -3,6 +3,7 @@
 #include "Main8088Bus.h"
 #include "Intel8088PrefetchTiming.h"
 #include "Intel8088BusEvents.h"
+#include "Intel8088BusEventSchedule.h"
 #include <array>
 #include <cstdint>
 #include <stdexcept>
@@ -53,6 +54,9 @@ public:
             timingRepeatActive_=false;
             prefetchTiming_.reset();
             busEvents_.reset();
+            eventSchedule_.reset();
+            scheduleRequested_=false;
+            scheduledOperandOffsets_.clear();
         }
         // Opt-in BIU timing diagnostics. No effect on guest semantics or
         // CPU cycle reporting until a bus-aware scheduler is introduced.
@@ -92,6 +96,17 @@ public:
         }
         const std::vector<Intel8088BusEvents::Event>& busEvents() const {
             return busEvents_.events();
+        }
+        // Verified offsets are supplied per instruction, one start
+        // T-state for each operand (non-fetch) byte bus event.
+        // They are NOT inferred from the opcode's reference clocks.
+        void setBusEventScheduleOffsets(std::vector<unsigned> starts) {
+            scheduledOperandOffsets_=std::move(starts);
+            scheduleRequested_=true;
+            busEvents_.setEnabled(variant_==CpuType::I8088);
+        }
+        Intel8088BusEventSchedule::Result busEventScheduleResult() const {
+            return eventSchedule_.lastResult();
         }
         bool halted() const {return halted_;}
         bool emulation8080() const {return emulation8080_;}
@@ -146,6 +161,9 @@ public:
         bool timingRepeatActive_=false;
         mutable Intel8088PrefetchTiming prefetchTiming_{};
         mutable Intel8088BusEvents busEvents_{};
+        Intel8088BusEventSchedule eventSchedule_{};
+        std::vector<unsigned> scheduledOperandOffsets_{};
+        bool scheduleRequested_=false;
         std::array<WORD,8> regs_{};
         std::array<WORD,4> segments_{}; // ES, CS, SS, DS
         WORD ip_=0;
