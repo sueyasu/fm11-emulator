@@ -836,6 +836,10 @@ void Main8088Board::Core::executeOne()
         case 0xcb: case 0xc9: clocks=34;break; // RET far
         case 0x9c: clocks=14;break; // PUSHF
         case 0x9d: clocks=12;break; // POPF
+        case 0x0f: clocks=12;break; // POP CS (8088 undocumented)
+        case 0xa0: case 0xa2: clocks=10;break; // MOV AL,moffs / moffs,AL
+        case 0xa1: case 0xa3: clocks=14;break; // 8088 word: 10 + 4
+        case 0xd7: clocks=11;break; // XLAT
         case 0xe4: case 0xe5: case 0xe6: case 0xe7: clocks=14;break;
         case 0xec: case 0xed: case 0xee: case 0xef: clocks=12;break;
         case 0x9b: clocks=4;break; // WAIT
@@ -1031,6 +1035,7 @@ void Main8088Board::Core::executeOne()
     if(variant_==CpuType::I8088 && opcode>=0x60 && opcode<=0x6f) {
         const auto displacement=static_cast<std::int8_t>(fetch8());
         if(jumpCondition(opcode&15)) {
+            prefetchTiming_.flush();
             ip_=WORD(ip_+displacement);
             lastCycles_+=12;
         }
