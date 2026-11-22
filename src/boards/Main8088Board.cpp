@@ -1005,8 +1005,11 @@ void Main8088Board::Core::executeOne()
                     return;
                 }
                 if(opcode>=0x88 && opcode<=0x8b) {
-                    const bool word=(opcode&1)!=0;
-                    cpu.lastCycles_=prefixCycles+(memory ? ((opcode&2)?8u:9u)+ea+(word?4u:0u) : 2u);
+                    // Published 8088 MOV clocks are 13+EA for
+                    // memory destination and 12+EA for memory source
+                    // for both byte and word forms.
+                    cpu.lastCycles_=prefixCycles+(memory
+                        ? ((opcode&2)?12u:13u)+ea : 2u);
                     return;
                 }
                 if(opcode==0x8c || opcode==0x8e) {
@@ -1014,7 +1017,7 @@ void Main8088Board::Core::executeOne()
                     return;
                 }
                 if(opcode==0xc6 || opcode==0xc7) {
-                    cpu.lastCycles_=prefixCycles+(memory ? 10u+ea+(opcode==0xc7?4u:0u) : 4u);
+                    cpu.lastCycles_=prefixCycles+(memory ? 14u+ea : 4u);
                     return;
                 }
                 if(opcode<=0x3b && (opcode&7)<=3 && (opcode&4)==0) {
@@ -1313,7 +1316,7 @@ void Main8088Board::Core::executeOne()
         }
         if(variant_==CpuType::I8088)
             lastCycles_=2*prefixCount+(opcode==0xe2
-                ? (taken?17u:5u) : (opcode==0xe0 ? (taken?19u:7u) : (taken?18u:6u)));
+                ? (taken?17u:5u) : (taken?18u:6u));
         break;
     }
     case 0xe3: { // JCXZ, no decrement

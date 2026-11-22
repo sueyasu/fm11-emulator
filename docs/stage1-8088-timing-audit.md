@@ -363,3 +363,32 @@ Source: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
 (groups D0-D3 and F6-F7). The table values are
 best-case instruction timings; they do not characterize
 queue starvation or external WAIT.
+
+## Follow-up: MOV ModR/M reference clocks and LOOPNE
+
+An opcode-by-opcode comparison with the published **8088**
+clock table corrected the earlier bus-transfer heuristic for
+MOV 88h–8Bh and MOV immediate C6h/C7h:
+
+| Instruction form | 8088 reference clocks |
+|---|---:|
+| MOV r/m8,r8 and MOV r/m16,r16 | 13+EA (memory), 2 (register) |
+| MOV r8,r/m8 and MOV r16,r/m16 | 12+EA (memory), 2 (register) |
+| MOV r/m8,imm8 and MOV r/m16,imm16 | 14+EA (memory), 4 (register) |
+
+These **8088** values already include the effect of its
+8-bit bus, and are not increased for the word form.
+The timing finalizer, the optional
+`Intel8088MovBusReference` diagnostic validator, and both
+MOV regression files now agree on these values.
+
+The same reference gives `LOOPNE` (E0h) 18 clocks
+when taken and 6 when not taken, identical to `LOOPE`.
+The previous 19/7 clocks have been corrected and covered
+by `main8088_dynamic_timing`.
+
+Reference: <https://pastraiser.com/cpu/i8088/i8088_opcodes.html>
+(88h–8Bh, C6h–C7h, and E0h–E2h entries).
+
+No new FIFO, bus-event logging, or T-state simulation is
+enabled in normal execution.

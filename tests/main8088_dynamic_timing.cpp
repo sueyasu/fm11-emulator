@@ -31,8 +31,8 @@ int main() {
     if(!run("LOOP untaken",{0xe2,0x02},2,1,2,5,2))return 2;
     if(!run("LOOPE taken",{0xe1,0x02},2,2,0x42,18,4))return 3;
     if(!run("LOOPE untaken",{0xe1,0x02},2,2,2,6,2))return 4;
-    if(!run("LOOPNE taken",{0xe0,0x02},2,2,2,19,4))return 5;
-    if(!run("LOOPNE untaken",{0xe0,0x02},2,2,0x42,7,2))return 6;
+    if(!run("LOOPNE taken",{0xe0,0x02},2,2,2,18,4))return 5;
+    if(!run("LOOPNE untaken",{0xe0,0x02},2,2,0x42,6,2))return 6;
     if(!run("JCXZ taken",{0xe3,0x02},2,0,2,18,4))return 7;
     if(!run("JCXZ untaken",{0xe3,0x02},2,1,2,6,2))return 8;
     // A taken JCXZ with displacement zero still invalidates prefetch;

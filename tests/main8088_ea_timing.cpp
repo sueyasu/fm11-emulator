@@ -33,23 +33,23 @@ int main() {
         const std::array<BYTE,6> byteOp{0x8a,modrm,0x00,0x20,0,0};
         const std::array<BYTE,6> wordOp{0x8b,modrm,0x00,0x20,0,0};
         const unsigned len=rm==6?4:2;
-        if(!check("MOV r8,m8",byteOp,len,regs,8+ea[rm]))return 1;
+        if(!check("MOV r8,m8",byteOp,len,regs,12+ea[rm]))return 1;
         if(!check("MOV r16,m16",wordOp,len,regs,12+ea[rm]))return 2;
     }
     for(unsigned mod=1;mod<=2;++mod) {
         const BYTE modrm=BYTE((mod<<6)|0); // BX+SI+disp
         const std::array<BYTE,6> mov{0x8a,modrm,0x10,0,0,0};
-        if(!check("MOV disp",mov,mod==1?3:4,regs,8+7+4))return 3;
+        if(!check("MOV disp",mov,mod==1?3:4,regs,12+7+4))return 3;
     }
     if(!check("MOV register",{0x8b,0xc3,0,0,0,0},2,regs,2))return 4;
-    if(!check("MOV imm8 memory",{0xc6,0x07,0x42,0,0,0},3,regs,10+5))return 5;
+    if(!check("MOV imm8 memory",{0xc6,0x07,0x42,0,0,0},3,regs,14+5))return 5;
     if(!check("MOV imm16 memory",{0xc7,0x07,0x42,0x12,0,0},4,regs,14+5))return 6;
     if(!check("ADD memory,reg",{0x00,0x07,0,0,0,0},2,regs,24+5))return 7;
     if(!check("ADD reg,memory",{0x02,0x07,0,0,0,0},2,regs,13+5))return 8;
     if(!check("ADD memory16,reg16",{0x01,0x07,0,0,0,0},2,regs,24+5))return 9;
     if(!check("CMP memory,reg",{0x38,0x07,0,0,0,0},2,regs,24+5))return 10;
-    if(!check("segment override MOV",{0x26,0x8a,0x07,0,0,0},3,regs,2+8+5))return 11;
-    if(!check("MOV byte memory destination",{0x88,0x07,0,0,0,0},2,regs,9+5))return 12;
+    if(!check("segment override MOV",{0x26,0x8a,0x07,0,0,0},3,regs,2+12+5))return 11;
+    if(!check("MOV byte memory destination",{0x88,0x07,0,0,0,0},2,regs,13+5))return 12;
     if(!check("MOV word memory destination",{0x89,0x07,0,0,0,0},2,regs,13+5))return 13;
     if(!check("MOV segment memory destination",{0x8c,0x07,0,0,0,0},2,regs,13+5))return 14;
     if(!check("MOV segment memory source",{0x8e,0x07,0,0,0,0},2,regs,12+5))return 15;

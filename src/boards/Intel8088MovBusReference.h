@@ -4,8 +4,9 @@
 #include <vector>
 
 // Datasheet-supported MOV transfer validation, NOT microcode timestamps.
-// Intel iAPX 86/88 User's Manual Table 2-21: MOV reg,mem 8+EA,
-// MOV mem,reg 9+EA; each 8088 16-bit operand adds four clocks.
+// Intel 8088 opcode reference: MOV reg,mem 12+EA,
+// MOV mem,reg 13+EA, for either byte or word operands.
+// The published 8088 totals already account for bus width.
 // Validate bus width, direction, order and the independently known
 // minimum 4-T-state occupancy of each memory operand byte.
 class Intel8088MovBusReference {
@@ -33,7 +34,7 @@ public:
         const unsigned bytes=memory?(word?2u:1u):0u;
         r.expectedOperandBytes=bytes;
         r.expectedClocks=prefixClocks+(memory
-            ? (load?8u:9u)+eaClocks+(word?4u:0u):2u);
+            ? (load?12u:13u)+eaClocks:2u);
         if(actualClocks!=r.expectedClocks) {
             r.status=Status::ClockMismatch;
             return r;

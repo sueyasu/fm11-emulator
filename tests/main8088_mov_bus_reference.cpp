@@ -41,11 +41,11 @@ bool run(BYTE opcode,BYTE modrm,WORD bx,WORD ax,unsigned clocks,
 }
 }
 int main() {
-    // Intel reference: MOV r/m8,r8=9+EA, MOV r8,r/m8=8+EA
-    // and 8088 MOV word adds four clocks on the byte-wide bus.
-    if(!run(0x88,0x07,0x200,0x1234,14,1,Kind::MemoryWrite))return 1;
+    // Intel 8088: memory destination 13+EA, source 12+EA,
+    // for either byte or word form.
+    if(!run(0x88,0x07,0x200,0x1234,18,1,Kind::MemoryWrite))return 1;
     if(!run(0x89,0x07,0x200,0x1234,18,2,Kind::MemoryWrite))return 2;
-    if(!run(0x8a,0x07,0x200,0x1234,13,1,Kind::MemoryRead))return 3;
+    if(!run(0x8a,0x07,0x200,0x1234,17,1,Kind::MemoryRead))return 3;
     if(!run(0x8b,0x07,0x200,0x1234,17,2,Kind::MemoryRead))return 4;
 
     // Register-only MOV does not occupy the external data bus.
