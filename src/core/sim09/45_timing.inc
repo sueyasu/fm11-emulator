@@ -137,6 +137,35 @@ void CSim09::FinishInstructionTiming(WORD op)
     // Apply native-mode timing to the fully decoded opcode. The prefixed
     // page-2/page-3 tables must not overwrite these adjustments.
     if (enable6309_ && nativeTimingMode_) {
+        // Non-prefixed HD6309 native cases explicitly listed in the
+        // HD63B09EP Technical Reference Guide opcode tables.
+        switch (op) {
+        case 0x0d: case 0x7d:
+            lastInstructionCycles_ -= 2; // TST memory
+            break;
+        case 0x0e: case 0x7e:
+        case 0x19: case 0x1a: case 0x1d:
+        case 0x3d: case 0x6d:
+        case 0xbe: case 0xbf:
+            --lastInstructionCycles_;
+            break;
+        case 0x1e: lastInstructionCycles_ -= 3; break; // EXG
+        case 0x1f: lastInstructionCycles_ -= 2; break; // TFR
+        case 0x3f: lastInstructionCycles_ += 2; break; // SWI stacks W
+        default:
+            if (((op <= 0x0f) &&
+                 lastInstructionCycles_ == 6 &&
+                 op != 0x01 && op != 0x02 &&
+                 op != 0x05 && op != 0x0b) ||
+                ((op >= 0x40 && op <= 0x5f) &&
+                 lastInstructionCycles_ == 2) ||
+                ((op >= 0x70 && op <= 0x7f) &&
+                 lastInstructionCycles_ == 7 &&
+                 op != 0x71 && op != 0x72 &&
+                 op != 0x75 && op != 0x7b))
+                --lastInstructionCycles_;
+            break;
+        }
         // ADDR..CMPR (4 clocks) and PSHSW..PULUW (6 clocks) use
         // the same timing in both HD6309 execution modes.
         if (op == 0x103f || op == 0x113f) lastInstructionCycles_ += 2;
