@@ -721,3 +721,56 @@ ctest --test-dir build --output-on-failure
 bus-arbitration phase timing and cache invalidation/flush semantics;
 only after hardware-equivalent queue stall behavior is verified
 should the prefetch model affect reported instruction clocks.
+
+### Stage 1-E: four-byte instruction FIFO (opt-in functional model)
+
+A second, explicitly enabled mode in `Intel8088PrefetchTiming`
+now holds **actual instruction bytes** in a circular four-entry
+FIFO. The ordinary `fetch8()` implementation returns buffered
+bytes without reading guest RAM again, or reads the original
+bus on a queue miss. After an instruction, eligible refill slots
+are filled with *real* bytes from CS:IP through the normal
+8088 memory decoder. The refill is based on the existing
+best-effort per-instruction bus budget (instruction cycles less
+observed data/IO reservations). On CS:IP discontinuity and
+interrupt entry the old FIFO is flushed and refill restarts at
+the destination. All offset arithmetic wraps at 16 bits.
+
+Enable separately from passive shadow mode:
+
+```cpp
+auto& cpu=static_cast<Main8088Board::Core&>(board.cpu());
+cpu.setPrefetchByteQueueEnabled(true); // disabled by default
+cpu.executeOne();
+// cpu.prefetchTimingSnapshot() reports queue and bus counters
+```
+
+The new `main8088_prefetch_fifo` regression exercises
+preserved prefetched bytes after later memory modification,
+sequential consumption, branch-induced flush, target fetch,
+conformance reset, disabled-mode direct fetch, and V20 isolation.
+The existing `main8088_prefetch_shadow` and
+`main8088_prefetch_bus_budget` tests keep passive mode coverage.
+
+**This is not a cycle-accurate 8088 BIU**. Refill timing uses a
+per-instruction estimate, not bus-phase arbitration; demand fetches
+do not yet add queue-starvation clocks; the CPU still runs each
+instruction atomically and reports its existing timing. The
+instruction byte FIFO is optional, rather than enabled by default,
+to avoid changing running CP/M and firmware behavior before
+more complete validation. No external DMA or WAIT scheduling is
+integrated. Read side effects of speculative accesses to
+memory-mapped hardware need explicit review before enabling this
+mode in the normal machine.
+
+```sh
+cmake -S . -B build -DFM11_BUILD_TESTS=ON
+cmake --build build
+ctest --test-dir build -R 'main8088_(prefetch_fifo|prefetch_shadow|prefetch_bus_budget)' --output-on-failure
+ctest --test-dir build --output-on-failure
+```
+
+Next step: account for sequential and control-transfer fetch
+delays using BIU bus phases, including the exact relative
+timing of execution unit accesses, and only then make queue
+starvation affect `lastExecutionCycles()`.
