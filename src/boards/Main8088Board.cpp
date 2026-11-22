@@ -1019,10 +1019,10 @@ void Main8088Board::Core::executeOne()
             // The 8088 word variants include the additional byte-bus
             // transfers for each source/destination word.
             static constexpr unsigned normal[12]={
-                18,26,30,38,11,15,16,20,19,23,0,0
+                18,26,30,30,11,15,16,16,19,19,0,0
             };
             static constexpr unsigned perRepeat[12]={
-                17,25,30,38,10,14,13,17,15,19,0,0
+                17,25,30,30,10,14,13,13,15,19,0,0
             };
             unsigned index=0;
             switch(opcode) {
