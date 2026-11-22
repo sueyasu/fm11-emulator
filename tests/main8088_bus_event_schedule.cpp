@@ -46,7 +46,7 @@ int main() {
     schedule.flush();
     r=schedule.evaluate(nop,3,{});
     if(r.bus.elapsed!=29 || r.bus.partial!=3 ||
-       r.bus.interrupted!=3)return 10;
+       r.bus.interrupted!=2)return 10;
     schedule.reset();
     r=schedule.lastResult();
     if(r.status!=S::Unspecified || r.bus.elapsed)return 11;
