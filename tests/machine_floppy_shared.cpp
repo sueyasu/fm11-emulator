@@ -82,6 +82,9 @@ int main()
     if(main.readIo(0xfd55,value) || main.writeIo(0xfd55,0x7f))
         return 11;
     // Main-board USART is shared across the two main CPU cards.
+    // A real 8251A needs its mode instruction and Rx enable first.
+    bus.writeIo(0xfd07,0x4e); // async x16, 8N1
+    bus.writeIo(0xfd07,0x05); // RxEN and TxEN
     p6809->queueSerialInput(0x41);
     if((bus.readIo(0xfd07)&0x02)==0 || bus.readIo(0xfd06)!=0x41)return 12;
     if((p6809->readCpu(0xfd07)&0x02)!=0)return 13;

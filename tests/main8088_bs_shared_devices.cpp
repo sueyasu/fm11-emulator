@@ -91,6 +91,9 @@ int main() {
         std::fputs("FAIL: 8088 boot ROM display mailbox is not shared\n",stderr);
         return 8;
     }
+    // Initialize the shared 8251A before receiving from the host.
+    cpu->bus().writeIo(0xfd07,0x4e); // async x16, 8N1
+    cpu->bus().writeIo(0xfd07,0x05); // RxEN and TxEN
     machine.systemBoard().queueSerialInput('A');
     if((cpu->bus().readIo(0xfd07)&0x02)==0 ||
        cpu->bus().readIo(0xfd06)!='A') {

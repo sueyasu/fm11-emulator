@@ -25,7 +25,14 @@ def read_until(fd, token, deadline):
 with tempfile.TemporaryDirectory() as directory:
     path = os.path.join(directory, "serial.bin")
     with open(path, "wb") as out:
-        out.write(bytes([0x86, 0x58, 0xB7, 0xFD, 0x06, 0x20, 0xF9]))
+        # LDA #$4E / STA $FD07: 8251A async 8N1 mode.
+        # LDA #$01 / STA $FD07: enable transmitter.
+        # LDA #'X' / STA $FD06 / BRA back to LDA #'X'.
+        out.write(bytes([
+            0x86, 0x4E, 0xB7, 0xFD, 0x07,
+            0x86, 0x01, 0xB7, 0xFD, 0x07,
+            0x86, 0x58, 0xB7, 0xFD, 0x06, 0x20, 0xF9
+        ]))
     proc = subprocess.Popen([sys.argv[1], "--binary", path, "--load", "0x1000",
                              "--pc", "0x1000", "--instructions", "10000"],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE,

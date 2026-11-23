@@ -6,7 +6,8 @@ int main()
     b.reset();
     if (b.readCpu(0xfd07) != 0x84) return 1;
     // The serial interrupt is masked by FD02 until the guest enables it.
-    b.writeCpu(0xfd07, 0x4e); // Async x16, 8 data bits, no parity, 1 stop\n    b.writeCpu(0xfd07, 0x04); // Rx enable, Tx disabled
+    b.writeCpu(0xfd07, 0x4e); // Async x16, 8 data bits, no parity, 1 stop
+    b.writeCpu(0xfd07, 0x04); // Rx enable, Tx disabled
     b.queueSerialInput('O');
     b.queueSerialInput('K');
     if (b.irqPending()) return 2;
