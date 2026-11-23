@@ -30,3 +30,28 @@ tests use the mode word 4Eh before the Tx/Rx command.
 cmake --build build
 ctest --test-dir build -R 'usart8251_registers|main6809_serial_console|machine_config' --output-on-failure
 ```
+
+
+## Next stage: opt-in character-clock model
+
+`Usart8251::setBaudRate(baud)` switches from the legacy immediate PTY
+transport to clocked transfer. `advanceNanoseconds(ns)` advances two
+distinct transmit registers and a receive shift/holding register:
+
+- TxRDY clears when the CPU-facing byte holding register is full; TxEMPTY
+  clears while either holding or shift register contains a byte.
+- Received characters become RxRDY only after their full frame duration.
+- A second completed receive frame overwrites unread data and sets OE;
+  Command ER clears the error.
+- Frame duration uses the mode word's character size, parity, and stop bits.
+- The FM-11 Communication DIP table is represented by
+  `Fm11SerialClock::lookup(sw4to8)`. Undefined baud entries remain zero.
+
+**Compatibility:** `setBaudRate` is not invoked by the SDL/headless
+frontends yet, so existing OS/PTTY interaction remains byte-complete.
+Actual external baud clock wiring, receive pacing, multi-thread ownership,
+and host `termios` integration are separate follow-up steps.
+
+```sh
+ctest --test-dir build -R 'usart8251_clocked|usart8251_registers|main6809_serial_console' --output-on-failure
+```
