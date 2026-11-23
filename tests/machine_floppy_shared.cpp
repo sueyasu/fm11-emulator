@@ -83,8 +83,12 @@ int main()
         return 11;
     // Main-board USART is shared across the two main CPU cards.
     // A real 8251A needs its mode instruction and Rx enable first.
+    // This test checks shared data transfer and *receive-only* IRQ
+    // delivery. Suppress TxRDY IRQ: enabling TxEN also raises the USART
+    // IRQ4 line and would leave an unrelated edge pending in the 8259.
+    p6809->setTxIrqEnabled(false);
     bus.writeIo(0xfd07,0x4e); // async x16, 8N1
-    bus.writeIo(0xfd07,0x05); // RxEN and TxEN
+    bus.writeIo(0xfd07,0x05); // RxEN and TxEN (Tx IRQ masked)
     p6809->queueSerialInput(0x41);
     if((bus.readIo(0xfd07)&0x02)==0 || bus.readIo(0xfd06)!=0x41)return 12;
     if((p6809->readCpu(0xfd07)&0x02)!=0)return 13;
