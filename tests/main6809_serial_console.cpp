@@ -4,9 +4,9 @@ int main()
 {
     Main6809Board b(CpuType::MC6809);
     b.reset();
-    if (b.readCpu(0xfd07) != 0x81) return 1;
+    if (b.readCpu(0xfd07) != 0x84) return 1;
     // The serial interrupt is masked by FD02 until the guest enables it.
-    b.writeCpu(0xfd07, 0x04); // Rx enable, Tx disabled
+    b.writeCpu(0xfd07, 0x4e); // Async x16, 8 data bits, no parity, 1 stop\n    b.writeCpu(0xfd07, 0x04); // Rx enable, Tx disabled
     b.queueSerialInput('O');
     b.queueSerialInput('K');
     if (b.irqPending()) return 2;
@@ -39,6 +39,6 @@ int main()
     if (b.irqPending()) return 13;
     b.queueSerialInput('R');
     b.reset();
-    if (b.readCpu(0xfd07)!=0x81 || b.readCpu(0xfd06)!=0) return 14;
+    if (b.readCpu(0xfd07)!=0x84 || b.readCpu(0xfd06)!=0) return 14;
     return 0;
 }

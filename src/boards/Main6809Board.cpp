@@ -1052,9 +1052,8 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         refreshSerialIrq();
         break;
     case 0x07:
-        // The original USART accepts an instruction byte at this port.
-        // For headless console I/O retain the Tx/Rx enable bits; baud/format
-        // selection is handled by the frontend, not by guest CPU timing.
+        // 8251A mode / sync-character / command phases are handled by
+        // the shared USART. External baud DIP clock remains separate.
         usart_->writeCommand(value);
         refreshSerialIrq();
         break;
