@@ -67,3 +67,31 @@ byte directions without requiring a USB adapter.
 Physical modem input changes now re-publish 6809 serial IRQ state even
 without FD06/FD07 guest access. Queued physical host bytes are withheld
 while sampled CTS is low; the PTY backend remains byte-immediate.
+
+## Opt-in virtual character clock
+
+```ini
+[serial]
+serial0 = pty
+timing = clocked
+```
+
+`timing = immediate` is the default and retains the fast NitrOS-9 and
+CP/M-86 PTY console. `clocked` uses the asynchronous DIP SW4..8 baud
+table, then advances the shared 8251A once per *main CPU instruction*
+using the instruction cycle count and selected CPU clock. The same
+clock applies to 6809/6309, Z80, 8088, and V20. Fractional nanoseconds
+are retained across instructions; CPU clock changes reset the fractional
+converter. The serial clock is independent of the MC6840 PTM worker,
+avoiding double advancement with real-time PTM scheduling.
+
+`clocked` supports `pty` and `none` for explicit timing/diagnostics;
+a physical TTY uses host UART framing and rejects `clocked` to avoid
+double pacing. Undefined DIP baud or synchronous DIP mode also fail
+explicitly. The 8251A's asynchronous mode word still determines the
+character length and stop/parity overhead; the external DIP determines
+the line baud. Host PTY bulk input is not hardware-clock synchronous,
+so clocked mode may intentionally report receive overrun.
+
+A separate deterministic test `machine_serial_timing` verifies both
+6809 and 8088 instruction-time progression and serial IRQ publication.

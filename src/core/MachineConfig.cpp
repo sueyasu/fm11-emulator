@@ -163,7 +163,12 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                 else if(key=="HDD")cfg.bootHdd=boolean(value);
                 else handled=false;
             } else if(section=="serial") {
-                if(key!="serial0")handled=false;
+                if(key=="timing") {
+                    if(value=="immediate")cfg.serialClocked=false;
+                    else if(value=="clocked")cfg.serialClocked=true;
+                    else throw std::invalid_argument(
+                        "serial.timing must be immediate or clocked");
+                } else if(key!="serial0")handled=false;
                 else if(value=="pty" || value=="none" ||
                         (value.size()>5 && value.compare(0,5,"/dev/")==0))
                     cfg.serial0=value;

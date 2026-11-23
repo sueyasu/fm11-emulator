@@ -25,6 +25,8 @@ ram_kib = 1024
 # Shared 8251A FD06/FD07: pty (default), none or a physical device.
 [serial]
 serial0 = pty
+# timing = clocked   # opt-in virtual character timing using DIP baud
+# timing = immediate # default, preserves OS/PTTY terminal responsiveness
 # serial0 = /dev/ttyUSB0
 # serial0 = none
 

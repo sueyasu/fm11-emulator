@@ -360,6 +360,8 @@ void Machine::reset()
     for (auto& board : boards_)
         board->reset();
     lastExecutionCycles_=0;
+    serialNanosecondFraction_=0;
+    serialFractionHz_=0;
     deterministicDisplay_.reset();
     synchronizeFd05Selection();
     if(wasRealtime)startRealtimePtm();
@@ -369,12 +371,51 @@ void Machine::reset()
 void Machine::advanceTimeNanoseconds(std::uint64_t nanoseconds)
 {
     mainBoard_->advanceTimeNanoseconds(nanoseconds);
+    mainBoard_->usartDevice()->advanceNanoseconds(nanoseconds);
+    publishSerialIrq();
     if(!displayCpuThreadEnabled())deterministicDisplay_.advanceTime(nanoseconds);
     // The 6809 IRQ aggregator is still implemented in its CPU adapter.
     // Synchronize it with the main-board PTM after independent time advance.
     for(auto& board:boards_)
         if(auto* cpu6809=dynamic_cast<Main6809Board*>(board.get()))
             cpu6809->syncPtmIrq();
+}
+
+void Machine::setSerialClockBaud(unsigned baud)
+{
+    // The UART is a shared system-board device; resetting the machine
+    // preserves its externally selected baud rate.
+    mainBoard_->usartDevice()->setBaudRate(baud);
+    serialNanosecondFraction_=0;
+    serialFractionHz_=0;
+    publishSerialIrq();
+}
+
+void Machine::publishSerialIrq()
+{
+    for(auto* board:main6809Boards_)
+        board->syncSerialIrq();
+    // The optional 8088 PIC samples a new rising IRQ4 edge before the
+    // next instruction. Do not sample it a second time here.
+}
+
+void Machine::advanceSerialCpuCycles(std::uint64_t cycles,std::uint64_t hz)
+{
+    if(!mainBoard_->usartDevice()->baudRate() || !cycles || !hz)return;
+    // Clock conversion is independent from the PTM worker and display
+    // scheduler. Carry sub-nanosecond remainders to avoid drift.
+    if(serialFractionHz_!=hz) {
+        serialNanosecondFraction_=0;
+        serialFractionHz_=hz;
+    }
+    constexpr std::uint64_t billion=1000000000ULL;
+    const auto whole=cycles/hz;
+    const auto rem=cycles%hz;
+    const auto numerator=rem*billion+serialNanosecondFraction_;
+    const auto nanos=whole*billion+numerator/hz;
+    serialNanosecondFraction_=numerator%hz;
+    mainBoard_->usartDevice()->advanceNanoseconds(nanos);
+    publishSerialIrq();
 }
 
 void Machine::set8088ClockHz(std::uint64_t hz)
@@ -420,6 +461,7 @@ void Machine::executeOne(bool ptmIrqSyncedBefore)
             const auto hz=execution.main6809->cpuClockHz();
             if(!realtimePtmEnabled())
                 mainBoard_->advanceCpuCycles(lastExecutionCycles_,hz);
+            advanceSerialCpuCycles(lastExecutionCycles_,hz);
             if(!displayCpuThreadEnabled())
                 deterministicDisplay_.advanceCpuCycles(lastExecutionCycles_,hz);
             // SDL samples the real-time PTM immediately before the
@@ -437,6 +479,7 @@ void Machine::executeOne(bool ptmIrqSyncedBefore)
         if(lastExecutionCycles_ && hz) {
             if(!realtimePtmEnabled())
                 mainBoard_->advanceCpuCycles(lastExecutionCycles_,hz);
+            advanceSerialCpuCycles(lastExecutionCycles_,hz);
             if(!displayCpuThreadEnabled())
                 deterministicDisplay_.advanceCpuCycles(lastExecutionCycles_,hz);
             for(auto* cpu6809:main6809Boards_)

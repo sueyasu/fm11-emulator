@@ -304,6 +304,19 @@ int main(int argc,char** argv) {
         machine.setDisplayCpuClockHz(testPattern?0:config.displayClockHz);
         machine.setDisplayCpuSpeedMultiplier(speed);
         machine.reset();
+        if(config.serialClocked) {
+            if(config.serial0!="pty" && config.serial0!="none")
+                throw std::invalid_argument(
+                    "serial.timing=clocked cannot be used with physical TTY");
+            if(config.dipSerialMode!=MachineConfig::SerialMode::Async)
+                throw std::invalid_argument(
+                    "serial.timing=clocked requires DIP async mode");
+            const auto baud=Fm11SerialClock::lookup(
+                config.dipSerialBaudSwitches).asyncBaud;
+            if(!baud)throw std::invalid_argument(
+                "serial.timing=clocked requires a defined DIP baud rate");
+            machine.setSerialClockBaud(baud);
+        }
         Sdl sdl;
         Window ui;
         auto createWindow=[&](Uint32 flags) {

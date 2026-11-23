@@ -154,6 +154,19 @@ int main(int argc, char** argv) {
         rom[0xfff]=static_cast<BYTE>(pc);
         board.loadBootRom(rom);
         machine.reset();
+        if(serialConfig.serialClocked) {
+            if(serialConfig.serial0!="pty" && serialConfig.serial0!="none")
+                throw std::invalid_argument(
+                    "serial.timing=clocked cannot be used with physical TTY");
+            if(serialConfig.dipSerialMode!=MachineConfig::SerialMode::Async)
+                throw std::invalid_argument(
+                    "serial.timing=clocked requires DIP async mode");
+            const auto baud=Fm11SerialClock::lookup(
+                serialConfig.dipSerialBaudSwitches).asyncBaud;
+            if(!baud)throw std::invalid_argument(
+                "serial.timing=clocked requires a defined DIP baud rate");
+            machine.setSerialClockBaud(baud);
+        }
         board.setCpuClockHz(hz);
         board.setTxIrqEnabled(!disableTxIrq);
         if (!floppy.empty()) {

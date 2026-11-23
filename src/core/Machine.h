@@ -167,6 +167,11 @@ public:
     // Advance the common main-board timebase regardless of active CPU.
     // Do not also advance the same interval through board.advanceCpuCycles().
     void advanceTimeNanoseconds(std::uint64_t nanoseconds);
+    // Explicit serial character-clock mode; zero retains immediate PTY I/O.
+    // Driven once per executed main CPU instruction, independently of PTM.
+    void setSerialClockBaud(unsigned baud);
+    unsigned serialClockBaud() const {return mainBoard_->usartDevice()->baudRate();}
+
 
 
 private:
@@ -182,6 +187,9 @@ private:
     void selectActiveBoard(std::size_t index);
     void synchronizeFd05Selection();
     void updateZ80MasterMapping();
+    void advanceSerialCpuCycles(std::uint64_t cycles,std::uint64_t hz);
+    void publishSerialIrq();
+
     bool fd05SelectionEnabled_=false;
     bool fd05WiringExplicit_=false;
     std::shared_ptr<MainBoard> mainBoard_=std::make_shared<MainBoard>();
@@ -196,6 +204,8 @@ private:
     std::size_t primaryBoardIndex_ = 0, optionalBoardIndex_ = 0;
     bool hasPrimaryBoard_ = false, hasOptionalBoard_ = false;
     std::uint64_t lastExecutionCycles_ = 0;
+    std::uint64_t serialNanosecondFraction_=0;
+    std::uint64_t serialFractionHz_=0;
     std::uint64_t clock8088Hz_ = 0;
     std::uint64_t clockZ80Hz_ = 4000000;
     std::uint64_t displayCpuClockHz_ = 0;
