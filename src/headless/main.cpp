@@ -1,5 +1,7 @@
 #include "Main6809Board.h"
 #include "Machine.h"
+#include "MachineConfig.h"
+#include "SerialBackend.h"
 
 #include <algorithm>
 #include <array>
@@ -92,7 +94,7 @@ void loadFloppyIpl(Main6809Board& board) {
 void usage() {
     std::cerr << "usage: fm11-headless (--binary FILE --load ADDR --pc ADDR"
                  " | --boottrack FILE --level 1|2 | --floppy RAW-2D|D88)"
-                 " [--floppy RAW-2D|D88] [--cpu 6809|6309] [--clock HZ] [--no-tx-irq] [--idle-log FILE] [--instructions COUNT]\n"
+                 " [--config FILE] [--floppy RAW-2D|D88] [--cpu 6809|6309] [--clock HZ] [--no-tx-irq] [--idle-log FILE] [--instructions COUNT]\n"
                  "  --floppy alone boots its on-disk IPL (T0/H0/S1-S2 at $0400).\n"
                  "  --boottrack bypasses the IPL and requires --level.\n"
                  "  Monitor on stdin; guest serial is on a separate /dev/pts/N.\n\n";
@@ -101,7 +103,7 @@ void usage() {
 
 int main(int argc, char** argv) {
     try {
-        std::string file, boottrack, floppy, cpu = "6809", idleLogPath;
+        std::string file, boottrack, floppy, cpu = "6809", idleLogPath, configPath;
         unsigned long long load = 0, pc = 0, hz = 2000000, limit = 0;
         bool hasLoad = false, hasPc = false, disableTxIrq = false;
         int level = 0;
@@ -124,6 +126,7 @@ int main(int argc, char** argv) {
             else if (a=="--pc") {pc=number(v);hasPc=true;}
             else if (a=="--clock") hz=number(v);
             else if (a=="--idle-log") idleLogPath=v;
+            else if (a=="--config") configPath=v;
             else if (a=="--instructions") limit=number(v);
             else {usage(); return 2;}
         }
@@ -139,6 +142,7 @@ int main(int argc, char** argv) {
         const unsigned long long bootSize = level==1 ? 17*256 : 21*256;
         if (bootMode) {load=bootBase; pc=bootBase+2;}
         if (floppyBootMode) {pc=0x0400;}
+        const auto serialConfig=loadMachineConfig(configPath);
         Machine machine;
         auto cpuBoard=std::make_unique<Main6809Board>(
             cpu=="6809" ? CpuType::MC6809 : CpuType::HD6309);
@@ -168,26 +172,13 @@ int main(int argc, char** argv) {
         if(floppyBootMode)loadFloppyIpl(board);
         else loadBinary(board,bootMode ? boottrack : file,load,
                         bootMode ? bootSize : 0);
-        // The original terminal is the monitor. The guest UART owns a PTY.
-        const int master=posix_openpt(O_RDWR|O_NOCTTY|O_NONBLOCK);
-        if(master<0 || grantpt(master)!=0 || unlockpt(master)!=0)
-            throw std::runtime_error("cannot create serial PTY");
-        const char* slave=ptsname(master);
-        if(!slave)throw std::runtime_error("cannot resolve serial PTY");
-        const std::string slavePath=slave;
-        // Configure the slave to raw mode even before a terminal connects.
-        const int slaveFd=open(slavePath.c_str(),O_RDWR|O_NOCTTY);
-        if(slaveFd<0)throw std::runtime_error("cannot open serial slave");
-        termios uart{};
-        if(tcgetattr(slaveFd,&uart)==0) {
-            cfmakeraw(&uart);
-            tcsetattr(slaveFd,TCSANOW,&uart);
-        }
-        // Retain an open slave to prevent POLLHUP when no terminal is attached.
+        // The monitor stays on stdin. The 8251A's host endpoint is separate.
+        SerialBackend serial(serialConfig.serial0,serialConfig.dipSerialBaudSwitches);
         std::signal(SIGINT,requestStop);
         std::signal(SIGTERM,requestStop);
-        std::cout << "FM-11 headless monitor\nSerial: " << slavePath
-                  << "\nCPU halted. Type help for commands.\n" << std::flush;
+        std::cout << "FM-11 headless monitor\nSerial: "
+                  <<(serial.enabled()?serial.label():std::string("none"))
+                  <<"\nCPU halted. Type help for commands.\n"<<std::flush;
         bool running=false, quitting=false, inputOpen=true;
         std::ofstream idleLog;
         if (!idleLogPath.empty()) {
@@ -207,7 +198,6 @@ int main(int argc, char** argv) {
         auto previousWait=CSim09::WaitState::Running;
         unsigned long long count=0;
         std::string line;
-        std::vector<BYTE> pendingTx;
         auto hex=[](unsigned v,int width) {
             std::ostringstream o;
             o << std::uppercase << std::hex << std::setw(width)
@@ -229,14 +219,14 @@ int main(int argc, char** argv) {
         };
         auto prompt=[&]() { std::cout << "fm11> " << std::flush; };
         auto drain=[&]() {
-            BYTE c;
-            while(board.takeSerialOutput(c))pendingTx.push_back(c);
-            if(!pendingTx.empty()) {
-                const ssize_t n=write(master,pendingTx.data(),pendingTx.size());
-                if(n>0)pendingTx.erase(pendingTx.begin(),pendingTx.begin()+n);
-                else if(n<0 && errno!=EAGAIN && errno!=EWOULDBLOCK && errno!=EIO)
-                    throw std::runtime_error("PTY write failed");
-            }
+            serial.synchronize(*machine.systemBoard().usartDevice());
+            serial.service(
+                [&](unsigned char& ch) {
+                    BYTE value=0;
+                    if(!board.takeSerialOutput(value))return false;
+                    ch=value;return true;
+                },
+                [&](unsigned char ch){board.queueSerialInput(ch);});
         };
         auto flushFloppy=[&]() {
             if(floppy.empty() || !board.floppyDirty())return;
@@ -254,7 +244,6 @@ int main(int argc, char** argv) {
             board.setCpuClockHz(hz);
             if(floppyBootMode)loadFloppyIpl(board);
             else loadBinary(board,bootMode ? boottrack : file,load,bootMode ? bootSize : 0);
-            pendingTx.clear();
             count=0;
             previousWait=CSim09::WaitState::Running;
         };
@@ -307,8 +296,7 @@ int main(int argc, char** argv) {
         };
         prompt();
         while(!stopping && !quitting) {
-            pollfd fds[2]={{inputOpen?STDIN_FILENO:-1,POLLIN,0},
-                           {master,POLLIN,0}};
+            pollfd fds[1]={{inputOpen?STDIN_FILENO:-1,POLLIN,0}};
             // Refresh CPU IRQ latches before deciding whether SYNC/CWAI can
             // sleep. The PTM worker updates only the shared board's IRQ level.
             if(running)board.syncPtmIrq();
@@ -327,7 +315,7 @@ int main(int argc, char** argv) {
                         std::max<std::uint64_t>(1,(next+999999)/1000000)));
             }
             const auto waitStart=std::chrono::steady_clock::now();
-            const int ready=poll(fds,2,timeout);
+            const int ready=poll(fds,1,timeout);
             if (sleeping) {
                 const auto elapsed=std::chrono::duration_cast<std::chrono::nanoseconds>(
                     std::chrono::steady_clock::now()-waitStart).count();
@@ -354,11 +342,7 @@ int main(int argc, char** argv) {
                     } else if(line.size()<1024)line+=data[i];
                 }
             }
-            if(ready>0 && (fds[1].revents&POLLIN)) {
-                BYTE data[256];
-                const ssize_t n=read(master,data,sizeof(data));
-                if(n>0)for(ssize_t i=0;i<n;++i)board.queueSerialInput(data[i]);
-            }
+            drain(); // nonblocking host serial input/output
             if(running) {
                 for(unsigned i=0;i<256 && running && !stopping;++i) {
                     if(limit && count>=limit) {
@@ -404,8 +388,6 @@ int main(int argc, char** argv) {
             }
         }
         machine.stopRealtimePtm();
-        close(slaveFd);
-        close(master);
         return 0;
     } catch (const std::exception& ex) {
         std::cerr << "fm11-headless: " << ex.what() << '\n';

@@ -77,7 +77,7 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                    section!="display_cpu" && section!="floppy_2d" &&
                    section!="floppy_2hd" && section!="hdd" &&
                    section!="boot" && section!="DIPSW" &&
-                   section!="display" && section!="memory")
+                   section!="display" && section!="memory" && section!="serial")
                     throw std::invalid_argument("unknown section ["+section+"]");
                 continue;
             }
@@ -162,6 +162,13 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                 else if(key=="2HD_FDD")cfg.boot2hdFdd=boolean(value);
                 else if(key=="HDD")cfg.bootHdd=boolean(value);
                 else handled=false;
+            } else if(section=="serial") {
+                if(key!="serial0")handled=false;
+                else if(value=="pty" || value=="none" ||
+                        (value.size()>5 && value.compare(0,5,"/dev/")==0))
+                    cfg.serial0=value;
+                else throw std::invalid_argument(
+                    "serial.serial0 must be pty, none or an absolute /dev/ path");
             } else if(section=="hdd") {
                 if(key=="image")cfg.hddImage=value;
                 else handled=false;

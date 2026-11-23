@@ -6,6 +6,7 @@
 #include "MainZ80Board.h"
 #include "Main8088Board.h"
 #include "MachineConfig.h"
+#include "SerialBackend.h"
 #include "DisplayBitmap.h"
 #include "RomFiles.h"
 #include "HostImageSync.h"
@@ -345,47 +346,26 @@ int main(int argc,char** argv) {
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"0");
         ui.setMode(high);
         std::cerr<<"FM-11 renderer: "<<(ui.glRenderer?"OpenGL 3.3":"software")<<"\n";
-        // Standalone raw PTY for guest serial, independent of SDL input.
-        int serialMaster=-1,serialSlave=-1;
+        // CPU worker alone owns the host endpoint and 8251A queues.
+        std::unique_ptr<SerialBackend> serial;
         if(mainBoard || main8088Enabled) {
-            serialMaster=posix_openpt(O_RDWR|O_NOCTTY|O_NONBLOCK);
-            if(serialMaster<0 || grantpt(serialMaster)!=0 || unlockpt(serialMaster)!=0)
-                throw std::runtime_error("cannot create serial PTY");
-            const char* name=ptsname(serialMaster);
-            if(!name)throw std::runtime_error("cannot resolve serial PTY");
-            serialSlave=open(name,O_RDWR|O_NOCTTY);
-            if(serialSlave<0)throw std::runtime_error("cannot open serial PTY slave");
-            termios mode{};
-            if(tcgetattr(serialSlave,&mode)==0) {
-                cfmakeraw(&mode);
-                tcsetattr(serialSlave,TCSANOW,&mode);
-            }
-            std::cout<<"Serial PTY: "<<name<<"\n"<<std::flush;
+            serial=std::make_unique<SerialBackend>(
+                config.serial0,config.dipSerialBaudSwitches);
+            if(serial->enabled())
+                std::cout<<(serial->physical()?"Serial device: ":"Serial PTY: ")
+                         <<serial->label()<<"\n"<<std::flush;
         }
-        std::vector<BYTE> serialPending;
-        // The CPU worker alone owns guest serial queues and the PTY.
-        // Keep a separate mutex only for UI diagnostics/CPU state reads.
         std::mutex cpuMutex;
         auto serviceSerial=[&]() {
-            if(serialMaster<0)return;
-            BYTE ch=0;
-            while(machine.systemBoard().takeSerialOutput(ch))serialPending.push_back(ch);
-            if(!serialPending.empty()) {
-                const ssize_t n=write(serialMaster,serialPending.data(),serialPending.size());
-                if(n>0)serialPending.erase(serialPending.begin(),serialPending.begin()+n);
-                else if(n<0 && errno!=EAGAIN && errno!=EWOULDBLOCK && errno!=EINTR && errno!=EIO)
-                    throw std::runtime_error("serial PTY write failed");
-            }
-            BYTE input[256];
-            for(;;) {
-                const ssize_t n=read(serialMaster,input,sizeof(input));
-                if(n>0) {
-                    for(ssize_t i=0;i<n;++i)machine.systemBoard().queueSerialInput(input[i]);
-                } else if(n<0 && errno==EINTR)continue;
-                else if(n<0 && errno!=EAGAIN && errno!=EWOULDBLOCK && errno!=EIO)
-                    throw std::runtime_error("serial PTY read failed");
-                else break;
-            }
+            if(!serial)return;
+            serial->synchronize(*machine.systemBoard().usartDevice());
+            serial->service(
+                [&](unsigned char& ch) {
+                    BYTE value=0;
+                    if(!machine.systemBoard().takeSerialOutput(value))return false;
+                    ch=value;return true;
+                },
+                [&](unsigned char ch){machine.systemBoard().queueSerialInput(ch);});
         };
         // Trace real shared-RAM bus transactions, not guessed values from
         // periodic snapshots. Limit completed requests to keep logs bounded.
