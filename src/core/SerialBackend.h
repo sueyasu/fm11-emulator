@@ -66,7 +66,8 @@ public:
     static bool stopBitsRepresentable(unsigned mode) {
         const unsigned stops=(mode>>6)&3;
         const unsigned bits=5+((mode>>2)&3);
-        return stops==1 || stops==3 || (stops==2 && bits==5);
+        return stops==1 || (stops==2 && bits==5) ||
+               (stops==3 && bits!=5);
     }
     // Called by the CPU owner immediately before servicing host I/O.
     // TIOCMGET supplies live CTS/DSR/CD levels. TIOCMSET changes only the

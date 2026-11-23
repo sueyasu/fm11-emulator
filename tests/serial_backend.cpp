@@ -44,6 +44,7 @@ int main() {
        !SerialBackend::stopBitsRepresentable(0xce) ||
        !SerialBackend::stopBitsRepresentable(0x82) || // 5-bit 1.5 stop
        SerialBackend::stopBitsRepresentable(0x8e) || // 8-bit 1.5 stop
+       SerialBackend::stopBitsRepresentable(0xc2) || // 5-bit 2 stops
        SerialBackend::stopBitsRepresentable(0x0e))return 9;
 
     // Exercise the /dev/... branch against a PTY slave (no USB device).
