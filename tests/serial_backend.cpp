@@ -19,10 +19,19 @@ int main() {
     }
     if(MachineConfig{}.serial0!="pty")return 3;
     SerialBackend none("none");
+    Usart8251 virtualUart;
+    virtualUart.reset();
+    virtualUart.writeCommand(0x4e);
+    virtualUart.writeCommand(0x22);
+    none.synchronize(virtualUart);
+    if(!virtualUart.cts() || !virtualUart.dsr() || !virtualUart.dtr() ||
+       !virtualUart.rts())return 7;
     if(none.enabled())return 4;
     SerialBackend pty("pty");
     if(!pty.enabled() || pty.physical() ||
        pty.label().compare(0,9,"/dev/pts/")!=0)return 5;
+    pty.synchronize(virtualUart);
+    if(!virtualUart.cts() || !virtualUart.dsr())return 8;
     Usart8251 uart;
     uart.reset();uart.writeCommand(0x4e);uart.writeCommand(0x05);
     uart.writeData('A');uart.writeData('B');

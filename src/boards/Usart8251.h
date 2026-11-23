@@ -126,6 +126,16 @@ public:
     BYTE sync1() const {return sync1_;}
     BYTE sync2() const {return sync2_;}
     bool dcd() const {return dcd_;}
+    bool cts() const {return cts_;}
+    bool dsr() const {return dsr_;}
+    // Command bits 1 (DTR) and 5 (RTS) are output levels, unlike the
+    // CTS/DSR inputs. They become inactive on an internal reset.
+    bool dtr() const {
+        return phase_==ControlPhase::Command && (command_&0x02)!=0;
+    }
+    bool rts() const {
+        return phase_==ControlPhase::Command && (command_&0x20)!=0;
+    }
     void signalReceiveError(bool parity,bool overrun,bool framing) {
         if(parity)errors_|=0x08;
         if(overrun)errors_|=0x10;

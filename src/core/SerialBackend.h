@@ -11,6 +11,7 @@
 #include <vector>
 #include <cstdlib>
 #include <sys/stat.h>
+#include <sys/ioctl.h>
 
 // Host-side serial transport, owned by the main CPU worker. It deliberately
 // does not advance virtual 8251A bit clocks: Linux UART hardware handles
@@ -60,10 +61,15 @@ public:
     const std::string& label() const {return label_;}
     bool enabled() const {return fd_>=0;}
     bool physical() const {return endpoint_!="pty" && endpoint_!="none";}
-    void synchronize(const Usart8251& uart) {
-        if(!physical() || uart.phase()!=Usart8251::ControlPhase::Command)return;
-        if(static_cast<int>(uart.mode())==lastMode_)return;
-        configure(uart.mode());
+    // Called by the CPU owner immediately before servicing host I/O.
+    // TIOCMGET supplies live CTS/DSR/CD levels. TIOCMSET changes only the
+    // two output bits; hardware input pins must never be overwritten.
+    void synchronize(Usart8251& uart) {
+        if(!physical())return;
+        if(uart.phase()==Usart8251::ControlPhase::Command &&
+           static_cast<int>(uart.mode())!=lastMode_)
+            configure(uart.mode());
+        synchronizeModem(uart);
     }
     template<class Take,class Inject>
     void service(Take take,Inject inject) {
@@ -89,6 +95,43 @@ public:
         }
     }
 private:
+    static bool unsupportedModemIoctl(int code) {
+        return code==ENOTTY || code==EINVAL || code==ENOSYS ||
+               code==EOPNOTSUPP;
+    }
+    void synchronizeModem(Usart8251& uart) {
+        if(!modemSupported_)return;
+        int pins=0;
+        if(ioctl(fd_,TIOCMGET,&pins)!=0) {
+            if(unsupportedModemIoctl(errno)) {
+                modemSupported_=false;
+                // Leave CTS/DSR asserted as the existing virtual default
+                // for adapters without modem-pin support.
+                uart.setModemInputs(true,true,true);
+                return;
+            }
+            throw std::runtime_error(error("cannot query serial modem lines"));
+        }
+        // Read the physical inputs before making any changes to DTR/RTS.
+        uart.setModemInputs((pins&TIOCM_CTS)!=0,
+                            (pins&TIOCM_DSR)!=0,
+                            (pins&TIOCM_CAR)!=0);
+        const int desired=(uart.dtr()?TIOCM_DTR:0) |
+                          (uart.rts()?TIOCM_RTS:0);
+        const int existing=pins&(TIOCM_DTR|TIOCM_RTS);
+        if(desired==existing)return;
+        // TIOCMBIS/TIOCMBIC preserve unrelated modem outputs and inputs.
+        int setBits=desired&~existing;
+        int clearBits=existing&~desired;
+        if(setBits && ioctl(fd_,TIOCMBIS,&setBits)!=0) {
+            if(unsupportedModemIoctl(errno)) {modemSupported_=false;return;}
+            throw std::runtime_error(error("cannot assert DTR/RTS"));
+        }
+        if(clearBits && ioctl(fd_,TIOCMBIC,&clearBits)!=0) {
+            if(unsupportedModemIoctl(errno)) {modemSupported_=false;return;}
+            throw std::runtime_error(error("cannot deassert DTR/RTS"));
+        }
+    }
     std::string error(const std::string& what) const {
         return what+": "+std::strerror(errno);
     }
@@ -132,6 +175,7 @@ private:
     unsigned baud_=0;
     int fd_=-1,peer_=-1,lastMode_=-1;
     bool savedTermios_=false;
+    bool modemSupported_=true;
     termios original_{};
     std::vector<unsigned char> pending_;
 };

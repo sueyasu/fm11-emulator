@@ -11,6 +11,7 @@ int main() {
     if(u.mode()!=0x4e || u.phase()!=Usart8251::ControlPhase::Command ||
        (u.status()&0x01))return 2;
     u.writeCommand(0x27); // TxEN, RxEN, DTR, RTS
+    if(!u.dtr() || !u.rts() || !u.cts() || !u.dsr() || !u.dcd())return 24;
     if(!u.txReady() || !u.irqRequest() || (u.status()&0x87)!=0x85)return 3;
     u.writeData('A');
     if((u.status()&0x04)!=0)return 4;
@@ -24,9 +25,11 @@ int main() {
     u.receive('Z');
     if(!u.irqRequest() || u.readData()!='Z' || u.irqRequest())return 8;
     u.setTxIrqEnabled(true);
-    u.setModemInputs(false,false);
+    u.setModemInputs(false,false,false);
+    if(u.cts() || u.dsr() || u.dcd() || !u.dtr() || !u.rts())return 25;
     if(u.txReady() || u.irqRequest() || (u.status()&0x80))return 9;
     u.setModemInputs(true,true);
+    if(!u.cts() || !u.dsr() || !u.dcd())return 26;
     if(!u.txReady() || !u.irqRequest())return 10;
     u.signalReceiveError(true,true,true);
     if((u.status()&0x38)!=0x38)return 11;
@@ -39,8 +42,16 @@ int main() {
     u.writeCommand(0x27);
     if(!u.txReady())return 15;
     u.writeCommand(0x40); // internal reset
+    if(u.dtr() || u.rts())return 27;
     if(u.phase()!=Usart8251::ControlPhase::Mode || u.irqRequest() ||
        (u.status()&0x87)!=0x84)return 16;
+    // RTS and DTR follow the command independently of TxEN/RxEN.
+    u.writeCommand(0x4e);
+    u.writeCommand(0x22); // DTR and RTS only
+    if(!u.dtr() || !u.rts() || u.txReady() || u.rxReady())return 28;
+    u.writeCommand(0x00);
+    if(u.dtr() || u.rts())return 29;
+    u.writeCommand(0x40); // return to mode phase
     // Synchronous mode with two sync characters.
     u.writeCommand(0x00);
     if(u.phase()!=Usart8251::ControlPhase::Sync1)return 17;

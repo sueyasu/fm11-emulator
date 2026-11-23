@@ -24,7 +24,7 @@ optional `Usart8251::setBaudRate()` model is **not** also enabled for
 physical TTY. PTY keeps the proven immediate-byte behavior.
 
 The asynchronous guest's first mode word updates the live physical TTY.
-Physical CTS/DSR/DCD modem-signal feedback, synchronous USART modes,
+Synchronous USART modes,
 and 1.5-stop-bit hardware formats are not yet implemented. Headless
 supports `--config FILE` for the same `[serial]` configuration; its
 monitor stays on stdin.
@@ -33,3 +33,23 @@ monitor stays on stdin.
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
+
+## Physical RS-232C modem control
+
+For physical TTYs only, `SerialBackend::synchronize()` now samples
+`TIOCMGET` on each host I/O service. It passes hardware CTS/DSR/DCD
+into the shared 8251A; CTS gates TxRDY and the resulting transmit IRQ,
+and DSR appears in the USART status bit 7. The guest's command bit 1
+(DTR) and bit 5 (RTS) are mapped to Linux `TIOCMBIS` / `TIOCMBIC`
+without changing other output lines. An internal USART reset releases
+both DTR and RTS at the next host service.
+
+Devices that report `ENOTTY`, `EINVAL`, `ENOSYS`, or `EOPNOTSUPP`
+for modem ioctls retain the preexisting virtual asserted inputs, allowing
+three-wire USB UARTs to operate without hardware modem pins. Unexpected
+I/O failures remain explicit errors. PTY and `none` do not issue modem
+ioctls or change the virtual line levels.
+
+Modem pins on real UARTs are sampled at the CPU worker's service cadence,
+not at a simulated per-bit clock edge. The direction of signal mapping
+is physical host-side DTR/RTS **outputs**, CTS/DSR/DCD **inputs**.
