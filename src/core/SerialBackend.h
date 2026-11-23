@@ -61,6 +61,13 @@ public:
     const std::string& label() const {return label_;}
     bool enabled() const {return fd_>=0;}
     bool physical() const {return endpoint_!="pty" && endpoint_!="none";}
+    // POSIX CS5+CSTOPB means 1.5 stop bits, CS6..CS8+CSTOPB
+    // means 2 stop bits. The 8251A encodes 1, 1.5, 2 as 01/10/11.
+    static bool stopBitsRepresentable(unsigned mode) {
+        const unsigned stops=(mode>>6)&3;
+        const unsigned bits=5+((mode>>2)&3);
+        return stops==1 || stops==3 || (stops==2 && bits==5);
+    }
     // Called by the CPU owner immediately before servicing host I/O.
     // TIOCMGET supplies live CTS/DSR/CD levels. TIOCMSET changes only the
     // two output bits; hardware input pins must never be overwritten.
@@ -76,7 +83,9 @@ public:
         if(fd_<0)return;
         unsigned char c=0;
         while(take(c))pending_.push_back(c);
-        if(!pending_.empty()) {
+        // Hold queued physical UART bytes while CTS is deasserted.
+        // The hardware driver remains responsible for bit timing.
+        if(!pending_.empty() && (!physical() || ctsAllowed_)) {
             const auto n=write(fd_,pending_.data(),pending_.size());
             if(n>0)pending_.erase(pending_.begin(),pending_.begin()+n);
             else if(n<0 && errno!=EAGAIN && errno!=EWOULDBLOCK && errno!=EINTR &&
@@ -107,13 +116,15 @@ private:
                 modemSupported_=false;
                 // Leave CTS/DSR asserted as the existing virtual default
                 // for adapters without modem-pin support.
+                ctsAllowed_=true;
                 uart.setModemInputs(true,true,true);
                 return;
             }
             throw std::runtime_error(error("cannot query serial modem lines"));
         }
         // Read the physical inputs before making any changes to DTR/RTS.
-        uart.setModemInputs((pins&TIOCM_CTS)!=0,
+        ctsAllowed_=(pins&TIOCM_CTS)!=0;
+        uart.setModemInputs(ctsAllowed_,
                             (pins&TIOCM_DSR)!=0,
                             (pins&TIOCM_CAR)!=0);
         const int desired=(uart.dtr()?TIOCM_DTR:0) |
@@ -124,11 +135,21 @@ private:
         int setBits=desired&~existing;
         int clearBits=existing&~desired;
         if(setBits && ioctl(fd_,TIOCMBIS,&setBits)!=0) {
-            if(unsupportedModemIoctl(errno)) {modemSupported_=false;return;}
+            if(unsupportedModemIoctl(errno)) {
+                modemSupported_=false;
+                ctsAllowed_=true;
+                uart.setModemInputs(true,true,true);
+                return;
+            }
             throw std::runtime_error(error("cannot assert DTR/RTS"));
         }
         if(clearBits && ioctl(fd_,TIOCMBIC,&clearBits)!=0) {
-            if(unsupportedModemIoctl(errno)) {modemSupported_=false;return;}
+            if(unsupportedModemIoctl(errno)) {
+                modemSupported_=false;
+                ctsAllowed_=true;
+                uart.setModemInputs(true,true,true);
+                return;
+            }
             throw std::runtime_error(error("cannot deassert DTR/RTS"));
         }
     }
@@ -160,7 +181,7 @@ private:
             if(!(mode&0x20))t.c_cflag|=PARODD;
         }
         const unsigned stops=(mode>>6)&3;
-        if(stops==0 || (stops==2 && word==5))
+        if(!stopBitsRepresentable(mode))
             throw std::runtime_error("unrepresentable 8251A stop-bit format");
         if(stops==2 || stops==3)t.c_cflag|=CSTOPB;
         t.c_cflag|=CLOCAL|CREAD;
@@ -176,6 +197,7 @@ private:
     int fd_=-1,peer_=-1,lastMode_=-1;
     bool savedTermios_=false;
     bool modemSupported_=true;
+    bool ctsAllowed_=true;
     termios original_{};
     std::vector<unsigned char> pending_;
 };

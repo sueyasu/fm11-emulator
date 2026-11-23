@@ -359,6 +359,7 @@ int main(int argc,char** argv) {
         auto serviceSerial=[&]() {
             if(!serial)return;
             serial->synchronize(*machine.systemBoard().usartDevice());
+            if(mainBoard)mainBoard->syncSerialIrq();
             serial->service(
                 [&](unsigned char& ch) {
                     BYTE value=0;

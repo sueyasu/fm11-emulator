@@ -41,5 +41,21 @@ int main()
     b.queueSerialInput('R');
     b.reset();
     if (b.readCpu(0xfd07)!=0x84 || b.readCpu(0xfd06)!=0) return 14;
+    // Physical modem CTS can transition between guest I/O operations.
+    // The host backend must explicitly re-evaluate the 6809 IRQ latch.
+    auto shared=std::make_shared<MainBoard>();
+    Main6809Board modem(CpuType::MC6809);
+    modem.setMainBoard(shared);
+    modem.reset();
+    modem.writeCpu(0xfd07,0x4e);
+    modem.writeCpu(0xfd07,0x01); // Tx enabled
+    modem.writeCpu(0xfd02,0x04); // unmask serial IRQ
+    if(!modem.irqPending())return 20;
+    shared->usartDevice()->setModemInputs(false,true,true);
+    modem.syncSerialIrq();
+    if(modem.irqPending() || (modem.readCpu(0xfd07)&0x01))return 21;
+    shared->usartDevice()->setModemInputs(true,true,true);
+    modem.syncSerialIrq();
+    if(!modem.irqPending() || !(modem.readCpu(0xfd07)&0x01))return 22;
     return 0;
 }

@@ -76,6 +76,9 @@ public:
     // Headless main RS-232C port (FD06 data, FD07 command/status).
     // The frontend owns terminal transport and may feed/drain bytes here.
     void setTxIrqEnabled(bool enabled);
+    // External modem input changes can change TxRDY IRQ without CPU I/O.
+    // Called on the CPU owner thread after sampling host modem pins.
+    void syncSerialIrq() {refreshSerialIrq();}
     void queueSerialInput(BYTE value);
     bool takeSerialOutput(BYTE& value);
 

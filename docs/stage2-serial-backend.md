@@ -53,3 +53,17 @@ ioctls or change the virtual line levels.
 Modem pins on real UARTs are sampled at the CPU worker's service cadence,
 not at a simulated per-bit clock edge. The direction of signal mapping
 is physical host-side DTR/RTS **outputs**, CTS/DSR/DCD **inputs**.
+
+## Physical TTY regression and stop-bit accuracy
+
+Linux POSIX represents 1.5 stop bits only with CS5+CSTOPB. The Intel
+8251A encodes one, one-and-a-half, or two stop bits independently of
+word length; unsupported host combinations are now rejected instead of
+silently changing the framing. The serial_backend regression creates
+an extra PTY master/slave pair and opens the slave through the physical
+/dev/ path. It verifies 4800 baud, 8N1/8N2 reconfiguration and both
+byte directions without requiring a USB adapter.
+
+Physical modem input changes now re-publish 6809 serial IRQ state even
+without FD06/FD07 guest access. Queued physical host bytes are withheld
+while sampled CTS is low; the PTY backend remains byte-immediate.

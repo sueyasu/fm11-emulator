@@ -220,6 +220,7 @@ int main(int argc, char** argv) {
         auto prompt=[&]() { std::cout << "fm11> " << std::flush; };
         auto drain=[&]() {
             serial.synchronize(*machine.systemBoard().usartDevice());
+            board.syncSerialIrq();
             serial.service(
                 [&](unsigned char& ch) {
                     BYTE value=0;
