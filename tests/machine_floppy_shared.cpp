@@ -248,6 +248,11 @@ int main()
     if(selectorMachine.activeBoard()!=secondaryCard)return 55;
     selectorMachine.enableFd05Selection(true);
     if(selectorMachine.activeBoard()!=&selectorMachine.board(0))return 56;
+    // The earlier machine.reset() reset the shared 8251A. Reinitialize
+    // its mode and RxEN before checking that individual CPU-card resets
+    // preserve the shared USART register and receive-data state.
+    bus.writeIo(0xfd07,0x4e); // async x16, 8N1
+    bus.writeIo(0xfd07,0x04); // RxEN (Tx disabled)
     // Resetting either CPU card must not clear state on the shared board.
     p6809->queueSerialInput(0x61);
     p6809->signalAttention();
