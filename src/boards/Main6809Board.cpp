@@ -613,7 +613,9 @@ BYTE Main6809Board::readIo(WORD address)
         }
         return ioRegisters_[0x33];
     case 0x30: {
-        if(floppy_->typeIIBusy(1,ioRegisters_[0x35]&3))return 0x01;
+        if(floppy_->typeIIBusy(1,ioRegisters_[0x35]&3))
+            return floppy_->typeIITransferring(1,ioRegisters_[0x35]&3) &&
+                   (ioRegisters_[0x30]&0x02) ? 0x03 : 0x01;
         if(floppy_->seekTimingEnabled()) {
             const unsigned drive=ioRegisters_[0x35]&3;
             if(floppy_->seekBusy(1,drive))return 0x01;
@@ -651,7 +653,9 @@ BYTE Main6809Board::readIo(WORD address)
         mainIrqStatus();
         return floppy_->registerValue(0x1f);
     case 0x18: {
-        if(floppy_->typeIIBusy(0,floppy_->registerValue(0x1d)&3))return 0x01;
+        if(floppy_->typeIIBusy(0,floppy_->registerValue(0x1d)&3))
+            return floppy_->typeIITransferring(0,floppy_->registerValue(0x1d)&3) &&
+                   (floppyStatus_&0x02) ? 0x03 : 0x01;
         if(floppy_->seekTimingEnabled() && floppyTypeIStatus_)
             return floppy_->typeIStatus(0,floppy_->registerValue(0x1d)&3);
         if(!floppyTypeIStatus_)return floppyStatus_;
@@ -1279,9 +1283,37 @@ void Main6809Board::serviceTimedFloppy()
     if(!floppy_->typeIIReady())return;
     for(unsigned channel=0;channel<2;++channel) {
         BYTE command=0;
-        if(!floppy_->takeTypeIIReady(channel,command))continue;
-        timedTypeIIDispatch_=true;
-        writeIo(WORD(channel==0?0xfd18:0xfd30),command);
-        timedTypeIIDispatch_=false;
+        bool completed=false;
+        // A single scheduler step can cross ID arrival and the end of
+        // the data interval; consume both edges in chronological order.
+        while(floppy_->takeTypeIIEvent(channel,command,completed)) {
+            if(!completed) {
+                timedTypeIIDispatch_=true;
+                writeIo(WORD(channel==0?0xfd18:0xfd30),command);
+                timedTypeIIDispatch_=false;
+                if(floppy_->typeIIBusy(channel,
+                     floppy_->registerValue(channel==0?0x1d:0x35)&3)) {
+                    if(channel==0) {
+                        floppy_->writeRegister(0x1c,
+                            floppy_->registerValue(0x1c)&0x01);
+                        floppy_->writeRegister(0x1f,0);
+                        setMainIrqSource(0x08,false);
+                    } else {
+                        ioRegisters_[0x37]=0;
+                        setExtendedIrqSource(0x40,false);
+                    }
+                }
+            } else {
+                if(channel==0) {
+                    floppy_->writeRegister(0x1c,
+                        floppy_->registerValue(0x1c)|0x40);
+                    floppy_->writeRegister(0x1f,floppy_->registerValue(0x1c));
+                    setMainIrqSource(0x08,true);
+                } else {
+                    ioRegisters_[0x37]=0x40;
+                    setExtendedIrqSource(0x40,true);
+                }
+            }
+        }
     }
 }
