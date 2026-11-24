@@ -790,6 +790,7 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             setExtendedIrqSource(0x40,false);
             break;
         }
+        floppy_->cancelSeek(1,ioRegisters_[0x35]&3);
         // MainCpu::Fm11FDC: Type I RESTORE/SEEK/STEP need not access
         // the disk. Not Ready is returned only when Verify is requested.
         // The boot ROM issues RESTORE $08 with no 2HD disk present.
@@ -951,6 +952,7 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             setMainIrqSource(0x08,false);
             break;
         }
+        floppy_->cancelSeek(0,floppy_->registerValue(0x1d)&3);
         // MainCpu::Fm11MiniFDC clears completion before processing a
         // command; when it finishes, FD1C and FD1F both carry IRQ bit 6.
         floppy_->writeRegister(0x1c,floppy_->registerValue(0x1c)&1);
