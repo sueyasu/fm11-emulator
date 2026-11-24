@@ -559,9 +559,12 @@ void Main8088Bus::serviceTimedFloppy()
                 floppyCommand(command,channel);
                 timedTypeIIDispatch_=false;
                 if(floppy_->typeIIBusy(channel,
-                       floppy_->registerValue(channel==0?0x1d:0x35)&3)
-                   && channel==0)
-                    floppy_->writeRegister(0x1f,0);
+                       floppy_->registerValue(channel==0?0x1d:0x35)&3)) {
+                    // The synchronous DMA helper raises the completion
+                    // latch immediately. Keep it deasserted until the
+                    // modeled data interval ends, for BOTH FDC channels.
+                    floppy_->writeRegister(channel==0?0x1f:0x37,0);
+                }
             } else {
                 floppy_->writeRegister(channel==0?0x1f:0x37,0x40);
             }
