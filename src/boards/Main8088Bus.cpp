@@ -202,7 +202,9 @@ BYTE Main8088Bus::readIo(WORD port) const
         if(port==0xfd18 || port==0xfd30){
             const unsigned channel=port==0xfd18?0:1;
             const unsigned selected=floppy_->registerValue(channel==0?0x1d:0x35)&3;
-            if(floppy_->typeIIBusy(channel,selected))return 0x01;
+            if(floppy_->typeIIBusy(channel,selected))
+                return floppy_->typeIITransferring(channel,selected) &&
+                       (floppy_->transferStatus()&0x02) ? 0x03 : 0x01;
             if(floppy_->seekTimingEnabled() &&
                (floppy_->seekBusy(channel,selected) ||
                 floppy_->seekComplete(channel,selected)))
@@ -541,9 +543,21 @@ void Main8088Bus::serviceTimedFloppy()
     if(!floppy_->typeIIReady())return;
     for(unsigned channel=0;channel<2;++channel) {
         BYTE command=0;
-        if(!floppy_->takeTypeIIReady(channel,command))continue;
-        timedTypeIIDispatch_=true;
-        floppyCommand(command,channel);
-        timedTypeIIDispatch_=false;
+        bool completed=false;
+        // Issue the DMA transfer at sector arrival, but keep FDC
+        // BUSY active until the physical data interval has elapsed.
+        while(floppy_->takeTypeIIEvent(channel,command,completed)) {
+            if(!completed) {
+                timedTypeIIDispatch_=true;
+                floppyCommand(command,channel);
+                timedTypeIIDispatch_=false;
+                if(floppy_->typeIIBusy(channel,
+                       floppy_->registerValue(channel==0?0x1d:0x35)&3)
+                   && channel==0)
+                    floppy_->writeRegister(0x1f,0);
+            } else if(channel==0) {
+                floppy_->writeRegister(0x1f,0x40);
+            }
+        }
     }
 }
