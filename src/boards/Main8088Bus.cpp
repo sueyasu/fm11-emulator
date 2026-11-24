@@ -98,15 +98,17 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
     // A Type-II command supersedes the prior Type-I status/IRQ latch.
     // Otherwise FD30 keeps reporting TRACK0/SEEK after DMA READ/WRITE.
     const unsigned selected=floppy_->registerValue(channel==0?0x1d:0x35)&3;
+    // A Type-II command invalidates the previous Type-I status even
+    // while the rotating disk is still searching for the sector ID.
+    floppy_->cancelSeek(channel,selected);
     if(!timedTypeIIDispatch_ &&
        floppy_->beginTypeII(channel,selected,floppy_->registerValue(base+1),
            floppy_->registerValue(channel==0?0x1c:0x34)&1,
            floppy_->registerValue(base+2),command)) {
         floppy_->finishTransfer();
-        if(channel==0)floppy_->writeRegister(0x1f,0);
+        floppy_->writeRegister(channel==0?0x1f:0x37,0);
         return;
     }
-    floppy_->cancelSeek(channel,selected);
     // Bit 7 of FD1D controls motor/drive selection; only the bottom
     // two bits identify the physical drive (as in the reference FM-11).
     const unsigned drive=floppy_->registerValue(channel==0?0x1d:0x35)&3;
@@ -126,7 +128,7 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
     }
     // The source emulator completes synchronous 8088 FDC commands by
     // setting FD1F bit 6, including failed sector reads.
-    if(channel==0)floppy_->writeRegister(0x1f,0x40);
+    floppy_->writeRegister(channel==0?0x1f:0x37,0x40);
 }
 
 void Main8088Bus::loadBootRom(const Rom& rom)
@@ -176,6 +178,11 @@ BYTE Main8088Bus::readIo(WORD port) const
     if(port==0x01)return picMask_;
     // FC80-FCFF is the shared display mailbox in the original FM-11.
     // The 8088 ROM sends text commands through FC81-FC84.
+    // The 2HD ROM waits for FD37 bit 6 (INTRQ), not FD30 BUSY.
+    // The shared latch remains low during rotational search and
+    // transfers, and rises only at FDC command completion.
+    if(port==0xfd37 && floppy_->seekTimingEnabled())
+        return floppy_->registerValue(0x37);
     if(port==0xfd36 && mainBoard_) {
         BYTE ready=0xc0;
         for(unsigned d=0;d<4;++d)
@@ -555,8 +562,8 @@ void Main8088Bus::serviceTimedFloppy()
                        floppy_->registerValue(channel==0?0x1d:0x35)&3)
                    && channel==0)
                     floppy_->writeRegister(0x1f,0);
-            } else if(channel==0) {
-                floppy_->writeRegister(0x1f,0x40);
+            } else {
+                floppy_->writeRegister(channel==0?0x1f:0x37,0x40);
             }
         }
     }
