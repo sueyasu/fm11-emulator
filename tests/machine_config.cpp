@@ -175,6 +175,14 @@ int main() {
     }
     try {(void)parseMachineConfigFile(path);return 26;}
     catch(const std::runtime_error&) {}
+    // Disk timing is opt-in and independent of the user's configuration.
+    for(const std::string timing:{"fast","timed"}) {
+        {std::ofstream out(path);out<<"[floppy]\ntiming = "<<timing<<"\n";}
+        if(parseMachineConfigFile(path).floppyTimed!=(timing=="timed"))return 27;
+    }
+    {std::ofstream out(path);out<<"[floppy]\ntiming = strict\\n";}
+    try {(void)parseMachineConfigFile(path);return 28;}
+    catch(const std::runtime_error&) {}
     std::remove(path.c_str());
     return 0;
 }
