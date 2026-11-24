@@ -94,6 +94,10 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
         if(channel==0)floppy_->writeRegister(0x1f,0x40);
         return;
     }
+    // A Type-II command supersedes the prior Type-I status/IRQ latch.
+    // Otherwise FD30 keeps reporting TRACK0/SEEK after DMA READ/WRITE.
+    const unsigned selected=floppy_->registerValue(channel==0?0x1d:0x35)&3;
+    floppy_->cancelSeek(channel,selected);
     // Bit 7 of FD1D controls motor/drive selection; only the bottom
     // two bits identify the physical drive (as in the reference FM-11).
     const unsigned drive=floppy_->registerValue(channel==0?0x1d:0x35)&3;
