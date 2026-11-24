@@ -52,6 +52,10 @@ public:
             else {registers_[0x30]=0x01;registers_[0x37]=0x40;}
         }
     }
+    void cancelSeek(unsigned ch,unsigned drive) {
+        if(!seekTimed_ || ch>1 || drive>3)return;
+        auto& s=seek_[ch][drive];s.pending=false;s.complete=false;
+    }
     bool seekBusy(unsigned ch,unsigned drive) const {return seek_.at(ch).at(drive).pending;}
     bool seekComplete(unsigned ch,unsigned drive) const {return seek_.at(ch).at(drive).complete;}
     void ackSeek(unsigned ch,unsigned drive) {seek_.at(ch).at(drive).complete=false;}
@@ -301,6 +305,8 @@ public:
     bool sectorOffset(unsigned channel,unsigned track,unsigned side,unsigned sector,
                       unsigned drive,std::size_t& offset) const {
         if(drive>=4 || channel>1)return false;
+        if(seekTimed_ && (seek_[channel][drive].pending ||
+                          seek_[channel][drive].head!=track))return false;
         const auto& disk=medium(channel,drive);
         const unsigned tracks=channel==0?40:77;
         if(disk.raw.empty() || track>=tracks || sector<1 ||
