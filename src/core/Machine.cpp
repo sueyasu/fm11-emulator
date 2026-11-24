@@ -429,6 +429,10 @@ void Machine::advanceFloppyCpuCycles(std::uint64_t cycles,std::uint64_t hz)
     const auto n=(cycles%hz)*billion+floppyFraction_;
     fdc->advanceSeekNanoseconds((cycles/hz)*billion+n/hz);
     floppyFraction_=n%hz;
+    for(auto* cpu:main6809Boards_) {
+        cpu->setMainIrqSource(0x08,fdc->seekComplete(0,fdc->registerValue(0x1d)&3));
+        cpu->setExtendedIrqSource(0x40,fdc->seekComplete(1,fdc->registerValue(0x35)&3));
+    }
 }
 
 void Machine::set8088ClockHz(std::uint64_t hz)
