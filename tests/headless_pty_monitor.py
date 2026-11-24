@@ -33,7 +33,11 @@ with tempfile.TemporaryDirectory() as directory:
             0x86, 0x01, 0xB7, 0xFD, 0x07,
             0x86, 0x58, 0xB7, 0xFD, 0x06, 0x20, 0xF9
         ]))
-    proc = subprocess.Popen([sys.argv[1], "--binary", path, "--load", "0x1000",
+    config_path = os.path.join(directory, "fm11-test.conf")
+    with open(config_path, "w", encoding="ascii") as config:
+        config.write("[serial]\nserial0 = pty\n")
+    proc = subprocess.Popen([sys.argv[1], "--config", config_path,
+                             "--binary", path, "--load", "0x1000",
                              "--pc", "0x1000", "--instructions", "10000"],
                             stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, bufsize=0)
