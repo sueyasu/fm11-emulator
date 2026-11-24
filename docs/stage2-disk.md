@@ -1,11 +1,11 @@
-# Stage 2-Disk — initial opt-in FDC Type-I timing
+# Stage 2-Disk — opt-in FDC timing
 
 The 2D and 2HD FDCs now share a small per-drive mechanical head state.
 `[floppy] timing = fast` remains the default, preserving pre-existing
 immediate transfer and boot behavior. `timing = timed` opts in to a first
 mechanical approximation, not strict WD179x conformance.
 
-## Implemented in this stage
+## Initial Type-I stage (retained)
 
 - Type-I RESTORE, SEEK, STEP, STEP IN and STEP OUT each start a pending
   head movement; the logical track register is distinct from the physical
@@ -23,14 +23,15 @@ mechanical approximation, not strict WD179x conformance.
   physical track. A logical track-register write alone cannot reposition
   the head.
 
-## Important limitations
+## Limitations of the initial Type-I stage
 
-This is the **first** timed-mode change, not a complete FDC rewrite.
+The original implementation was only a **first** timed-mode change, not a complete FDC rewrite.
 FDC status differences between the 2D and 2HD controller adapters remain,
 as do approximations in interrupt publication and RESET behavior.
 READ/WRITE command timing, disk rotation, INDEX pulses, DMA byte pacing,
 Lost Data, seek verification against on-media IDs, and motor spin-up
-are **not yet modeled**. The current fast mode is the regression baseline.
+were **not modeled by the initial Type-I stage**. See Stage 2-A/B below
+for the subsequently added rotation, INDEX and sector command delay. The current fast mode is the regression baseline.
 
 ## Configuration and validation
 
@@ -41,7 +42,7 @@ timing = timed
 
 `timing = fast` is the default; `strict` is intentionally rejected.
 Test the new mode separately with 2D and 2HD boot media, and keep
-`timing = fast` for everyday work until those tests pass. The
+`timing = fast` as the compatibility baseline until OS regression tests pass. The
 `fdc_command_decode` regression tests the shared seek model and
 rejects reads made solely by changing the track register.
 
