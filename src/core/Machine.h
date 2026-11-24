@@ -187,6 +187,7 @@ private:
     void selectActiveBoard(std::size_t index);
     void synchronizeFd05Selection();
     void updateZ80MasterMapping();
+    void advanceFloppyCpuCycles(std::uint64_t cycles,std::uint64_t hz);
     void advanceSerialCpuCycles(std::uint64_t cycles,std::uint64_t hz);
     void publishSerialIrq();
 
@@ -206,6 +207,7 @@ private:
     std::uint64_t lastExecutionCycles_ = 0;
     std::uint64_t serialNanosecondFraction_=0;
     std::uint64_t serialFractionHz_=0;
+    std::uint64_t floppyFraction_=0,floppyClockHz_=0;
     std::uint64_t clock8088Hz_ = 0;
     std::uint64_t clockZ80Hz_ = 4000000;
     std::uint64_t displayCpuClockHz_ = 0;
