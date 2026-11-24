@@ -60,14 +60,17 @@ and 360 rpm (2HD). A 2 ms INDEX pulse is derived from the phase rather
 than the number of polling reads; the two FDC channels share a common
 virtual timebase while each drive retains its own phase.
 
-READ/WRITE SECTOR now enters BUSY until the requested sector's angular
-position is reached and the data-transfer interval has elapsed. The
-first-stage transfer-rate approximations are 250 kbps (2D) and 500 kbps
-(2HD). Sector IDs are provisionally uniformly distributed around the
+READ/WRITE SECTOR enters BUSY until the requested sector arrives.
+At ID arrival, the adapter starts the existing atomic DMA or PIO transfer;
+the modeled data-transfer interval continues to elapse before the FDC
+completes the command and publishes its final interrupt. In PIO mode,
+DRQ becomes visible at ID arrival, while DMA terminal count can precede
+FDC completion. The first-stage transfer-rate approximations are
+250 kbps (2D) and 500 kbps (2HD). Sector IDs are provisionally uniformly distributed around the
 track, with a small lead-in offset. Absent IDs or mismatched physical
 cylinders report RNF after five revolutions rather than immediately.
-Completion then dispatches the existing adapter-specific DMA or PIO code
-on the owning CPU thread. New commands cancel a pending Type-II request.
+Both timing events are serviced on the owning CPU thread, and new commands
+cancel a pending Type-II request.
 
 **Known limitation / Stage 2-C boundary:** the actual DMA/PIO byte
 transfer remains atomic after the timed interval; it is *not* paced by
