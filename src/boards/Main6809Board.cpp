@@ -789,6 +789,7 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         break;
     case 0x30: {
         if(floppy_->beginTypeI(1,ioRegisters_[0x35]&3,value)) {
+            floppy_->finishTransfer();
             ioRegisters_[0x30]=0x01;ioRegisters_[0x37]=0;
             setExtendedIrqSource(0x40,false);
             break;
@@ -953,6 +954,8 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         break;
     case 0x18:
         if(floppy_->beginTypeI(0,floppy_->registerValue(0x1d)&3,value)) {
+            floppy_->finishTransfer();
+            floppyOffset_=256;floppyWritePio_=false;
             floppyTypeIStatus_=true;floppyStatus_=0x01;
             setMainIrqSource(0x08,false);
             break;
