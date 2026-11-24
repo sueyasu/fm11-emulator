@@ -40,6 +40,7 @@ public:
         setDmaDevice(1,[this](){return floppyReadData();},
                        [this](BYTE value){floppyWriteData(value);});
     }
+    void serviceTimedFloppy(); // elapsed Type-II FDC events
     void loadFloppy2d(const std::vector<BYTE>& image);
     void loadFloppy2hd(const std::vector<BYTE>& image);
     std::vector<BYTE> floppy2hdImage() const { return floppy_->image2hd(); }
@@ -114,6 +115,7 @@ private:
     std::array<DmaRead,4> dmaReaders_{};
     std::array<DmaWrite,4> dmaWriters_{};
     std::shared_ptr<MainBoard> mainBoard_;
+    bool timedTypeIIDispatch_=false;
     std::shared_ptr<FloppyDevice> floppy_=std::make_shared<FloppyDevice>();
     void floppyCommand(BYTE command,unsigned channel);
     BYTE floppyReadData();
