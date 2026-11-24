@@ -230,6 +230,9 @@ if(FM11_BUILD_TESTS)
     add_executable(timed_floppy_seek tests/timed_floppy_seek.cpp)
     target_link_libraries(timed_floppy_seek PRIVATE fm11_core)
     add_test(NAME timed_floppy_seek COMMAND timed_floppy_seek)
+    add_executable(timed_floppy_rotation tests/timed_floppy_rotation.cpp)
+    target_link_libraries(timed_floppy_rotation PRIVATE fm11_core)
+    add_test(NAME timed_floppy_rotation COMMAND timed_floppy_rotation)
 
 
     add_executable(main8088_cycles tests/main8088_cycles.cpp)
