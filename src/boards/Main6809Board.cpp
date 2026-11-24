@@ -618,7 +618,7 @@ BYTE Main6809Board::readIo(WORD address)
             const unsigned drive=ioRegisters_[0x35]&3;
             if(floppy_->seekBusy(1,drive))return 0x01;
             if(floppy_->seekComplete(1,drive))
-                return floppy_->registerValue(0x30);
+                return floppy_->typeIStatus(1,drive);
         }
         // Reference MainCpu::GetIoByte: return the status, acknowledge
         // INTRQ (bit 0), then merge the one-shot DRQ latch.
