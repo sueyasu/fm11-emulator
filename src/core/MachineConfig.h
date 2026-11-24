@@ -32,6 +32,7 @@ struct MachineConfig {
     std::array<std::string,4> floppy2d{};
     std::array<std::string,4> floppy2hd{};
     std::string hddImage;
+    bool floppyTimed=false; // opt-in FDC Type-I mechanical delay
     std::string serial0="pty"; // host endpoint for shared 8251A
     bool serialClocked=false; // opt-in virtual character timing
     bool serialRtsCts=false; // default to TX/RX/GND three-wire operation
