@@ -13,13 +13,15 @@
 // The CPU boards retain only their FDC register and DMA-adapter behavior.
 class FloppyDevice {
 public:
-    // Opt-in Type-I mechanical timing, shared by 6809 and 8088 buses.
-    // Rotational/DRQ timing is deliberately outside this first stage.
+    // Opt-in virtual mechanical time for both FDCs and CPU adapters.
+    // Type-II rotation/latency is modeled; per-byte DRQ timing remains future work.
     void enableSeekTiming(bool enable) {seekTimed_=enable;resetSeekTiming();}
     bool seekTimingEnabled() const {return seekTimed_;}
     void resetSeekTiming() {
         for(auto& bank:seek_)for(auto& s:bank)s=SeekState{};
-        for(auto& r:rotationNs_)r.fill(0);
+        for(unsigned ch=0;ch<2;++ch)
+            for(unsigned d=0;d<4;++d)
+                rotationNs_[ch][d]=(revolutionNanoseconds(ch)/4)*d;
         typeII_.fill(TypeIIState{});
     }
     bool beginTypeI(unsigned channel,unsigned drive,BYTE command) {
