@@ -593,6 +593,9 @@ BYTE Main6809Board::readIo(WORD address)
         refreshDmaCompletion();
         return status;
     }
+    case 0x31:
+        if(floppy_->seekTimingEnabled())return floppy_->registerValue(0x31);
+        return ioRegisters_[0x31];
     case 0x33:
         // The 2HD IPL disables DMA and reads each sector through FD33.
         // Return the actual FIFO byte, not the stale data-register latch.
@@ -819,7 +822,8 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             } else {
                 // Only 2HD media can be accessed through this controller.
                 // Unlike the MiniFDC, this controller uses DMA channel 1.
-                const unsigned track=ioRegisters_[0x31];
+                const unsigned track=floppy_->seekTimingEnabled()
+                    ?floppy_->registerValue(0x31):ioRegisters_[0x31];
                 const unsigned sector=ioRegisters_[0x32];
                 const unsigned side=ioRegisters_[0x34]&1;
                 const unsigned drive=ioRegisters_[0x35]&3;
@@ -936,6 +940,7 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         break;
     }
     case 0x33:
+        if(floppy_->seekTimingEnabled())floppy_->writeRegister(0x33,value);
         if(floppy_->transferChannel()==1 && (floppy_->transferStatus()&0x02)!=0) {
             floppy_->transferWrite(value);
             if(floppy_->transferPosition()==floppy_->transferLength()) {
@@ -1102,6 +1107,8 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         }
         break;
     default:
+        if(floppy_->seekTimingEnabled() && reg==0x31)
+            floppy_->writeRegister(0x31,value);
         if (reg == 0x55) {
             // HD6844 common IRQ/completion register: bit 7 is read-only.
             // IRQ enable writes must not acknowledge a pending completion.
