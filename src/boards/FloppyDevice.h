@@ -17,7 +17,11 @@ public:
     // Rotational/DRQ timing is deliberately outside this first stage.
     void enableSeekTiming(bool enable) {seekTimed_=enable;resetSeekTiming();}
     bool seekTimingEnabled() const {return seekTimed_;}
-    void resetSeekTiming() {for(auto& bank:seek_)for(auto& s:bank)s=SeekState{};}
+    void resetSeekTiming() {
+        for(auto& bank:seek_)for(auto& s:bank)s=SeekState{};
+        for(auto& r:rotationNs_)r.fill(0);
+        typeII_.fill(TypeIIState{});
+    }
     bool beginTypeI(unsigned channel,unsigned drive,BYTE command) {
         if(!seekTimed_ || channel>1 || drive>3 || (command&0x80))return false;
         const unsigned kind=command&0xe0;
@@ -40,8 +44,65 @@ public:
         else {registers_[0x30]=0x01;registers_[0x37]=0;}
         return true;
     }
+    // Stage 2-A/B: virtual rotation and delayed Type-II commands.
+    // Individual DRQ pacing remains the separate Stage 2-C.
+    static constexpr std::uint64_t revolutionNanoseconds(unsigned ch) {
+        return ch==0?200000000ULL:166666667ULL;
+    }
+    bool indexPulse(unsigned ch,unsigned drive) const {
+        return ch<2 && drive<4 && seekTimed_ &&
+               (ch==0?has2d(drive):has2hd(drive)) &&
+               rotationNs_[ch][drive]<2000000ULL;
+    }
+    bool beginTypeII(unsigned ch,unsigned drive,unsigned track,unsigned side,
+                     unsigned sector,BYTE command) {
+        if(!seekTimed_ || ch>1 || drive>3 ||
+           ((command&0xf0)!=0x80 && (command&0xf0)!=0xa0))return false;
+        auto& t=typeII_[ch];
+        t=TypeIIState{};
+        t.pending=true;t.drive=drive;t.command=command;
+        std::size_t offset=0;
+        const auto rev=revolutionNanoseconds(ch);
+        if(!sectorOffset(ch,track,side,sector,drive,offset)) {
+            t.remainingNs=5*rev; // Record Not Found after five revolutions
+        } else {
+            const auto& disk=medium(ch,drive);
+            const auto count=std::uint64_t(disk.sectorsPerTrack);
+            const auto idPhase=((std::uint64_t(sector-1)*rev)/count+rev/64)%rev;
+            const auto search=(idPhase+rev-rotationNs_[ch][drive])%rev;
+            const auto bytes=sectorLength(ch,track,side,sector,drive);
+            const auto bitrate=ch?500000ULL:250000ULL;
+            const auto transfer=(std::uint64_t(bytes)*8*1000000000ULL+bitrate-1)/bitrate;
+            t.remainingNs=search+transfer;
+        }
+        return true;
+    }
+    bool typeIIBusy(unsigned ch,unsigned drive) const {
+        return ch<2 && drive<4 && typeII_[ch].pending &&
+               typeII_[ch].drive==drive;
+    }
+    bool typeIIReady() const {
+        for(const auto& t:typeII_)if(t.pending && t.remainingNs==0)return true;
+        return false;
+    }
+    bool takeTypeIIReady(unsigned ch,BYTE& command) {
+        if(ch>1 || !typeII_[ch].pending || typeII_[ch].remainingNs)return false;
+        command=typeII_[ch].command;
+        typeII_[ch]=TypeIIState{};
+        return true;
+    }
+    void cancelTypeII(unsigned ch) {
+        if(ch<2)typeII_[ch]=TypeIIState{};
+    }
     void advanceSeekNanoseconds(std::uint64_t ns) {
         if(!seekTimed_ || !ns)return;
+        for(unsigned ch=0;ch<2;++ch) {
+            const auto rev=revolutionNanoseconds(ch);
+            for(unsigned d=0;d<4;++d)
+                rotationNs_[ch][d]=(rotationNs_[ch][d]+ns%rev)%rev;
+            auto& t=typeII_[ch];
+            if(t.pending)t.remainingNs=ns>=t.remainingNs?0:t.remainingNs-ns;
+        }
         for(unsigned ch=0;ch<2;++ch)for(unsigned d=0;d<4;++d){
             auto& s=seek_[ch][d];
             if(!s.pending)continue;
@@ -64,6 +125,7 @@ public:
         const auto& s=seek_.at(ch).at(drive);
         if(s.pending)return 0x01;
         return BYTE((s.head==0?0x04:0) |
+              (indexPulse(ch,drive)?0x02:0) |
               ((ch==0?has2d(drive):has2hd(drive))?0:0x80));
     }
     // The controller drive-select bits address independent inserted media.
@@ -438,8 +500,16 @@ private:
         std::uint64_t remainingNs=0;
         bool inward=true,updateTrack=false,pending=false,complete=false;
     };
+    struct TypeIIState {
+        bool pending=false;
+        unsigned drive=0;
+        BYTE command=0;
+        std::uint64_t remainingNs=0;
+    };
     bool seekTimed_=false;
     std::array<std::array<SeekState,4>,2> seek_{};
+    std::array<std::array<std::uint64_t,4>,2> rotationNs_{};
+    std::array<TypeIIState,2> typeII_{};
     struct Disk {
         std::vector<BYTE> raw,d88;
         std::vector<std::size_t> offsets;
