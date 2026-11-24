@@ -1,6 +1,7 @@
 #include "Main8088Bus.h"
 #include <memory>
 #include <vector>
+#include <cstdio>
 
 // Reproduces the stock FM-11 8088 boot ROM's 2HD polling contract:
 // FF00:074A issues READ SECTOR, FF00:0684 waits for FD37 bit 6,
@@ -44,8 +45,20 @@ int main() {
     // DMA terminal count is reached before the FDC completion interrupt.
     fdc->advanceSeekNanoseconds(140000000);
     bus.serviceTimedFloppy();
-    if((bus.readIo(0xfd37)&0x40) || (bus.readIo(0xfd30)&1)==0 ||
-       bus.readRam(0x4000)!=0x5a)return 9;
+    const BYTE irqAtArrival=bus.readIo(0xfd37);
+    const BYTE statusAtArrival=bus.readIo(0xfd30);
+    const BYTE dmaByteAtArrival=bus.readRam(0x4000);
+    if((irqAtArrival&0x40) || (statusAtArrival&1)==0 ||
+       dmaByteAtArrival!=0x5a) {
+        std::fprintf(stderr,
+            "Type-II arrival: FD37=%02X FD30=%02X DMA[4000]=%02X "
+            "pending=%d ready=%d transfer=%d DMAcount=%04X\\n",
+            unsigned(irqAtArrival),unsigned(statusAtArrival),
+            unsigned(dmaByteAtArrival),int(fdc->typeIIBusy(1,0)),
+            int(fdc->typeIIReady()),int(fdc->typeIITransferring(1,0)),
+            unsigned(bus.dmaChannel(1).count));
+        return 9;
+    }
     fdc->advanceSeekNanoseconds(20000000);
     bus.serviceTimedFloppy();
     // A prior Type-I TRACK0 (04h) must not leak into the Type-II result.
