@@ -154,6 +154,7 @@ int main(int argc, char** argv) {
         rom[0xfff]=static_cast<BYTE>(pc);
         board.loadBootRom(rom);
         machine.reset();
+        machine.systemBoard().floppyDevice()->enableSeekTiming(serialConfig.floppyTimed);
         if(serialConfig.serialClocked) {
             if(serialConfig.serial0!="pty" && serialConfig.serial0!="none")
                 throw std::invalid_argument(
