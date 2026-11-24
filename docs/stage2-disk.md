@@ -50,3 +50,34 @@ git pull
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
+
+## Stage 2-A/B: rotational timing and Type-II commands
+
+With `[floppy] timing=timed`, each physical drive now tracks its spindle
+phase in CPU-derived virtual nanoseconds. Nominal rates are 300 rpm (2D)
+and 360 rpm (2HD). A 2 ms INDEX pulse is derived from the phase rather
+than the number of polling reads; the two FDC channels share a common
+virtual timebase while each drive retains its own phase.
+
+READ/WRITE SECTOR now enters BUSY until the requested sector's angular
+position is reached and the data-transfer interval has elapsed. The
+first-stage transfer-rate approximations are 250 kbps (2D) and 500 kbps
+(2HD). Sector IDs are provisionally uniformly distributed around the
+track, with a small lead-in offset. Absent IDs or mismatched physical
+cylinders report RNF after five revolutions rather than immediately.
+Completion then dispatches the existing adapter-specific DMA or PIO code
+on the owning CPU thread. New commands cancel a pending Type-II request.
+
+**Known limitation / Stage 2-C boundary:** the actual DMA/PIO byte
+transfer remains atomic after the timed interval; it is *not* paced by
+individual DRQ assertions. Therefore this implementation does not yet
+reproduce Lost Data, the separate DMA terminal-count and FDC completion
+edges, physical gap/CRC spacing, or the exact temporal placement of
+individual bytes. Full WRITE TRACK/READ TRACK, READ ADDRESS, Force
+Interrupt modes, motor spin-up and media-error timing remain separate
+future work. These approximations are intended for compatibility testing,
+not cycle-accurate WD179x emulation.
+
+The `fast` mode bypasses this new scheduling and keeps the existing
+immediate transfer behavior. `--speed` is not forcibly changed: both
+FDC and CPU time advance from the same modeled CPU cycle counts.
