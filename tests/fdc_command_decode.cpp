@@ -33,9 +33,10 @@ int main()
     fdc.writeRegister(0x19,1);
     std::size_t seekOffset=0;
     if(fdc.sectorOffset(0,1,0,1,0,seekOffset))return 19;
+    fdc.writeRegister(0x1b,1);
     if(!fdc.beginTypeI(0,0,0x10))return 20;
     fdc.advanceSeekNanoseconds(100000000);
-    if(fdc.sectorOffset(0,1,0,1,0,seekOffset))return 21;
+    if(!fdc.sectorOffset(0,1,0,1,0,seekOffset))return 21;
     fdc.enableSeekTiming(false);
     if(fdc.beginTypeI(0,0,0x10))return 18;
     if(fdc.beginSector(0,0,0,1,0,false))return 2;
