@@ -24,12 +24,17 @@ int main() {
     f.advanceSeekNanoseconds(200000000);
     if(!f.typeIIReady())return 8;
     BYTE command=0;
-    if(!f.takeTypeIIReady(0,command) || command!=0x80 || f.typeIIBusy(0,0))return 9;
+    bool completed=false;
+    if(!f.takeTypeIIEvent(0,command,completed) || command!=0x80 ||
+       completed || !f.typeIITransferring(0,0))return 9;
+    if(!f.takeTypeIIEvent(0,command,completed) || !completed ||
+       f.typeIIBusy(0,0))return 9;
     if(!f.beginTypeII(1,0,0,0,27,0x80))return 10;
     f.advanceSeekNanoseconds(4*f.revolutionNanoseconds(1));
     if(f.typeIIReady())return 11;
     f.advanceSeekNanoseconds(f.revolutionNanoseconds(1));
-    if(!f.takeTypeIIReady(1,command))return 12;
+    if(!f.takeTypeIIEvent(1,command,completed) || completed ||
+       f.typeIIBusy(1,0))return 12;
     if(!f.beginTypeII(0,0,0,0,1,0xa0))return 13;
     f.cancelTypeII(0);
     if(f.typeIIReady() || f.typeIIBusy(0,0))return 14;
