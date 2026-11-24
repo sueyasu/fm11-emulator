@@ -77,7 +77,7 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                    section!="display_cpu" && section!="floppy_2d" &&
                    section!="floppy_2hd" && section!="hdd" &&
                    section!="boot" && section!="DIPSW" &&
-                   section!="display" && section!="memory" && section!="serial")
+                   section!="display" && section!="memory" && section!="serial" && section!="floppy")
                     throw std::invalid_argument("unknown section ["+section+"]");
                 continue;
             }
@@ -162,6 +162,12 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                 else if(key=="2HD_FDD")cfg.boot2hdFdd=boolean(value);
                 else if(key=="HDD")cfg.bootHdd=boolean(value);
                 else handled=false;
+            } else if(section=="floppy") {
+                if(key=="timing") {
+                    if(value=="fast")cfg.floppyTimed=false;
+                    else if(value=="timed")cfg.floppyTimed=true;
+                    else throw std::invalid_argument("floppy.timing must be fast or timed");
+                } else handled=false;
             } else if(section=="serial") {
                 if(key=="flow_control") {
                     if(value=="none")cfg.serialRtsCts=false;
