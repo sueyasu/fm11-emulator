@@ -96,6 +96,7 @@ public:
     // convert emulated CPU time to these PTM ticks.
     void advancePtm(std::uint64_t ticks);
     void syncPtmIrq(); // shared main-board clock changed PTM independently
+    void serviceTimedFloppy(); // elapsed Type-II disk events
 
     // The first PTM timebase runs at PTMCLOCK/2 = 9700 Hz (16-bit mode,
     // internal clock select 0). CPU cycles are supplied by the scheduler.
@@ -122,6 +123,7 @@ public:
     void writePhysical(std::uint32_t address, BYTE value);
 
 private:
+    bool timedTypeIIDispatch_=false;
     BYTE bootDip_=0x9f;
     static constexpr std::size_t kPhysicalMemorySize = 1u << 20;
     static constexpr std::size_t kOnboardRamSize = 0x1000;
