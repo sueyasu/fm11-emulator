@@ -916,7 +916,8 @@ void Main6809Board::writeIo(WORD address, BYTE value)
                     }
                 }
                 if(stream.size()!=length ||
-                   !floppy_->formatTrack(1,ioRegisters_[0x31],
+                   !floppy_->formatTrack(1,floppy_->seekTimingEnabled()
+                          ?floppy_->registerValue(0x31):ioRegisters_[0x31],
                           ioRegisters_[0x34]&1,ioRegisters_[0x35]&3,stream))
                     status=0x20;
                 else {
