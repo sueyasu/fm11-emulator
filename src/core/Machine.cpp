@@ -373,6 +373,7 @@ void Machine::advanceTimeNanoseconds(std::uint64_t nanoseconds)
 {
     mainBoard_->advanceTimeNanoseconds(nanoseconds);
     mainBoard_->floppyDevice()->advanceSeekNanoseconds(nanoseconds);
+    serviceTimedFloppy();
     if(mainBoard_->floppyDevice()->seekTimingEnabled()) {
         const auto fdc=mainBoard_->floppyDevice();
         for(auto* cpu:main6809Boards_) {
@@ -438,12 +439,25 @@ void Machine::advanceFloppyCpuCycles(std::uint64_t cycles,std::uint64_t hz)
     const auto n=(cycles%hz)*billion+floppyFraction_;
     fdc->advanceSeekNanoseconds((cycles/hz)*billion+n/hz);
     floppyFraction_=n%hz;
+    serviceTimedFloppy();
     for(auto* cpu:main6809Boards_) {
         if(fdc->seekComplete(0,fdc->registerValue(0x1d)&3))
                 cpu->setMainIrqSource(0x08,true);
         if(fdc->seekComplete(1,fdc->registerValue(0x35)&3))
                 cpu->setExtendedIrqSource(0x40,true);
     }
+}
+
+void Machine::serviceTimedFloppy()
+{
+    auto fdc=mainBoard_->floppyDevice();
+    if(!fdc->typeIIReady())return;
+    if(activeExecution_.kind==ExecutionKind::Main6809 &&
+       activeExecution_.main6809)
+        activeExecution_.main6809->serviceTimedFloppy();
+    else if(activeExecution_.kind==ExecutionKind::Main8088 &&
+            activeExecution_.main8088)
+        activeExecution_.main8088->bus().serviceTimedFloppy();
 }
 
 void Machine::set8088ClockHz(std::uint64_t hz)
