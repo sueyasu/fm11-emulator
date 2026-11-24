@@ -613,6 +613,7 @@ BYTE Main6809Board::readIo(WORD address)
         }
         return ioRegisters_[0x33];
     case 0x30: {
+        if(floppy_->typeIIBusy(1,ioRegisters_[0x35]&3))return 0x01;
         if(floppy_->seekTimingEnabled()) {
             const unsigned drive=ioRegisters_[0x35]&3;
             if(floppy_->seekBusy(1,drive))return 0x01;
@@ -650,13 +651,16 @@ BYTE Main6809Board::readIo(WORD address)
         mainIrqStatus();
         return floppy_->registerValue(0x1f);
     case 0x18: {
+        if(floppy_->typeIIBusy(0,floppy_->registerValue(0x1d)&3))return 0x01;
         if(floppy_->seekTimingEnabled() && floppyTypeIStatus_)
             return floppy_->typeIStatus(0,floppy_->registerValue(0x1d)&3);
         if(!floppyTypeIStatus_)return floppyStatus_;
         // The index hole produces a short pulse once per revolution.
         // Model its periodic assertion in polling-driven firmware even
         // when the guest has no dedicated index pulse clock yet.
-        const bool index=(++floppyIndexPolls_%256u)<16u;
+        const bool index=floppy_->seekTimingEnabled()
+            ?floppy_->indexPulse(0,floppy_->registerValue(0x1d)&3)
+            :(++floppyIndexPolls_%256u)<16u;
         return static_cast<BYTE>((floppyStatus_&~0x02u) |
             ((floppy_->has2d((floppy_->registerValue(0x1d)&3)) && index)?0x02u:0));
     }
@@ -798,6 +802,7 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             (floppy_->registerValue(0x1c)&0xfe)|(value&1)));
         break;
     case 0x30: {
+        if(!timedTypeIIDispatch_)floppy_->cancelTypeII(1);
         if(floppy_->beginTypeI(1,ioRegisters_[0x35]&3,value)) {
             floppy_->finishTransfer();
             ioRegisters_[0x30]=0x01;ioRegisters_[0x37]=0;
@@ -805,6 +810,15 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             break;
         }
         floppy_->cancelSeek(1,ioRegisters_[0x35]&3);
+        if(!timedTypeIIDispatch_ &&
+           floppy_->beginTypeII(1,ioRegisters_[0x35]&3,
+                 floppy_->registerValue(0x31),ioRegisters_[0x34]&1,
+                 ioRegisters_[0x32],value)) {
+            ioRegisters_[0x30]=0x01; // BUSY until virtual time expires
+            ioRegisters_[0x37]=0;
+            setExtendedIrqSource(0x40,false);
+            break;
+        }
         // MainCpu::Fm11FDC: Type I RESTORE/SEEK/STEP need not access
         // the disk. Not Ready is returned only when Verify is requested.
         // The boot ROM issues RESTORE $08 with no 2HD disk present.
@@ -964,6 +978,7 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         ioRegisters_[0x33]=value;
         break;
     case 0x18:
+        if(!timedTypeIIDispatch_)floppy_->cancelTypeII(0);
         if(floppy_->beginTypeI(0,floppy_->registerValue(0x1d)&3,value)) {
             floppy_->finishTransfer();
             floppyOffset_=256;floppyWritePio_=false;
@@ -972,6 +987,17 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             break;
         }
         floppy_->cancelSeek(0,floppy_->registerValue(0x1d)&3);
+        if(!timedTypeIIDispatch_ &&
+           floppy_->beginTypeII(0,floppy_->registerValue(0x1d)&3,
+                floppy_->registerValue(0x19),floppy_->registerValue(0x1c)&1,
+                floppy_->registerValue(0x1a),value)) {
+            floppy_->finishTransfer();
+            floppyOffset_=256;floppyWritePio_=false;
+            floppyTypeIStatus_=false;floppyStatus_=0x01;
+            floppy_->writeRegister(0x1f,0);
+            setMainIrqSource(0x08,false);
+            break;
+        }
         // MainCpu::Fm11MiniFDC clears completion before processing a
         // command; when it finishes, FD1C and FD1F both carry IRQ bit 6.
         floppy_->writeRegister(0x1c,floppy_->registerValue(0x1c)&1);
@@ -1246,4 +1272,16 @@ void Main6809Board::Core::firq()
 CpuType Main6809Board::Core::type() const
 {
     return variant_;
+}
+
+void Main6809Board::serviceTimedFloppy()
+{
+    if(!floppy_->typeIIReady())return;
+    for(unsigned channel=0;channel<2;++channel) {
+        BYTE command=0;
+        if(!floppy_->takeTypeIIReady(channel,command))continue;
+        timedTypeIIDispatch_=true;
+        writeIo(WORD(channel==0?0xfd18:0xfd30),command);
+        timedTypeIIDispatch_=false;
+    }
 }
