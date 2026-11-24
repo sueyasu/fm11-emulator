@@ -85,3 +85,20 @@ not cycle-accurate WD179x emulation.
 The `fast` mode bypasses this new scheduling and keeps the existing
 immediate transfer behavior. `--speed` is not forcibly changed: both
 FDC and CPU time advance from the same modeled CPU cycle counts.
+
+## Stock 8088/V20 boot-ROM completion handshake
+
+The original 4096-byte FM-11 8088 ROM (version 3.3, supplied for
+development analysis, not redistributed) issues a 2HD READ SECTOR
+at ROM offset 074Ah and polls FD37 bit 6 in its routine at 0684h.
+It then reads FD30 at 07C6h and expects zero. A premature nonzero
+status without a recognized WD179x error bit is reported as
+`Disk error 0F`.
+
+In timed mode, the 8088 bus must expose FD37 and clear its interrupt
+latch at the start of every 2HD Type-II command; it asserts bit 6
+only after the modeled transfer end. The former Type-I completion
+state must also be cleared when Type-II begins, not later when
+its DMA starts. The `timed_floppy_rom_status` regression reproduces
+the ROM's RESTORE/READ and SEEK/READ status-poll sequence without
+embedding proprietary firmware in the repository.
