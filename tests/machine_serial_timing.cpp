@@ -32,7 +32,8 @@ static int run(CpuType cpuType)
         p6809->setCpuClockHz(1000);
         for(unsigned i=0;i<64;++i)
             p6809->writeCpu(static_cast<WORD>(0x1000+i),0x12); // MC6809 NOP
-        p6809->writeCpu(0xfd02,0x04); // serial interrupt enabled
+        // Keep IRQ masked while stepping NOPs. Assert the 6809
+        // aggregator later without vectoring into an uninitialized ISR.
     }
     auto uart=machine.systemBoard().usartDevice();
     // Default transport remains instantaneous; not clock-driven until opt-in.
@@ -46,7 +47,12 @@ static int run(CpuType cpuType)
     for(unsigned i=0;i<10;++i)machine.executeOne();
     if(!uart->rxReady() || !uart->irqRequest() ||
        (machine.systemBoard().irqLines()&0x10)==0)return 3;
-    if(p6809 && !p6809->irqPending())return 4;
+    if(p6809) {
+        p6809->writeCpu(0xfd02,0x04); // unmask after arrival
+        p6809->syncSerialIrq();
+        if(!p6809->irqPending())return 4;
+        p6809->writeCpu(0xfd02,0x00); // re-mask before continuing NOPs
+    }
     if(p8088) {
         p8088->bus().refreshSystemIrq();
         if(!p8088->bus().interruptPending())return 5;
