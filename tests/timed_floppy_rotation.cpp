@@ -56,6 +56,19 @@ int main() {
     machine.advanceTimeNanoseconds(200000000);
     if((cpu->readCpu(0xfd30)&2)==0)return 18;
     if(cpu->readCpu(0xfd33)!=0x6c)return 19;
+    // An absent ID does not return RNF before five revolutions.
+    cpu->writeCpu(0xfd32,27);
+    cpu->writeCpu(0xfd30,0x80);
+    machine.advanceTimeNanoseconds(4*FloppyDevice::revolutionNanoseconds(1));
+    if((cpu->readCpu(0xfd30)&1)==0)return 22;
+    machine.advanceTimeNanoseconds(FloppyDevice::revolutionNanoseconds(1));
+    if((cpu->readCpu(0xfd30)&0x10)==0)return 23;
+    // Force Interrupt aborts a pending rotational wait.
+    cpu->writeCpu(0xfd32,1);
+    cpu->writeCpu(0xfd30,0x80);
+    cpu->writeCpu(0xfd30,0xd0);
+    machine.advanceTimeNanoseconds(200000000);
+    if(cpu->readCpu(0xfd30)&1)return 24;
 
     // The same scheduler must defer 8088 8237 DMA transfers.
     Machine machine86;
@@ -83,5 +96,19 @@ int main() {
     if((bus.readIo(0xfd18)&1)==0 || bus.readRam(0x2000)==0x73)return 20;
     machine86.advanceTimeNanoseconds(200000000);
     if(bus.readRam(0x2000)!=0x73 || bus.readIo(0xfd18)!=0)return 21;
+    // WRITE SECTOR must not modify backing media until timed completion.
+    for(unsigned i=0;i<256;++i)bus.writeMemory(0x2100+i,0x42);
+    bus.writeIo(0xfd1a,2);
+    bus.writeIo(0x1c,0);
+    bus.writeIo(0x10,0);
+    bus.writeIo(0x10,0x21);
+    bus.writeIo(0x11,0xff);
+    bus.writeIo(0x11,0);
+    bus.writeIo(0x1b,0x48);
+    bus.writeIo(0x1a,0);
+    bus.writeIo(0xfd18,0xa0);
+    if(machine86.systemBoard().floppyDevice()->raw2d()[256]!=0)return 25;
+    machine86.advanceTimeNanoseconds(200000000);
+    if(machine86.systemBoard().floppyDevice()->raw2d()[256]!=0x42)return 26;
     return 0;
 }
