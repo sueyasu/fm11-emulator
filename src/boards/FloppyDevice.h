@@ -13,6 +13,55 @@
 // The CPU boards retain only their FDC register and DMA-adapter behavior.
 class FloppyDevice {
 public:
+    // Opt-in Type-I mechanical timing, shared by 6809 and 8088 buses.
+    // Rotational/DRQ timing is deliberately outside this first stage.
+    void enableSeekTiming(bool enable) {seekTimed_=enable;resetSeekTiming();}
+    bool seekTimingEnabled() const {return seekTimed_;}
+    void resetSeekTiming() {for(auto& bank:seek_)for(auto& s:bank)s=SeekState{};}
+    bool beginTypeI(unsigned channel,unsigned drive,BYTE command) {
+        if(!seekTimed_ || channel>1 || drive>3 || (command&0x80))return false;
+        const unsigned kind=command&0xe0;
+        if(kind!=0 && kind!=0x20 && kind!=0x40 && kind!=0x60)return false;
+        auto& s=seek_[channel][drive];
+        const unsigned maxTrack=channel?76u:39u;
+        unsigned target=s.head;
+        if(kind==0)target=(command&0x10)?registerValue(channel?0x33:0x1b):0;
+        else if(kind==0x20)target=s.inward?std::min(maxTrack,s.head+1):(s.head?s.head-1:0);
+        else if(kind==0x40){s.inward=true;target=std::min(maxTrack,s.head+1);}
+        else {s.inward=false;target=s.head?s.head-1:0;}
+        target=std::min(maxTrack,target);
+        const unsigned distance=s.head>target?s.head-target:target-s.head;
+        constexpr std::array<unsigned,4> stepMs{{6,12,20,30}};
+        s.target=target;
+        s.updateTrack=(kind==0 || (command&0x10)!=0);
+        s.pending=true;s.complete=false;
+        s.remainingNs=(std::uint64_t(std::max(1u,distance))*stepMs[command&3]+15)*1000000ULL;
+        if(channel==0){registers_[0x1c]&=0x01;registers_[0x1f]=0;}
+        else {registers_[0x30]=0x01;registers_[0x37]=0;}
+        return true;
+    }
+    void advanceSeekNanoseconds(std::uint64_t ns) {
+        if(!seekTimed_ || !ns)return;
+        for(unsigned ch=0;ch<2;++ch)for(unsigned d=0;d<4;++d){
+            auto& s=seek_[ch][d];
+            if(!s.pending)continue;
+            if(ns<s.remainingNs){s.remainingNs-=ns;continue;}
+            s.pending=false;s.remainingNs=0;s.head=s.target;s.complete=true;
+            if(s.updateTrack)registers_[ch?0x31:0x19]=BYTE(s.head);
+            if(ch==0){registers_[0x1c]|=0x40;registers_[0x1f]=registers_[0x1c];}
+            else {registers_[0x30]=0x01;registers_[0x37]=0x40;}
+        }
+    }
+    bool seekBusy(unsigned ch,unsigned drive) const {return seek_.at(ch).at(drive).pending;}
+    bool seekComplete(unsigned ch,unsigned drive) const {return seek_.at(ch).at(drive).complete;}
+    void ackSeek(unsigned ch,unsigned drive) {seek_.at(ch).at(drive).complete=false;}
+    unsigned headTrack(unsigned ch,unsigned drive) const {return seek_.at(ch).at(drive).head;}
+    BYTE typeIStatus(unsigned ch,unsigned drive) const {
+        const auto& s=seek_.at(ch).at(drive);
+        if(s.pending)return 0x01;
+        return BYTE((s.head==0?0x04:0) |
+              ((ch==0?has2d(drive):has2hd(drive))?0:0x80));
+    }
     // The controller drive-select bits address independent inserted media.
     void setMountedDrive(unsigned drive) {
         if(drive>3)throw std::invalid_argument("FDC drive must be 0..3");
@@ -304,7 +353,7 @@ public:
     // Command and data ports are dispatched separately by DMA adapters.
     BYTE registerValue(unsigned reg) const {return registers_.at(reg);}
     void writeRegister(unsigned reg,BYTE value) {registers_.at(reg)=value;}
-    void resetRegisters() {registers_.fill(0);}
+    void resetRegisters() {registers_.fill(0);resetSeekTiming();}
     enum class Command : BYTE { Other, ReadSector, WriteSector };
     static Command decodeCommand(BYTE value) {
         switch(value&0xf0) {
@@ -378,6 +427,13 @@ public:
     void clearDirty2d(unsigned drive=0) {media2d_.at(drive).dirty=false;}
     void clearDirty2hd(unsigned drive=0) {media2hd_.at(drive).dirty=false;}
 private:
+    struct SeekState {
+        unsigned head=0,target=0;
+        std::uint64_t remainingNs=0;
+        bool inward=true,updateTrack=false,pending=false,complete=false;
+    };
+    bool seekTimed_=false;
+    std::array<std::array<SeekState,4>,2> seek_{};
     struct Disk {
         std::vector<BYTE> raw,d88;
         std::vector<std::size_t> offsets;
