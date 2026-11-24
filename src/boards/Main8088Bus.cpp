@@ -48,6 +48,8 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
     const bool writing=decoded==FloppyDevice::Command::WriteSector;
     if(decoded==FloppyDevice::Command::Other) {
         floppy_->finishTransfer();
+        const unsigned selected=floppy_->registerValue(channel==0?0x1d:0x35)&3;
+        if(floppy_->beginTypeI(channel,selected,command))return;
         if((command&0xf0)==0xf0) {
             // FM-11 original: Mini-FDC 6400 bytes, standard FDC 10900.
             // 8237 channel 0/1 supplies the raw WRITE TRACK stream.
@@ -183,7 +185,12 @@ BYTE Main8088Bus::readIo(WORD port) const
     if(port>=0xfd00 && port<=0xfdff && systemReader_) return systemReader_(port);
     if(((port>=0xfd18 && port<=0xfd1f && floppy_->hasAny2d()) ||
         (port>=0xfd30 && port<=0xfd35 && floppy_->hasAny2hd()))) {
-        if(port==0xfd18 || port==0xfd30)return floppy_->transferStatus();
+        if(port==0xfd18 || port==0xfd30){
+            const unsigned channel=port==0xfd18?0:1;
+            const unsigned selected=floppy_->registerValue(channel==0?0x1d:0x35)&3;
+            if(floppy_->seekTimingEnabled())return floppy_->typeIStatus(channel,selected);
+            return floppy_->transferStatus();
+        }
         if(port==0xfd1b || port==0xfd33)
             return const_cast<Main8088Bus*>(this)->floppyReadData();
         BYTE busValue=0;
