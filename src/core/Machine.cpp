@@ -376,8 +376,10 @@ void Machine::advanceTimeNanoseconds(std::uint64_t nanoseconds)
     if(mainBoard_->floppyDevice()->seekTimingEnabled()) {
         const auto fdc=mainBoard_->floppyDevice();
         for(auto* cpu:main6809Boards_) {
-            cpu->setMainIrqSource(0x08,fdc->seekComplete(0,fdc->registerValue(0x1d)&3));
-            cpu->setExtendedIrqSource(0x40,fdc->seekComplete(1,fdc->registerValue(0x35)&3));
+            if(fdc->seekComplete(0,fdc->registerValue(0x1d)&3))
+                cpu->setMainIrqSource(0x08,true);
+            if(fdc->seekComplete(1,fdc->registerValue(0x35)&3))
+                cpu->setExtendedIrqSource(0x40,true);
         }
     }
     mainBoard_->usartDevice()->advanceNanoseconds(nanoseconds);
@@ -437,8 +439,10 @@ void Machine::advanceFloppyCpuCycles(std::uint64_t cycles,std::uint64_t hz)
     fdc->advanceSeekNanoseconds((cycles/hz)*billion+n/hz);
     floppyFraction_=n%hz;
     for(auto* cpu:main6809Boards_) {
-        cpu->setMainIrqSource(0x08,fdc->seekComplete(0,fdc->registerValue(0x1d)&3));
-        cpu->setExtendedIrqSource(0x40,fdc->seekComplete(1,fdc->registerValue(0x35)&3));
+        if(fdc->seekComplete(0,fdc->registerValue(0x1d)&3))
+                cpu->setMainIrqSource(0x08,true);
+        if(fdc->seekComplete(1,fdc->registerValue(0x35)&3))
+                cpu->setExtendedIrqSource(0x40,true);
     }
 }
 

@@ -227,6 +227,9 @@ if(FM11_BUILD_TESTS)
     add_executable(fdc_command_decode tests/fdc_command_decode.cpp)
     target_link_libraries(fdc_command_decode PRIVATE fm11_core)
     add_test(NAME fdc_command_decode COMMAND fdc_command_decode)
+    add_executable(timed_floppy_seek tests/timed_floppy_seek.cpp)
+    target_link_libraries(timed_floppy_seek PRIVATE fm11_core)
+    add_test(NAME timed_floppy_seek COMMAND timed_floppy_seek)
 
 
     add_executable(main8088_cycles tests/main8088_cycles.cpp)

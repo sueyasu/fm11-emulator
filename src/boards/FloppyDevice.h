@@ -49,7 +49,7 @@ public:
             s.pending=false;s.remainingNs=0;s.head=s.target;s.complete=true;
             if(s.updateTrack)registers_[ch?0x31:0x19]=BYTE(s.head);
             if(ch==0){registers_[0x1c]|=0x40;registers_[0x1f]=registers_[0x1c];}
-            else {registers_[0x30]=0x01;registers_[0x37]=0x40;}
+            else {registers_[0x30]=0x00;registers_[0x37]=0x40;}
         }
     }
     void cancelSeek(unsigned ch,unsigned drive) {
