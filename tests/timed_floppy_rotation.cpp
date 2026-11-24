@@ -58,6 +58,10 @@ int main() {
     if((cpu->readCpu(0xfd30)&1)==0)return 16;
     machine.advanceTimeNanoseconds(1000000);
     if((cpu->readCpu(0xfd30)&1)==0)return 17;
+    // At C0/H0/S1 the 2HD sector arrives after about 2.6 ms:
+    // DRQ must appear before the 4.096 ms payload interval finishes.
+    machine.advanceTimeNanoseconds(2000000);
+    if((cpu->readCpu(0xfd30)&3)!=3)return 27;
     machine.advanceTimeNanoseconds(200000000);
     if((cpu->readCpu(0xfd30)&2)==0)return 18;
     if(cpu->readCpu(0xfd33)!=0x6c)return 19;
@@ -99,6 +103,11 @@ int main() {
     bus.writeIo(0x1a,0);
     bus.writeIo(0xfd18,0x80);
     if((bus.readIo(0xfd18)&1)==0 || bus.readRam(0x2000)==0x73)return 20;
+    machine86.advanceTimeNanoseconds(3000000);
+    if(bus.readRam(0x2000)==0x73 || (bus.readIo(0xfd18)&1)==0)return 28;
+    machine86.advanceTimeNanoseconds(1000000);
+    // 8237 terminal count is now asserted, but FDC is still BUSY.
+    if(bus.readRam(0x2000)!=0x73 || (bus.readIo(0xfd18)&1)==0)return 29;
     machine86.advanceTimeNanoseconds(200000000);
     if(bus.readRam(0x2000)!=0x73 || bus.readIo(0xfd18)!=0)return 21;
     // WRITE SECTOR must not modify backing media until timed completion.
