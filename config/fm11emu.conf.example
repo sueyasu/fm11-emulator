@@ -63,6 +63,10 @@ height = 400
 
 # 2D Mini-FDC: up to four independent physical drives.
 # Raw 320 KiB images and 2D D88 containers are accepted.
+[floppy]
+# timing = fast  # default: immediate FDC commands
+# timing = timed # optional simulated SEEK/RESTORE/STEP timing
+
 [floppy_2d]
 # drive0 = /path/to/system.d88
 # drive1 = /path/to/data.d88
