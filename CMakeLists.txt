@@ -233,6 +233,9 @@ if(FM11_BUILD_TESTS)
     add_executable(timed_floppy_rotation tests/timed_floppy_rotation.cpp)
     target_link_libraries(timed_floppy_rotation PRIVATE fm11_core)
     add_test(NAME timed_floppy_rotation COMMAND timed_floppy_rotation)
+    add_executable(timed_floppy_rom_status tests/timed_floppy_rom_status.cpp)
+    target_link_libraries(timed_floppy_rom_status PRIVATE fm11_core)
+    add_test(NAME timed_floppy_rom_status COMMAND timed_floppy_rom_status)
 
 
     add_executable(main8088_cycles tests/main8088_cycles.cpp)
