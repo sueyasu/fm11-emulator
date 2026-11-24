@@ -70,6 +70,23 @@ public:
         return stops==1 || (stops==2 && bits==5) ||
                (stops==3 && bits!=5);
     }
+    // Host-independent mode-to-termios translation. PTY drivers may ignore
+    // CS5..CS7 and PARENB, so verify these flags without relying on PTY
+    // tcgetattr() to echo them back.
+    static tcflag_t lineControlFlags(unsigned mode) {
+        if((mode&0x03)==0)
+            throw std::runtime_error("synchronous USART mode unsupported by termios");
+        if(!stopBitsRepresentable(mode))
+            throw std::runtime_error("unrepresentable 8251A stop-bit format");
+        const unsigned word=5+((mode>>2)&3);
+        tcflag_t flags=word==5?CS5:word==6?CS6:word==7?CS7:CS8;
+        if(mode&0x10) {
+            flags|=PARENB;
+            if(!(mode&0x20))flags|=PARODD;
+        }
+        if(((mode>>6)&3)!=1)flags|=CSTOPB;
+        return flags;
+    }
     // Called by the CPU owner immediately before servicing host I/O.
     // TIOCMGET supplies live CTS/DSR/CD levels. TIOCMSET changes only the
     // two output bits; hardware input pins must never be overwritten.
@@ -172,22 +189,12 @@ private:
     void configure(unsigned mode) {
         if(!physical())return;
         if(!baud_)throw std::runtime_error("undefined DIP baud for physical serial port");
-        if((mode&0x03)==0)
-            throw std::runtime_error("synchronous USART mode unsupported by termios");
+        const tcflag_t lineFlags=lineControlFlags(mode);
         termios t{};
         if(tcgetattr(fd_,&t)!=0)throw std::runtime_error(error("tcgetattr failed"));
         cfmakeraw(&t);
         t.c_cflag=static_cast<tcflag_t>(t.c_cflag&~(CSIZE|PARENB|PARODD|CSTOPB));
-        const unsigned word=5+((mode>>2)&3);
-        t.c_cflag|=word==5?CS5:word==6?CS6:word==7?CS7:CS8;
-        if(mode&0x10) {
-            t.c_cflag|=PARENB;
-            if(!(mode&0x20))t.c_cflag|=PARODD;
-        }
-        const unsigned stops=(mode>>6)&3;
-        if(!stopBitsRepresentable(mode))
-            throw std::runtime_error("unrepresentable 8251A stop-bit format");
-        if(stops==2 || stops==3)t.c_cflag|=CSTOPB;
+        t.c_cflag|=lineFlags;
         t.c_cflag|=CLOCAL|CREAD;
         t.c_cc[VMIN]=0;t.c_cc[VTIME]=0;
         const auto speed=termiosBaud(baud_);

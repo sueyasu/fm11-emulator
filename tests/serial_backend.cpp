@@ -1,6 +1,7 @@
 #include "MachineConfig.h"
 #include "SerialBackend.h"
 #include <fstream>
+#include <initializer_list>
 #include <cstdio>
 #include <stdexcept>
 #include <string>
@@ -54,6 +55,50 @@ int main() {
        SerialBackend::stopBitsRepresentable(0xc2) || // 5-bit 2 stops
        SerialBackend::stopBitsRepresentable(0x0e))return 9;
 
+    // Validate all representable asynchronous framing translations before
+    // testing the host driver. PTY drivers may silently clear PARENB/CS7.
+    struct Framing {unsigned mode;tcflag_t size;bool parity,odd,twoStops;};
+    for(const Framing f:std::initializer_list<Framing>{
+        {0x4e,CS8,false,false,false}, // 8N1
+        {0xce,CS8,false,false,true},  // 8N2
+        {0x7a,CS7,true,false,false},  // 7E1
+        {0x5a,CS7,true,true,false},   // 7O1
+        {0x7e,CS8,true,false,false},  // 8E1
+        {0x82,CS5,false,false,true},  // 5-bit 1.5 stops (POSIX CS5+CSTOPB)
+    }) {
+        const auto flags=SerialBackend::lineControlFlags(f.mode);
+        if((flags&CSIZE)!=f.size || !!(flags&PARENB)!=f.parity ||
+           !!(flags&PARODD)!=f.odd || !!(flags&CSTOPB)!=f.twoStops)
+            return 22;
+    }
+    for(const unsigned mode:{0x00u,0x0eu,0x8eu,0xc2u}) {
+        try {(void)SerialBackend::lineControlFlags(mode);return 23;}
+        catch(const std::runtime_error&) {}
+    }
+    // Verify all defined asynchronous DIP baud rates through a PTY. Only
+    // baud and 8-bit stop flags are asserted using tcgetattr() here.
+    struct BaudCase {unsigned dip;speed_t speed;};
+    for(const BaudCase rate:std::initializer_list<BaudCase>{
+        {8u,B75},{9u,B150},{0u,B300},{1u,B600},{2u,B1200},
+        {3u,B2400},{4u,B4800},{5u,B9600}
+    }) {
+        const int m=posix_openpt(O_RDWR|O_NOCTTY|O_NONBLOCK);
+        if(m<0 || grantpt(m)!=0 || unlockpt(m)!=0)return 24;
+        const char* path=ptsname(m);
+        if(!path)return 25;
+        {
+            SerialBackend backend(path,rate.dip);
+            termios t{};
+            const int fd=open(path,O_RDWR|O_NOCTTY|O_NONBLOCK);
+            if(fd<0)return 26;
+            const bool valid=tcgetattr(fd,&t)==0 &&
+                             cfgetispeed(&t)==rate.speed &&
+                             cfgetospeed(&t)==rate.speed;
+            close(fd);
+            if(!valid)return 27;
+        }
+        close(m);
+    }
     // Exercise the /dev/... branch against a PTY slave (no USB device).
     const int master=posix_openpt(O_RDWR|O_NOCTTY|O_NONBLOCK);
     if(master<0 || grantpt(master)!=0 || unlockpt(master)!=0)return 10;

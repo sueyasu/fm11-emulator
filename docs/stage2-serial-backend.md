@@ -103,6 +103,25 @@ so clocked mode may intentionally report receive overrun.
 A separate deterministic test `machine_serial_timing` verifies both
 6809 and 8088 instruction-time progression and serial IRQ publication.
 
+## Stage 2-A completion criteria and scope
+
+Confirmed on external physical 4800-baud connections: NitrOS-9 /T1
+interactive shell and CP/M-86 interactive console, including bidirectional
+commands and output. Starting picocom before launching the guest shell
+eliminated the reported one-time startup garbling; cause is not proven.
+
+Automated regression verifies 75, 150, 300, 600, 1200, 2400, 4800 and
+9600 baud mappings through Linux PTYs; it tests 8N1/8N2 configuration
+and 7E1, 7O1, 8E1, and CS5/1.5-stop mode translation independent of the
+TTY driver. PTY drivers can silently normalize data bits/parity, so this
+is **not** a physical adapter parity test. CTS/DSR/DCD and DTR/RTS
+are mapped through TIOCMGET/TIOCMBIS/TIOCMBIC when available, but
+real modem-pin wiring and full RTS/CTS behavior remain unverified.
+
+Stage 2-A is functionally complete for the tested 4800-baud three-wire
+terminal use case; other baud rates, parity, modem wiring and electrical
+error behavior remain optional physical-hardware validation.
+
 ## Real serial terminal smoke test
 
 On Linux, connect a USB serial adapter to the host, with TX/RX crossed
