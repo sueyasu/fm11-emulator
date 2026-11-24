@@ -613,8 +613,12 @@ BYTE Main6809Board::readIo(WORD address)
         }
         return ioRegisters_[0x33];
     case 0x30: {
-        if(floppy_->seekTimingEnabled() &&
-           floppy_->seekBusy(1,ioRegisters_[0x35]&3))return 0x01;
+        if(floppy_->seekTimingEnabled()) {
+            const unsigned drive=ioRegisters_[0x35]&3;
+            if(floppy_->seekBusy(1,drive))return 0x01;
+            if(floppy_->seekComplete(1,drive))
+                return floppy_->registerValue(0x30);
+        }
         // Reference MainCpu::GetIoByte: return the status, acknowledge
         // INTRQ (bit 0), then merge the one-shot DRQ latch.
         const BYTE status=ioRegisters_[reg];
@@ -626,10 +630,16 @@ BYTE Main6809Board::readIo(WORD address)
         // The shared device currently supports drive zero only.
         return static_cast<BYTE>(0xc0 | ([&](){unsigned ready=0;for(unsigned d=0;d<4;++d)if(floppy_->has2hd(d))ready|=1u<<d;return ready;}()));
     case 0x37: {
-        if(floppy_->seekTimingEnabled())floppy_->ackSeek(1,ioRegisters_[0x35]&3);
+        // Timed Type-I completion is latched by the shared FDC; other
+        // commands still use the board-local completion status.
+        const unsigned drive=ioRegisters_[0x35]&3;
+        const bool timedComplete=floppy_->seekTimingEnabled() &&
+                                 floppy_->seekComplete(1,drive);
+        const BYTE result=timedComplete?floppy_->registerValue(0x37):
+                                       ioRegisters_[0x37];
+        if(timedComplete)floppy_->ackSeek(1,drive);
         // Reference MainCpu::GetIoByte: reading FDC IRQ status
         // acknowledges the extended FDC interrupt source.
-        const BYTE result=ioRegisters_[0x37];
         setExtendedIrqSource(0x40,false);
         return result;
     }
