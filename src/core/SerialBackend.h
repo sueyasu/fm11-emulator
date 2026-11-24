@@ -19,7 +19,8 @@
 class SerialBackend {
 public:
     explicit SerialBackend(const std::string& endpoint,unsigned baudDip=0,
-                           bool fast=false):endpoint_(endpoint) {
+                           bool fast=false,bool rtscts=false):endpoint_(endpoint),
+                           rtscts_(rtscts) {
         const auto rate=Fm11SerialClock::lookup(baudDip);
         baud_=fast?rate.fastBaud:rate.asyncBaud;
         if(endpoint_=="none")return;
@@ -124,7 +125,9 @@ private:
             throw std::runtime_error(error("cannot query serial modem lines"));
         }
         // Read the physical inputs before making any changes to DTR/RTS.
-        ctsAllowed_=(pins&TIOCM_CTS)!=0;
+        // In a three-wire connection CTS may be permanently low despite
+        // usable TX/RX. Enable CTS gating only when explicitly requested.
+        ctsAllowed_=!rtscts_ || (pins&TIOCM_CTS)!=0;
         uart.setModemInputs(ctsAllowed_,
                             (pins&TIOCM_DSR)!=0,
                             (pins&TIOCM_CAR)!=0);
@@ -199,6 +202,7 @@ private:
     bool savedTermios_=false;
     bool modemSupported_=true;
     bool ctsAllowed_=true;
+    bool rtscts_=false;
     termios original_{};
     std::vector<unsigned char> pending_;
 };

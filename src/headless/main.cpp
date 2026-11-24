@@ -186,7 +186,8 @@ int main(int argc, char** argv) {
         else loadBinary(board,bootMode ? boottrack : file,load,
                         bootMode ? bootSize : 0);
         // The monitor stays on stdin. The 8251A's host endpoint is separate.
-        SerialBackend serial(serialConfig.serial0,serialConfig.dipSerialBaudSwitches);
+        SerialBackend serial(serialConfig.serial0,serialConfig.dipSerialBaudSwitches,
+                             false,serialConfig.serialRtsCts);
         std::signal(SIGINT,requestStop);
         std::signal(SIGTERM,requestStop);
         std::cout << "FM-11 headless monitor\nSerial: "

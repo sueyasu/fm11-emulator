@@ -163,7 +163,12 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                 else if(key=="HDD")cfg.bootHdd=boolean(value);
                 else handled=false;
             } else if(section=="serial") {
-                if(key=="timing") {
+                if(key=="flow_control") {
+                    if(value=="none")cfg.serialRtsCts=false;
+                    else if(value=="rtscts")cfg.serialRtsCts=true;
+                    else throw std::invalid_argument(
+                        "serial.flow_control must be none or rtscts");
+                } else if(key=="timing") {
                     if(value=="immediate")cfg.serialClocked=false;
                     else if(value=="clocked")cfg.serialClocked=true;
                     else throw std::invalid_argument(

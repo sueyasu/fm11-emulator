@@ -34,6 +34,7 @@ struct MachineConfig {
     std::string hddImage;
     std::string serial0="pty"; // host endpoint for shared 8251A
     bool serialClocked=false; // opt-in virtual character timing
+    bool serialRtsCts=false; // default to TX/RX/GND three-wire operation
     // FD23 boot-device DIP switches SW6..SW8 are active-low.
     // Defaults preserve the existing 0x9f hardware setting.
     bool boot2dFdd=true;

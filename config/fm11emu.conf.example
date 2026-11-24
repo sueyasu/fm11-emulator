@@ -25,6 +25,8 @@ ram_kib = 1024
 # Shared 8251A FD06/FD07: pty (default), none or a physical device.
 [serial]
 serial0 = pty
+# flow_control = none   # default: TX/RX/GND, do not require CTS
+# flow_control = rtscts # require physical CTS before transmission
 # timing = clocked   # opt-in virtual character timing using DIP baud
 # timing = immediate # default, preserves OS/PTTY terminal responsiveness
 # serial0 = /dev/ttyUSB0

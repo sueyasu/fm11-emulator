@@ -363,7 +363,8 @@ int main(int argc,char** argv) {
         std::unique_ptr<SerialBackend> serial;
         if(mainBoard || main8088Enabled) {
             serial=std::make_unique<SerialBackend>(
-                config.serial0,config.dipSerialBaudSwitches);
+                config.serial0,config.dipSerialBaudSwitches,false,
+                config.serialRtsCts);
             if(serial->enabled())
                 std::cout<<(serial->physical()?"Serial device: ":"Serial PTY: ")
                          <<serial->label()<<"\n"<<std::flush;

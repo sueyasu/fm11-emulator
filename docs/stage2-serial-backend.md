@@ -6,6 +6,7 @@ in both SDL and headless:
 ```ini
 [serial]
 serial0 = pty
+# flow_control = none
 # serial0 = /dev/ttyUSB0
 # serial0 = none
 ```
@@ -17,6 +18,12 @@ serial0 = pty
   parity and stop bits. The DIP SW4..8 selector determines the host baud.
   Unsupported/undefined speed and framing fail rather than guess.
 - `none`: no external serial endpoint; the guest 8251A still exists.
+
+`flow_control = none` (default) permits three-wire TX/RX/GND USB adapters:
+CTS is treated as asserted in the guest even when a host device reports
+an inactive hardware CTS pin. Set `flow_control = rtscts` only when the
+adapter and terminal have the CTS/RTS wiring. The guest DTR/RTS commands
+continue to control the host outputs in either mode.
 
 The backend is serviced only by the CPU owner, not by the SDL renderer or
 the PTM thread. Linux UART hardware performs real bit timing, so the
@@ -95,3 +102,28 @@ so clocked mode may intentionally report receive overrun.
 
 A separate deterministic test `machine_serial_timing` verifies both
 6809 and 8088 instruction-time progression and serial IRQ publication.
+
+## Real serial terminal smoke test
+
+On Linux, connect a USB serial adapter to the host, with TX/RX crossed
+and a shared GND to the terminal. Use a real RS-232 level converter when
+connecting to an RS-232 terminal (never connect TTL UART pins directly).
+Set `[serial] serial0 = /dev/ttyUSB0`, `flow_control = none`, and
+`[DIPSW] serial_baud_sw4_8 = 4` for 4800 baud. Keep `timing = immediate`
+(the physical UART already performs bit timing).
+
+On the terminal select 4800 baud, 8N1, and no hardware/software flow
+control. Start `fm11-sdl --config PATH` or `fm11-headless --config PATH`
+using the normal boot options and an OS image with serial console enabled.
+The startup log should show `Serial device: /dev/ttyUSB0` in SDL or
+`Serial: /dev/ttyUSB0` in headless. Verify boot output, input commands,
+and bidirectional multi-line text (e.g., NitrOS-9 `dir` or CP/M-86 `dir`).
+For a wired RTS/CTS terminal select `flow_control = rtscts` and configure
+appropriate handshaking at the terminal. The terminal-side baud/framing
+must match the guest mode and DIP setting.
+
+Only one process can safely operate the serial port at a time. Stop
+ModemManager and other port clients if they claim it, and make sure the
+user has permissions (usually the `dialout` group). Automated PTY tests
+validate host I/O and configuration but cannot prove electrical levels,
+USB cable wiring, or a particular terminal's handshake behavior.

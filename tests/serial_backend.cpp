@@ -17,7 +17,14 @@ int main() {
         try {(void)parseMachineConfigFile(file);return 2;}
         catch(const std::runtime_error&) {}
     }
-    if(MachineConfig{}.serial0!="pty")return 3;
+    if(MachineConfig{}.serial0!="pty" || MachineConfig{}.serialRtsCts)return 3;
+    for(const std::string setting:{"none","rtscts"}) {
+        {std::ofstream out(file);out<<"[serial]\nflow_control = "<<setting<<"\n";}
+        if(parseMachineConfigFile(file).serialRtsCts!=(setting=="rtscts"))return 20;
+    }
+    {std::ofstream out(file);out<<"[serial]\nflow_control = invalid\n";}
+    try {(void)parseMachineConfigFile(file);return 21;}
+    catch(const std::runtime_error&) {}
     SerialBackend none("none");
     Usart8251 virtualUart;
     virtualUart.reset();
