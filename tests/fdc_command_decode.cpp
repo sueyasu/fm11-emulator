@@ -11,6 +11,10 @@ int main()
             return 1;
     }
     FloppyDevice fdc;
+    if(fdc.beginSector(0,0,0,1,0,false))return 2;
+    if(fdc.transferStatus()!=0x10)return 3;
+    fdc.finishTransfer();
+    if(fdc.transferStatus()!=0)return 4;
     fdc.enableSeekTiming(true);
     fdc.writeRegister(0x1b,12);
     if(!fdc.beginTypeI(0,0,0x10) || !fdc.seekBusy(0,0) || fdc.registerValue(0x19)!=0)return 10;
@@ -39,9 +43,5 @@ int main()
     if(!fdc.sectorOffset(0,1,0,1,0,seekOffset))return 21;
     fdc.enableSeekTiming(false);
     if(fdc.beginTypeI(0,0,0x10))return 18;
-    if(fdc.beginSector(0,0,0,1,0,false))return 2;
-    if(fdc.transferStatus()!=0x10)return 3;
-    fdc.finishTransfer();
-    if(fdc.transferStatus()!=0)return 4;
     return 0;
 }
