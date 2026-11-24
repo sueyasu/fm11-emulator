@@ -362,6 +362,7 @@ void Machine::reset()
     lastExecutionCycles_=0;
     serialNanosecondFraction_=0;
     serialFractionHz_=0;
+    floppyFraction_=floppyClockHz_=0;
     deterministicDisplay_.reset();
     synchronizeFd05Selection();
     if(wasRealtime)startRealtimePtm();
@@ -371,6 +372,7 @@ void Machine::reset()
 void Machine::advanceTimeNanoseconds(std::uint64_t nanoseconds)
 {
     mainBoard_->advanceTimeNanoseconds(nanoseconds);
+    mainBoard_->floppyDevice()->advanceSeekNanoseconds(nanoseconds);
     mainBoard_->usartDevice()->advanceNanoseconds(nanoseconds);
     publishSerialIrq();
     if(!displayCpuThreadEnabled())deterministicDisplay_.advanceTime(nanoseconds);
@@ -418,6 +420,17 @@ void Machine::advanceSerialCpuCycles(std::uint64_t cycles,std::uint64_t hz)
     publishSerialIrq();
 }
 
+void Machine::advanceFloppyCpuCycles(std::uint64_t cycles,std::uint64_t hz)
+{
+    auto fdc=mainBoard_->floppyDevice();
+    if(!fdc->seekTimingEnabled() || !cycles || !hz)return;
+    if(floppyClockHz_!=hz){floppyClockHz_=hz;floppyFraction_=0;}
+    constexpr std::uint64_t billion=1000000000ULL;
+    const auto n=(cycles%hz)*billion+floppyFraction_;
+    fdc->advanceSeekNanoseconds((cycles/hz)*billion+n/hz);
+    floppyFraction_=n%hz;
+}
+
 void Machine::set8088ClockHz(std::uint64_t hz)
 {
     if(hz==0 || hz>1000000000ULL)
@@ -462,6 +475,7 @@ void Machine::executeOne(bool ptmIrqSyncedBefore)
             if(!realtimePtmEnabled())
                 mainBoard_->advanceCpuCycles(lastExecutionCycles_,hz);
             advanceSerialCpuCycles(lastExecutionCycles_,hz);
+            advanceFloppyCpuCycles(lastExecutionCycles_,hz);
             if(!displayCpuThreadEnabled())
                 deterministicDisplay_.advanceCpuCycles(lastExecutionCycles_,hz);
             // SDL samples the real-time PTM immediately before the
@@ -480,6 +494,7 @@ void Machine::executeOne(bool ptmIrqSyncedBefore)
             if(!realtimePtmEnabled())
                 mainBoard_->advanceCpuCycles(lastExecutionCycles_,hz);
             advanceSerialCpuCycles(lastExecutionCycles_,hz);
+            advanceFloppyCpuCycles(lastExecutionCycles_,hz);
             if(!displayCpuThreadEnabled())
                 deterministicDisplay_.advanceCpuCycles(lastExecutionCycles_,hz);
             for(auto* cpu6809:main6809Boards_)
