@@ -1,4 +1,5 @@
 #include "FloppyDevice.h"
+#include <vector>
 
 int main()
 {
@@ -27,6 +28,14 @@ int main()
     if(!fdc.beginTypeI(1,1,0x10))return 16;
     fdc.advanceSeekNanoseconds(50000000);
     if(fdc.headTrack(1,1)!=5 || fdc.headTrack(0,0)!=0)return 17;
+    // A logical track-register write cannot move the physical head.
+    fdc.load2d(std::vector<BYTE>(40u*2*16*256,0));
+    fdc.writeRegister(0x19,1);
+    std::size_t seekOffset=0;
+    if(fdc.sectorOffset(0,1,0,1,0,seekOffset))return 19;
+    if(!fdc.beginTypeI(0,0,0x10))return 20;
+    fdc.advanceSeekNanoseconds(100000000);
+    if(fdc.sectorOffset(0,1,0,1,0,seekOffset))return 21;
     fdc.enableSeekTiming(false);
     if(fdc.beginTypeI(0,0,0x10))return 18;
     if(fdc.beginSector(0,0,0,1,0,false))return 2;
