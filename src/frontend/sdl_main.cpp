@@ -304,6 +304,7 @@ int main(int argc,char** argv) {
         machine.setDisplayCpuClockHz(testPattern?0:config.displayClockHz);
         machine.setDisplayCpuSpeedMultiplier(speed);
         machine.reset();
+        machine.systemBoard().floppyDevice()->enableSeekTiming(config.floppyTimed);
         if(config.serialClocked) {
             if(config.serial0!="pty" && config.serial0!="none")
                 throw std::invalid_argument(
