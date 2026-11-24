@@ -1,6 +1,7 @@
 #include "FloppyDevice.h"
 #include "Machine.h"
 #include "Main6809Board.h"
+#include "Main8088Board.h"
 #include <memory>
 #include <vector>
 
@@ -55,5 +56,32 @@ int main() {
     machine.advanceTimeNanoseconds(200000000);
     if((cpu->readCpu(0xfd30)&2)==0)return 18;
     if(cpu->readCpu(0xfd33)!=0x6c)return 19;
+
+    // The same scheduler must defer 8088 8237 DMA transfers.
+    Machine machine86;
+    auto board86=std::make_unique<Main8088Board>(CpuType::I8088);
+    auto* cpu86=board86.get();
+    machine86.addBoard(std::move(board86));
+    std::vector<BYTE> image(40u*2*16*256,0);
+    image[0]=0x73;
+    machine86.systemBoard().floppyDevice()->load2d(image);
+    machine86.reset();
+    machine86.systemBoard().floppyDevice()->enableSeekTiming(true);
+    auto& bus=cpu86->bus();
+    bus.writeIo(0xfd19,0);
+    bus.writeIo(0xfd1a,1);
+    bus.writeIo(0xfd1c,0);
+    bus.writeIo(0xfd1d,0);
+    bus.writeIo(0x1c,0); // reset 8237 address/count flip-flop
+    bus.writeIo(0x10,0);
+    bus.writeIo(0x10,0x20);
+    bus.writeIo(0x11,0xff);
+    bus.writeIo(0x11,0);
+    bus.writeIo(0x1b,0x44);
+    bus.writeIo(0x1a,0);
+    bus.writeIo(0xfd18,0x80);
+    if((bus.readIo(0xfd18)&1)==0 || bus.readRam(0x2000)==0x73)return 20;
+    machine86.advanceTimeNanoseconds(200000000);
+    if(bus.readRam(0x2000)!=0x73 || bus.readIo(0xfd18)!=0)return 21;
     return 0;
 }
