@@ -47,6 +47,12 @@ int main() {
     // Writing the track register alone cannot teleport the head.
     cpu->writeCpu(0xfd31,0);
     cpu->writeCpu(0xfd30,0x80);
-    if((cpu->readCpu(0xfd30)&0x10)==0)return 11;
+    // The physical head remains on cylinder 1. A mismatched cylinder
+    // produces Record Not Found only after five full revolutions.
+    if((cpu->readCpu(0xfd30)&1)==0)return 11;
+    machine.advanceTimeNanoseconds(4*FloppyDevice::revolutionNanoseconds(1));
+    if((cpu->readCpu(0xfd30)&1)==0)return 12;
+    machine.advanceTimeNanoseconds(FloppyDevice::revolutionNanoseconds(1));
+    if((cpu->readCpu(0xfd30)&0x10)==0)return 13;
     return 0;
 }
