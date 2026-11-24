@@ -1,5 +1,6 @@
 #include "Main8088Bus.h"
 #include <vector>
+#include <memory>
 
 static void channel0(Main8088Bus& b,WORD address,BYTE mode)
 {
@@ -71,5 +72,48 @@ int main()
     const auto hdResult=b.floppy2hdImage();
     for(unsigned i=0;i<1024;++i)
         if(hdResult[1024+i]!=BYTE(i^0x67))return 8;
+    // Timed 2HD ROM sequence: RESTORE -> DMA READ -> SEEK -> DMA READ.
+    // A new Type-II command must discard the completed Type-I status,
+    // instead of leaving FD30 stuck at TRACK0 (04h) or a stale SEEK status.
+    Main8088Bus timed;
+    auto timedFdc=std::make_shared<FloppyDevice>();
+    timed.setFloppyDevice(timedFdc);
+    std::vector<BYTE> timedImage(77u*2*26*256,0);
+    timedImage[0]=0x71;
+    timedImage[2u*26*256]=0x72; // C1/H0/S1
+    timedFdc->load2hd(timedImage);
+    timed.reset();
+    timedFdc->enableSeekTiming(true);
+    timed.writeIo(0xfd35,0);
+    timed.writeIo(0xfd34,0);
+    timed.writeIo(0xfd31,0);
+    timed.writeIo(0xfd32,1);
+    timed.writeIo(0xfd30,0x08); // RESTORE
+    if((timed.readIo(0xfd30)&1)==0)return 9;
+    timedFdc->advanceSeekNanoseconds(30000000);
+    if((timed.readIo(0xfd30)&4)==0)return 10;
+    timed.writeIo(0x1c,0);
+    timed.writeIo(0x12,0);
+    timed.writeIo(0x12,0x40);
+    timed.writeIo(0x13,0xff);
+    timed.writeIo(0x13,0);
+    timed.writeIo(0x1b,0x45);
+    timed.writeIo(0x1a,1);
+    timed.writeIo(0xfd30,0x80);
+    if(timed.readIo(0xfd30)!=0 || timed.readRam(0x4000)!=0x71)return 11;
+    timed.writeIo(0xfd33,1);
+    timed.writeIo(0xfd30,0x1a); // SEEK to C1
+    if((timed.readIo(0xfd30)&1)==0)return 12;
+    timedFdc->advanceSeekNanoseconds(50000000);
+    if(timedFdc->headTrack(1,0)!=1 || timed.readIo(0xfd31)!=1)return 13;
+    timed.writeIo(0x1c,0);
+    timed.writeIo(0x12,0);
+    timed.writeIo(0x12,0x41);
+    timed.writeIo(0x13,0xff);
+    timed.writeIo(0x13,0);
+    timed.writeIo(0x1b,0x45);
+    timed.writeIo(0x1a,1);
+    timed.writeIo(0xfd30,0x80);
+    if(timed.readIo(0xfd30)!=0 || timed.readRam(0x4100)!=0x72)return 14;
     return 0;
 }
