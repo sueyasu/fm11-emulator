@@ -43,6 +43,7 @@ void Main8088Bus::floppyWriteData(BYTE value)
 
 void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
 {
+    if(!timedTypeIIDispatch_)floppy_->cancelTypeII(channel);
     const unsigned base=channel==0?0x18:0x30;
     const auto decoded=FloppyDevice::decodeCommand(command);
     const bool writing=decoded==FloppyDevice::Command::WriteSector;
@@ -97,6 +98,14 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
     // A Type-II command supersedes the prior Type-I status/IRQ latch.
     // Otherwise FD30 keeps reporting TRACK0/SEEK after DMA READ/WRITE.
     const unsigned selected=floppy_->registerValue(channel==0?0x1d:0x35)&3;
+    if(!timedTypeIIDispatch_ &&
+       floppy_->beginTypeII(channel,selected,floppy_->registerValue(base+1),
+           floppy_->registerValue(channel==0?0x1c:0x34)&1,
+           floppy_->registerValue(base+2),command)) {
+        floppy_->finishTransfer();
+        if(channel==0)floppy_->writeRegister(0x1f,0);
+        return;
+    }
     floppy_->cancelSeek(channel,selected);
     // Bit 7 of FD1D controls motor/drive selection; only the bottom
     // two bits identify the physical drive (as in the reference FM-11).
@@ -193,6 +202,7 @@ BYTE Main8088Bus::readIo(WORD port) const
         if(port==0xfd18 || port==0xfd30){
             const unsigned channel=port==0xfd18?0:1;
             const unsigned selected=floppy_->registerValue(channel==0?0x1d:0x35)&3;
+            if(floppy_->typeIIBusy(channel,selected))return 0x01;
             if(floppy_->seekTimingEnabled() &&
                (floppy_->seekBusy(channel,selected) ||
                 floppy_->seekComplete(channel,selected)))
@@ -524,4 +534,16 @@ bool Main8088Bus::serviceDma()
         return true;
     }
     return false;
+}
+
+void Main8088Bus::serviceTimedFloppy()
+{
+    if(!floppy_->typeIIReady())return;
+    for(unsigned channel=0;channel<2;++channel) {
+        BYTE command=0;
+        if(!floppy_->takeTypeIIReady(channel,command))continue;
+        timedTypeIIDispatch_=true;
+        floppyCommand(command,channel);
+        timedTypeIIDispatch_=false;
+    }
 }
