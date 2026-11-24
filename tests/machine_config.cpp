@@ -180,7 +180,7 @@ int main() {
         {std::ofstream out(path);out<<"[floppy]\ntiming = "<<timing<<"\n";}
         if(parseMachineConfigFile(path).floppyTimed!=(timing=="timed"))return 27;
     }
-    {std::ofstream out(path);out<<"[floppy]\ntiming = strict\\n";}
+    {std::ofstream out(path);out<<"[floppy]\ntiming = strict\n";}
     try {(void)parseMachineConfigFile(path);return 28;}
     catch(const std::runtime_error&) {}
     std::remove(path.c_str());
