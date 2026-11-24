@@ -75,7 +75,8 @@ public:
             const auto bytes=sectorLength(ch,track,side,sector,drive);
             const auto bitrate=ch?500000ULL:250000ULL;
             const auto transfer=(std::uint64_t(bytes)*8*1000000000ULL+bitrate-1)/bitrate;
-            t.remainingNs=search+transfer;
+            t.remainingNs=search;
+            t.transferNs=transfer;
         }
         return true;
     }
@@ -87,10 +88,25 @@ public:
         for(const auto& t:typeII_)if(t.pending && t.remainingNs==0)return true;
         return false;
     }
-    bool takeTypeIIReady(unsigned ch,BYTE& command) {
+    bool typeIITransferring(unsigned ch,unsigned drive) const {
+        return ch<2 && drive<4 && typeII_[ch].pending &&
+               typeII_[ch].drive==drive && typeII_[ch].transferring;
+    }
+    // Returns one event: at sector arrival, start DMA/PIO; at the
+    // end of the data interval, release BUSY and publish completion.
+    // An invalid ID has transferNs=0 and finishes with RNF after 5 turns.
+    bool takeTypeIIEvent(unsigned ch,BYTE& command,bool& completed) {
         if(ch>1 || !typeII_[ch].pending || typeII_[ch].remainingNs)return false;
-        command=typeII_[ch].command;
-        typeII_[ch]=TypeIIState{};
+        auto& t=typeII_[ch];
+        command=t.command;
+        completed=t.transferring;
+        if(completed || !t.transferNs) {
+            t=TypeIIState{};
+        } else {
+            t.transferring=true;
+            t.remainingNs=t.transferNs>t.overrunNs?t.transferNs-t.overrunNs:0;
+            t.overrunNs=0;
+        }
         return true;
     }
     void cancelTypeII(unsigned ch) {
@@ -103,7 +119,15 @@ public:
             for(unsigned d=0;d<4;++d)
                 rotationNs_[ch][d]=(rotationNs_[ch][d]+ns%rev)%rev;
             auto& t=typeII_[ch];
-            if(t.pending)t.remainingNs=ns>=t.remainingNs?0:t.remainingNs-ns;
+            if(t.pending) {
+                if(ns>=t.remainingNs) {
+                    // Preserve elapsed time after ID arrival so a large
+                    // Machine::advanceTimeNanoseconds() call can produce
+                    // both events without requiring a second advance.
+                    t.overrunNs+=ns-t.remainingNs;
+                    t.remainingNs=0;
+                } else t.remainingNs-=ns;
+            }
         }
         for(unsigned ch=0;ch<2;++ch)for(unsigned d=0;d<4;++d){
             auto& s=seek_[ch][d];
@@ -506,7 +530,8 @@ private:
         bool pending=false;
         unsigned drive=0;
         BYTE command=0;
-        std::uint64_t remainingNs=0;
+        std::uint64_t remainingNs=0,transferNs=0,overrunNs=0;
+        bool transferring=false;
     };
     bool seekTimed_=false;
     std::array<std::array<SeekState,4>,2> seek_{};
