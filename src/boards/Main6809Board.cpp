@@ -610,6 +610,8 @@ BYTE Main6809Board::readIo(WORD address)
         }
         return ioRegisters_[0x33];
     case 0x30: {
+        if(floppy_->seekTimingEnabled() &&
+           floppy_->seekBusy(1,ioRegisters_[0x35]&3))return 0x01;
         // Reference MainCpu::GetIoByte: return the status, acknowledge
         // INTRQ (bit 0), then merge the one-shot DRQ latch.
         const BYTE status=ioRegisters_[reg];
@@ -621,6 +623,7 @@ BYTE Main6809Board::readIo(WORD address)
         // The shared device currently supports drive zero only.
         return static_cast<BYTE>(0xc0 | ([&](){unsigned ready=0;for(unsigned d=0;d<4;++d)if(floppy_->has2hd(d))ready|=1u<<d;return ready;}()));
     case 0x37: {
+        if(floppy_->seekTimingEnabled())floppy_->ackSeek(1,ioRegisters_[0x35]&3);
         // Reference MainCpu::GetIoByte: reading FDC IRQ status
         // acknowledges the extended FDC interrupt source.
         const BYTE result=ioRegisters_[0x37];
@@ -628,11 +631,14 @@ BYTE Main6809Board::readIo(WORD address)
         return result;
     }
     case 0x1f:
+        if(floppy_->seekTimingEnabled())floppy_->ackSeek(0,floppy_->registerValue(0x1d)&3);
         // Reading the MiniFDC IRQ latch acknowledges its IRQ request.
         mainIrqSources_&=static_cast<BYTE>(~0x08);
         mainIrqStatus();
         return floppy_->registerValue(0x1f);
     case 0x18: {
+        if(floppy_->seekTimingEnabled() && floppyTypeIStatus_)
+            return floppy_->typeIStatus(0,floppy_->registerValue(0x1d)&3);
         if(!floppyTypeIStatus_)return floppyStatus_;
         // The index hole produces a short pulse once per revolution.
         // Model its periodic assertion in polling-driven firmware even
@@ -779,6 +785,11 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             (floppy_->registerValue(0x1c)&0xfe)|(value&1)));
         break;
     case 0x30: {
+        if(floppy_->beginTypeI(1,ioRegisters_[0x35]&3,value)) {
+            ioRegisters_[0x30]=0x01;ioRegisters_[0x37]=0;
+            setExtendedIrqSource(0x40,false);
+            break;
+        }
         // MainCpu::Fm11FDC: Type I RESTORE/SEEK/STEP need not access
         // the disk. Not Ready is returned only when Verify is requested.
         // The boot ROM issues RESTORE $08 with no 2HD disk present.
@@ -935,6 +946,11 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         ioRegisters_[0x33]=value;
         break;
     case 0x18:
+        if(floppy_->beginTypeI(0,floppy_->registerValue(0x1d)&3,value)) {
+            floppyTypeIStatus_=true;floppyStatus_=0x01;
+            setMainIrqSource(0x08,false);
+            break;
+        }
         // MainCpu::Fm11MiniFDC clears completion before processing a
         // command; when it finishes, FD1C and FD1F both carry IRQ bit 6.
         floppy_->writeRegister(0x1c,floppy_->registerValue(0x1c)&1);
