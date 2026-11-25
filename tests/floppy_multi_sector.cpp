@@ -58,6 +58,44 @@ static int check6809(unsigned ch,bool timed,bool writing) {
     }
     return 0;
 }
+// A fast PIO multi-record command must cross sector boundaries without
+// another command write, through the same data port as single-sector I/O.
+static int check6809FastPio(unsigned ch,bool writing) {
+    Machine m;
+    auto board=std::make_unique<Main6809Board>(CpuType::MC6809);
+    auto* cpu=board.get();
+    m.addBoard(std::move(board));
+    auto f=m.systemBoard().floppyDevice();
+    disk(*f,ch);
+    m.reset();
+    f->enableSeekTiming(false);
+    const WORD cmd=ch?0xfd30:0xfd18;
+    const WORD data=ch?0xfd33:0xfd1b;
+    const WORD sector=ch?0xfd32:0xfd1a;
+    cpu->writeCpu(ch?0xfd35:0xfd1d,0);
+    cpu->writeCpu(ch?0xfd31:0xfd19,0);
+    cpu->writeCpu(ch?0xfd34:0xfd1c,0);
+    cpu->writeCpu(sector,1);
+    cpu->writeCpu(ch?0xfd51:0xfd50,writing?1:0); // no DMA
+    cpu->writeCpu(cmd,writing?0xb0:0x90);
+    const unsigned count=f->sectorsPerTrack(ch,0);
+    for(unsigned sectorNum=0;sectorNum<count;++sectorNum)
+        for(unsigned j=0;j<256;++j) {
+            const BYTE expected=BYTE(sectorNum==0?0x31:
+                                     sectorNum==1?0x62:0xe5);
+            if(writing)
+                cpu->writeCpu(data,BYTE(sectorNum==0?0x73:
+                                        sectorNum==1?0x84:0x95));
+            else if(cpu->readCpu(data)!=expected)return 1;
+        }
+    if(cpu->readCpu(sector)!=count)return 2;
+    if(writing) {
+        const auto& raw=ch?f->raw2hd():f->raw2d();
+        for(unsigned n=0;n<count;++n)
+            if(raw[n*256]!=BYTE(n==0?0x73:n==1?0x84:0x95))return 3;
+    }
+    return 0;
+}
 static int check8088(unsigned ch,bool timed,bool writing) {
     Machine m;
     auto board=std::make_unique<Main8088Board>(CpuType::I8088);
@@ -107,6 +145,9 @@ int main() {
                     return 10+ch*40+timed*20+writing*10+r;
                 if(int r=check8088(ch,timed!=0,writing!=0))
                     return 100+ch*40+timed*20+writing*10+r;
+                if(!timed)
+                    if(int r=check6809FastPio(ch,writing!=0))
+                        return 200+ch*20+writing*10+r;
             }
     return 0;
 }
