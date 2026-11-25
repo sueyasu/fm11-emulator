@@ -48,6 +48,7 @@ static int check6809(unsigned ch,bool timed,bool writing) {
     if(timed)m.advanceTimeNanoseconds(500000000);
     if((cpu->readCpu(irq)&0x40)==0)return 1;
     if(cpu->readCpu(cnt)!=0 || cpu->readCpu(WORD(cnt+1))!=0)return 2;
+    if(cpu->readCpu(ch?0xfd32:0xfd1a)!=2)return 5;
     for(unsigned j=0;j<512;++j) {
         const BYTE expect=writing?BYTE(j<256?0x73:0x84):
                                   BYTE(j<256?0x31:0x62);

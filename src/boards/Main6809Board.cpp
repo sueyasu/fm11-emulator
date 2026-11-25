@@ -1686,6 +1686,10 @@ void Main6809Board::serviceTimedFloppy()
                         floppy_->writeRegister(0x1f,0);
                         setMainIrqSource(0x08,false);
                     } else {
+                        // The 2HD CPU adapter reads its own FD32 latch
+                        // when beginning each DMA/PIO sector. Keep it in
+                        // step with the common FDC's incremented R field.
+                        ioRegisters_[0x32]=floppy_->registerValue(0x32);
                         ioRegisters_[0x30]=0x01;ioRegisters_[0x37]=0;
                         setExtendedIrqSource(0x40,false);
                     }
