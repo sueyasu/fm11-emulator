@@ -225,9 +225,14 @@ BYTE Main8088Bus::readIo(WORD port) const
         if(port==0xfd18 || port==0xfd30){
             const unsigned channel=port==0xfd18?0:1;
             const unsigned selected=floppy_->registerValue(channel==0?0x1d:0x35)&3;
-            if(floppy_->typeIIBusy(channel,selected))
+            if(floppy_->typeIIBusy(channel,selected)) {
+                if(floppy_->typeIIBytePaced(channel))
+                    return BYTE(0x01 |
+                        (floppy_->typeIIByteReady(channel)?0x02:0) |
+                        (floppy_->typeIILostData(channel)?0x04:0));
                 return floppy_->typeIITransferring(channel,selected) &&
                        (floppy_->transferStatus()&0x02) ? 0x03 : 0x01;
+            }
             if(floppy_->seekTimingEnabled() &&
                (floppy_->seekBusy(channel,selected) ||
                 floppy_->seekComplete(channel,selected)))
@@ -586,13 +591,12 @@ void Main8088Bus::serviceTimedFloppy()
         // wrong mode or late CPU transfer leaves DRQ pending and will
         // assert LOST DATA on the following byte boundary.
         if(floppy_->typeIIByteReady(channel)) {
-            const auto before=floppy_->transferPosition();
             setDmaRequest(channel,true);
             serviceDma();
             setDmaRequest(channel,false);
             // PIO callers consume DRQ in floppyReadData/floppyWriteData.
-            // serviceDma() acknowledges only if it actually moved a byte.
-            (void)before;
+            // The FDC byte is acknowledged by those DMA callbacks only
+            // when the 8237 actually transfers it.
         }
     }
 }
