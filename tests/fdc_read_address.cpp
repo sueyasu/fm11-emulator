@@ -48,18 +48,16 @@ static int cpu6809(unsigned ch,bool timed) {
     cpu->writeCpu(cmd,0xc0);
     if(timed) {
         if((cpu->readCpu(cmd)&1)==0)return 1;
-        m.advanceTimeNanoseconds(20000000);
+        // Stop precisely at ID arrival; an unserviced PIO DRQ must
+        // correctly report Lost Data rather than silently queue bytes.
+        m.advanceTimeNanoseconds(f->nextTypeIIEventNanoseconds());
     }
     const BYTE id[]={0,0,1,1};
-    for(unsigned n=0;n<4;++n) {
-        if(timed)m.advanceTimeNanoseconds(32000);
+    for(unsigned n=0;n<6;++n) {
+        if(timed && n)m.advanceTimeNanoseconds(32000);
         const BYTE got=cpu->readCpu(data);
-        if(got!=id[n])return 2;
+        if(n<4 && got!=id[n])return 2;
     }
-    if(timed)m.advanceTimeNanoseconds(32000);
-    cpu->readCpu(data);
-    if(timed)m.advanceTimeNanoseconds(32000);
-    cpu->readCpu(data);
     if(!timed && (cpu->readCpu(cmd)&2))return 3;
     return 0;
 }
