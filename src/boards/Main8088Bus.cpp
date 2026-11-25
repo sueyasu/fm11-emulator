@@ -116,7 +116,13 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
             floppy_->registerValue(channel==0?0x1c:0x34),
             floppy_->registerValue(base+2),drive,writing);
     if(started) {
-        // The 8237 remains the bus master; the system FDC supplies data.
+        if(timedTypeIIDispatch_) {
+            // B2: sector arrival arms the data field, not an atomic DMA
+            // burst. The machine clock services exactly one byte per DRQ.
+            floppy_->startTypeIIBytePacing(channel);
+            return;
+        }
+        // Fast mode retains the legacy atomic sector transfer.
         setDmaRequest(channel,true);
         for(unsigned i=0;i<floppy_->transferLength();++i) {
             if(!serviceDma() || floppy_->transferPosition()==floppy_->transferLength())
@@ -209,17 +215,29 @@ BYTE Main8088Bus::readIo(WORD port) const
         if(port==0xfd18 || port==0xfd30){
             const unsigned channel=port==0xfd18?0:1;
             const unsigned selected=floppy_->registerValue(channel==0?0x1d:0x35)&3;
-            if(floppy_->typeIIBusy(channel,selected))
+            if(floppy_->typeIIBusy(channel,selected)) {
+                if(floppy_->typeIIBytePaced(channel))
+                    return BYTE(0x01 | (floppy_->typeIIByteReady(channel)?0x02:0) |
+                                (floppy_->typeIILostData(channel)?0x04:0));
                 return floppy_->typeIITransferring(channel,selected) &&
                        (floppy_->transferStatus()&0x02) ? 0x03 : 0x01;
+            }
             if(floppy_->seekTimingEnabled() &&
                (floppy_->seekBusy(channel,selected) ||
                 floppy_->seekComplete(channel,selected)))
                 return floppy_->typeIStatus(channel,selected);
             return floppy_->transferStatus();
         }
-        if(port==0xfd1b || port==0xfd33)
+        if(port==0xfd1b || port==0xfd33) {
+            const unsigned channel=port==0xfd1b?0:1;
+            if(floppy_->typeIIBytePaced(channel)) {
+                if(!floppy_->typeIIByteReady(channel))return 0xff;
+                BYTE value=const_cast<Main8088Bus*>(this)->floppyReadData();
+                floppy_->acceptTypeIIByte(channel);
+                return value;
+            }
             return const_cast<Main8088Bus*>(this)->floppyReadData();
+        }
         BYTE busValue=0;
         if(mainBoard_ && mainBoard_->readIo(port,busValue))return busValue;
         return floppy_->registerValue(port&0xff);
@@ -310,7 +328,14 @@ void Main8088Bus::writeIo(WORD port,BYTE value)
         else if(port==0xfd1b || port==0xfd33) {
             // FD1B is the SEEK destination register for type I commands.
             // It is also a PIO data port during an active transfer.
-            if(floppy_->transferStatus()&0x02)floppyWriteData(value);
+            const unsigned channel=port==0xfd1b?0:1;
+            if(floppy_->typeIIBytePaced(channel)) {
+                if(floppy_->typeIIByteReady(channel) &&
+                   (floppy_->transferStatus()&0x02)) {
+                    floppyWriteData(value);
+                    floppy_->acceptTypeIIByte(channel);
+                }
+            } else if(floppy_->transferStatus()&0x02)floppyWriteData(value);
             else floppy_->writeRegister(port&0xff,value);
         }
         else if(!mainBoard_ || !mainBoard_->writeIo(port,value))
@@ -547,27 +572,36 @@ bool Main8088Bus::serviceDma()
 
 void Main8088Bus::serviceTimedFloppy()
 {
-    if(!floppy_->typeIIReady())return;
     for(unsigned channel=0;channel<2;++channel) {
         BYTE command=0;
         bool completed=false;
-        // Issue the DMA transfer at sector arrival, but keep FDC
-        // BUSY active until the physical data interval has elapsed.
         while(floppy_->takeTypeIIEvent(channel,command,completed)) {
             if(!completed) {
                 timedTypeIIDispatch_=true;
                 floppyCommand(command,channel);
                 timedTypeIIDispatch_=false;
-                if(floppy_->typeIIBusy(channel,
-                       floppy_->registerValue(channel==0?0x1d:0x35)&3)) {
-                    // Synchronous DMA completes before the modeled FDC
-                    // data interval. Keep INTRQ low for both controllers
-                    // until the final timed completion event.
-                    floppy_->writeRegister(channel==0?0x1f:0x37,0);
-                }
+                // IRQ stays deasserted until FDC transfer completion.
+                floppy_->writeRegister(channel==0?0x1f:0x37,0);
             } else {
+                const BYTE result=BYTE(floppy_->typeIIResult(channel) |
+                                       (floppy_->transferStatus()&0x14));
+                if(result)floppy_->transferError(result);
                 floppy_->writeRegister(channel==0?0x1f:0x37,0x40);
             }
+        }
+
+        if(!floppy_->typeIIByteReady(channel))continue;
+        // Leave the DRQ asserted if masked/disabled: the next byte slot
+        // will then report WD179x LOST DATA.
+        setDmaRequest(channel,true);
+        const auto before=floppy_->transferPosition();
+        const bool transferred=serviceDma();
+        setDmaRequest(channel,false);
+        if(transferred && floppy_->transferPosition()!=before) {
+            floppy_->acceptTypeIIByte(channel);
+            if(floppy_->transferPosition()==floppy_->transferLength())
+                floppy_->traceTiming("8237 DMA ch="+std::to_string(channel)+
+                    " bytes="+std::to_string(floppy_->transferLength()));
         }
     }
 }
