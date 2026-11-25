@@ -44,6 +44,7 @@ void Main8088Bus::floppyWriteData(BYTE value)
 void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
 {
     if(!timedTypeIIDispatch_)floppy_->cancelTypeII(channel);
+    if((command&0xf0)!=0xf0)floppy_->cancelTrackWrite(channel);
     const unsigned base=channel==0?0x18:0x30;
     const auto decoded=FloppyDevice::decodeCommand(command);
     const bool writing=decoded==FloppyDevice::Command::WriteSector;
@@ -53,6 +54,15 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
         if(floppy_->beginTypeI(channel,selected,command))return;
         floppy_->cancelSeek(channel,selected);
         if((command&0xf0)==0xf0) {
+            const unsigned drive=floppy_->registerValue(channel==0?0x1d:0x35)&3;
+            const unsigned track=floppy_->registerValue(base+1);
+            const unsigned side=floppy_->registerValue(channel==0?0x1c:0x34)&1;
+            if(floppy_->beginTrackWrite(channel,drive,track,side)) {
+                floppy_->finishTransfer();
+                floppy_->writeRegister(channel==0?0x1f:0x37,0);
+                return;
+            }
+            // In untimed mode preserve synchronous WRITE TRACK behavior.
             // FM-11 original: Mini-FDC 6400 bytes, standard FDC 10900.
             // 8237 channel 0/1 supplies the raw WRITE TRACK stream.
             const unsigned drive=floppy_->registerValue(channel==0?0x1d:0x35)&3;
@@ -215,6 +225,7 @@ BYTE Main8088Bus::readIo(WORD port) const
         if(port==0xfd18 || port==0xfd30){
             const unsigned channel=port==0xfd18?0:1;
             const unsigned selected=floppy_->registerValue(channel==0?0x1d:0x35)&3;
+            if(floppy_->trackBusy(channel,selected))return 0x01;
             if(floppy_->typeIIBusy(channel,selected)) {
                 if(floppy_->typeIIBytePaced(channel))
                     return BYTE(0x01 | (floppy_->typeIIByteReady(channel)?0x02:0) |
@@ -573,6 +584,27 @@ bool Main8088Bus::serviceDma()
 void Main8088Bus::serviceTimedFloppy()
 {
     for(unsigned channel=0;channel<2;++channel) {
+        if(floppy_->trackByteReady(channel)) {
+            // Write one byte through the real 8237 arbitration/mask/TC
+            // path; no partial stream is committed to the host image.
+            const auto savedReader=dmaReaders_[channel];
+            const auto savedWriter=dmaWriters_[channel];
+            bool received=false;
+            BYTE byte=0;
+            setDmaDevice(channel,savedReader,[&](BYTE value) {
+                byte=value;received=true;
+            });
+            setDmaRequest(channel,true);
+            const bool ran=serviceDma();
+            setDmaRequest(channel,false);
+            setDmaDevice(channel,savedReader,savedWriter);
+            if(ran && received)floppy_->takeTrackByte(channel,byte);
+        }
+        if(floppy_->trackDone(channel)) {
+            const bool ok=floppy_->finishTrackWrite(channel);
+            if(!ok)floppy_->transferError(0x04);
+            floppy_->writeRegister(channel==0?0x1f:0x37,0x40);
+        }
         BYTE command=0;
         bool completed=false;
         while(floppy_->takeTypeIIEvent(channel,command,completed)) {
