@@ -85,3 +85,32 @@ This manual OS/ROM test cannot be declared PASS on CI alone: the original
 ROMs are user-supplied and the guest-side command sequence depends on
 the OS program. `--trace-kanji` is diagnostic only; the default runtime
 behavior and ANK output are unchanged.
+
+## Interactive ROM gallery (`--test-kanji`)
+
+`fm11-sdl --test-kanji` displays 480 consecutive 16x16 glyphs at
+40 columns x 12 rows on a 640x200 graphics screen without booting an
+OS or loading the standard sub-ROM. It uses a user-provided 128-KiB
+Kanji ROM: pass `--kanji-rom FILE`, set `[display_cpu] kanji_rom`,
+or place a ROM at `external/roms/kanji.bin`. Missing or invalid ROMs
+are errors, not silently replaced by a synthetic font.
+
+The gallery selects each glyph using AFF4/AFF5 and reads exactly
+16 left and 16 right bytes through AFF6/AFF7, then writes the
+corresponding scanlines through the standard graphics VRAM ports.
+The two existing SDL renderers display that same graphics RAM: no
+host-side Unicode/font conversion, alternate text renderer or GLSL
+Kanji path is added. The gallery forces the 200-line display mode and
+does not start CPU workers or require the boot ROM. It never modifies
+the ROM file. PageUp/PageDown cycle through 9 ROM pages; the window
+title shows the current glyph-number range. Ctrl+F12 closes the viewer.
+
+```sh
+./build/fm11-sdl --test-kanji --kanji-rom external/roms/kanji.bin --renderer software
+./build/fm11-sdl --test-kanji --kanji-rom external/roms/kanji.bin --renderer gl
+```
+
+The portable `display_kanji_gallery` CTest uses a synthetic ROM to
+check port accesses, glyph positions, page transitions, clearing,
+graphics scanout, and the end of the 4096-glyph ROM. Visual fidelity
+with a real ROM is a separate manual check, not claimed by CTest.

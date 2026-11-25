@@ -8,6 +8,7 @@
 #include "MachineConfig.h"
 #include "SerialBackend.h"
 #include "DisplayBitmap.h"
+#include "KanjiTestPattern.h"
 #include "RomFiles.h"
 #include "HostImageSync.h"
 #include "SdlBeeper.h"
@@ -27,6 +28,7 @@
 #include <cstring>
 #include <cstdint>
 #include <iostream>
+#include <sstream>
 #include <fstream>
 #include <iterator>
 #include <vector>
@@ -85,11 +87,13 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--beep-test] [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-fdc] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--kanji-rom FILE] [--trace-kanji] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software] [--scanlines]\n"
+    std::cout<<"usage: fm11-sdl [--beep-test] [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--test-kanji] [--main-rom FILE] [--trace-boot] [--trace-fdc] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--kanji-rom FILE] [--trace-kanji] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software] [--scanlines]\n"
              <<"  ROM defaults to [display_cpu].rom (external/roms/display6809.bin); CPU ROM paths may be set in the config file\n"
              <<"  Initial window height: [display].height=200|400 (default 400); --high forces 400\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
              <<"  --beep-test: audible 205ms pulse, pause, continuous tone, then stop.\n"
+             <<"  --test-kanji: ROM glyph gallery, PgUp/PgDn change page (40x12 glyphs).\n"
+             <<"                Uses --kanji-rom FILE or external/roms/kanji.bin.\n"
              <<"  --speed N: main CPU multiplier (default 10, 1=real-time);\n"
              <<"             display CPU uses the same multiplier, capped at 8 MHz.\n"
              <<"             0=unlimited main CPU, 8 MHz display CPU; PTM stays real-time.\n"
@@ -108,6 +112,8 @@ int main(int argc,char** argv) {
         bool scanlines=false;
         bool beepTest=false;
         bool traceKanji=false;
+        bool testKanji=false;
+        unsigned kanjiPage=0;
         unsigned floppyDrive=0;
         unsigned bootDip=0x9f;
         bool bootDipOverridden=false;
@@ -119,6 +125,7 @@ int main(int argc,char** argv) {
             if(arg=="--high"){high=true;highOverridden=true;continue;}
             if(arg=="--scanlines"){scanlines=true;continue;}
             if(arg=="--beep-test"){beepTest=true;continue;}
+            if(arg=="--test-kanji"){testKanji=true;continue;}
             if(arg=="--trace-kanji"){traceKanji=true;continue;}
              if(arg=="--trace-cpm80"){traceCpm80=true;continue;}
             if(arg=="--cpu-speed"){cpuSpeed=true;continue;}
@@ -167,6 +174,9 @@ int main(int argc,char** argv) {
         }
         const MachineConfig config=loadMachineConfig(configPath);
         if(!highOverridden)high=config.displayHeight==400;
+        if(testPattern && testKanji)
+            throw std::invalid_argument("--test-pattern and --test-kanji are mutually exclusive");
+        if(testKanji)high=false; // the gallery is a fixed 640x200 graphics frame
         // Explicit raw DIP override remains available for diagnostics.
         if(!bootDipOverridden)bootDip=config.bootDip();
         if(traceCpm80 && (!config.z80Installed || !config.main6809Installed))
@@ -184,8 +194,11 @@ int main(int argc,char** argv) {
         }
         if(ankPath.empty())ankPath=config.ankRom;
         if(kanjiPath.empty())kanjiPath=config.kanjiRom;
-        if(testPattern && (!mainRomPath.empty() || !main6809RomOverride.empty() || !main8088RomOverride.empty()))
-            throw std::invalid_argument("CPU ROMs cannot be combined with --test-pattern");
+        if((testPattern || testKanji) &&
+           (!mainRomPath.empty() || !main6809RomOverride.empty() || !main8088RomOverride.empty()))
+            throw std::invalid_argument("CPU ROMs cannot be combined with display test modes");
+        if(testKanji && kanjiPath.empty())
+            kanjiPath="external/roms/kanji.bin";
         if(instructions>1000000)
             throw std::invalid_argument("--cycles must be <= 1000000");
         // Declare before Machine: CPU callbacks must be destroyed before
@@ -196,7 +209,7 @@ int main(int argc,char** argv) {
         Main6809Board* mainBoard=nullptr;
         bool z80Enabled=false;
         bool main8088Enabled=false;
-        if(!testPattern) {
+        if(!testPattern && !testKanji) {
             machine.loadDisplayRomFile(romPath);
             if(!ankPath.empty())machine.loadAnkRomFile(ankPath);
             if(!kanjiPath.empty())machine.loadKanjiRomFile(kanjiPath);
@@ -316,9 +329,18 @@ int main(int argc,char** argv) {
         machine.systemBoard().setBootDip(static_cast<BYTE>(bootDip));
         if(mainBoard)mainBoard->setBootDip(static_cast<BYTE>(bootDip));
 
-        machine.setDisplayCpuClockHz(testPattern?0:config.displayClockHz);
+        machine.setDisplayCpuClockHz((testPattern || testKanji)?0:config.displayClockHz);
         machine.setDisplayCpuSpeedMultiplier(speed);
         machine.reset();
+        if(testKanji) {
+            machine.loadKanjiRomFile(kanjiPath);
+            KanjiTestPattern::paint(machine.systemBoard().displaySubsystem(),kanjiPage);
+            std::cout<<"Kanji ROM gallery: "<<kanjiPath
+                     <<" ("<<KanjiTestPattern::glyphCount<<" glyphs, "
+                     <<KanjiTestPattern::pages<<" pages)\n"
+                     <<"PageUp/PageDown: change ROM range; Ctrl+F12: quit\n"
+                     <<std::flush;
+        }
         machine.systemBoard().usartDevice()->requireCarrierAndDsr(
             config.dipSerialCd==MachineConfig::SerialCd::CdAndDsr);
         machine.systemBoard().floppyDevice()->enableSeekTiming(config.floppyTimed);
@@ -377,6 +399,11 @@ int main(int argc,char** argv) {
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"0");
         ui.setMode(high);
         std::cerr<<"FM-11 renderer: "<<(ui.glRenderer?"OpenGL 3.3":"software")<<"\n";
+        if(testKanji) {
+            const std::string title="FM-11 Kanji ROM page 1/"+
+                std::to_string(KanjiTestPattern::pages);
+            SDL_SetWindowTitle(ui.window,title.c_str());
+        }
         // Audio device owns an SDL callback but never touches guest CPU
         // state. A missing host audio device must not block OS boot.
         SdlBeeper audio(machine.systemBoard().beeperDevice());
@@ -637,7 +664,7 @@ int main(int argc,char** argv) {
             SDL_Event event;
             while(SDL_PollEvent(&event)) {
                 if(event.type==SDL_QUIT)running=false;
-                if(event.type==SDL_TEXTINPUT && !paused && !testPattern) {
+                if(event.type==SDL_TEXTINPUT && !paused && !testPattern && !testKanji) {
                     for(const unsigned char* p=reinterpret_cast<const unsigned char*>(event.text.text);
                         *p;++p) {
                         // The original keyboard queue carries 8-bit codes;
@@ -650,13 +677,32 @@ int main(int argc,char** argv) {
                 if(event.type==SDL_KEYDOWN && !event.key.repeat) {
                     const auto sym=event.key.keysym.sym;
                     const auto mod=event.key.keysym.mod;
-                    if(sym==SDLK_F2)paused=!paused;
-                    else if(sym==SDLK_F1) {
+                    if(testKanji && (sym==SDLK_PAGEDOWN || sym==SDLK_PAGEUP)) {
+                        const unsigned next=sym==SDLK_PAGEDOWN
+                            ?(kanjiPage+1)%KanjiTestPattern::pages
+                            :(kanjiPage+KanjiTestPattern::pages-1)%KanjiTestPattern::pages;
+                        if(next!=kanjiPage) {
+                            kanjiPage=next;
+                            KanjiTestPattern::paint(
+                                machine.systemBoard().displaySubsystem(),kanjiPage);
+                            const unsigned first=kanjiPage*KanjiTestPattern::glyphsPerPage;
+                            const unsigned last=std::min(
+                                first+KanjiTestPattern::glyphsPerPage,
+                                KanjiTestPattern::glyphCount)-1;
+                            std::ostringstream title;
+                            title<<"FM-11 Kanji ROM page "<<(kanjiPage+1)
+                                 <<"/"<<KanjiTestPattern::pages
+                                 <<" (glyph "<<std::hex<<std::uppercase
+                                 <<first<<"-"<<last<<")";
+                            SDL_SetWindowTitle(ui.window,title.str().c_str());
+                        }
+                    } else if(sym==SDLK_F2 && !testKanji)paused=!paused;
+                    else if(sym==SDLK_F1 && !testKanji) {
                         high=!high;
                         ui.setMode(high);
                     } else if(sym==SDLK_F12 && (mod&KMOD_CTRL)) {
                         running=false;
-                    } else if(!paused && !testPattern) {
+                    } else if(!paused && !testPattern && !testKanji) {
                         // Physical/special keys come from SDL_KEYDOWN; printable
                         // characters (including Space) come from SDL_TEXTINPUT.
                         // Non-ASCII FM-11 codes match the original KeyCode.h.
@@ -710,7 +756,7 @@ int main(int argc,char** argv) {
             wasPaused=paused;
             // CPU, PTM and display execution are independently scheduled.
             // The SDL thread only services host events and paints frames.
-            if(!paused && !testPattern && !machine.boardCount())
+            if(!paused && !testPattern && !testKanji && !machine.boardCount())
                 SDL_Delay(1);
             cpuWorker.rethrowWorkerFailure();
             if(cpuSpeed && !paused && machine.boardCount()) {
@@ -763,10 +809,10 @@ int main(int argc,char** argv) {
                 // Only the snapshot copy is serialized with the sub-CPU.
                 // All OpenGL uploads, uniforms, drawing and swap occur after
                 // releasing the display-bus lock.
-                const auto snapshot=OpenGlRenderer::capture(machine,!ankPath.empty());
+                const auto snapshot=OpenGlRenderer::capture(machine,!ankPath.empty() && !testKanji);
                 int outputW=0,outputH=0;
                 SDL_GL_GetDrawableSize(ui.window,&outputW,&outputH);
-                ui.glRenderer->render(snapshot,high,testPattern,!ankPath.empty(),
+                ui.glRenderer->render(snapshot,high,testPattern,!ankPath.empty() && !testKanji,
                                        outputW,outputH,cursorTick,scanlines);
                 SDL_GL_SwapWindow(ui.window);
             } else {
@@ -793,10 +839,10 @@ int main(int argc,char** argv) {
                     }
                     if((control&0x03)!=0 && !ankPath.empty())
                         DisplayBitmap::compositeText(frame,machine.displaySubsystem());
-                } else if(!ankPath.empty()) {
+                } else if(!ankPath.empty() && !testKanji) {
                     DisplayBitmap::compositeText(frame,machine.displaySubsystem());
                 }
-                if(!testPattern && !ankPath.empty() &&
+                if(!testPattern && !testKanji && !ankPath.empty() &&
                    (!machine.boardCount() || (machine.mainDisplayControl()&0x03)!=0))
                     DisplayBitmap::compositeCursor(frame,machine.displaySubsystem(),cursorTick);
                 if(testPattern) {
