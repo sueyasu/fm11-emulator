@@ -1,3 +1,18 @@
+## Stage 2-B3: multi-sector READ/WRITE (90h/B0h)
+
+The FM-11 controller's WD17xx multiple-record bit is supported in
+both fast and timed modes for 2D and 2HD. The FDC increments the
+sector register after each completed sector and retains the active
+DMA address/count. The operation ends at DMA terminal count or at
+the final sector of the side-track; it never wraps into a different
+head/cylinder. PIO continues through adjacent sectors when enabled.
+Timed mode schedules each successive sector's rotational ID and
+byte DRQs, preserving Lost Data if a byte is missed; fast mode uses
+the legacy atomic sector transfer path. A fresh command or Force
+Interrupt cancels pending multi-sector work. The `floppy_multi_sector`
+CTest exercises two-sector DMA read/write with both CPU cards,
+controller channels and timing modes.
+
 ## Stage 2-B3: READ ADDRESS (C0h)
 
 READ ADDRESS returns six bytes, C/H/R/N/CRC high/CRC low, through the
