@@ -28,6 +28,7 @@ public:
         typeII_.fill(TypeIIState{});
         typeIIResult_.fill(0);
         tracks_.fill(TrackWriteState{});
+        force_.fill(ForceInterruptState{});
     }
     bool beginTypeI(unsigned channel,unsigned drive,BYTE command) {
         if(!seekTimed_ || channel>1 || drive>3 || (command&0x80))return false;
@@ -51,8 +52,7 @@ public:
         else {registers_[0x30]=0x01;registers_[0x37]=0;}
         return true;
     }
-    // Stage 2-A/B: virtual rotation and delayed Type-II commands.
-    // Individual DRQ pacing remains the separate Stage 2-C.
+    // Stage 2-A/B2: virtual rotation and per-byte Type-II DRQ.
     static constexpr std::uint64_t revolutionNanoseconds(unsigned ch) {
         return ch==0?200000000ULL:166666667ULL;
     }
@@ -104,6 +104,37 @@ public:
         return true;
     }
 
+    // Stage 2-B3: D0 aborts without IRQ, D8 interrupts immediately;
+    // D4/D2/D1 interrupt on the next INDEX / ready-down / ready-up edge.
+    bool forceInterrupt(unsigned ch,unsigned drive,BYTE command) {
+        if(!seekTimed_ || ch>1 || drive>3 ||
+           (command&0xf0)!=0xd0)return false;
+        cancelTypeII(ch);
+        cancelTrackWrite(ch);
+        cancelSeek(ch,drive);
+        finishTransfer();
+        auto& q=force_[ch];
+        q=ForceInterruptState{};
+        q.drive=drive;
+        q.mask=BYTE(command&0x07);
+        q.armed=q.mask!=0;
+        // Immediate INTRQ is published by the issuing CPU adapter.
+        // Do not leave a second deferred event that could re-assert IRQ.
+        q.irq=false;
+        q.lastReady=ch?has2hd(drive):has2d(drive);
+        return (command&0x08)!=0;
+    }
+    void cancelForceInterrupt(unsigned ch) {
+        if(ch<2)force_[ch]=ForceInterruptState{};
+    }
+    bool forceInterruptPending(unsigned ch) const {
+        return ch<2 && force_[ch].irq;
+    }
+    bool takeForceInterrupt(unsigned ch) {
+        if(!forceInterruptPending(ch))return false;
+        force_[ch].irq=false;
+        return true;
+    }
     // Stage 2-B2 timed WRITE TRACK: all DMA bytes span one revolution.
     // The medium is updated only after the complete stream arrives.
     bool beginTrackWrite(unsigned ch,unsigned drive,unsigned track,unsigned side) {
@@ -218,6 +249,11 @@ public:
             }
         }
         for(unsigned ch=0;ch<2;++ch) {
+            const auto& q=force_[ch];
+            if(q.armed && (q.mask&0x04)) {
+                const auto rev=revolutionNanoseconds(ch);
+                next=std::min(next,rev-rotationNs_[ch][q.drive]);
+            }
             const auto& t=tracks_[ch];
             if(!t.active)continue;
             const auto rev=revolutionNanoseconds(ch);
@@ -268,6 +304,20 @@ public:
         if(!seekTimed_ || !ns)return;
         for(unsigned ch=0;ch<2;++ch) {
             const auto rev=revolutionNanoseconds(ch);
+            auto& q=force_[ch];
+            if(q.armed) {
+                const bool ready=ch?has2hd(q.drive):has2d(q.drive);
+                const bool changed=ready!=q.lastReady;
+                const bool index=(q.mask&0x04) &&
+                    ns>=rev-rotationNs_[ch][q.drive];
+                const bool readyDown=changed && !ready && (q.mask&0x02);
+                const bool readyUp=changed && ready && (q.mask&0x01);
+                if(index || readyDown || readyUp) {
+                    q.irq=true;
+                    q.armed=false;
+                }
+                q.lastReady=ready;
+            }
             for(unsigned d=0;d<4;++d)
                 rotationNs_[ch][d]=(rotationNs_[ch][d]+ns%rev)%rev;
             auto& t=typeII_[ch];
@@ -713,6 +763,12 @@ private:
         bool bytePaced=false,byteReady=false,lostData=false;
         std::uint64_t bytePeriodNs=0,byteCount=0,byteSlots=0,byteServed=0;
     };
+    struct ForceInterruptState {
+        unsigned drive=0;
+        BYTE mask=0;
+        bool armed=false,irq=false,lastReady=false;
+    };
+    std::array<ForceInterruptState,2> force_{};
     struct TrackWriteState {
         bool active=false,ready=false,lost=false;
         unsigned drive=0,track=0,side=0;

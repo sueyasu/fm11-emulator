@@ -47,6 +47,13 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
     if((command&0xf0)!=0xf0)floppy_->cancelTrackWrite(channel);
     const unsigned base=channel==0?0x18:0x30;
     const auto decoded=FloppyDevice::decodeCommand(command);
+    const unsigned selectedDrive=floppy_->registerValue(channel==0?0x1d:0x35)&3;
+    if(floppy_->seekTimingEnabled() && (command&0xf0)==0xd0) {
+        const bool immediate=floppy_->forceInterrupt(channel,selectedDrive,command);
+        floppy_->writeRegister(channel==0?0x1f:0x37,immediate?0x40:0);
+        return;
+    }
+    floppy_->cancelForceInterrupt(channel);
     const bool writing=decoded==FloppyDevice::Command::WriteSector;
     if(decoded==FloppyDevice::Command::Other) {
         floppy_->finishTransfer();
@@ -590,6 +597,8 @@ bool Main8088Bus::serviceDma()
 void Main8088Bus::serviceTimedFloppy()
 {
     for(unsigned channel=0;channel<2;++channel) {
+        if(floppy_->takeForceInterrupt(channel))
+            floppy_->writeRegister(channel==0?0x1f:0x37,0x40);
         if(floppy_->trackByteReady(channel)) {
             // Write one byte through the real 8237 arbitration/mask/TC
             // path; no partial stream is committed to the host image.

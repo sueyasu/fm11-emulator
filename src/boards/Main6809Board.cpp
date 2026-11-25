@@ -825,12 +825,27 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         break;
     case 0x30: {
         if(!timedTypeIIDispatch_)floppy_->cancelTypeII(1);
+        if(floppy_->seekTimingEnabled() && (value&0xf0)==0xd0) {
+            const bool immediate=floppy_->forceInterrupt(1,ioRegisters_[0x35]&3,value);
+            ioRegisters_[0x30]=0;
+            ioRegisters_[0x37]=immediate?0x40:0;
+            setExtendedIrqSource(0x40,immediate);
+            break;
+        }
+        floppy_->cancelForceInterrupt(1);
         if((value&0xf0)==0xf0 &&
            floppy_->beginTrackWrite(1,ioRegisters_[0x35]&3,
                  floppy_->registerValue(0x31),ioRegisters_[0x34]&1)) {
             ioRegisters_[0x30]=0x01;
             ioRegisters_[0x37]=0;
             setExtendedIrqSource(0x40,false);
+            break;
+        }
+        if((value&0xf0)==0xf0 && floppy_->seekTimingEnabled()) {
+            floppy_->cancelSeek(1,ioRegisters_[0x35]&3);
+            ioRegisters_[0x30]=0x20;
+            ioRegisters_[0x37]=0x40;
+            setExtendedIrqSource(0x40,true);
             break;
         }
         if((value&0xf0)!=0xf0)floppy_->cancelTrackWrite(1);
@@ -1013,6 +1028,19 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         break;
     case 0x18:
         if(!timedTypeIIDispatch_)floppy_->cancelTypeII(0);
+        if(floppy_->seekTimingEnabled() && (value&0xf0)==0xd0) {
+            const bool immediate=floppy_->forceInterrupt(0,
+                floppy_->registerValue(0x1d)&3,value);
+            floppyStatus_=0;
+            floppyTypeIStatus_=false;
+            floppyOffset_=256;
+            floppyWritePio_=false;
+            floppy_->writeRegister(0x1c,floppy_->registerValue(0x1c)&1);
+            floppy_->writeRegister(0x1f,immediate?0x40:0);
+            setMainIrqSource(0x08,immediate);
+            break;
+        }
+        floppy_->cancelForceInterrupt(0);
         if((value&0xf0)==0xf0 &&
            floppy_->beginTrackWrite(0,floppy_->registerValue(0x1d)&3,
                   floppy_->registerValue(0x19),
@@ -1022,6 +1050,17 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             floppy_->writeRegister(0x1c,floppy_->registerValue(0x1c)&1);
             floppy_->writeRegister(0x1f,0);
             setMainIrqSource(0x08,false);
+            break;
+        }
+        if((value&0xf0)==0xf0 && floppy_->seekTimingEnabled()) {
+            floppy_->cancelSeek(0,floppy_->registerValue(0x1d)&3);
+            floppyStatus_=0x20;
+            floppyTypeIStatus_=false;
+            floppyOffset_=256;
+            floppyWritePio_=false;
+            floppy_->writeRegister(0x1c,floppy_->registerValue(0x1c)|0x40);
+            floppy_->writeRegister(0x1f,floppy_->registerValue(0x1c));
+            setMainIrqSource(0x08,true);
             break;
         }
         if((value&0xf0)!=0xf0)floppy_->cancelTrackWrite(0);
@@ -1326,6 +1365,15 @@ CpuType Main6809Board::Core::type() const
 void Main6809Board::serviceTimedFloppy()
 {
     for(unsigned channel=0;channel<2;++channel) {
+        if(floppy_->takeForceInterrupt(channel)) {
+            if(channel==0) {
+                floppy_->writeRegister(0x1f,0x40);
+                setMainIrqSource(0x08,true);
+            } else {
+                ioRegisters_[0x37]=0x40;
+                setExtendedIrqSource(0x40,true);
+            }
+        }
         // Type-III WRITE TRACK: the HD6844 writes one byte on each
         // rotational DRQ, completing its block before the FDC INTRQ.
         if(floppy_->trackByteReady(channel)) {

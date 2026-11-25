@@ -472,7 +472,9 @@ void Machine::serviceTimedFloppy()
     if(!fdc->typeIIReady() && !fdc->typeIIByteReady(0) &&
        !fdc->typeIIByteReady(1) &&
        !fdc->trackByteReady(0) && !fdc->trackByteReady(1) &&
-       !fdc->trackDone(0) && !fdc->trackDone(1))return;
+       !fdc->trackDone(0) && !fdc->trackDone(1) &&
+       !fdc->forceInterruptPending(0) &&
+       !fdc->forceInterruptPending(1))return;
     if(activeExecution_.kind==ExecutionKind::Main6809 &&
        activeExecution_.main6809)
         activeExecution_.main6809->serviceTimedFloppy();

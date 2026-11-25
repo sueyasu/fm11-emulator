@@ -242,6 +242,9 @@ if(FM11_BUILD_TESTS)
     add_executable(timed_floppy_write_track tests/timed_floppy_write_track.cpp)
     target_link_libraries(timed_floppy_write_track PRIVATE fm11_core)
     add_test(NAME timed_floppy_write_track COMMAND timed_floppy_write_track)
+    add_executable(timed_floppy_force_interrupt tests/timed_floppy_force_interrupt.cpp)
+    target_link_libraries(timed_floppy_force_interrupt PRIVATE fm11_core)
+    add_test(NAME timed_floppy_force_interrupt COMMAND timed_floppy_force_interrupt)
 
 
     add_executable(main8088_cycles tests/main8088_cycles.cpp)

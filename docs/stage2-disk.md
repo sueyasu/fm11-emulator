@@ -124,6 +124,25 @@ regress 2D/2HD NitrOS-9 L1/L2, CP/M-86 and CP/M-80 where available
 before integration into main. Boot and FORMAT have been exercised
 manually, but the final post-commit full CTest remains a separate check.
 
+## Stage 2-B3: Force Interrupt and WRITE TRACK error parity
+
+In `timed` mode, Force Interrupt D0h aborts a pending seek, Type-II
+sector transfer or WRITE TRACK without asserting a completion interrupt.
+D8h aborts and immediately latches INTRQ; D4h, D2h and D1h arm
+one-shot interrupts on the next INDEX edge, ready-to-not-ready and
+not-ready-to-ready transitions, respectively. Conditional requests are
+cleared by the next ordinary FDC command or a new Force Interrupt.
+The 6809 adapter publishes the interrupt via its existing Mini-FDC /
+2HD IRQ sources; the 8088 adapter uses the existing FD1F/FD37
+completion latches. No partial WRITE TRACK is committed by an abort.
+The 6809 timed WRITE TRACK path now rejects invalid head/SEEK state
+instead of falling through to an instantaneous DMA format, matching
+the 8088 timed path. `fast` behavior is unchanged.
+
+CTest `timed_floppy_force_interrupt` covers command cancellation,
+immediate and conditional interrupt delivery and rejected timed
+WRITE TRACK on both controllers and CPU families.
+
 ## Opt-in sector-arrival diagnostics
 
 Use `fm11-sdl --trace-fdc` with `[floppy] timing = timed` when a
