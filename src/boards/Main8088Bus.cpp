@@ -168,8 +168,9 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
             // Preserve legacy short-DMA handling for single-sector
             // commands. A multi-sector command may legitimately stop
             // at DMA terminal count within the final sector.
-            if(!multi || dmaChannels_[channel].count!=0xffff)
-                floppy_->transferError();
+            if(multi && dmaChannels_[channel].count==0xffff)
+                floppy_->finishTransfer(); // TC ends a short final DMA block
+            else floppy_->transferError();
             break;
         }
         if(!multi || dmaChannels_[channel].count==0xffff ||
