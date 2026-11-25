@@ -43,7 +43,17 @@ public:
         modeBinary_=false;
         reset();
     }
-    void enableTiming(bool enable) {timed_=enable; pending_=Pending{};}
+    // Switching timing modes while a command is pending aborts the old
+    // operation. Never leave BUSY set with no scheduler to finish it.
+    void enableTiming(bool enable) {
+        if(phase_==3) {
+            phase_=0;
+            status_=0x80;
+            control_=0x10;
+        }
+        pending_=Pending{};
+        timed_=enable;
+    }
     bool timingEnabled() const {return timed_;}
     bool busy() const {return phase_==3;}
     void advanceNanoseconds(std::uint64_t ns) {
@@ -133,6 +143,9 @@ public:
     void write(unsigned port,BYTE value) {
         switch(port&0xff) {
         case 0xc0:
+            // A new command supersedes an unfinished seek or DMA block.
+            // In particular, no late timed WRITE may persist after it.
+            pending_=Pending{};
             command_=value;
             params_.fill(0);
             result_.fill(0);
@@ -156,6 +169,7 @@ public:
                 phase_=0;
                 status_=0x80;
                 control_=0x10;
+                paramExpected_=paramPos_=resultPos_=0;
                 pending_=Pending{};
             }
             break;

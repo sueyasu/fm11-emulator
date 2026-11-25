@@ -24,11 +24,21 @@ Provide independent `[hdd] timing = fast|timed`, default fast;
 seek, rotation and transfer phases; advancing DMA and completion IRQ
 on the virtual clock. Keep the CPU-specific 6844 and 8237 adapters.
 
-## B4-C: completion and error regressions (planned)
+## B4-C: completion and error regressions
 
-Test DMA TC/partial transfer, invalid addresses, reset/interruption
-while busy, persistence failure, IRQ gating, and HDD boot/FORMAT/
-read-write regressions for NitrOS-9 L1/L2 and CP/M-80/86.
+CTest `mdc_b4_errors` exercises invalid CHR and binary-address boundaries,
+6809/8088 DMA shortage on READ/WRITE, per-record host-write failure,
+command replacement and reset during an active transfer, and the 6809
+HDD IRQ gate (FD C2 bit 7) with result-byte acknowledgement.
+
+MDC command replacement, controller reset and timing-mode changes
+explicitly discard pending virtual-time operations. Writes persist
+only after a complete DMA record and a successful host callback.
+Fast mode retains its existing synchronous transfer semantics.
+
+**Final acceptance remains guest-OS validation**: NitrOS-9 L1/L2
+and CP/M-80/86 HDD boot, READ/WRITE and FORMAT with `timing=fast`
+and `timing=timed`. Do not declare B4 complete until that passes.
 
 The current B4-B virtual clock defers command result and IRQ until SEEK or
 record DMA completion. A read/write command begins with a seek-time estimate
