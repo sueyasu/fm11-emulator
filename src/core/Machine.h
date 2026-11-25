@@ -188,11 +188,13 @@ private:
     void synchronizeFd05Selection();
     void updateZ80MasterMapping();
     void advanceFloppyCpuCycles(std::uint64_t cycles,std::uint64_t hz);
+    void advanceHddCpuCycles(std::uint64_t cycles,std::uint64_t hz);
     void advanceTimedFloppyNanoseconds(std::uint64_t ns);
     void serviceTimedFloppy();
     void advanceSerialCpuCycles(std::uint64_t cycles,std::uint64_t hz);
     void publishSerialIrq();
 
+    std::uint64_t hddFraction_=0,hddClockHz_=0;
     bool fd05SelectionEnabled_=false;
     bool fd05WiringExplicit_=false;
     std::shared_ptr<MainBoard> mainBoard_=std::make_shared<MainBoard>();

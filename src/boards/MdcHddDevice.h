@@ -43,6 +43,57 @@ public:
         modeBinary_=false;
         reset();
     }
+    void enableTiming(bool enable) {timed_=enable; pending_=Pending{};}
+    bool timingEnabled() const {return timed_;}
+    bool busy() const {return phase_==3;}
+    void advanceNanoseconds(std::uint64_t ns) {
+        if(!timed_ || phase_!=3 || !ns)return;
+        while(phase_==3 && ns>=pending_.remainingNs) {
+            ns-=pending_.remainingNs;
+            if(pending_.seekOnly) {
+                currentCylinder_=pending_.cylinder;
+                publishResult();
+                break;
+            }
+            const std::size_t offset=pending_.start+pending_.completed;
+            const std::size_t length=std::min<std::size_t>(
+                256,pending_.length-pending_.completed);
+            std::vector<BYTE> bytes(length);
+            if(!pending_.writing)
+                std::copy_n(image_.begin()+offset,length,bytes.begin());
+            if(!dma_ || !dma_(pending_.dmaChannel,pending_.writing,bytes)) {
+                failure(0x90,0x40,0x01,0x60);
+                publishResult();
+                break;
+            }
+            if(pending_.writing) {
+                if(writer_ && !writer_(offset,bytes.data(),length)) {
+                    failure(0x90,0x40,0x01,0x60);
+                    publishResult();
+                    break;
+                }
+                std::copy(bytes.begin(),bytes.end(),image_.begin()+offset);
+            }
+            pending_.completed+=length;
+            if(pending_.completed==pending_.length) {
+                const std::uint64_t next=pending_.record+
+                    pending_.length/256;
+                if(modeBinary_) {
+                    result_[4]=BYTE(next>>24);result_[5]=BYTE(next>>16);
+                    result_[6]=BYTE(next>>8);result_[7]=BYTE(next);
+                } else {
+                    auto n=next;
+                    result_[7]=BYTE(n%geometry_.records);n/=geometry_.records;
+                    result_[6]=BYTE(n%geometry_.heads);n/=geometry_.heads;
+                    result_[5]=BYTE(n);n>>=8;result_[4]=BYTE(n);
+                }
+                result_[8]=result_[9]=0;
+                currentCylinder_=pending_.cylinder;
+                publishResult();
+            } else pending_.remainingNs=recordTimeNs_;
+        }
+        if(phase_==3)pending_.remainingNs-=ns;
+    }
     bool present() const {return !image_.empty();}
     // Parameter request is not an interrupt; result readiness is.
     bool irqPending() const {return phase_==2;}
@@ -58,6 +109,8 @@ public:
         paramPos_=resultPos_=paramExpected_=0;
         status_=0x80;
         control_=0x10;
+        pending_=Pending{};
+        currentCylinder_=0;
     }
     BYTE read(unsigned port) {
         switch(port&0xff) {
@@ -103,6 +156,7 @@ public:
                 phase_=0;
                 status_=0x80;
                 control_=0x10;
+                pending_=Pending{};
             }
             break;
         default:break;
@@ -155,6 +209,7 @@ private:
             else if((params_[0]&0xf0)==0x70)modeBinary_=true;
         } else if(command_==0x10) {
             if(drive!=0 || !present())failure(0x80,0x80,0x02,0);
+            else if(timed_)schedule(0,0,0,false,0,true);
         } else if(command_==0x20 || command_==0x22 ||
                   command_==0x23 || command_==0x24) {
             const std::uint64_t record=modeBinary_
@@ -178,6 +233,9 @@ private:
                     failure(0x90,0x40,0x10,0);
                 else if(badChs || record>=capacity)
                     failure(0x90,0x40,0x10,0x60);
+                else if(timed_)
+                    schedule(record,0,0,false,unsigned(record/
+                        (geometry_.heads*geometry_.records)),true);
             } else if(drive!=0 || !present())
                 failure(0x80,0x80,0x02,0);
             else if(badChs || begin>image_.size() ||
@@ -185,6 +243,11 @@ private:
                 failure(0x80,0x02,0x80,0x60);
             else {
                 const bool writing=command_==0x23;
+                if(timed_) {
+                    schedule(record,static_cast<std::size_t>(begin),length,
+                        writing,unsigned(record/
+                            (geometry_.heads*geometry_.records)),false);
+                } else {
                 std::vector<BYTE> bytes(length);
                 if(!writing) {
                     std::copy_n(image_.begin()+static_cast<std::size_t>(begin),
@@ -218,6 +281,7 @@ private:
                     }
                     result_[8]=result_[9]=0;
                 }
+                } // fast synchronous DMA
             }
         } else if(command_==0x71) {
             if(drive!=0 || !present())failure(0x80,0x80,0x02,0);
@@ -230,18 +294,45 @@ private:
         }
         // The original controller echoes AD in result byte 0.
         if(paramExpected_)result_[0]=BYTE(result_[0]|(params_[0]&0x0f));
+        if(phase_!=3)publishResult();
+    }
+    struct Pending {
+        std::uint64_t record=0,remainingNs=0;
+        std::size_t start=0,length=0,completed=0;
+        unsigned dmaChannel=0,cylinder=0;
+        bool writing=false,seekOnly=false;
+    };
+    void publishResult() {
+        pending_=Pending{};
         phase_=2;
         resultPos_=0;
         status_=0x43;
         control_=0x4c;
     }
+    void schedule(std::uint64_t record,std::size_t start,
+                  std::size_t length,bool writing,unsigned cylinder,
+                  bool seekOnly) {
+        pending_=Pending{};
+        pending_.record=record;pending_.start=start;
+        pending_.length=length;pending_.writing=writing;
+        pending_.cylinder=cylinder;pending_.seekOnly=seekOnly;
+        pending_.dmaChannel=(selected_>>4)&3u;
+        const unsigned steps=currentCylinder_>cylinder?
+            currentCylinder_-cylinder:cylinder-currentCylinder_;
+        pending_.remainingNs=(steps?2000000ULL+steps*200000ULL:0ULL)+
+            (seekOnly?2000000ULL:8333333ULL+recordTimeNs_);
+        phase_=3;status_=0x01;control_=0x00;
+    }
+    static constexpr std::uint64_t recordTimeNs_=1000000ULL;
     std::vector<BYTE> image_;
     Geometry geometry_{0x09,315,4,32};
     DmaTransfer dma_;
     HostWrite writer_;
     BYTE command_=0,phase_=0,selected_=0,status_=0x80,control_=0x10;
     unsigned paramPos_=0,resultPos_=0,paramExpected_=0;
-    bool modeBinary_=false;
+    bool modeBinary_=false,timed_=false;
+    unsigned currentCylinder_=0;
+    Pending pending_{};
     std::array<BYTE,8> params_{};
     std::array<BYTE,10> result_{};
 };

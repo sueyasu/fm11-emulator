@@ -363,6 +363,7 @@ void Machine::reset()
     serialNanosecondFraction_=0;
     serialFractionHz_=0;
     floppyFraction_=floppyClockHz_=0;
+    hddFraction_=hddClockHz_=0;
     deterministicDisplay_.reset();
     synchronizeFd05Selection();
     if(wasRealtime)startRealtimePtm();
@@ -373,6 +374,7 @@ void Machine::advanceTimeNanoseconds(std::uint64_t nanoseconds)
 {
     mainBoard_->advanceTimeNanoseconds(nanoseconds);
     advanceTimedFloppyNanoseconds(nanoseconds);
+    mainBoard_->hddDevice()->advanceNanoseconds(nanoseconds);
     if(mainBoard_->floppyDevice()->seekTimingEnabled()) {
         const auto fdc=mainBoard_->floppyDevice();
         for(auto* cpu:main6809Boards_) {
@@ -427,6 +429,19 @@ void Machine::advanceSerialCpuCycles(std::uint64_t cycles,std::uint64_t hz)
     serialNanosecondFraction_=numerator%hz;
     mainBoard_->usartDevice()->advanceNanoseconds(nanos);
     publishSerialIrq();
+}
+
+void Machine::advanceHddCpuCycles(std::uint64_t cycles,std::uint64_t hz)
+{
+    auto hdd=mainBoard_->hddDevice();
+    if(!hdd->timingEnabled() || !cycles || !hz)return;
+    if(hddClockHz_!=hz){hddClockHz_=hz;hddFraction_=0;}
+    constexpr std::uint64_t billion=1000000000ULL;
+    const auto rem=(cycles%hz)*billion+hddFraction_;
+    hdd->advanceNanoseconds((cycles/hz)*billion+rem/hz);
+    hddFraction_=rem%hz;
+    for(auto* cpu:main6809Boards_)
+        cpu->setExtendedIrqSource(0x04,hdd->irqPending());
 }
 
 void Machine::advanceFloppyCpuCycles(std::uint64_t cycles,std::uint64_t hz)
@@ -528,6 +543,7 @@ void Machine::executeOne(bool ptmIrqSyncedBefore)
                 mainBoard_->advanceCpuCycles(lastExecutionCycles_,hz);
             advanceSerialCpuCycles(lastExecutionCycles_,hz);
             advanceFloppyCpuCycles(lastExecutionCycles_,hz);
+            advanceHddCpuCycles(lastExecutionCycles_,hz);
             if(!displayCpuThreadEnabled())
                 deterministicDisplay_.advanceCpuCycles(lastExecutionCycles_,hz);
             // SDL samples the real-time PTM immediately before the
@@ -547,6 +563,7 @@ void Machine::executeOne(bool ptmIrqSyncedBefore)
                 mainBoard_->advanceCpuCycles(lastExecutionCycles_,hz);
             advanceSerialCpuCycles(lastExecutionCycles_,hz);
             advanceFloppyCpuCycles(lastExecutionCycles_,hz);
+            advanceHddCpuCycles(lastExecutionCycles_,hz);
             if(!displayCpuThreadEnabled())
                 deterministicDisplay_.advanceCpuCycles(lastExecutionCycles_,hz);
             for(auto* cpu6809:main6809Boards_)

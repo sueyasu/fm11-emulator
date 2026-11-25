@@ -187,7 +187,11 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                     "serial.serial0 must be pty, none or an absolute /dev/ path");
             } else if(section=="hdd") {
                 if(key=="image")cfg.hddImage=value;
-                else handled=false;
+                else if(key=="timing") {
+                    if(value=="fast")cfg.hddTimed=false;
+                    else if(value=="timed")cfg.hddTimed=true;
+                    else throw std::invalid_argument("hdd.timing must be fast or timed");
+                } else handled=false;
             } else if(section=="memory") {
                 if(key=="ram_kib")cfg.ramKiB=ramKiB(value);
                 else handled=false;

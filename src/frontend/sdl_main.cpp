@@ -183,6 +183,7 @@ int main(int argc,char** argv) {
         // mounted host image descriptors and their sync worker.
         HostImageSync imageSync;
         Machine machine;
+        machine.systemBoard().hddDevice()->enableTiming(config.hddTimed);
         Main6809Board* mainBoard=nullptr;
         bool z80Enabled=false;
         bool main8088Enabled=false;

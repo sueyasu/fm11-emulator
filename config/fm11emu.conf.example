@@ -84,4 +84,6 @@ height = 400
 
 # MDC HDD controller: one 256-byte-record RAW image.
 [hdd]
+# fast (default) or timed: independent MDC virtual disk clock
+timing = fast
 # image = /path/to/m2233b.img
