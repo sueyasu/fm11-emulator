@@ -27,6 +27,7 @@ public:
                 rotationNs_[ch][d]=(revolutionNanoseconds(ch)/4)*d;
         typeII_.fill(TypeIIState{});
         typeIIResult_.fill(0);
+        tracks_.fill(TrackWriteState{});
     }
     bool beginTypeI(unsigned channel,unsigned drive,BYTE command) {
         if(!seekTimed_ || channel>1 || drive>3 || (command&0x80))return false;
@@ -102,6 +103,56 @@ public:
         }
         return true;
     }
+
+    // Stage 2-B2 timed WRITE TRACK: all DMA bytes span one revolution.
+    // The medium is updated only after the complete stream arrives.
+    bool beginTrackWrite(unsigned ch,unsigned drive,unsigned track,unsigned side) {
+        if(!seekTimed_ || ch>1 || drive>3 || side>1 ||
+           !(ch?has2hd(drive):has2d(drive)) ||
+           seek_[ch][drive].pending || seek_[ch][drive].head!=track)return false;
+        auto& t=tracks_[ch];
+        t=TrackWriteState{};
+        t.active=true;t.drive=drive;t.track=track;t.side=side;
+        t.length=ch?10900u:6400u;
+        t.bytes.reserve(t.length);
+        t.ready=true; // first DRQ begins with the write data interval
+        traceTiming("WRITE TRACK begin ch="+std::to_string(ch)+
+            " C="+std::to_string(track)+" H="+std::to_string(side)+
+            " bytes="+std::to_string(t.length));
+        return true;
+    }
+    bool trackBusy(unsigned ch,unsigned drive) const {
+        return ch<2 && tracks_[ch].active && tracks_[ch].drive==drive;
+    }
+    bool trackByteReady(unsigned ch) const {
+        return ch<2 && tracks_[ch].active && tracks_[ch].ready &&
+               tracks_[ch].elapsed<revolutionNanoseconds(ch);
+    }
+    bool trackDone(unsigned ch) const {
+        return ch<2 && tracks_[ch].active &&
+               tracks_[ch].elapsed>=revolutionNanoseconds(ch);
+    }
+    bool takeTrackByte(unsigned ch,BYTE byte) {
+        if(!trackByteReady(ch))return false;
+        auto& t=tracks_[ch];
+        t.bytes.push_back(byte);
+        t.ready=false;
+        return true;
+    }
+    bool finishTrackWrite(unsigned ch) {
+        if(!trackDone(ch))return false;
+        auto& t=tracks_[ch];
+        const bool complete=!t.lost && t.bytes.size()==t.length;
+        traceTiming("WRITE TRACK complete ch="+std::to_string(ch)+
+            " served="+std::to_string(t.bytes.size())+
+            " lost="+std::to_string(t.lost));
+        const bool result=complete && formatTrack(ch,t.track,t.side,t.drive,t.bytes);
+        t=TrackWriteState{};
+        return result;
+    }
+    void cancelTrackWrite(unsigned ch) {
+        if(ch<2)tracks_[ch]=TrackWriteState{};
+    }
     bool typeIIBusy(unsigned ch,unsigned drive) const {
         return ch<2 && drive<4 && typeII_[ch].pending &&
                typeII_[ch].drive==drive;
@@ -164,6 +215,17 @@ public:
                 const auto boundary=(t.byteSlots+1)*t.bytePeriodNs;
                 if(boundary>elapsed)
                     next=std::min(next,boundary-elapsed);
+            }
+        }
+        for(unsigned ch=0;ch<2;++ch) {
+            const auto& t=tracks_[ch];
+            if(!t.active)continue;
+            const auto rev=revolutionNanoseconds(ch);
+            next=std::min(next,rev>t.elapsed?rev-t.elapsed:0ULL);
+            if(t.slots+1<t.length) {
+                const auto boundary=((t.slots+1)*rev+t.length-1)/t.length;
+                if(boundary>t.elapsed)
+                    next=std::min(next,boundary-t.elapsed);
             }
         }
         return next;
@@ -230,6 +292,19 @@ public:
                     t.overrunNs+=ns-t.remainingNs;
                     t.remainingNs=0;
                 } else t.remainingNs-=ns;
+            }
+        }
+        for(unsigned ch=0;ch<2;++ch) {
+            auto& t=tracks_[ch];
+            if(!t.active)continue;
+            const auto rev=revolutionNanoseconds(ch);
+            t.elapsed=std::min(rev,t.elapsed+ns);
+            const auto slots=std::min<std::uint64_t>(
+                t.length-1,(t.elapsed*t.length)/rev);
+            if(slots>t.slots) {
+                if(t.ready || slots>t.slots+1)t.lost=true;
+                t.ready=true;
+                t.slots=slots;
             }
         }
         for(unsigned ch=0;ch<2;++ch)for(unsigned d=0;d<4;++d){
@@ -638,6 +713,13 @@ private:
         bool bytePaced=false,byteReady=false,lostData=false;
         std::uint64_t bytePeriodNs=0,byteCount=0,byteSlots=0,byteServed=0;
     };
+    struct TrackWriteState {
+        bool active=false,ready=false,lost=false;
+        unsigned drive=0,track=0,side=0;
+        std::uint64_t elapsed=0,slots=0,length=0;
+        std::vector<BYTE> bytes;
+    };
+    std::array<TrackWriteState,2> tracks_{};
     std::function<void(const std::string&)> timingTrace_;
     bool seekTimed_=false;
     std::array<std::array<SeekState,4>,2> seek_{};
