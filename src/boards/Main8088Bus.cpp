@@ -647,6 +647,15 @@ void Main8088Bus::serviceTimedFloppy()
             } else {
                 const BYTE result=BYTE(floppy_->typeIIResult(channel) |
                                        (floppy_->transferStatus()&0x14));
+                // 8237 terminal count masks the channel and wraps count
+                // to FFFF. Do not start the next sector after TC.
+                const bool moreDma=floppy_->transferPosition()==floppy_->transferLength() &&
+                    dmaChannels_[channel].count!=0xffff &&
+                    (dmaMask_&(1u<<channel))==0;
+                if(!result && floppy_->continueMultiTypeII(channel,moreDma)) {
+                    floppy_->writeRegister(channel==0?0x1f:0x37,0);
+                    continue;
+                }
                 if(result)floppy_->transferError(result);
                 floppy_->writeRegister(channel==0?0x1f:0x37,0x40);
             }

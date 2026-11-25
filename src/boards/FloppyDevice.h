@@ -26,6 +26,7 @@ public:
             for(unsigned d=0;d<4;++d)
                 rotationNs_[ch][d]=(revolutionNanoseconds(ch)/4)*d;
         typeII_.fill(TypeIIState{});
+        lastCompleted_.fill(TypeIIState{});
         typeIIResult_.fill(0);
         tracks_.fill(TrackWriteState{});
         force_.fill(ForceInterruptState{});
@@ -64,12 +65,15 @@ public:
     bool beginTypeII(unsigned ch,unsigned drive,unsigned track,unsigned side,
                      unsigned sector,BYTE command) {
         if(!seekTimed_ || ch>1 || drive>3 ||
-           ((command&0xf0)!=0x80 && (command&0xf0)!=0xa0 &&
+           ((command&0xe0)!=0x80 && (command&0xe0)!=0xa0 &&
             (command&0xf0)!=0xc0))return false;
         auto& t=typeII_[ch];
         t=TypeIIState{};
         typeIIResult_[ch]=0;
         t.pending=true;t.drive=drive;t.command=command;
+        lastCompleted_[ch]=TypeIIState{};
+        t.track=track;t.side=side;t.sector=sector;
+        t.multi=((command&0xf0)==0x90 || (command&0xf0)==0xb0);
         const bool address=(command&0xf0)==0xc0;
         const auto rev=revolutionNanoseconds(ch);
         const auto& disk=medium(ch,drive);
@@ -211,6 +215,20 @@ public:
     void cancelTrackWrite(unsigned ch) {
         if(ch<2)tracks_[ch]=TrackWriteState{};
     }
+    // After one timed sector completes, the adapter checks its DMA
+    // terminal count before deciding whether a multi-sector command
+    // should search for the next sector ID.
+    bool continueMultiTypeII(unsigned ch,bool dmaOrPioReady) {
+        if(ch>1 || !dmaOrPioReady || !lastCompleted_[ch].multi ||
+           typeIIResult_[ch]!=0 || status_!=0)return false;
+        const auto prior=lastCompleted_[ch];
+        lastCompleted_[ch]=TypeIIState{};
+        const auto& disk=medium(ch,prior.drive);
+        const unsigned next=prior.sector+1;
+        if(next>disk.sectorsPerTrack)return false; // end of side-track
+        registers_[ch?0x32:0x1a]=BYTE(next);
+        return beginTypeII(ch,prior.drive,prior.track,prior.side,next,prior.command);
+    }
     bool typeIIBusy(unsigned ch,unsigned drive) const {
         return ch<2 && drive<4 && typeII_[ch].pending &&
                typeII_[ch].drive==drive;
@@ -316,6 +334,7 @@ public:
         if(completed) {
             typeIIResult_[ch]=!t.transferNs?0x10:
                 (t.bytePaced && (t.lostData || t.byteServed!=t.byteCount))?0x04:0;
+            lastCompleted_[ch]=t;
             t=TypeIIState{};
         } else {
             t.transferring=true;
@@ -325,7 +344,10 @@ public:
         return true;
     }
     void cancelTypeII(unsigned ch) {
-        if(ch<2)typeII_[ch]=TypeIIState{};
+        if(ch<2) {
+            typeII_[ch]=TypeIIState{};
+            lastCompleted_[ch]=TypeIIState{};
+        }
     }
     void advanceSeekNanoseconds(std::uint64_t ns) {
         if(!seekTimed_ || !ns)return;
@@ -706,8 +728,8 @@ public:
     enum class Command : BYTE { Other, ReadSector, WriteSector, ReadAddress };
     static Command decodeCommand(BYTE value) {
         switch(value&0xf0) {
-        case 0x80: return Command::ReadSector;
-        case 0xa0: return Command::WriteSector;
+        case 0x80: case 0x90: return Command::ReadSector;
+        case 0xa0: case 0xb0: return Command::WriteSector;
         case 0xc0: return Command::ReadAddress;
         default: return Command::Other;
         }
@@ -816,7 +838,8 @@ private:
     };
     struct TypeIIState {
         bool pending=false;
-        unsigned drive=0,addressSector=0;
+        unsigned drive=0,addressSector=0,track=0,side=0,sector=0;
+        bool multi=false;
         BYTE command=0;
         std::uint64_t remainingNs=0,transferNs=0,overrunNs=0;
         bool transferring=false;
@@ -842,6 +865,7 @@ private:
     std::array<std::array<SeekState,4>,2> seek_{};
     std::array<std::array<std::uint64_t,4>,2> rotationNs_{};
     std::array<TypeIIState,2> typeII_{};
+    std::array<TypeIIState,2> lastCompleted_{};
     std::array<BYTE,2> typeIIResult_{};
     struct Disk {
         std::vector<BYTE> raw,d88;

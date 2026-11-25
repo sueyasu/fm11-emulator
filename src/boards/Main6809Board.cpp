@@ -1531,6 +1531,25 @@ void Main6809Board::serviceTimedFloppy()
             } else {
                 const BYTE result=BYTE(floppy_->typeIIResult(channel) |
                                       (floppy_->transferStatus()&0x14));
+                // HD6844 count reaches zero on terminal completion;
+                // with PIO, continue through the rest of the side-track.
+                const unsigned ctl=channel?0x51:0x50;
+                const unsigned cnt=channel?0x46:0x42;
+                const unsigned left=(unsigned(ioRegisters_[cnt])<<8)|
+                                    ioRegisters_[cnt+1];
+                const bool more=!(ioRegisters_[ctl]&4) || left!=0;
+                if(!result && floppy_->continueMultiTypeII(channel,more)) {
+                    if(channel==0) {
+                        floppyStatus_=0x01;
+                        floppyOffset_=256;floppyWritePio_=false;
+                        floppy_->writeRegister(0x1f,0);
+                        setMainIrqSource(0x08,false);
+                    } else {
+                        ioRegisters_[0x30]=0x01;ioRegisters_[0x37]=0;
+                        setExtendedIrqSource(0x40,false);
+                    }
+                    continue;
+                }
                 if(result)floppy_->transferError(result);
                 if(channel==0) {
                     floppyStatus_=result;
