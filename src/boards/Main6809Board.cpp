@@ -1303,8 +1303,8 @@ CpuType Main6809Board::Core::type() const
 void Main6809Board::serviceTimedFloppy()
 {
     for(unsigned channel=0;channel<2;++channel) {
-        const unsigned selectReg=channel?0x35:0x1d;
-        const unsigned drive=floppy_->registerValue(selectReg)&3;
+        const unsigned drive=channel?(ioRegisters_[0x35]&3):
+                                      (floppy_->registerValue(0x1d)&3);
         BYTE command=0;
         bool completed=false;
         // Stage 2-B2: sector arrival arms the FDC data register. The
@@ -1313,8 +1313,10 @@ void Main6809Board::serviceTimedFloppy()
         while(floppy_->takeTypeIIEvent(channel,command,completed)) {
             if(!completed) {
                 const unsigned track=floppy_->registerValue(channel?0x31:0x19);
-                const unsigned side=floppy_->registerValue(channel?0x34:0x1c)&1;
-                const unsigned sector=floppy_->registerValue(channel?0x32:0x1a);
+                const unsigned side=channel?(ioRegisters_[0x34]&1):
+                                            (floppy_->registerValue(0x1c)&1);
+                const unsigned sector=channel?ioRegisters_[0x32]:
+                                              floppy_->registerValue(0x1a);
                 const bool writing=(command&0x20)!=0;
                 if(floppy_->beginSector(channel,track,side,sector,drive,writing)) {
                     floppy_->startTypeIIBytePacing(channel);
