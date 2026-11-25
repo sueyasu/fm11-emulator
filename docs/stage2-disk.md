@@ -86,6 +86,32 @@ The `fast` mode bypasses this new scheduling and keeps the existing
 immediate transfer behavior. `--speed` is not forcibly changed: both
 FDC and CPU time advance from the same modeled CPU cycle counts.
 
+## WRITE TRACK rotational timing (Stage 2-B2)
+
+With `[floppy] timing = timed`, WD179x WRITE TRACK (`F0h`) now
+uses the same virtual FDC scheduler as byte-paced READ/WRITE SECTOR.
+The guest's existing HD6844 (6809/6309) or 8237 (8088/V20)
+channel supplies each stream byte at evenly spaced DRQ deadlines
+over a full physical revolution: 200 ms for 2D at 300 rpm and
+approximately 166.7 ms for 2HD at 360 rpm. The nominal format
+streams remain 6,400 and 10,900 bytes respectively.
+
+The FDC stays BUSY throughout the write interval. DMA address,
+terminal count and completion advance with transferred bytes.
+FDC completion/INTRQ occurs only at the end of the revolution.
+The backing RAW/D88 track is updated only if every DRQ was serviced
+and the stream parses successfully; missed bytes (e.g. a masked
+DMA channel) report an error without committing a partial track.
+`--trace-fdc` reports WRITE TRACK begin/completion and bytes served.
+
+Untimed `fast` mode retains its prior immediate WRITE TRACK behavior.
+The rotational model does not yet simulate individual index/ID gaps,
+CRC timing or mechanical track-to-track stepping beyond existing
+seek timing.
+
+CTest `timed_floppy_write_track` checks both CPU families and both
+FDC channels, partial progress, completion and masked-DMA failure.
+
 ## Stage 2-B2 diagnostic retry branch
 
 The `stage2-b2-diag-retry` branch enables byte-paced DRQ for the
