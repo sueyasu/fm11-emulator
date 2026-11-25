@@ -43,8 +43,10 @@ int main() {
     if((bus.readIo(0xfd30)&1)==0 || (bus.readIo(0xfd37)&0x40))return 3;
     // Sector 1 passes after ~139 ms from the post-RESTORE angle.
     // DMA terminal count is reached before the FDC completion interrupt.
-    fdc->advanceSeekNanoseconds(140000000);
-    bus.serviceTimedFloppy();
+    for(unsigned tick=0;tick<25000 && bus.readRam(0x4000)!=0x5a;++tick) {
+        fdc->advanceSeekNanoseconds(8000);
+        bus.serviceTimedFloppy();
+    }
     const BYTE irqAtArrival=bus.readIo(0xfd37);
     const BYTE statusAtArrival=bus.readIo(0xfd30);
     const BYTE dmaByteAtArrival=bus.readRam(0x4000);
@@ -59,8 +61,10 @@ int main() {
             unsigned(bus.dmaChannel(1).count));
         return 9;
     }
-    fdc->advanceSeekNanoseconds(20000000);
-    bus.serviceTimedFloppy();
+    for(unsigned tick=0;tick<2500;++tick) {
+        fdc->advanceSeekNanoseconds(8000);
+        bus.serviceTimedFloppy();
+    }
     // A prior Type-I TRACK0 (04h) must not leak into the Type-II result.
     if((bus.readIo(0xfd37)&0x40)==0 || bus.readIo(0xfd30)!=0 ||
        bus.readRam(0x4000)!=0x5a || bus.dmaChannel(1).count!=0xffff)
@@ -76,8 +80,10 @@ int main() {
     setupDma(0x4100);
     bus.writeIo(0xfd30,0x80);
     if((bus.readIo(0xfd37)&0x40) || (bus.readIo(0xfd30)&1)==0)return 7;
-    fdc->advanceSeekNanoseconds(200000000);
-    bus.serviceTimedFloppy();
+    for(unsigned tick=0;tick<30000;++tick) {
+        fdc->advanceSeekNanoseconds(8000);
+        bus.serviceTimedFloppy();
+    }
     if((bus.readIo(0xfd37)&0x40)==0 || bus.readIo(0xfd30)!=0 ||
        bus.readRam(0x4100)!=0xa5)return 8;
     return 0;
