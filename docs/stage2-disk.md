@@ -86,6 +86,26 @@ The `fast` mode bypasses this new scheduling and keeps the existing
 immediate transfer behavior. `--speed` is not forcibly changed: both
 FDC and CPU time advance from the same modeled CPU cycle counts.
 
+## Opt-in sector-arrival diagnostics
+
+Use `fm11-sdl --trace-fdc` with `[floppy] timing = timed` when a
+boot ROM reports BUSY but the HD6844 count remains unchanged. Standard
+error receives a line at each Type-II command, ID/data-field arrival,
+DMA dispatch, and FDC transfer completion. For example:
+
+```text
+FDC-TIME begin ch=0 d=0 C=0 H=0 R=1 wait_ns=3125000 bytes=256
+FDC-TIME event ch=0 sector-arrival overrun_ns=...
+FDC-TIME DMA ch=0 mode=132 remaining=0
+FDC-TIME event ch=0 complete overrun_ns=...
+```
+
+Values above are illustrative, not measured. If the `begin` event is
+present but `sector-arrival` never appears, investigate the virtual-time
+advance path; if an arrival appears but DMA remains unchanged, examine the
+board's controller/DMA dispatch. Diagnostics are off by default and do not
+change FDC behavior.
+
 ## Stock 8088/V20 boot-ROM completion handshake
 
 The original 4096-byte FM-11 8088 ROM (version 3.3, supplied for
