@@ -41,8 +41,9 @@ int main() {
     f.advanceSeekNanoseconds(4*f.revolutionNanoseconds(1));
     if(f.typeIIReady())return 11;
     f.advanceSeekNanoseconds(f.revolutionNanoseconds(1));
-    if(!f.takeTypeIIEvent(1,command,completed) || completed ||
-       f.typeIIBusy(1,0))return 12;
+    // Missing sector ID completes with RNF, not a phantom data phase.
+    if(!f.takeTypeIIEvent(1,command,completed) || !completed ||
+       f.typeIIBusy(1,0) || f.typeIIResult(1)!=0x10)return 12;
     if(!f.beginTypeII(0,0,0,0,1,0xa0))return 13;
     f.cancelTypeII(0);
     if(f.typeIIReady() || f.typeIIBusy(0,0))return 14;
