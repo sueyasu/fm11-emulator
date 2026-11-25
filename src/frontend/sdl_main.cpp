@@ -84,7 +84,7 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software] [--scanlines]\n"
+    std::cout<<"usage: fm11-sdl [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-fdc] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software] [--scanlines]\n"
              <<"  ROM defaults to [display_cpu].rom (external/roms/display6809.bin); CPU ROM paths may be set in the config file\n"
              <<"  Initial window height: [display].height=200|400 (default 400); --high forces 400\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
@@ -106,7 +106,7 @@ int main(int argc,char** argv) {
         unsigned floppyDrive=0;
         unsigned bootDip=0x9f;
         bool bootDipOverridden=false;
-        bool high=false, highOverridden=false, testPattern=false, traceBoot=false, traceInkey=false, diagnostics=false, traceCpm80=false, cpuSpeed=false;
+        bool high=false, highOverridden=false, testPattern=false, traceBoot=false, traceFdc=false, traceInkey=false, diagnostics=false, traceCpm80=false, cpuSpeed=false;
         std::uint64_t instructions=10000;
         for(int i=1;i<argc;++i) {
             const std::string arg=argv[i];
@@ -117,6 +117,7 @@ int main(int argc,char** argv) {
             if(arg=="--cpu-speed"){cpuSpeed=true;continue;}
             if(arg=="--test-pattern"){testPattern=true;continue;}
             if(arg=="--trace-boot"){traceBoot=true;continue;}
+            if(arg=="--trace-fdc"){traceFdc=true;continue;}
             if(arg=="--trace-inkey"){traceInkey=true;continue;}
             if(arg=="--diagnostics"){diagnostics=true;continue;}
             if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--6809-rom" || arg=="--ank-rom" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive" || arg=="--boot-dip" || arg=="--config" || arg=="--8088-rom" || arg=="--speed" || arg=="--renderer") && i+1<argc) {
@@ -227,6 +228,9 @@ int main(int argc,char** argv) {
                 // CPU's initial private device would lose the image.
                 {
                     auto floppy=machine.systemBoard().floppyDevice();
+                    if(traceFdc)floppy->setTimingTrace([](const std::string& message) {
+                        std::cerr<<"FDC-TIME "<<message<<"\n";
+                    });
                     auto paths2d=config.floppy2d, paths2hd=config.floppy2hd;
                     if(!floppyPath.empty()) {
                         // Legacy command-line image overrides this 2D slot.
