@@ -866,7 +866,10 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             (floppy_->registerValue(0x1c)&0xfe)|(value&1)));
         break;
     case 0x30: {
-        if(!timedTypeIIDispatch_)floppy_->cancelTypeII(1);
+        if(!timedTypeIIDispatch_) {
+            floppy_->cancelTypeII(1);
+            fastMultiPio_[1]=false;
+        }
         if((value&0xf0)==0xd0) {
             const bool immediate=floppy_->forceInterrupt(1,ioRegisters_[0x35]&3,value);
             ioRegisters_[0x30]=0;
@@ -1164,7 +1167,10 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         ioRegisters_[0x33]=value;
         break;
     case 0x18:
-        if(!timedTypeIIDispatch_)floppy_->cancelTypeII(0);
+        if(!timedTypeIIDispatch_) {
+            floppy_->cancelTypeII(0);
+            fastMultiPio_[0]=false;
+        }
         if((value&0xf0)==0xd0) {
             const bool immediate=floppy_->forceInterrupt(0,
                 floppy_->registerValue(0x1d)&3,value);
