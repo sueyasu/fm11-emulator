@@ -157,3 +157,47 @@ only the ROM bank/address selection and data readback.
 
 Hardware reference (reverse-engineered FM-11AD2/AD2+ ROM card):
 https://hardyboy.livedoor.blog/archives/10763657.html
+
+## Standard sub-ROM JIS78 level-2 address translation (verified)
+
+The reference Windows emulator source archive contains a 20,480-byte
+`Fm11/SubRom.h`. Its sub-CPU MC6809 code at **E8D4-E964** implements
+JIS-to-ROM selection. The second-level case is **E928-E963**:
+- E928 `CMPA #$74` rejects JIS lead byte >= $74.
+- E92C `SUBD #$0020` yields 1-based JIS cell numbers.
+- E933-E950 computes the high AFF4 selector (including A16=1).
+- E952-E963 combines the row-in-block and column-in-block to form AFF5.
+
+This firmware addresses **JIS78 rows 48-83, 94 cells per row = 3384
+characters**. JIS83 row 84 (six added characters) is not accessible via
+this routine. The correct selector, for `ku=48..83, ten=1..94`, is:
+
+```python
+a = ku + 0x20
+group = 3 * ((a - 0x50) >> 4) + (ten >> 5)
+g2 = group << 1
+high = 0x1D if (g2 & 0x10) else ((g2 & 0x0E) | 0x10)
+offset = ((a & 0x0F) << 5) + (ten & 0x1F)
+selector = (high << 8) | offset  # write selector to AFF4/AFF5
+slot = selector & 0x0FFF         # address within kanji2_rom
+```
+
+The prior diagnostic image used a provisional JIS row-major 96-slot
+layout; it **was not** compatible with this mapping. Use
+`tools/make_kanji2_rom.py` to generate a corrected 128-KiB test bank
+from a locally installed OFL font (requires Pillow):
+
+```sh
+python3 tools/make_kanji2_rom.py --font /usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc --index 0 --output external/roms/kanji2.bin --csv build/kanji2_map.csv
+```
+
+`fm11_kanji2_address` CTest validates the 3384 distinct hardware
+selectors, boundary handling and representative pairs. Font glyph shapes
+and Unicode's modern JIS conversion are **not** byte-for-byte copies of
+the original Fujitsu JIS78 mask ROM; this is a replacement **test image**
+with the sub-ROM-compatible **address placement**.
+
+Changing the image requires no hardware-emulation change: AFF4 bit4
+already selects the optional second-level bank; AFF6/AFF7 read its
+32-byte glyph at the designated selector. The standalone `--test-kanji`
+gallery displays sequential ROM slots, not JIS code ordering.

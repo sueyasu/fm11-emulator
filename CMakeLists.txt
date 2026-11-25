@@ -326,6 +326,9 @@ if(FM11_BUILD_TESTS)
     target_link_libraries(main8088_esc_timing PRIVATE fm11_core)
     add_test(NAME main8088_esc_timing COMMAND main8088_esc_timing)
 
+    add_test(NAME fm11_kanji2_address
+             COMMAND ${Python3_EXECUTABLE}
+                     ${CMAKE_CURRENT_SOURCE_DIR}/tests/test_fm11_kanji2_address.py)
     add_executable(display_kanji_gallery tests/display_kanji_gallery.cpp)
     target_link_libraries(display_kanji_gallery PRIVATE fm11_core)
     add_test(NAME display_kanji_gallery COMMAND display_kanji_gallery)
