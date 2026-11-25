@@ -208,6 +208,7 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                 } else if(key=="clock_hz")cfg.displayClockHz=clockHz(value);
                 else if(key=="rom")cfg.displayRom=value;
                 else if(key=="ank_rom")cfg.ankRom=value;
+                else if(key=="kanji_rom")cfg.kanjiRom=value;
                 else handled=false;
             }
             if(!handled)throw std::invalid_argument("unknown setting ["+section+"]."+key);

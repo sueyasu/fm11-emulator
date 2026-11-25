@@ -56,6 +56,7 @@ cpu = 6809
 clock_hz = 2000000
 rom = external/roms/display6809.bin
 ank_rom = external/roms/ank.bin
+# kanji_rom = /path/to/kanji.bin  # exact 128 KiB ROM; not distributed
 
 # Initial SDL window height (not a physical DIP switch).
 [display]

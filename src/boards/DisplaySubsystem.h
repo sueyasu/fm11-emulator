@@ -44,6 +44,10 @@ public:
         vsyncMode_=0;
         vsyncStatus_=0x40;
         subIoRam_.fill(0);
+        kanjiSelectHigh_=kanjiSelectLow_=0;
+        kanjiStart_=0;
+        kanjiLeft_=kanjiRight_=32;
+        rtcRegisters_.fill(0);
         subFirqLatch_=keyboardStatusLatch_=keyboardDataLatch_=0;
         {
             std::lock_guard<std::mutex> lock(keyQueueMutex_);
@@ -277,6 +281,21 @@ public:
             return 0;
         }
         if(address==0xafe6)return const_cast<DisplaySubsystem*>(this)->readVsyncStatus();
+        // Original SubCpu.cpp: AFF4/5 select a 32-byte 16x16 Kanji glyph.
+        // AFF6 and AFF7 have independently advancing left/right row cursors.
+        if(address==0xaff6) {
+            if((kanjiSelectHigh_&0x80) || kanjiLeft_>=32)return 0;
+            const auto result=kanjiRom_[kanjiStart_+kanjiLeft_];
+            kanjiLeft_+=2;
+            return result;
+        }
+        if(address==0xaff7) {
+            if(kanjiSelectHigh_&0x80)return rtcRegisters_[kanjiSelectHigh_&0x0f];
+            if(kanjiRight_>=32)return 1;
+            const auto result=kanjiRom_[kanjiStart_+kanjiRight_];
+            kanjiRight_+=2;
+            return result;
+        }
         if(address==0xaff0)return dmaChannel0_; // original write target is DMA channel 0
         if(address>=0xb000)return rom_[address-0xb000];
         if(address>=0xa000)return ioRam_[address-0xa000];
@@ -378,6 +397,25 @@ public:
             }
         }
         else if(address==0xaff0)dmaChannel0_=value;
+        else if(address==0xaff4) {
+            kanjiSelectHigh_=value;
+            ioRam_[address-0xa000]=value;
+        }
+        else if(address==0xaff5) {
+            kanjiSelectLow_=value;
+            ioRam_[address-0xa000]=value;
+            const auto start=std::size_t(
+                (unsigned(kanjiSelectHigh_)<<8)|kanjiSelectLow_)*32u;
+            if(start<kKanjiRomSize) {
+                kanjiStart_=start;
+                kanjiLeft_=0;
+                kanjiRight_=1;
+            }
+        }
+        else if(address==0xaff7) {
+            if(kanjiSelectHigh_&0x80)
+                rtcRegisters_[kanjiSelectHigh_&0x0f]=value;
+        }
         else if(address>=0xa000 && address<0xb000)ioRam_[address-0xa000]=value; // original maps to DMA channel 0
         // ROM and unmapped space are read-only. Trace even writes to
         // unimplemented I/O locations; their hardware decode is unknown.
@@ -432,4 +470,10 @@ private:
     RomImage rom_{};
     AnkRomImage ankRom_{};
     KanjiRomImage kanjiRom_{};
+    BYTE kanjiSelectHigh_=0,kanjiSelectLow_=0;
+    std::size_t kanjiStart_=0;
+    mutable unsigned kanjiLeft_=32,kanjiRight_=32;
+    // AFF7 also exposes a 16-register RTC window when AFF4 bit7 is set.
+    // This is a storage latch only; real-time clock behavior is separate.
+    std::array<BYTE,16> rtcRegisters_{};
 };

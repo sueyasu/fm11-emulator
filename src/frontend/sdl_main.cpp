@@ -85,7 +85,7 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--beep-test] [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-fdc] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software] [--scanlines]\n"
+    std::cout<<"usage: fm11-sdl [--beep-test] [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-fdc] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--kanji-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software] [--scanlines]\n"
              <<"  ROM defaults to [display_cpu].rom (external/roms/display6809.bin); CPU ROM paths may be set in the config file\n"
              <<"  Initial window height: [display].height=200|400 (default 400); --high forces 400\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
@@ -100,7 +100,7 @@ void usage() {
 }
 int main(int argc,char** argv) {
     try {
-        std::string displayRomOverride, mainRomPath, main6809RomOverride, ankPath, floppyPath;
+        std::string displayRomOverride, mainRomPath, main6809RomOverride, ankPath, kanjiPath, floppyPath;
         std::string configPath,main8088RomOverride;
         unsigned speed=10;
         std::string rendererMode="auto";
@@ -124,7 +124,7 @@ int main(int argc,char** argv) {
             if(arg=="--trace-fdc"){traceFdc=true;continue;}
             if(arg=="--trace-inkey"){traceInkey=true;continue;}
             if(arg=="--diagnostics"){diagnostics=true;continue;}
-            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--6809-rom" || arg=="--ank-rom" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive" || arg=="--boot-dip" || arg=="--config" || arg=="--8088-rom" || arg=="--speed" || arg=="--renderer") && i+1<argc) {
+            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--6809-rom" || arg=="--ank-rom" || arg=="--kanji-rom" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive" || arg=="--boot-dip" || arg=="--config" || arg=="--8088-rom" || arg=="--speed" || arg=="--renderer") && i+1<argc) {
                 if(arg=="--rom")displayRomOverride=argv[++i];
                 else if(arg=="--config")configPath=argv[++i];
                 else if(arg=="--8088-rom")main8088RomOverride=argv[++i];
@@ -143,6 +143,7 @@ int main(int argc,char** argv) {
                 }
                 else if(arg=="--main-rom")mainRomPath=argv[++i];
                 else if(arg=="--ank-rom")ankPath=argv[++i];
+                else if(arg=="--kanji-rom")kanjiPath=argv[++i];
                 else if(arg=="--boot-dip") {
                     const auto v=parseCount(argv[++i]);
                     if(v>255)throw std::invalid_argument("--boot-dip must be a byte");
@@ -179,6 +180,7 @@ int main(int argc,char** argv) {
             else rom8088=mainRomPath;
         }
         if(ankPath.empty())ankPath=config.ankRom;
+        if(kanjiPath.empty())kanjiPath=config.kanjiRom;
         if(testPattern && (!mainRomPath.empty() || !main6809RomOverride.empty() || !main8088RomOverride.empty()))
             throw std::invalid_argument("CPU ROMs cannot be combined with --test-pattern");
         if(instructions>1000000)
@@ -194,6 +196,7 @@ int main(int argc,char** argv) {
         if(!testPattern) {
             machine.loadDisplayRomFile(romPath);
             if(!ankPath.empty())machine.loadAnkRomFile(ankPath);
+            if(!kanjiPath.empty())machine.loadKanjiRomFile(kanjiPath);
             if(!rom6809.empty() || !rom8088.empty()) {
                 std::size_t cpu6809Index=0,cpu8088Index=0,z80Index=0;
                 if(config.main6809Installed) {

@@ -27,6 +27,7 @@ struct MachineConfig {
     unsigned displayHeight=400;
     std::string displayRom="external/roms/display6809.bin";
     std::string ankRom;
+    std::string kanjiRom;
     // Empty paths mean no medium mounted. 2D accepts raw 320 KiB or D88;
     // 2HD accepts raw 1232 KiB. Drive indices are physical 0..3.
     std::array<std::string,4> floppy2d{};
