@@ -105,6 +105,9 @@ public:
         }
         t.byteSlots=slots;
     }
+    bool typeIIBytePaced(unsigned ch) const {
+        return ch<2 && typeII_[ch].pending && typeII_[ch].bytePaced;
+    }
     bool typeIIByteReady(unsigned ch) const {
         return ch<2 && typeII_[ch].pending &&
                typeII_[ch].bytePaced && typeII_[ch].byteReady;
