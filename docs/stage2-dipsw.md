@@ -61,3 +61,19 @@ from the preceding Stage 2-A draft are rejected as unknown settings.
 cmake --build build
 ctest --test-dir build -R 'machine_config|machine_dipsw_config' --output-on-failure
 ```
+
+## Stage 2-C: serial clock and 8251 divider
+
+For asynchronous SW3 settings, SW4..8 selects the conventional x16
+baud-rate column. The input clock supplied to the USART is that table
+value multiplied by 16; the guest's 8251 mode word selects x1, x16,
+or x64. This applies to virtual `serial.timing=clocked` and to the
+physical port's `termios` speed. An internal USART reset and new mode
+word can thus change line speed without changing the DIP switches.
+
+The separate synchronous/fast baud column remains in the reference
+table, but the actual synchronous clock wiring is not verified.
+Physical POSIX termios synchronous operation is rejected rather
+than masquerading as async. Virtual synchronous mode still has the
+existing 8251 register-level approximation; synchronous bitstream
+generation and SYNDET timing are not yet implemented.

@@ -319,11 +319,11 @@ int main(int argc,char** argv) {
             if(config.dipSerialMode!=MachineConfig::SerialMode::Async)
                 throw std::invalid_argument(
                     "serial.timing=clocked requires DIP async mode");
-            const auto baud=Fm11SerialClock::lookup(
-                config.dipSerialBaudSwitches).asyncBaud;
-            if(!baud)throw std::invalid_argument(
+            const auto clock=Fm11SerialClock::asyncClockHz(
+                config.dipSerialBaudSwitches);
+            if(!clock)throw std::invalid_argument(
                 "serial.timing=clocked requires a defined DIP baud rate");
-            machine.setSerialClockBaud(baud);
+            machine.systemBoard().usartDevice()->setExternalClockHz(clock);
         }
         Sdl sdl;
         Window ui;

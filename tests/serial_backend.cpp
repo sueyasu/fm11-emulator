@@ -117,6 +117,31 @@ int main() {
         }
         close(m);
     }
+    // With SW4..8=4, the oscillator is 76800Hz. x16 -> 4800 and
+    // x64 -> 1200; POSIX baud tracks the guest's 8251 mode word.
+    const int divisorMaster=posix_openpt(O_RDWR|O_NOCTTY|O_NONBLOCK);
+    if(divisorMaster<0 || grantpt(divisorMaster)!=0 ||
+       unlockpt(divisorMaster)!=0)return 32;
+    const char* divisorSlave=ptsname(divisorMaster);
+    if(!divisorSlave)return 33;
+    {
+        SerialBackend physical(divisorSlave,4);
+        const int verify=open(divisorSlave,O_RDWR|O_NOCTTY|O_NONBLOCK);
+        if(verify<0)return 34;
+        Usart8251 guest;
+        guest.reset();guest.writeCommand(0x4f);guest.writeCommand(0x05);
+        physical.synchronize(guest);
+        termios actual{};
+        if(tcgetattr(verify,&actual)!=0 || cfgetospeed(&actual)!=B1200)
+            return 35;
+        guest.writeCommand(0x40);
+        guest.writeCommand(0x4e);guest.writeCommand(0x05);
+        physical.synchronize(guest);
+        if(tcgetattr(verify,&actual)!=0 || cfgetospeed(&actual)!=B4800)
+            return 36;
+        close(verify);
+    }
+    close(divisorMaster);
     // Exercise the /dev/... branch against a PTY slave (no USB device).
     const int master=posix_openpt(O_RDWR|O_NOCTTY|O_NONBLOCK);
     if(master<0 || grantpt(master)!=0 || unlockpt(master)!=0)return 10;

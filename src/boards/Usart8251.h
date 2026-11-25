@@ -34,13 +34,27 @@ public:
     // Zero selects the original instantaneous host transport.
     // This is a *line* baud rate after the 8251 mode's x1/x16/x64 division.
     void setBaudRate(unsigned baud) {
+        clockHz_=0;
         baud_=baud;
         txHoldingFull_=txShiftBusy_=rxHoldingFull_=rxShiftBusy_=false;
         txTimeLeft_=rxTimeLeft_=0;
         input_.clear();
         output_.clear();
     }
-    unsigned baudRate() const {return baud_;}
+    // External DIP oscillator is upstream of the programmable 8251
+    // x1/x16/x64 divider; unlike setBaudRate this is mode sensitive.
+    void setExternalClockHz(unsigned hz) {
+        clockHz_=hz;baud_=0;
+        txHoldingFull_=txShiftBusy_=rxHoldingFull_=rxShiftBusy_=false;
+        txTimeLeft_=rxTimeLeft_=0;
+        input_.clear();output_.clear();
+    }
+    unsigned externalClockHz() const {return clockHz_;}
+    unsigned baudRate() const {
+        if(!clockHz_)return baud_;
+        const unsigned divider=(mode_&3)==2?16:(mode_&3)==3?64:1;
+        return clockHz_/divider;
+    }
     // The serial frontend provides completed host characters. In clocked
     // mode this is the pre-receiver wire queue, not the read-data register.
     void receive(BYTE value) {input_.push_back(value);}
@@ -58,7 +72,7 @@ public:
     }
     BYTE readData() {
         if(!rxReady())return 0;
-        if(baud_) {
+        if(baudRate()) {
             rxHoldingFull_=false;
             return rxHolding_;
         }
@@ -68,7 +82,7 @@ public:
     }
     void writeData(BYTE value) {
         if(!txReady())return;
-        if(!baud_) {
+        if(!baudRate()) {
             output_.push_back(value);
             return;
         }
@@ -111,17 +125,17 @@ public:
     }
     bool txReady() const {
         return phase_==ControlPhase::Command && (command_&0x01) && cts_ &&
-               !(command_&0x08) && (!baud_ || !txHoldingFull_);
+               !(command_&0x08) && (!baudRate() || !txHoldingFull_);
     }
     bool rxReady() const {
         return phase_==ControlPhase::Command && (command_&0x04) &&
                (!requireCarrierAndDsr_ || carrierAndDsrPresent()) &&
-               (baud_ ? rxHoldingFull_ : !input_.empty());
+               (baudRate() ? rxHoldingFull_ : !input_.empty());
     }
     // Advance only when an external baud clock is configured. The default
     // frontend has no timing source yet and retains its immediate behavior.
     void advanceNanoseconds(std::uint64_t nanoseconds) {
-        if(!baud_ || phase_!=ControlPhase::Command || !nanoseconds)return;
+        if(!baudRate() || phase_!=ControlPhase::Command || !nanoseconds)return;
         advanceTransmit(nanoseconds);
         advanceReceive(nanoseconds);
     }
@@ -164,7 +178,8 @@ private:
             }
         }
         // Round up: a frame cannot finish earlier than its final bit.
-        return (static_cast<std::uint64_t>(halfBits)*500000000ULL+baud_-1)/baud_;
+        const auto lineBaud=baudRate();
+        return (static_cast<std::uint64_t>(halfBits)*500000000ULL+lineBaud-1)/lineBaud;
     }
     void startTransmit(BYTE value) {
         txShift_=value;
@@ -209,7 +224,7 @@ private:
         }
     }
     bool transmitterEmpty() const {
-        return baud_ ? (!txShiftBusy_ && !txHoldingFull_) : output_.empty();
+        return baudRate() ? (!txShiftBusy_ && !txHoldingFull_) : output_.empty();
     }
     std::deque<BYTE> input_,output_;
     BYTE mode_=0,command_=0,sync1_=0,sync2_=0,errors_=0;
@@ -219,6 +234,6 @@ private:
     bool requireCarrierAndDsr_=false;
     bool syncDetected_=false;
     bool txHoldingFull_=false,txShiftBusy_=false,rxHoldingFull_=false,rxShiftBusy_=false;
-    unsigned baud_=0;
+    unsigned baud_=0,clockHz_=0;
     std::uint64_t txTimeLeft_=0,rxTimeLeft_=0;
 };

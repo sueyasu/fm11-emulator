@@ -9,6 +9,31 @@ int main() {
        lookup(8).asyncBaud!=75 || lookup(9).asyncBaud!=150 ||
        lookup(6).divider!=0 || lookup(31).asyncBaud!=0 ||
        lookup(32).divider!=0 || lookup(26).divider!=4096)return 1;
+    if(asyncClockHz(4)!=76800 || asyncLineBaud(4,0x4d)!=76800 ||
+       asyncLineBaud(4,0x4e)!=4800 || asyncLineBaud(4,0x4f)!=1200 ||
+       asyncLineBaud(4,0x4c)!=0 || asyncClockHz(6)!=0)return 18;
+    // External oscillator stays fixed across internal resets / mode changes.
+    Usart8251 oscillator;
+    oscillator.reset();
+    oscillator.setExternalClockHz(asyncClockHz(4));
+    oscillator.writeCommand(0x4e);oscillator.writeCommand(0x05);
+    if(oscillator.baudRate()!=4800)return 19;
+    oscillator.writeData('1');
+    oscillator.advanceNanoseconds(2083334);
+    BYTE paced=0;
+    if(!oscillator.takeOutput(paced) || paced!='1')return 20;
+    oscillator.writeCommand(0x40);
+    oscillator.writeCommand(0x4f);oscillator.writeCommand(0x05);
+    if(oscillator.baudRate()!=1200 ||
+       oscillator.externalClockHz()!=76800)return 21;
+    oscillator.writeData('2');
+    oscillator.advanceNanoseconds(8333332);
+    if(oscillator.takeOutput(paced))return 22;
+    oscillator.advanceNanoseconds(2);
+    if(!oscillator.takeOutput(paced) || paced!='2')return 23;
+    oscillator.writeCommand(0x40);
+    oscillator.writeCommand(0x4d);oscillator.writeCommand(0x05);
+    if(oscillator.baudRate()!=76800)return 24;
     // SW2 gating is also effective after the timed shift register fills.
     Usart8251 gated;
     gated.reset();gated.requireCarrierAndDsr(true);

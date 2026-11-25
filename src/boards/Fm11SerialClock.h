@@ -20,4 +20,20 @@ constexpr std::array<Setting,32> settings{{
 constexpr Setting lookup(unsigned sw4to8) {
     return sw4to8<settings.size()?settings[sw4to8]:Setting{0,0,0};
 }
+// The defined asynchronous DIP rates are for the conventional 8251 x16.
+constexpr unsigned asyncClockHz(unsigned sw4to8) {
+    return lookup(sw4to8).asyncBaud*16u;
+}
+constexpr unsigned asyncDivider(unsigned mode) {
+    switch(mode&3u) {
+    case 1:return 1;
+    case 2:return 16;
+    case 3:return 64;
+    default:return 0;
+    }
+}
+constexpr unsigned asyncLineBaud(unsigned sw4to8,unsigned mode) {
+    const auto divider=asyncDivider(mode);
+    return divider?asyncClockHz(sw4to8)/divider:0;
+}
 }

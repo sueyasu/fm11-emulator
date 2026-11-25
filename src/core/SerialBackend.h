@@ -21,6 +21,7 @@ public:
     explicit SerialBackend(const std::string& endpoint,unsigned baudDip=0,
                            bool fast=false,bool rtscts=false,
                            bool requireCarrierAndDsr=false):endpoint_(endpoint),
+                           fast_(fast),baudDip_(baudDip),
                            rtscts_(rtscts),requireCarrierAndDsr_(requireCarrierAndDsr) {
         const auto rate=Fm11SerialClock::lookup(baudDip);
         baud_=fast?rate.fastBaud:rate.asyncBaud;
@@ -201,7 +202,10 @@ private:
         t.c_cflag|=lineFlags;
         t.c_cflag|=CLOCAL|CREAD;
         t.c_cc[VMIN]=0;t.c_cc[VTIME]=0;
-        const auto speed=termiosBaud(baud_);
+        const unsigned lineBaud=fast_?baud_:
+            Fm11SerialClock::asyncLineBaud(baudDip_,mode);
+        if(!lineBaud)throw std::runtime_error("undefined DIP/8251 async baud");
+        const auto speed=termiosBaud(lineBaud);
         if(cfsetispeed(&t,speed)!=0 || cfsetospeed(&t,speed)!=0 ||
            tcsetattr(fd_,TCSANOW,&t)!=0)
             throw std::runtime_error(error("cannot apply serial line parameters"));
@@ -209,6 +213,8 @@ private:
     }
     std::string endpoint_,label_;
     unsigned baud_=0;
+    bool fast_=false;
+    unsigned baudDip_=0;
     int fd_=-1,peer_=-1,lastMode_=-1;
     bool savedTermios_=false;
     bool modemSupported_=true;
