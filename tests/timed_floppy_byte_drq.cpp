@@ -153,5 +153,33 @@ int main() {
     if(!bootHd.acceptTypeIIByte(1))return 24;
     bootHd.advanceSeekNanoseconds(16000);
     if(!bootHd.typeIIByteReady(1))return 25;
+
+    // Exercise the actual 6809 2HD PIO adapter at C0/H0, as used by
+    // the stock ROM IPL, not only the FloppyDevice's timing state.
+    Machine romMachine;
+    auto romCard=std::make_unique<Main6809Board>(CpuType::MC6809);
+    auto* romCpu=romCard.get();
+    romMachine.addBoard(std::move(romCard));
+    romMachine.systemBoard().floppyDevice()->loadD882hd(hdD88);
+    romMachine.reset();
+    romMachine.systemBoard().floppyDevice()->enableSeekTiming(true);
+    romCpu->writeCpu(0xfd35,0);
+    romCpu->writeCpu(0xfd34,0);
+    romCpu->writeCpu(0xfd31,0);
+    romCpu->writeCpu(0xfd32,1);
+    romCpu->writeCpu(0xfd51,0); // PIO, same as 6809 ROM
+    romCpu->writeCpu(0xfd30,0x80);
+    unsigned received=0;
+    for(unsigned tick=0;tick<40000 && received<128;++tick) {
+        romMachine.advanceTimeNanoseconds(8000);
+        if(romCpu->readCpu(0xfd30)&0x02) {
+            if(romCpu->readCpu(0xfd33)!=BYTE(1+received))return 26;
+            ++received;
+        }
+    }
+    if(received!=128)return 27;
+    romMachine.advanceTimeNanoseconds(32000);
+    if(romCpu->readCpu(0xfd30)!=0 ||
+       (romCpu->readCpu(0xfd37)&0x40)==0)return 28;
     return 0;
 }
