@@ -46,6 +46,7 @@ public:
         subIoRam_.fill(0);
         kanjiSelectHigh_=kanjiSelectLow_=0;
         kanjiStart_=0;
+        kanjiSelectedBank_=0;
         kanjiLeft_=kanjiRight_=32;
         kanjiSelectCount_.store(0,std::memory_order_relaxed);
         kanjiLeftReadCount_.store(0,std::memory_order_relaxed);
@@ -77,6 +78,12 @@ public:
     void loadRom(const RomImage& image) {rom_=image;}
     void loadAnkRom(const AnkRomImage& image) {ankRom_=image;markVideoChanged();}
     void loadKanjiRom(const KanjiRomImage& image) {kanjiRom_=image;markVideoChanged();}
+    void loadKanji2Rom(const KanjiRomImage& image) {
+        kanji2Rom_=image;
+        kanji2Installed_=true;
+        markVideoChanged();
+    }
+    bool kanji2Installed() const {return kanji2Installed_;}
     BYTE ankGlyphRow(BYTE character,unsigned row) const {
         return ankRom_.at(std::size_t(character)*16+row);
     }
@@ -300,7 +307,7 @@ public:
         // AFF6 and AFF7 have independently advancing left/right row cursors.
         if(address==0xaff6) {
             if((kanjiSelectHigh_&0x80) || kanjiLeft_>=32)return 0;
-            const auto result=kanjiRom_[kanjiStart_+kanjiLeft_];
+            const auto result=(kanjiSelectedBank_?kanji2Rom_:kanjiRom_)[kanjiStart_+kanjiLeft_];
             kanjiLeft_+=2;
             kanjiLeftReadCount_.fetch_add(1,std::memory_order_relaxed);
             return result;
@@ -308,7 +315,7 @@ public:
         if(address==0xaff7) {
             if(kanjiSelectHigh_&0x80)return rtcRegisters_[kanjiSelectHigh_&0x0f];
             if(kanjiRight_>=32)return 1;
-            const auto result=kanjiRom_[kanjiStart_+kanjiRight_];
+            const auto result=(kanjiSelectedBank_?kanji2Rom_:kanjiRom_)[kanjiStart_+kanjiRight_];
             kanjiRight_+=2;
             kanjiRightReadCount_.fetch_add(1,std::memory_order_relaxed);
             return result;
@@ -421,10 +428,14 @@ public:
         else if(address==0xaff5) {
             kanjiSelectLow_=value;
             ioRam_[address-0xa000]=value;
+            // AFF4 bit4 is A16 on the FM-11AD2/AD2+ ROM card.
+            const unsigned high=kanjiSelectHigh_;
+            const unsigned bank=(high>>4)&1u;
             const auto start=std::size_t(
-                (unsigned(kanjiSelectHigh_)<<8)|kanjiSelectLow_)*32u;
-            if(start<kKanjiRomSize) {
+                ((high&0x0fu)<<8)|kanjiSelectLow_)*32u;
+            if((high&0xe0u)==0 && (!bank || kanji2Installed_)) {
                 kanjiSelectCount_.fetch_add(1,std::memory_order_relaxed);
+                kanjiSelectedBank_=bank;
                 kanjiStart_=start;
                 kanjiLeft_=0;
                 kanjiRight_=1;
@@ -488,6 +499,9 @@ private:
     RomImage rom_{};
     AnkRomImage ankRom_{};
     KanjiRomImage kanjiRom_{};
+    KanjiRomImage kanji2Rom_{};
+    bool kanji2Installed_=false;
+    unsigned kanjiSelectedBank_=0;
     mutable std::atomic<std::uint64_t> kanjiSelectCount_{0};
     mutable std::atomic<std::uint64_t> kanjiLeftReadCount_{0};
     mutable std::atomic<std::uint64_t> kanjiRightReadCount_{0};

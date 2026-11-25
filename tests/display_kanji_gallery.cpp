@@ -47,11 +47,23 @@ int main() {
        pixels[(lastRow*16-1)*640]!=0)return 9;
     stats=d.kanjiStatistics();
     if(stats.selections!=3*KanjiTestPattern::glyphsPerPage)return 10;
+    // Second bank uses the identical graphic scanout, selected via AFF4 bit4.
+    DisplaySubsystem::KanjiRomImage second{};
+    second[0]=0x40;
+    second[1]=0x02;
+    second[KanjiTestPattern::glyphsPerPage*32]=0x10;
+    d.loadKanji2Rom(second);
+    KanjiTestPattern::paint(d,0,2);
+    pixels=DisplayBitmap::decodeSelectedGraphics400(d);
+    if(pixels[1]!=7 || pixels[14]!=7 || pixels[0]!=0)return 11;
+    KanjiTestPattern::paint(d,1,2);
+    pixels=DisplayBitmap::decodeSelectedGraphics400(d);
+    if(pixels[3]!=7 || pixels[1]!=0)return 12;
     KanjiTestPattern::paint(d,KanjiTestPattern::pages-1);
     stats=d.kanjiStatistics();
     const unsigned finalPageGlyphs=KanjiTestPattern::glyphCount-
         (KanjiTestPattern::pages-1)*KanjiTestPattern::glyphsPerPage;
-    if(stats.selections!=3*KanjiTestPattern::glyphsPerPage+
+    if(stats.selections!=5*KanjiTestPattern::glyphsPerPage+
                          finalPageGlyphs)return 6;
     try {
         KanjiTestPattern::paint(d,KanjiTestPattern::pages);

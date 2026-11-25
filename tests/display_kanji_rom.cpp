@@ -41,6 +41,22 @@ int main() {
     d.writeMemory(0xaff5,0x00);
     if(d.readMemory(0xaff6)!=0x50 || d.readMemory(0xaff7)!=0x90)
         return 6;
+    // Optional bank uses AFF4 bit4 (address A16).
+    DisplaySubsystem::KanjiRomImage level2{};
+    level2[3*32]=0x13;
+    level2[3*32+1]=0x93;
+    level2[0]=0x27;
+    level2[1]=0xa7;
+    d.loadKanji2Rom(level2);
+    d.writeMemory(0xaff4,0x10);
+    d.writeMemory(0xaff5,0x03);
+    if(d.readMemory(0xaff6)!=0x13 || d.readMemory(0xaff7)!=0x93)return 14;
+    d.writeMemory(0xaff4,0x00);
+    d.writeMemory(0xaff5,0x03);
+    if(d.readMemory(0xaff6)!=0x43 || d.readMemory(0xaff7)!=0x83)return 15;
+    d.writeMemory(0xaff4,0x10);
+    d.writeMemory(0xaff5,0x00);
+    if(d.readMemory(0xaff6)!=0x27 || d.readMemory(0xaff7)!=0xa7)return 16;
     // High bit selects the RTC window on AFF7, disables Kanji on AFF6.
     d.writeMemory(0xaff4,0x8d);
     d.writeMemory(0xaff7,0xa5);

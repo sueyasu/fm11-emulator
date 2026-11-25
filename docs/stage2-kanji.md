@@ -120,3 +120,40 @@ The 400-line gallery displays 16x16 ROM glyphs without the vertical
 2x scaling used by the 200-line display. The last (fifth) page holds
 96 glyphs. All 32,000 bytes per graphics plane are cleared on each page
 change; no glyph pixels can persist from a preceding page.
+
+## Optional JIS level-2 ROM (FM-11AD2/AD2+ Kanji board)
+
+The revised FM-11 Kanji ROM board exposes one extra address bit:
+AFF4 bit 4 is address A16 and selects the second-level 128-KiB
+ROM. Bits 3..0 of AFF4 and AFF5 select a 32-byte glyph within the
+bank; AFF6/AFF7 remain the left and right raster-byte read ports.
+The original first-level-only board has no second bank.
+
+The emulator retains the existing 128-KiB `kanji_rom` image and
+adds an optional, separate 128-KiB `kanji2_rom` image. Both
+loaders validate their file sizes. If the second ROM is absent,
+the previous first-level-only behavior is preserved. Reset clears
+the selected bank, without discarding loaded ROM data.
+
+```ini
+[display_cpu]
+kanji_rom = external/roms/kanji.bin
+kanji2_rom = external/roms/kanji2.bin
+```
+
+```sh
+./build/fm11-sdl --test-kanji --kanji2-rom external/roms/kanji2.bin --test-kanji-level 2
+```
+
+In the gallery, **F3** changes between levels 1 and 2 and resets
+the page to 1; **PageUp/PageDown** navigate the current level.
+Both levels have five 640x400 pages. The normal OS mode also
+loads both ROMs and lets the real sub-CPU firmware select A16.
+
+The firmware for the later FM-11 model must translate JIS level-2
+codes into a different ROM address mapping from level 1. That
+translation belongs to the guest sub-ROM; the emulator models
+only the ROM bank/address selection and data readback.
+
+Hardware reference (reverse-engineered FM-11AD2/AD2+ ROM card):
+https://hardyboy.livedoor.blog/archives/10763657.html

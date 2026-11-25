@@ -17,7 +17,10 @@ constexpr unsigned pages=(glyphCount+glyphsPerPage-1)/glyphsPerPage;
 constexpr unsigned bytesPerScanline=80;
 constexpr unsigned visibleScanlines=400;
 
-inline void paint(DisplaySubsystem& display,unsigned page) {
+inline void paint(DisplaySubsystem& display,unsigned page,unsigned level=1) {
+    if(level!=1 && level!=2)throw std::invalid_argument("Kanji test level must be 1 or 2");
+    if(level==2 && !display.kanji2Installed())
+        throw std::invalid_argument("second-level Kanji ROM is not loaded");
     if(page>=pages)throw std::out_of_range("Kanji test page");
     // Three RGB planes receive the same bits -> white-on-black text.
     // Keep the displayed VRAM page and CRTC display start at zero.
@@ -36,7 +39,8 @@ inline void paint(DisplaySubsystem& display,unsigned page) {
         if(glyph>=glyphCount)break;
         const unsigned x=cell%columns;
         const unsigned y=cell/columns;
-        display.writeMemory(0xaff4,static_cast<std::uint8_t>(glyph>>8));
+        display.writeMemory(0xaff4,static_cast<std::uint8_t>(
+            (glyph>>8)|(level==2?0x10u:0u)));
         display.writeMemory(0xaff5,static_cast<std::uint8_t>(glyph));
         for(unsigned scan=0;scan<16;++scan) {
             const auto address=static_cast<std::uint16_t>(

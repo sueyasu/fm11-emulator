@@ -87,13 +87,16 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--beep-test] [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--test-kanji] [--main-rom FILE] [--trace-boot] [--trace-fdc] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--kanji-rom FILE] [--trace-kanji] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software] [--scanlines]\n"
+    std::cout<<"usage: fm11-sdl [--beep-test] [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--test-kanji] [--main-rom FILE] [--trace-boot] [--trace-fdc] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--kanji-rom FILE] [--kanji2-rom FILE] [--test-kanji-level 1|2] [--trace-kanji] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software] [--scanlines]\n"
              <<"  ROM defaults to [display_cpu].rom (external/roms/display6809.bin); CPU ROM paths may be set in the config file\n"
              <<"  Initial window height: [display].height=200|400 (default 400); --high forces 400\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
              <<"  --beep-test: audible 205ms pulse, pause, continuous tone, then stop.\n"
              <<"  --test-kanji: ROM glyph gallery, PgUp/PgDn change page (40x25 glyphs).\n"
              <<"                Uses --kanji-rom FILE or external/roms/kanji.bin.\n"
+             <<"                F3 switches level 1/2 when --kanji2-rom is loaded.\n"
+             <<"  --kanji2-rom FILE: optional JIS level-2 128-KiB ROM.\n"
+             <<"  --test-kanji-level 1|2: initial gallery ROM bank.\n"
              <<"  --speed N: main CPU multiplier (default 10, 1=real-time);\n"
              <<"             display CPU uses the same multiplier, capped at 8 MHz.\n"
              <<"             0=unlimited main CPU, 8 MHz display CPU; PTM stays real-time.\n"
@@ -105,7 +108,7 @@ void usage() {
 }
 int main(int argc,char** argv) {
     try {
-        std::string displayRomOverride, mainRomPath, main6809RomOverride, ankPath, kanjiPath, floppyPath;
+        std::string displayRomOverride, mainRomPath, main6809RomOverride, ankPath, kanjiPath, kanji2Path, floppyPath;
         std::string configPath,main8088RomOverride;
         unsigned speed=10;
         std::string rendererMode="auto";
@@ -114,6 +117,7 @@ int main(int argc,char** argv) {
         bool traceKanji=false;
         bool testKanji=false;
         unsigned kanjiPage=0;
+        unsigned kanjiLevel=1;
         unsigned floppyDrive=0;
         unsigned bootDip=0x9f;
         bool bootDipOverridden=false;
@@ -134,7 +138,7 @@ int main(int argc,char** argv) {
             if(arg=="--trace-fdc"){traceFdc=true;continue;}
             if(arg=="--trace-inkey"){traceInkey=true;continue;}
             if(arg=="--diagnostics"){diagnostics=true;continue;}
-            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--6809-rom" || arg=="--ank-rom" || arg=="--kanji-rom" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive" || arg=="--boot-dip" || arg=="--config" || arg=="--8088-rom" || arg=="--speed" || arg=="--renderer") && i+1<argc) {
+            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--6809-rom" || arg=="--ank-rom" || arg=="--kanji-rom" || arg=="--kanji2-rom" || arg=="--test-kanji-level" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive" || arg=="--boot-dip" || arg=="--config" || arg=="--8088-rom" || arg=="--speed" || arg=="--renderer") && i+1<argc) {
                 if(arg=="--rom")displayRomOverride=argv[++i];
                 else if(arg=="--config")configPath=argv[++i];
                 else if(arg=="--8088-rom")main8088RomOverride=argv[++i];
@@ -154,6 +158,13 @@ int main(int argc,char** argv) {
                 else if(arg=="--main-rom")mainRomPath=argv[++i];
                 else if(arg=="--ank-rom")ankPath=argv[++i];
                 else if(arg=="--kanji-rom")kanjiPath=argv[++i];
+                else if(arg=="--kanji2-rom")kanji2Path=argv[++i];
+                else if(arg=="--test-kanji-level") {
+                    const auto level=parseCount(argv[++i]);
+                    if(level!=1 && level!=2)
+                        throw std::invalid_argument("--test-kanji-level must be 1 or 2");
+                    kanjiLevel=static_cast<unsigned>(level);
+                }
                 else if(arg=="--boot-dip") {
                     const auto v=parseCount(argv[++i]);
                     if(v>255)throw std::invalid_argument("--boot-dip must be a byte");
@@ -194,6 +205,7 @@ int main(int argc,char** argv) {
         }
         if(ankPath.empty())ankPath=config.ankRom;
         if(kanjiPath.empty())kanjiPath=config.kanjiRom;
+        if(kanji2Path.empty())kanji2Path=config.kanji2Rom;
         if((testPattern || testKanji) &&
            (!mainRomPath.empty() || !main6809RomOverride.empty() || !main8088RomOverride.empty()))
             throw std::invalid_argument("CPU ROMs cannot be combined with display test modes");
@@ -213,6 +225,7 @@ int main(int argc,char** argv) {
             machine.loadDisplayRomFile(romPath);
             if(!ankPath.empty())machine.loadAnkRomFile(ankPath);
             if(!kanjiPath.empty())machine.loadKanjiRomFile(kanjiPath);
+            if(!kanji2Path.empty())machine.loadKanji2RomFile(kanji2Path);
             if(!rom6809.empty() || !rom8088.empty()) {
                 std::size_t cpu6809Index=0,cpu8088Index=0,z80Index=0;
                 if(config.main6809Installed) {
@@ -334,11 +347,15 @@ int main(int argc,char** argv) {
         machine.reset();
         if(testKanji) {
             machine.loadKanjiRomFile(kanjiPath);
-            KanjiTestPattern::paint(machine.systemBoard().displaySubsystem(),kanjiPage);
+            if(!kanji2Path.empty())machine.loadKanji2RomFile(kanji2Path);
+            KanjiTestPattern::paint(machine.systemBoard().displaySubsystem(),
+                                    kanjiPage,kanjiLevel);
             std::cout<<"Kanji ROM gallery: "<<kanjiPath
+                     <<(kanji2Path.empty()?"":" + "+kanji2Path)
+                     <<" level="<<kanjiLevel
                      <<" ("<<KanjiTestPattern::glyphCount<<" glyphs, "
                      <<KanjiTestPattern::pages<<" pages)\n"
-                     <<"PageUp/PageDown: change ROM range; Ctrl+F12: quit\n"
+                     <<"PageUp/PageDown: change ROM range; F3: switch ROM level; Ctrl+F12: quit\n"
                      <<std::flush;
         }
         machine.systemBoard().usartDevice()->requireCarrierAndDsr(
@@ -400,7 +417,8 @@ int main(int argc,char** argv) {
         ui.setMode(high);
         std::cerr<<"FM-11 renderer: "<<(ui.glRenderer?"OpenGL 3.3":"software")<<"\n";
         if(testKanji) {
-            const std::string title="FM-11 Kanji ROM page 1/"+
+            const std::string title="FM-11 Kanji level "+
+                std::to_string(kanjiLevel)+" page 1/"+
                 std::to_string(KanjiTestPattern::pages);
             SDL_SetWindowTitle(ui.window,title.c_str());
         }
@@ -677,20 +695,32 @@ int main(int argc,char** argv) {
                 if(event.type==SDL_KEYDOWN && !event.key.repeat) {
                     const auto sym=event.key.keysym.sym;
                     const auto mod=event.key.keysym.mod;
-                    if(testKanji && (sym==SDLK_PAGEDOWN || sym==SDLK_PAGEUP)) {
+                    if(testKanji && sym==SDLK_F3) {
+                        if(machine.displaySubsystem().kanji2Installed()) {
+                            kanjiLevel=3-kanjiLevel;
+                            kanjiPage=0;
+                            KanjiTestPattern::paint(
+                                machine.systemBoard().displaySubsystem(),kanjiPage,kanjiLevel);
+                            const std::string title="FM-11 Kanji level "+
+                                std::to_string(kanjiLevel)+" page 1/"+
+                                std::to_string(KanjiTestPattern::pages);
+                            SDL_SetWindowTitle(ui.window,title.c_str());
+                        }
+                    } else if(testKanji && (sym==SDLK_PAGEDOWN || sym==SDLK_PAGEUP)) {
                         const unsigned next=sym==SDLK_PAGEDOWN
                             ?(kanjiPage+1)%KanjiTestPattern::pages
                             :(kanjiPage+KanjiTestPattern::pages-1)%KanjiTestPattern::pages;
                         if(next!=kanjiPage) {
                             kanjiPage=next;
                             KanjiTestPattern::paint(
-                                machine.systemBoard().displaySubsystem(),kanjiPage);
+                                machine.systemBoard().displaySubsystem(),kanjiPage,kanjiLevel);
                             const unsigned first=kanjiPage*KanjiTestPattern::glyphsPerPage;
                             const unsigned last=std::min(
                                 first+KanjiTestPattern::glyphsPerPage,
                                 KanjiTestPattern::glyphCount)-1;
                             std::ostringstream title;
-                            title<<"FM-11 Kanji ROM page "<<(kanjiPage+1)
+                            title<<"FM-11 Kanji level "<<kanjiLevel
+                                 <<" page "<<(kanjiPage+1)
                                  <<"/"<<KanjiTestPattern::pages
                                  <<" (glyph "<<std::hex<<std::uppercase
                                  <<first<<"-"<<last<<")";
