@@ -5,6 +5,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <string>
 #include <utility>
 #include <stdexcept>
 #include <vector>
@@ -13,6 +14,13 @@
 // The CPU boards retain only their FDC register and DMA-adapter behavior.
 class FloppyDevice {
 public:
+    // Optional one-line events for boot timing diagnosis; disabled by default.
+    void setTimingTrace(std::function<void(const std::string&)> callback) {
+        timingTrace_=std::move(callback);
+    }
+    void traceTiming(const std::string& message) const {
+        if(timingTrace_)timingTrace_(message);
+    }
     // Opt-in virtual mechanical time for both FDCs and CPU adapters.
     // Type-II rotation/latency is modeled; per-byte DRQ timing remains future work.
     void enableSeekTiming(bool enable) {seekTimed_=enable;resetSeekTiming();}
@@ -67,6 +75,9 @@ public:
         const auto rev=revolutionNanoseconds(ch);
         if(!sectorOffset(ch,track,side,sector,drive,offset)) {
             t.remainingNs=5*rev; // Record Not Found after five revolutions
+            traceTiming("begin ch="+std::to_string(ch)+" d="+std::to_string(drive)+
+                " C="+std::to_string(track)+" H="+std::to_string(side)+
+                " R="+std::to_string(sector)+" no sector/head match; RNF pending");
         } else {
             const auto& disk=medium(ch,drive);
             const auto count=std::uint64_t(disk.sectorsPerTrack);
@@ -77,6 +88,10 @@ public:
             const auto transfer=(std::uint64_t(bytes)*8*1000000000ULL+bitrate-1)/bitrate;
             t.remainingNs=search;
             t.transferNs=transfer;
+            traceTiming("begin ch="+std::to_string(ch)+" d="+std::to_string(drive)+
+                " C="+std::to_string(track)+" H="+std::to_string(side)+
+                " R="+std::to_string(sector)+" wait_ns="+std::to_string(search)+
+                " bytes="+std::to_string(bytes));
         }
         return true;
     }
@@ -100,6 +115,9 @@ public:
         auto& t=typeII_[ch];
         command=t.command;
         completed=t.transferring;
+        traceTiming("event ch="+std::to_string(ch)+
+            (completed?" complete":" sector-arrival")+
+            " overrun_ns="+std::to_string(t.overrunNs));
         if(completed || !t.transferNs) {
             t=TypeIIState{};
         } else {
@@ -533,6 +551,7 @@ private:
         std::uint64_t remainingNs=0,transferNs=0,overrunNs=0;
         bool transferring=false;
     };
+    std::function<void(const std::string&)> timingTrace_;
     bool seekTimed_=false;
     std::array<std::array<SeekState,4>,2> seek_{};
     std::array<std::array<std::uint64_t,4>,2> rotationNs_{};
