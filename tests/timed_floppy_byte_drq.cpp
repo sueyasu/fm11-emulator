@@ -91,5 +91,67 @@ int main() {
        (*c09->physicalMemory())[0x2000]!=0x7e ||
        c09->readCpu(0xfd42)!=0 || c09->readCpu(0xfd43)!=0)
         return 12;
+    // The native 2HD ROM boot track is FM (26 x 128), not the
+    // normal 500-kbps MFM data track. PIO gets 32 us per byte.
+    std::vector<BYTE> hdD88(0x2b0,0);
+    hdD88[0x1b]=0x20;
+    auto put32=[&](std::size_t off,unsigned v) {
+        for(unsigned i=0;i<4;++i)hdD88[off+i]=BYTE(v>>(i*8));
+    };
+    for(unsigned tr=0;tr<154;++tr) {
+        put32(0x20+4*tr,unsigned(hdD88.size()));
+        const unsigned len=tr==0?128:256;
+        for(unsigned id=1;id<=26;++id) {
+            const auto start=hdD88.size();
+            hdD88.resize(start+16+len,0);
+            hdD88[start]=BYTE(tr/2);
+            hdD88[start+1]=BYTE(tr&1);
+            hdD88[start+2]=BYTE(id);
+            hdD88[start+3]=BYTE(tr==0?0:1);
+            hdD88[start+4]=26;
+            hdD88[start+6]=BYTE(tr==0?0x40:0);
+            hdD88[start+14]=BYTE(len);
+            hdD88[start+15]=BYTE(len>>8);
+            for(unsigned i=0;i<len;++i)
+                hdD88[start+16+i]=BYTE(id+i);
+        }
+    }
+    put32(0x1c,unsigned(hdD88.size()));
+    FloppyDevice bootHd;
+    bootHd.loadD882hd(hdD88);
+    bootHd.enableSeekTiming(true);
+    if(!bootHd.beginTypeII(1,0,0,0,1,0x80))return 13;
+    bootHd.advanceSeekNanoseconds(FloppyDevice::revolutionNanoseconds(1));
+    if(!bootHd.takeTypeIIEvent(1,cmd,done) || done ||
+       !bootHd.beginSector(1,0,0,1,0,false))return 14;
+    bootHd.startTypeIIBytePacing(1);
+    if(!bootHd.typeIIByteReady(1))return 15;
+    if(bootHd.transferRead()!=1 || !bootHd.acceptTypeIIByte(1))return 16;
+    bootHd.advanceSeekNanoseconds(16000);
+    // DRQ cannot be asserted after 16 us on the FM boot track.
+    if(bootHd.typeIIByteReady(1) || bootHd.typeIILostData(1))return 17;
+    bootHd.advanceSeekNanoseconds(16000);
+    if(!bootHd.typeIIByteReady(1) || bootHd.typeIILostData(1))return 18;
+    if(bootHd.transferRead()!=2 || !bootHd.acceptTypeIIByte(1))return 19;
+    // All 128 FM-sector bytes, at one-byte/32us, must complete cleanly.
+    for(unsigned i=2;i<128;++i) {
+        bootHd.advanceSeekNanoseconds(32000);
+        if(!bootHd.typeIIByteReady(1) || bootHd.transferRead()!=BYTE(1+i) ||
+           !bootHd.acceptTypeIIByte(1))return 20;
+    }
+    bootHd.advanceSeekNanoseconds(32000);
+    if(!bootHd.takeTypeIIEvent(1,cmd,done) || !done ||
+       bootHd.typeIIResult(1)!=0)return 21;
+
+    // The adjacent C0/H1 MFM track retains 16 us per byte.
+    bootHd.advanceSeekNanoseconds(100000000);
+    if(!bootHd.beginTypeII(1,0,0,1,1,0x80))return 22;
+    bootHd.advanceSeekNanoseconds(FloppyDevice::revolutionNanoseconds(1));
+    if(!bootHd.takeTypeIIEvent(1,cmd,done) || done ||
+       !bootHd.beginSector(1,0,1,1,0,false))return 23;
+    bootHd.startTypeIIBytePacing(1);
+    if(!bootHd.acceptTypeIIByte(1))return 24;
+    bootHd.advanceSeekNanoseconds(16000);
+    if(!bootHd.typeIIByteReady(1))return 25;
     return 0;
 }
