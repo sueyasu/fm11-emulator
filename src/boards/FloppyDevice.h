@@ -165,7 +165,7 @@ public:
                     const auto elapsed=t.transferNs-t.remainingNs+
                         std::min(ns,t.remainingNs);
                     const auto slots=std::min<std::uint64_t>(
-                        t.byteCount,elapsed/t.bytePeriodNs);
+                        t.byteCount?t.byteCount-1:0,elapsed/t.bytePeriodNs);
                     if(slots>oldSlots) {
                         if(t.byteReady || slots>oldSlots+1)
                             t.lostData=true;
