@@ -559,9 +559,12 @@ void Main8088Bus::serviceTimedFloppy()
                 floppyCommand(command,channel);
                 timedTypeIIDispatch_=false;
                 if(floppy_->typeIIBusy(channel,
-                       floppy_->registerValue(channel==0?0x1d:0x35)&3)
-                   && channel==0)
-                    floppy_->writeRegister(0x1f,0);
+                       floppy_->registerValue(channel==0?0x1d:0x35)&3)) {
+                    // Synchronous DMA completes before the modeled FDC
+                    // data interval. Keep INTRQ low for both controllers
+                    // until the final timed completion event.
+                    floppy_->writeRegister(channel==0?0x1f:0x37,0);
+                }
             } else {
                 floppy_->writeRegister(channel==0?0x1f:0x37,0x40);
             }
