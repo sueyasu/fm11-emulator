@@ -934,7 +934,10 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             if(!floppy_->beginReadAddress(1,ioRegisters_[0x31],
                                           ioRegisters_[0x34]&1,drive))
                 status=0x10;
-            else if(!(ioRegisters_[0x51]&4))status=0x03;
+            else if(!(ioRegisters_[0x51]&4)) {
+                ioRegisters_[0x32]=floppy_->registerValue(0x32);
+                status=0x03;
+            }
             else {
                 const unsigned ctl=0x51,addrReg=0x44,countReg=0x46,bankReg=0x95;
             const unsigned count=(unsigned(ioRegisters_[countReg])<<8)|ioRegisters_[countReg+1];
@@ -954,6 +957,7 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             if(!remaining)ioRegisters_[ctl]=BYTE((ioRegisters_[ctl]|0x80)&~0x40);
             else ioRegisters_[ctl]|=0x40;
             refreshDmaCompletion();
+                ioRegisters_[0x32]=floppy_->registerValue(0x32);
                 status=floppy_->transferStatus();
             }
         } else if(((value&0xf0)==0x90 || (value&0xf0)==0xb0) &&
@@ -1648,6 +1652,8 @@ void Main6809Board::serviceTimedFloppy()
                 if(((command&0xf0)==0xc0?
                        floppy_->beginReadAddress(channel,track,side,drive):
                        floppy_->beginSector(channel,track,side,sector,drive,writing))) {
+                    if(channel==1 && (command&0xf0)==0xc0)
+                        ioRegisters_[0x32]=floppy_->registerValue(0x32);
                     floppy_->startTypeIIBytePacing(channel);
                     floppy_->traceTiming("DRQ start ch="+std::to_string(channel)+
                         " bytes="+std::to_string(floppy_->transferLength()));

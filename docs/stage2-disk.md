@@ -13,6 +13,17 @@ Interrupt cancels pending multi-sector work. The `floppy_multi_sector`
 CTest exercises two-sector DMA read/write with both CPU cards,
 controller channels and timing modes.
 
+## Stage 2-B3 boundary regression (pre-OS validation)
+
+The `fdc_b3_boundaries` CTest checks multi-sector end-of-track,
+missing sector ID with the five-revolution RNF timeout, command
+cancellation, no partial media write after Force Interrupt or missed
+DRQs, and READ ADDRESS CHRN/CRC for the native 2HD D88 mixed-size
+boot track (128 bytes) versus ordinary 256-byte tracks. The 6809
+2HD adapter now synchronizes FD32 after READ ADDRESS in both fast
+and timed modes. These tests complement (not replace) the final
+NitrOS-9/CP/M OS boot and FORMAT regression.
+
 ## Stage 2-B3: READ ADDRESS (C0h)
 
 READ ADDRESS returns six bytes, C/H/R/N/CRC high/CRC low, through the
