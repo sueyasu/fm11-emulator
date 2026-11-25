@@ -372,7 +372,8 @@ void Machine::reset()
 void Machine::advanceTimeNanoseconds(std::uint64_t nanoseconds)
 {
     mainBoard_->advanceTimeNanoseconds(nanoseconds);
-    advanceTimedFloppyNanoseconds(nanoseconds);
+    mainBoard_->floppyDevice()->advanceSeekNanoseconds(nanoseconds);
+    serviceTimedFloppy();
     if(mainBoard_->floppyDevice()->seekTimingEnabled()) {
         const auto fdc=mainBoard_->floppyDevice();
         for(auto* cpu:main6809Boards_) {
@@ -436,8 +437,9 @@ void Machine::advanceFloppyCpuCycles(std::uint64_t cycles,std::uint64_t hz)
     if(floppyClockHz_!=hz){floppyClockHz_=hz;floppyFraction_=0;}
     constexpr std::uint64_t billion=1000000000ULL;
     const auto n=(cycles%hz)*billion+floppyFraction_;
-    advanceTimedFloppyNanoseconds((cycles/hz)*billion+n/hz);
+    fdc->advanceSeekNanoseconds((cycles/hz)*billion+n/hz);
     floppyFraction_=n%hz;
+    serviceTimedFloppy();
     for(auto* cpu:main6809Boards_) {
         if(fdc->seekComplete(0,fdc->registerValue(0x1d)&3))
                 cpu->setMainIrqSource(0x08,true);
@@ -446,29 +448,10 @@ void Machine::advanceFloppyCpuCycles(std::uint64_t cycles,std::uint64_t hz)
     }
 }
 
-void Machine::advanceTimedFloppyNanoseconds(std::uint64_t ns)
-{
-    auto fdc=mainBoard_->floppyDevice();
-    if(!fdc->seekTimingEnabled() || !ns)return;
-    // Hardware DMA is independent of the CPU instruction boundary.
-    // Split a long instruction's virtual time at each FDC DRQ/command
-    // edge, so a slow CPU instruction cannot create fictitious Lost Data.
-    while(ns) {
-        if(fdc->nextTypeIIEventNanoseconds()==0)serviceTimedFloppy();
-        const auto next=fdc->nextTypeIIEventNanoseconds();
-        const auto step=next==UINT64_MAX?ns:
-                        std::min(ns,std::max<std::uint64_t>(1,next));
-        fdc->advanceSeekNanoseconds(step);
-        serviceTimedFloppy();
-        ns-=step;
-    }
-}
-
 void Machine::serviceTimedFloppy()
 {
     auto fdc=mainBoard_->floppyDevice();
-    if(!fdc->typeIIReady() && !fdc->typeIIByteReady(0) &&
-       !fdc->typeIIByteReady(1))return;
+    if(!fdc->typeIIReady())return;
     if(activeExecution_.kind==ExecutionKind::Main6809 &&
        activeExecution_.main6809)
         activeExecution_.main6809->serviceTimedFloppy();

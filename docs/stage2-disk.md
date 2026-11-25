@@ -61,50 +61,26 @@ than the number of polling reads; the two FDC channels share a common
 virtual timebase while each drive retains its own phase.
 
 READ/WRITE SECTOR enters BUSY until the requested sector arrives.
-At ID arrival, the adapter starts the timed byte transfer;
-the modeled data interval continues until the FDC completes the command
-and publishes its final interrupt. In PIO mode, DRQ initially appears
-at ID arrival and reappears for each byte, while DMA terminal count can
-precede FDC completion. The transfer-rate approximations are
+At ID arrival, the adapter starts the existing atomic DMA or PIO transfer;
+the modeled data-transfer interval continues to elapse before the FDC
+completes the command and publishes its final interrupt. In PIO mode,
+DRQ becomes visible at ID arrival, while DMA terminal count can precede
+FDC completion. The first-stage transfer-rate approximations are
 250 kbps (2D) and 500 kbps (2HD). Sector IDs are provisionally uniformly distributed around the
 track, with a small lead-in offset. Absent IDs or mismatched physical
 cylinders report RNF after five revolutions rather than immediately.
 Both timing events are serviced on the owning CPU thread, and new commands
 cancel a pending Type-II request.
 
-## Stage 2-B2: per-byte DRQ and DMA coupling
-
-With `timing=timed`, after an ID arrives, a byte DRQ is asserted at
-the start of the data field and subsequently every 32 us (2D, 250 kb/s)
-or 16 us (normal 2HD MFM, 500 kb/s). The native FM-11 2HD boot
-side-track C0/H0 (26 x 128-byte FM sectors) uses 250 kb/s and therefore
-32 us per byte, even though it is attached to the 2HD controller.
-Applying 500 kb/s to this special ROM boot track makes its PIO
-loader see an unrealistically early next DRQ and report Lost Data. A CPU PIO data-register access or one
-8237/HD6844 DMA service acknowledges one byte. The FDC keeps BUSY
-asserted until the full data interval has expired. A new byte arriving
-while the previous DRQ is still pending asserts WD179x LOST DATA (04h);
-an incomplete sector also reports LOST DATA on command completion.
-No write is persisted for an incomplete WRITE SECTOR.
-
-The scheduler splits even a long main CPU instruction at hardware byte
-deadlines. This allows autonomous 8237/HD6844 DMA to run independently
-of CPU instruction timing, while delayed PIO can still fail as actual
-hardware would. Both 6809 and 8088/V20 adapters use the same shared
-byte clock, and `fast` mode continues to bypass it. The
-`timed_floppy_byte_drq` test covers DRQ cadence, stalled/masked DMA,
-and long scheduler time advances.
-
-**Still approximate:** this models the guest-visible byte cadence,
-not disk flux and individual controller shift-register transitions.
-Physical ID/data gaps, CRC, detailed write-sector underrun fill,
-WRITE TRACK/READ TRACK timing, motor spin-up and disk media-error
-conditions are not yet cycle-accurate. WRITE TRACK still uses the
-legacy synchronous fast-path in both adapters. The existing artificial
-uniform-sector placement can cause large rotational waits on 2HD.
-
-These approximations are intended for OS robustness testing, not
-timing-equivalent performance comparisons with physical FM-11 drives.
+**Known limitation / Stage 2-C boundary:** the actual DMA/PIO byte
+transfer remains atomic after the timed interval; it is *not* paced by
+individual DRQ assertions. Therefore this implementation does not yet
+reproduce Lost Data, the separate DMA terminal-count and FDC completion
+edges, physical gap/CRC spacing, or the exact temporal placement of
+individual bytes. Full WRITE TRACK/READ TRACK, READ ADDRESS, Force
+Interrupt modes, motor spin-up and media-error timing remain separate
+future work. These approximations are intended for compatibility testing,
+not cycle-accurate WD179x emulation.
 
 The `fast` mode bypasses this new scheduling and keeps the existing
 immediate transfer behavior. `--speed` is not forcibly changed: both

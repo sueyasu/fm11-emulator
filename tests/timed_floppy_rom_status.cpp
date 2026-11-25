@@ -1,7 +1,6 @@
 #include "Main8088Bus.h"
 #include <memory>
 #include <vector>
-#include <cstdio>
 
 // Reproduces the stock FM-11 8088 boot ROM's 2HD polling contract:
 // FF00:074A issues READ SECTOR, FF00:0684 waits for FD37 bit 6,
@@ -43,28 +42,12 @@ int main() {
     if((bus.readIo(0xfd30)&1)==0 || (bus.readIo(0xfd37)&0x40))return 3;
     // Sector 1 passes after ~139 ms from the post-RESTORE angle.
     // DMA terminal count is reached before the FDC completion interrupt.
-    for(unsigned tick=0;tick<25000 && bus.readRam(0x4000)!=0x5a;++tick) {
-        fdc->advanceSeekNanoseconds(8000);
-        bus.serviceTimedFloppy();
-    }
-    const BYTE irqAtArrival=bus.readIo(0xfd37);
-    const BYTE statusAtArrival=bus.readIo(0xfd30);
-    const BYTE dmaByteAtArrival=bus.readRam(0x4000);
-    if((irqAtArrival&0x40) || (statusAtArrival&1)==0 ||
-       dmaByteAtArrival!=0x5a) {
-        std::fprintf(stderr,
-            "Type-II arrival: FD37=%02X FD30=%02X DMA[4000]=%02X "
-            "pending=%d ready=%d transfer=%d DMAcount=%04X\\n",
-            unsigned(irqAtArrival),unsigned(statusAtArrival),
-            unsigned(dmaByteAtArrival),int(fdc->typeIIBusy(1,0)),
-            int(fdc->typeIIReady()),int(fdc->typeIITransferring(1,0)),
-            unsigned(bus.dmaChannel(1).count));
-        return 9;
-    }
-    for(unsigned tick=0;tick<2500;++tick) {
-        fdc->advanceSeekNanoseconds(8000);
-        bus.serviceTimedFloppy();
-    }
+    fdc->advanceSeekNanoseconds(140000000);
+    bus.serviceTimedFloppy();
+    if((bus.readIo(0xfd37)&0x40) || (bus.readIo(0xfd30)&1)==0 ||
+       bus.readRam(0x4000)!=0x5a)return 9;
+    fdc->advanceSeekNanoseconds(20000000);
+    bus.serviceTimedFloppy();
     // A prior Type-I TRACK0 (04h) must not leak into the Type-II result.
     if((bus.readIo(0xfd37)&0x40)==0 || bus.readIo(0xfd30)!=0 ||
        bus.readRam(0x4000)!=0x5a || bus.dmaChannel(1).count!=0xffff)
@@ -80,10 +63,8 @@ int main() {
     setupDma(0x4100);
     bus.writeIo(0xfd30,0x80);
     if((bus.readIo(0xfd37)&0x40) || (bus.readIo(0xfd30)&1)==0)return 7;
-    for(unsigned tick=0;tick<30000;++tick) {
-        fdc->advanceSeekNanoseconds(8000);
-        bus.serviceTimedFloppy();
-    }
+    fdc->advanceSeekNanoseconds(200000000);
+    bus.serviceTimedFloppy();
     if((bus.readIo(0xfd37)&0x40)==0 || bus.readIo(0xfd30)!=0 ||
        bus.readRam(0x4100)!=0xa5)return 8;
     return 0;
