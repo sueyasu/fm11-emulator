@@ -1291,6 +1291,12 @@ void Main6809Board::serviceTimedFloppy()
                 timedTypeIIDispatch_=true;
                 writeIo(WORD(channel==0?0xfd18:0xfd30),command);
                 timedTypeIIDispatch_=false;
+                const unsigned base=channel==0?0x42:0x46;
+                const unsigned control=channel==0?0x50:0x51;
+                floppy_->traceTiming("DMA ch="+std::to_string(channel)+
+                    " mode="+std::to_string(ioRegisters_[control])+
+                    " remaining="+std::to_string((unsigned(ioRegisters_[base])<<8)|
+                                                 ioRegisters_[base+1]));
                 if(floppy_->typeIIBusy(channel,
                      floppy_->registerValue(channel==0?0x1d:0x35)&3)) {
                     if(channel==0) {
