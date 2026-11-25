@@ -181,5 +181,36 @@ int main() {
     romMachine.advanceTimeNanoseconds(32000);
     if(romCpu->readCpu(0xfd30)!=0 ||
        (romCpu->readCpu(0xfd37)&0x40)==0)return 28;
+
+    // NitrOS-9's second-stage 2HD IPL reads C0/H1 MFM sectors.
+    // The 500-kbps byte clock is faster than its former PIO loop;
+    // HD6844 DMA must complete the entire 256-byte sector.
+    Machine mfmDmaMachine;
+    auto mfmCard=std::make_unique<Main6809Board>(CpuType::MC6809);
+    auto* mfmCpu=mfmCard.get();
+    mfmDmaMachine.addBoard(std::move(mfmCard));
+    mfmDmaMachine.systemBoard().floppyDevice()->loadD882hd(hdD88);
+    mfmDmaMachine.reset();
+    mfmDmaMachine.systemBoard().floppyDevice()->enableSeekTiming(true);
+    mfmCpu->writeCpu(0xfd35,0);
+    mfmCpu->writeCpu(0xfd34,1);
+    mfmCpu->writeCpu(0xfd31,0);
+    mfmCpu->writeCpu(0xfd32,1);
+    mfmCpu->writeCpu(0xfd95,0);    // DMA physical bank zero
+    mfmCpu->writeCpu(0xfd44,0x06);
+    mfmCpu->writeCpu(0xfd45,0x00);
+    mfmCpu->writeCpu(0xfd46,0x01);
+    mfmCpu->writeCpu(0xfd47,0x00); // exactly 256 bytes
+    mfmCpu->writeCpu(0xfd51,0x04); // HD6844 channel 1, FDC -> RAM
+    mfmCpu->writeCpu(0xfd30,0x80);
+    mfmDmaMachine.advanceTimeNanoseconds(200000000);
+    if(mfmCpu->readCpu(0xfd30)!=0 ||
+       (mfmCpu->readCpu(0xfd37)&0x40)==0 ||
+       (mfmCpu->readCpu(0xfd51)&0x80)==0 ||
+       mfmCpu->readCpu(0xfd46)!=0 || mfmCpu->readCpu(0xfd47)!=0)
+        return 29;
+    for(unsigned i=0;i<256;++i)
+        if((*mfmCpu->physicalMemory())[0x600+i]!=BYTE(2+i))
+            return 30;
     return 0;
 }
