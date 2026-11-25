@@ -37,3 +37,19 @@ composer remains ANK-only; the original emulator also only composes
 ANK text directly, with Kanji glyphs accessed by the sub-CPU via these
 ports and then drawn through the guest's display/VRAM commands.
 Do not invent an additional direct UTF-8 -> renderer path.
+
+## Stage 2-E integrated sub-CPU and graphics test
+
+`display_kanji_subcpu` runs a real MC6809 sub-CPU program from a
+synthetic 20-KiB display ROM. That program selects a glyph through AFF4/5,
+reads 16 left/right bytes from AFF6/7, writes them to 16 separate
+VRAM scanlines, and signals completion through the shared RAM mailbox.
+The test then checks physical VRAM and the existing graphics scanout.
+It does **not** implement a second host-side Kanji renderer or require
+copyrighted ROM images.
+
+This proves the CPU -> Kanji port -> VRAM -> software-graphics
+path. The stock Fujitsu display ROM's higher-level Kanji command
+protocol and OpenGL presentation still need an OS-level visual
+regression with a user-supplied Kanji ROM, as the test uses a synthetic
+sub-CPU program rather than the stock firmware.
