@@ -19,7 +19,7 @@ int main() {
     if(stats.selections!=KanjiTestPattern::glyphsPerPage ||
        stats.leftReads!=16*KanjiTestPattern::glyphsPerPage ||
        stats.rightReads!=16*KanjiTestPattern::glyphsPerPage)return 1;
-    auto pixels=DisplayBitmap::decodeSelectedGraphics400(d,0);
+    auto pixels=DisplayBitmap::decodeSelectedGraphics400(d);
     // Each 16x16 glyph occupies two adjacent VRAM bytes.
     if(pixels[0]!=7 || pixels[15]!=7 ||
        pixels[16+1]!=7 || pixels[16+14]!=7 ||
@@ -30,7 +30,7 @@ int main() {
     if(frame.argb[0]!=DisplayBitmap::colorArgb(7) ||
        frame.argb[2]!=DisplayBitmap::colorArgb(0))return 3;
     KanjiTestPattern::paint(d,1);
-    pixels=DisplayBitmap::decodeSelectedGraphics400(d,0);
+    pixels=DisplayBitmap::decodeSelectedGraphics400(d);
     if(pixels[2]!=7 || pixels[8+5]!=7 ||
        pixels[0]!=0 || pixels[16+1]!=0)return 4;
     stats=d.kanjiStatistics();
@@ -42,7 +42,7 @@ int main() {
     rom[(KanjiTestPattern::glyphsPerPage+lastCell)*32]=0x80;
     d.loadKanjiRom(rom);
     KanjiTestPattern::paint(d,1);
-    pixels=DisplayBitmap::decodeSelectedGraphics400(d,0);
+    pixels=DisplayBitmap::decodeSelectedGraphics400(d);
     if(pixels[lastRow*16*640]!=7 ||
        pixels[(lastRow*16-1)*640]!=0)return 9;
     stats=d.kanjiStatistics();
