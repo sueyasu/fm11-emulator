@@ -103,7 +103,7 @@ static int check8088(unsigned ch,bool masked) {
         return 6;
     machine.advanceTimeNanoseconds(200000000);
     if((bus.readIo(WORD(ch?0xfd30:0xfd18))&1)!=0 ||
-       (bus.readIo(WORD(ch?0xfd1f:0xfd1f))&0x40)==0)
+       (bus.readIo(WORD(ch?0xfd37:0xfd1f))&0x40)==0)
         return 7;
     if(masked) {
         if((bus.readIo(WORD(ch?0xfd30:0xfd18))&0x04)==0 ||
