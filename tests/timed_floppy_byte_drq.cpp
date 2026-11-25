@@ -121,7 +121,7 @@ int main() {
     bootHd.loadD882hd(hdD88);
     bootHd.enableSeekTiming(true);
     if(!bootHd.beginTypeII(1,0,0,0,1,0x80))return 13;
-    bootHd.advanceSeekNanoseconds(FloppyDevice::revolutionNanoseconds(1));
+    bootHd.advanceSeekNanoseconds(bootHd.nextTypeIIEventNanoseconds());
     if(!bootHd.takeTypeIIEvent(1,cmd,done) || done ||
        !bootHd.beginSector(1,0,0,1,0,false))return 14;
     bootHd.startTypeIIBytePacing(1);
@@ -146,7 +146,7 @@ int main() {
     // The adjacent C0/H1 MFM track retains 16 us per byte.
     bootHd.advanceSeekNanoseconds(100000000);
     if(!bootHd.beginTypeII(1,0,0,1,1,0x80))return 22;
-    bootHd.advanceSeekNanoseconds(FloppyDevice::revolutionNanoseconds(1));
+    bootHd.advanceSeekNanoseconds(bootHd.nextTypeIIEventNanoseconds());
     if(!bootHd.takeTypeIIEvent(1,cmd,done) || done ||
        !bootHd.beginSector(1,0,1,1,0,false))return 23;
     bootHd.startTypeIIBytePacing(1);
