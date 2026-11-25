@@ -74,8 +74,12 @@ public:
         const auto rev=revolutionNanoseconds(ch);
         const auto& disk=medium(ch,drive);
         const unsigned n=disk.sectorsPerTrack;
+        // Select the next ID after the current spindle phase, not the
+        // previous ID (which would incorrectly wait a whole revolution).
+        const auto lead=rev/64;
+        const auto shifted=(rotationNs_[ch][drive]+rev-lead)%rev;
         const unsigned chosen=address && n?
-            unsigned(rotationNs_[ch][drive]*n/rev)%n+1:sector;
+            unsigned((shifted*n+rev-1)/rev)%n+1:sector;
         t.addressSector=chosen;
         std::size_t offset=0;
         if(!sectorOffset(ch,track,side,chosen,drive,offset)) {
