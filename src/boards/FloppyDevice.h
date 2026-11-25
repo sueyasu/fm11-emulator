@@ -23,6 +23,7 @@ public:
             for(unsigned d=0;d<4;++d)
                 rotationNs_[ch][d]=(revolutionNanoseconds(ch)/4)*d;
         typeII_.fill(TypeIIState{});
+        typeIIResult_.fill(0);
     }
     bool beginTypeI(unsigned channel,unsigned drive,BYTE command) {
         if(!seekTimed_ || channel>1 || drive>3 || (command&0x80))return false;
@@ -62,6 +63,7 @@ public:
            ((command&0xf0)!=0x80 && (command&0xf0)!=0xa0))return false;
         auto& t=typeII_[ch];
         t=TypeIIState{};
+        typeIIResult_[ch]=0;
         t.pending=true;t.drive=drive;t.command=command;
         std::size_t offset=0;
         const auto rev=revolutionNanoseconds(ch);
@@ -77,12 +79,48 @@ public:
             const auto transfer=(std::uint64_t(bytes)*8*1000000000ULL+bitrate-1)/bitrate;
             t.remainingNs=search;
             t.transferNs=transfer;
+            t.byteCount=bytes;
         }
         return true;
     }
     bool typeIIBusy(unsigned ch,unsigned drive) const {
         return ch<2 && drive<4 && typeII_[ch].pending &&
                typeII_[ch].drive==drive;
+    }
+    // Stage 2-B2: byte-level DRQ clock. The adapter opts in after
+    // locating a sector and arming its DMA/PIO transfer. The existing
+    // two-edge command model remains available for legacy adapters.
+    void startTypeIIBytePacing(unsigned ch) {
+        if(ch>1)return;
+        auto& t=typeII_[ch];
+        if(!t.pending || !t.transferring || !t.byteCount)return;
+        t.bytePaced=true;
+        t.bytePeriodNs=ch?16000ULL:32000ULL;
+        t.byteReady=true; // first byte when the data field arrives
+        const auto elapsed=t.transferNs-t.remainingNs;
+        const auto slots=elapsed/t.bytePeriodNs;
+        if(slots) {
+            t.byteReady=true;
+            t.lostData=true; // first DRQ was not serviced in time
+        }
+        t.byteSlots=slots;
+    }
+    bool typeIIByteReady(unsigned ch) const {
+        return ch<2 && typeII_[ch].pending &&
+               typeII_[ch].bytePaced && typeII_[ch].byteReady;
+    }
+    bool acceptTypeIIByte(unsigned ch) {
+        if(!typeIIByteReady(ch))return false;
+        auto& t=typeII_[ch];
+        t.byteReady=false;
+        ++t.byteServed;
+        return true;
+    }
+    bool typeIILostData(unsigned ch) const {
+        return ch<2 && typeII_[ch].lostData;
+    }
+    BYTE typeIIResult(unsigned ch) const {
+        return ch<2?typeIIResult_[ch]:0x10;
     }
     bool typeIIReady() const {
         for(const auto& t:typeII_)if(t.pending && t.remainingNs==0)return true;
@@ -101,6 +139,8 @@ public:
         command=t.command;
         completed=t.transferring;
         if(completed || !t.transferNs) {
+            typeIIResult_[ch]=!t.transferNs?0x10:
+                (t.bytePaced && (t.lostData || t.byteServed!=t.byteCount))?0x04:0;
             t=TypeIIState{};
         } else {
             t.transferring=true;
@@ -120,6 +160,19 @@ public:
                 rotationNs_[ch][d]=(rotationNs_[ch][d]+ns%rev)%rev;
             auto& t=typeII_[ch];
             if(t.pending) {
+                if(t.transferring && t.bytePaced && t.bytePeriodNs) {
+                    const auto oldSlots=t.byteSlots;
+                    const auto elapsed=t.transferNs-t.remainingNs+
+                        std::min(ns,t.remainingNs);
+                    const auto slots=std::min<std::uint64_t>(
+                        t.byteCount,elapsed/t.bytePeriodNs);
+                    if(slots>oldSlots) {
+                        if(t.byteReady || slots>oldSlots+1)
+                            t.lostData=true;
+                        t.byteReady=true;
+                        t.byteSlots=slots;
+                    }
+                }
                 if(ns>=t.remainingNs) {
                     // Preserve elapsed time after ID arrival so a large
                     // Machine::advanceTimeNanoseconds() call can produce
@@ -532,11 +585,14 @@ private:
         BYTE command=0;
         std::uint64_t remainingNs=0,transferNs=0,overrunNs=0;
         bool transferring=false;
+        bool bytePaced=false,byteReady=false,lostData=false;
+        std::uint64_t bytePeriodNs=0,byteCount=0,byteSlots=0,byteServed=0;
     };
     bool seekTimed_=false;
     std::array<std::array<SeekState,4>,2> seek_{};
     std::array<std::array<std::uint64_t,4>,2> rotationNs_{};
     std::array<TypeIIState,2> typeII_{};
+    std::array<BYTE,2> typeIIResult_{};
     struct Disk {
         std::vector<BYTE> raw,d88;
         std::vector<std::size_t> offsets;
