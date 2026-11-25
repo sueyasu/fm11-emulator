@@ -440,7 +440,8 @@ void Machine::advanceSerialCpuCycles(std::uint64_t cycles,std::uint64_t hz)
 void Machine::advanceBeeperCpuCycles(std::uint64_t cycles,std::uint64_t hz)
 {
     const auto sound=mainBoard_->beeperDevice();
-    if(sound->audioDriven() || !cycles || !hz)return;
+    // Do not lock the audio device for every emulated CPU instruction.
+    if(!sound->virtualOneShotPending() || !cycles || !hz)return;
     if(beeperClockHz_!=hz){beeperClockHz_=hz;beeperFraction_=0;}
     constexpr std::uint64_t billion=1000000000ULL;
     const auto remainder=(cycles%hz)*billion+beeperFraction_;

@@ -1,5 +1,6 @@
 #pragma once
 #include <algorithm>
+#include <atomic>
 #include <cstddef>
 #include <cstdint>
 #include <mutex>
@@ -19,6 +20,7 @@ public:
         pulseFrames_=0;
         pulseRemainingNs_=0;
         pulsePending_=false;
+        virtualOneShotPending_.store(false,std::memory_order_relaxed);
         sampleRate_=0;
         phase_=0;
     }
@@ -27,6 +29,11 @@ public:
     void setAudioDriven(bool enabled) {
         std::lock_guard<std::mutex> g(mutex_);
         audioDriven_=enabled;
+        virtualOneShotPending_.store(!enabled && active_ && pulseRemainingNs_!=0,
+                                     std::memory_order_relaxed);
+    }
+    bool virtualOneShotPending() const {
+        return virtualOneShotPending_.load(std::memory_order_relaxed);
     }
     bool audioDriven() const {
         std::lock_guard<std::mutex> g(mutex_);
@@ -40,6 +47,7 @@ public:
             pulseFrames_=0;
             pulsePending_=false;
             active_=false;
+            virtualOneShotPending_.store(false,std::memory_order_relaxed);
         } else pulseRemainingNs_-=ns;
     }
     void writeControl(std::uint8_t value) {
@@ -50,9 +58,11 @@ public:
             pulseFrames_=0;
             pulseRemainingNs_=0;
             pulsePending_=false;
+            virtualOneShotPending_.store(false,std::memory_order_relaxed);
         } else if(value&0x40u) {
             active_=true;
             pulseRemainingNs_=std::uint64_t(kPulseMilliseconds)*1000000ULL;
+            virtualOneShotPending_.store(!audioDriven_,std::memory_order_relaxed);
             // The remaining one-shot duration is calculated at render rate
             // so it stays 205 ms of audible time at accelerated CPU speeds.
             pulseFrames_=sampleRate_?
@@ -63,6 +73,7 @@ public:
             pulseFrames_=0;
             pulseRemainingNs_=0;
             active_=(value&0x80u)!=0;
+            virtualOneShotPending_.store(false,std::memory_order_relaxed);
         }
     }
     bool active() const {
@@ -94,11 +105,15 @@ public:
                 phase_+=kFrequencyHz;
                 if(phase_>=rate)phase_%=rate;
             }
-            if(pulseFrames_ && --pulseFrames_==0)active_=false;
+            if(pulseFrames_ && --pulseFrames_==0) {
+                active_=false;
+                virtualOneShotPending_.store(false,std::memory_order_relaxed);
+            }
         }
     }
 private:
     mutable std::mutex mutex_;
+    std::atomic<bool> virtualOneShotPending_{false};
     bool speaker_=false,active_=false,pulsePending_=false;
     bool audioDriven_=false;
     std::uint64_t pulseRemainingNs_=0;
