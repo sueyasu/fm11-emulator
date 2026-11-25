@@ -44,7 +44,8 @@ public:
         reset();
     }
     bool present() const {return !image_.empty();}
-    bool irqPending() const {return phase_!=0;}
+    // Parameter request is not an interrupt; result readiness is.
+    bool irqPending() const {return phase_==2;}
     const Geometry& geometry() const {return geometry_;}
     void setDmaTransfer(DmaTransfer handler) {dma_=std::move(handler);}
     void setHostWriter(HostWrite handler) {writer_=std::move(handler);}
@@ -134,7 +135,7 @@ private:
         for(unsigned i=0;i<6;++i)result_[4+i]=params_[2+i];
         const unsigned drive=((selected_&3u)<<1)|(params_[0]&1u);
         if(command_==0x01 || command_==0x12 || command_==0x13) {
-            if(command_==0x12 || command_==0x13)result_[3]=0;
+            result_[3]=0;
         } else if(command_==0x14) {
             if(drive!=0 || !present() || (params_[0]&0x10)) {
                 failure(0x90,0x40,0x01,0);
@@ -167,12 +168,22 @@ private:
             const std::uint64_t begin=record*256;
             const bool badChs=!modeBinary_ &&
                 (params_[4]>=geometry_.heads || params_[5]>=geometry_.records);
-            if(drive!=0 || !present())
+            // Original MDC SEEK validates disk geometry (not image size)
+            // and returns 90/40/10 for missing drives or invalid CHR/LBA.
+            const std::uint64_t capacity=
+                std::uint64_t(geometry_.cylinders)*geometry_.heads*
+                geometry_.records;
+            if(command_==0x20) {
+                if(drive!=0 || !present())
+                    failure(0x90,0x40,0x10,0);
+                else if(badChs || record>=capacity)
+                    failure(0x90,0x40,0x10,0x60);
+            } else if(drive!=0 || !present())
                 failure(0x80,0x80,0x02,0);
             else if(badChs || begin>image_.size() ||
                     length>image_.size()-static_cast<std::size_t>(begin))
                 failure(0x80,0x02,0x80,0x60);
-            else if(command_!=0x20) {
+            else {
                 const bool writing=command_==0x23;
                 std::vector<BYTE> bytes(length);
                 if(!writing) {
@@ -217,6 +228,8 @@ private:
             failure(0x80,0x80,0x01,0);
             result_[8]=command_;
         }
+        // The original controller echoes AD in result byte 0.
+        if(paramExpected_)result_[0]=BYTE(result_[0]|(params_[0]&0x0f));
         phase_=2;
         resultPos_=0;
         status_=0x43;
