@@ -99,7 +99,7 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
             if(bytes.size()!=length ||
                !floppy_->formatTrack(channel,track,side,drive,bytes))
                 floppy_->transferError(0x20);
-            if(channel==0)floppy_->writeRegister(0x1f,0x40);
+            floppy_->writeRegister(channel==0?0x1f:0x37,0x40);
             return;
         }
         floppy_->cancelSeek(channel,selected);
@@ -119,7 +119,10 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
                 floppy_->writeRegister(base+1,BYTE(floppy_->registerValue(base+1)-1));
             }
         }
-        if(channel==0)floppy_->writeRegister(0x1f,0x40);
+        // The 2HD boot ROM polls FD37 bit 6 after RESTORE/SEEK,
+        // including in fast mode. Keep the controller completion
+        // latches symmetric for both FDC channels.
+        floppy_->writeRegister(channel==0?0x1f:0x37,0x40);
         return;
     }
     // A Type-II command supersedes the prior Type-I status/IRQ latch.
