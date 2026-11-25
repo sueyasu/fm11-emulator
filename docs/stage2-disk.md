@@ -76,7 +76,11 @@ cancel a pending Type-II request.
 
 With `timing=timed`, after an ID arrives, a byte DRQ is asserted at
 the start of the data field and subsequently every 32 us (2D, 250 kb/s)
-or 16 us (2HD, 500 kb/s). A CPU PIO data-register access or one
+or 16 us (normal 2HD MFM, 500 kb/s). The native FM-11 2HD boot
+side-track C0/H0 (26 x 128-byte FM sectors) uses 250 kb/s and therefore
+32 us per byte, even though it is attached to the 2HD controller.
+Applying 500 kb/s to this special ROM boot track makes its PIO
+loader see an unrealistically early next DRQ and report Lost Data. A CPU PIO data-register access or one
 8237/HD6844 DMA service acknowledges one byte. The FDC keeps BUSY
 asserted until the full data interval has expired. A new byte arriving
 while the previous DRQ is still pending asserts WD179x LOST DATA (04h);
