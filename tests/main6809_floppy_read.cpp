@@ -42,8 +42,11 @@ int main() {
    sawGap|=(status&0x02)==0;
  }
  if(!sawIndex || !sawGap)return 10;
+ // D0 aborts without an interrupt; D8 explicitly raises INTRQ.
  b.writeCpu(0xfd18,0xd0);
- if(b.readCpu(0xfd18)!=0 || (b.readCpu(0xfd1f)&0x40)==0)return 15;
+ if(b.readCpu(0xfd18)!=0 || (b.readCpu(0xfd1f)&0x40)!=0)return 15;
+ b.writeCpu(0xfd18,0xd8);
+ if(b.readCpu(0xfd18)!=0 || (b.readCpu(0xfd1f)&0x40)==0)return 36;
  // With DRQ inactive the original controller returns its data latch.
  // ROM uses this write/readback to probe the Mini FDC.
  b.writeCpu(0xfd1b,0xff);
