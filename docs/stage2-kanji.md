@@ -88,8 +88,8 @@ behavior and ANK output are unchanged.
 
 ## Interactive ROM gallery (`--test-kanji`)
 
-`fm11-sdl --test-kanji` displays 480 consecutive 16x16 glyphs at
-40 columns x 12 rows on a 640x200 graphics screen without booting an
+`fm11-sdl --test-kanji` displays 1000 consecutive 16x16 glyphs at
+40 columns x 25 rows on a 640x400 graphics screen without booting an
 OS or loading the standard sub-ROM. It uses a user-provided 128-KiB
 Kanji ROM: pass `--kanji-rom FILE`, set `[display_cpu] kanji_rom`,
 or place a ROM at `external/roms/kanji.bin`. Missing or invalid ROMs
@@ -100,9 +100,9 @@ The gallery selects each glyph using AFF4/AFF5 and reads exactly
 corresponding scanlines through the standard graphics VRAM ports.
 The two existing SDL renderers display that same graphics RAM: no
 host-side Unicode/font conversion, alternate text renderer or GLSL
-Kanji path is added. The gallery forces the 200-line display mode and
+Kanji path is added. The gallery forces the 400-line display mode and
 does not start CPU workers or require the boot ROM. It never modifies
-the ROM file. PageUp/PageDown cycle through 9 ROM pages; the window
+the ROM file. PageUp/PageDown cycle through 5 ROM pages; the window
 title shows the current glyph-number range. Ctrl+F12 closes the viewer.
 
 ```sh
@@ -111,6 +111,12 @@ title shows the current glyph-number range. Ctrl+F12 closes the viewer.
 ```
 
 The portable `display_kanji_gallery` CTest uses a synthetic ROM to
-check port accesses, glyph positions, page transitions, clearing,
-graphics scanout, and the end of the 4096-glyph ROM. Visual fidelity
+check port accesses, glyph positions including the bottom 400-line row,
+page transitions, clearing, 400-line graphics scanout, and the end of
+the 4096-glyph ROM. Visual fidelity
 with a real ROM is a separate manual check, not claimed by CTest.
+
+The 400-line gallery displays 16x16 ROM glyphs without the vertical
+2x scaling used by the 200-line display. The last (fifth) page holds
+96 glyphs. All 32,000 bytes per graphics plane are cleared on each page
+change; no glyph pixels can persist from a preceding page.

@@ -92,7 +92,7 @@ void usage() {
              <<"  Initial window height: [display].height=200|400 (default 400); --high forces 400\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
              <<"  --beep-test: audible 205ms pulse, pause, continuous tone, then stop.\n"
-             <<"  --test-kanji: ROM glyph gallery, PgUp/PgDn change page (40x12 glyphs).\n"
+             <<"  --test-kanji: ROM glyph gallery, PgUp/PgDn change page (40x25 glyphs).\n"
              <<"                Uses --kanji-rom FILE or external/roms/kanji.bin.\n"
              <<"  --speed N: main CPU multiplier (default 10, 1=real-time);\n"
              <<"             display CPU uses the same multiplier, capped at 8 MHz.\n"
@@ -176,7 +176,7 @@ int main(int argc,char** argv) {
         if(!highOverridden)high=config.displayHeight==400;
         if(testPattern && testKanji)
             throw std::invalid_argument("--test-pattern and --test-kanji are mutually exclusive");
-        if(testKanji)high=false; // the gallery is a fixed 640x200 graphics frame
+        if(testKanji)high=true; // 16x16 glyphs at native 640x400, no vertical doubling
         // Explicit raw DIP override remains available for diagnostics.
         if(!bootDipOverridden)bootDip=config.bootDip();
         if(traceCpm80 && (!config.z80Installed || !config.main6809Installed))

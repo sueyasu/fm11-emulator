@@ -10,12 +10,12 @@
 // It does not require the sub ROM, an ANK ROM, or a main CPU card.
 namespace KanjiTestPattern {
 constexpr unsigned columns=40;
-constexpr unsigned rows=12;
+constexpr unsigned rows=25;
 constexpr unsigned glyphsPerPage=columns*rows;
 constexpr unsigned glyphCount=DisplaySubsystem::kKanjiRomSize/32;
 constexpr unsigned pages=(glyphCount+glyphsPerPage-1)/glyphsPerPage;
 constexpr unsigned bytesPerScanline=80;
-constexpr unsigned visibleScanlines=200;
+constexpr unsigned visibleScanlines=400;
 
 inline void paint(DisplaySubsystem& display,unsigned page) {
     if(page>=pages)throw std::out_of_range("Kanji test page");
@@ -28,7 +28,7 @@ inline void paint(DisplaySubsystem& display,unsigned page) {
     display.writeMemory(0xafe9,0);
     display.writeMemory(0xafea,0);
     display.writeMemory(0xafeb,0);
-    // Clear the complete 640x200 graphics field on every page change.
+    // Clear the complete 640x400 (32,000-byte) graphics field on every page change.
     for(unsigned offset=0;offset<bytesPerScanline*visibleScanlines;++offset)
         display.writeMemory(static_cast<std::uint16_t>(offset),0);
     for(unsigned cell=0;cell<glyphsPerPage;++cell) {
