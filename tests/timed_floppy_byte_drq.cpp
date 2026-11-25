@@ -209,8 +209,10 @@ int main() {
        (mfmCpu->readCpu(0xfd51)&0x80)==0 ||
        mfmCpu->readCpu(0xfd46)!=0 || mfmCpu->readCpu(0xfd47)!=0)
         return 29;
+    // hdD88 populates every sector with BYTE(id+i), irrespective of
+    // the track index. C0/H1/S1 therefore starts at 01h, not 02h.
     for(unsigned i=0;i<256;++i)
-        if((*mfmCpu->physicalMemory())[0x600+i]!=BYTE(2+i))
+        if((*mfmCpu->physicalMemory())[0x600+i]!=BYTE(1+i))
             return 30;
     return 0;
 }
