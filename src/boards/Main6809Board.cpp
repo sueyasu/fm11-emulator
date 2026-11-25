@@ -601,11 +601,15 @@ BYTE Main6809Board::readIo(WORD address)
         // Return the actual FIFO byte, not the stale data-register latch.
         if(floppy_->transferChannel()==1 &&
            (floppy_->transferStatus()&0x02)!=0 &&
-           ioRegisters_[0x30]&0x02) {
+           (ioRegisters_[0x30]&0x02)) {
+            const bool paced=floppy_->typeIIBytePaced(1);
+            if(paced && !floppy_->typeIIByteReady(1))
+                return ioRegisters_[0x33];
             const BYTE data=floppy_->transferRead();
             ioRegisters_[0x33]=data;
-            if(floppy_->transferPosition()==floppy_->transferLength()) {
-                ioRegisters_[0x30]=0x01; // INTRQ; DRQ/BUSY cleared
+            if(paced)floppy_->acceptTypeIIByte(1);
+            else if(floppy_->transferPosition()==floppy_->transferLength()) {
+                ioRegisters_[0x30]=0x01;
                 ioRegisters_[0x37]=0x40;
                 setExtendedIrqSource(0x40,true);
             }
@@ -613,9 +617,13 @@ BYTE Main6809Board::readIo(WORD address)
         }
         return ioRegisters_[0x33];
     case 0x30: {
-        if(floppy_->typeIIBusy(1,ioRegisters_[0x35]&3))
+        if(floppy_->typeIIBusy(1,ioRegisters_[0x35]&3)) {
+            if(floppy_->typeIIBytePaced(1))
+                return BYTE(0x01 | (floppy_->typeIIByteReady(1)?0x02:0) |
+                            (floppy_->typeIILostData(1)?0x04:0));
             return floppy_->typeIITransferring(1,ioRegisters_[0x35]&3) &&
                    (ioRegisters_[0x30]&0x02) ? 0x03 : 0x01;
+        }
         if(floppy_->seekTimingEnabled()) {
             const unsigned drive=ioRegisters_[0x35]&3;
             if(floppy_->seekBusy(1,drive))return 0x01;
@@ -653,9 +661,13 @@ BYTE Main6809Board::readIo(WORD address)
         mainIrqStatus();
         return floppy_->registerValue(0x1f);
     case 0x18: {
-        if(floppy_->typeIIBusy(0,floppy_->registerValue(0x1d)&3))
+        if(floppy_->typeIIBusy(0,floppy_->registerValue(0x1d)&3)) {
+            if(floppy_->typeIIBytePaced(0))
+                return BYTE(0x01 | (floppy_->typeIIByteReady(0)?0x02:0) |
+                            (floppy_->typeIILostData(0)?0x04:0));
             return floppy_->typeIITransferring(0,floppy_->registerValue(0x1d)&3) &&
                    (floppyStatus_&0x02) ? 0x03 : 0x01;
+        }
         if(floppy_->seekTimingEnabled() && floppyTypeIStatus_)
             return floppy_->typeIStatus(0,floppy_->registerValue(0x1d)&3);
         if(!floppyTypeIStatus_)return floppyStatus_;
@@ -678,9 +690,13 @@ BYTE Main6809Board::readIo(WORD address)
         // Reference Fm11MiniFDCData returns the FD1B data latch when
         // DRQ is clear. ROM checks this latch before issuing READ SECTOR.
         if(floppyOffset_==256)return floppy_->registerValue(0x1b);
+        const bool paced=floppy_->typeIIBytePaced(0);
+        if(paced && !floppy_->typeIIByteReady(0))
+            return floppy_->registerValue(0x1b);
         const BYTE value=floppy_->transferRead();
         ++floppyOffset_;
-        if(floppyOffset_==256)floppyStatus_=0;
+        if(paced)floppy_->acceptTypeIIByte(0);
+        else if(floppyOffset_==256)floppyStatus_=0;
         return value;
     }
     case 0x06: {
@@ -971,9 +987,12 @@ void Main6809Board::writeIo(WORD address, BYTE value)
     }
     case 0x33:
         if(floppy_->seekTimingEnabled())floppy_->writeRegister(0x33,value);
-        if(floppy_->transferChannel()==1 && (floppy_->transferStatus()&0x02)!=0) {
+        if(floppy_->transferChannel()==1 && (floppy_->transferStatus()&0x02)!=0 &&
+           (!floppy_->typeIIBytePaced(1) || floppy_->typeIIByteReady(1))) {
+            const bool paced=floppy_->typeIIBytePaced(1);
             floppy_->transferWrite(value);
-            if(floppy_->transferPosition()==floppy_->transferLength()) {
+            if(paced)floppy_->acceptTypeIIByte(1);
+            else if(floppy_->transferPosition()==floppy_->transferLength()) {
                 ioRegisters_[0x30]=floppy_->transferStatus()==0?0x01:0x20;
                 ioRegisters_[0x37]=0x40;
                 setExtendedIrqSource(0x40,true);
@@ -1099,10 +1118,13 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         // The WD179x data register is also the SEEK target and must retain
         // writes even when no sector transfer is active.
         floppy_->writeRegister(0x1b,value);
-        if(floppyWritePio_ && floppyOffset_<256) {
+        if(floppyWritePio_ && floppyOffset_<256 &&
+           (!floppy_->typeIIBytePaced(0) || floppy_->typeIIByteReady(0))) {
+            const bool paced=floppy_->typeIIBytePaced(0);
             floppy_->transferWrite(value);
             ++floppyOffset_;
-            if(floppyOffset_==256) {
+            if(paced)floppy_->acceptTypeIIByte(0);
+            else if(floppyOffset_==256) {
                 floppyWritePio_=false;
                 floppyStatus_=0;
             }
