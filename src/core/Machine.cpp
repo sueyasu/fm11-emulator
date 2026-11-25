@@ -375,6 +375,10 @@ void Machine::advanceTimeNanoseconds(std::uint64_t nanoseconds)
     mainBoard_->advanceTimeNanoseconds(nanoseconds);
     advanceTimedFloppyNanoseconds(nanoseconds);
     mainBoard_->hddDevice()->advanceNanoseconds(nanoseconds);
+    if(mainBoard_->hddDevice()->timingEnabled())
+        for(auto* cpu:main6809Boards_)
+            cpu->setExtendedIrqSource(
+                0x04,mainBoard_->hddDevice()->irqPending());
     if(mainBoard_->floppyDevice()->seekTimingEnabled()) {
         const auto fdc=mainBoard_->floppyDevice();
         for(auto* cpu:main6809Boards_) {

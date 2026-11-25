@@ -22,7 +22,7 @@ int main() {
               "[display]\nheight = 200\n"
               "[floppy_2d]\ndrive0 = system.d88\ndrive3 = extra.d88\n"
               "[floppy_2hd]\ndrive1 = hd1.raw\ndrive2 = hd2.raw\n"
-              "[hdd]\nimage = fixed-disk.img\n";
+              "[hdd]\nimage = fixed-disk.img\ntiming = timed\n";
     }
     auto config=parseMachineConfigFile(path);
     if(!config.main6809Installed || !config.main8088Installed ||
@@ -42,12 +42,13 @@ int main() {
        config.floppy2hd[1]!="hd1.raw" ||
        config.floppy2hd[2]!="hd2.raw" ||
        config.ramKiB!=384 ||
-       config.hddImage!="fixed-disk.img" ||
+       config.hddImage!="fixed-disk.img" || !config.hddTimed ||
        !config.boot2dFdd || config.boot2hdFdd || config.bootHdd ||
        config.bootDip()!=0xdf)return 2;
 
     // Original DIP default enables both FDD formats and disables HDD.
     MachineConfig defaults;
+    if(defaults.hddTimed)return 24;
     if(defaults.displayHeight!=400)return 19;
     if(defaults.ramKiB!=1024)return 23;
     if(defaults.bootDip()!=0x9f)return 10;
