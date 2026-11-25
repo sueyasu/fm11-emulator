@@ -613,9 +613,20 @@ BYTE Main6809Board::readIo(WORD address)
             ioRegisters_[0x33]=data;
             if(paced)floppy_->acceptTypeIIByte(1);
             else if(floppy_->transferPosition()==floppy_->transferLength()) {
-                ioRegisters_[0x30]=0x01;
-                ioRegisters_[0x37]=0x40;
-                setExtendedIrqSource(0x40,true);
+                const unsigned next=unsigned(ioRegisters_[0x32])+1;
+                if(fastMultiPio_[1] && next<=floppy_->sectorsPerTrack(1,
+                       ioRegisters_[0x35]&3) &&
+                   floppy_->beginSector(1,ioRegisters_[0x31],
+                       ioRegisters_[0x34]&1,next,
+                       ioRegisters_[0x35]&3,false)) {
+                    ioRegisters_[0x32]=BYTE(next);
+                    ioRegisters_[0x30]=0x03;
+                } else {
+                    fastMultiPio_[1]=false;
+                    ioRegisters_[0x30]=0x01;
+                    ioRegisters_[0x37]=0x40;
+                    setExtendedIrqSource(0x40,true);
+                }
             }
             return data;
         }
@@ -715,6 +726,20 @@ BYTE Main6809Board::readIo(WORD address)
         else if(floppy_->transferPosition()==floppy_->transferLength()) {
             floppyOffset_=256;
             floppyStatus_=0;
+            if(fastMultiPio_[0]) {
+                const unsigned next=unsigned(floppy_->registerValue(0x1a))+1;
+                std::size_t offset=0;
+                if(floppy_->sectorOffset(0,floppy_->registerValue(0x19),
+                    floppy_->registerValue(0x1c)&1,next,
+                    floppy_->registerValue(0x1d)&3,offset)) {
+                    floppy_->writeRegister(0x1a,BYTE(next));
+                    if(floppy_->beginSector(0,floppy_->registerValue(0x19),
+                         floppy_->registerValue(0x1c)&1,next,
+                         floppy_->registerValue(0x1d)&3,false)) {
+                        floppyOffset_=0;floppyStatus_=0x02;
+                    }
+                } else fastMultiPio_[0]=false;
+            }
         }
         return value;
     }
@@ -1121,9 +1146,19 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             floppy_->transferWrite(value);
             if(paced)floppy_->acceptTypeIIByte(1);
             else if(floppy_->transferPosition()==floppy_->transferLength()) {
-                ioRegisters_[0x30]=floppy_->transferStatus()==0?0x01:0x20;
-                ioRegisters_[0x37]=0x40;
-                setExtendedIrqSource(0x40,true);
+                const unsigned next=unsigned(ioRegisters_[0x32])+1;
+                if(floppy_->transferStatus()==0 && fastMultiPio_[1] &&
+                   next<=floppy_->sectorsPerTrack(1,ioRegisters_[0x35]&3) &&
+                   floppy_->beginSector(1,ioRegisters_[0x31],
+                       ioRegisters_[0x34]&1,next,ioRegisters_[0x35]&3,true)) {
+                    ioRegisters_[0x32]=BYTE(next);
+                    ioRegisters_[0x30]=0x03;
+                } else {
+                    fastMultiPio_[1]=false;
+                    ioRegisters_[0x30]=floppy_->transferStatus()==0?0x01:0x20;
+                    ioRegisters_[0x37]=0x40;
+                    setExtendedIrqSource(0x40,true);
+                }
             }
         }
         ioRegisters_[0x33]=value;
@@ -1341,9 +1376,25 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             floppy_->transferWrite(value);
             ++floppyOffset_;
             if(paced)floppy_->acceptTypeIIByte(0);
-            else if(floppyOffset_==256) {
+            else if(floppy_->transferPosition()==floppy_->transferLength()) {
+                floppyOffset_=256;
                 floppyWritePio_=false;
                 floppyStatus_=0;
+                if(fastMultiPio_[0]) {
+                    const unsigned next=unsigned(floppy_->registerValue(0x1a))+1;
+                    std::size_t offset=0;
+                    if(floppy_->sectorOffset(0,floppy_->registerValue(0x19),
+                        floppy_->registerValue(0x1c)&1,next,
+                        floppy_->registerValue(0x1d)&3,offset)) {
+                        floppy_->writeRegister(0x1a,BYTE(next));
+                        if(floppy_->beginSector(0,floppy_->registerValue(0x19),
+                              floppy_->registerValue(0x1c)&1,next,
+                              floppy_->registerValue(0x1d)&3,true)) {
+                            floppyOffset_=0;floppyWritePio_=true;
+                            floppyStatus_=0x02;
+                        }
+                    } else fastMultiPio_[0]=false;
+                }
             }
         }
         break;

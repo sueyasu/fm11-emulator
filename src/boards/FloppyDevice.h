@@ -438,6 +438,9 @@ public:
     }
     unsigned mountedDrive() const {return mountedDrive_;}
     bool present(unsigned drive) const {return drive<4 && !media2hd_[drive].raw.empty();}
+    unsigned sectorsPerTrack(unsigned channel,unsigned drive=0) const {
+        return channel<2 && drive<4?medium(channel,drive).sectorsPerTrack:0;
+    }
     bool has2d(unsigned drive=0) const {return drive<4 && !media2d_[drive].raw.empty();}
     bool has2hd(unsigned drive=0) const {return drive<4 && !media2hd_[drive].raw.empty();}
     bool hasAny2d() const {
