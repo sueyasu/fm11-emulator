@@ -309,6 +309,8 @@ int main(int argc,char** argv) {
         machine.setDisplayCpuClockHz(testPattern?0:config.displayClockHz);
         machine.setDisplayCpuSpeedMultiplier(speed);
         machine.reset();
+        machine.systemBoard().usartDevice()->requireCarrierAndDsr(
+            config.dipSerialCd==MachineConfig::SerialCd::CdAndDsr);
         machine.systemBoard().floppyDevice()->enableSeekTiming(config.floppyTimed);
         if(config.serialClocked) {
             if(config.serial0!="pty" && config.serial0!="none")
@@ -368,9 +370,14 @@ int main(int argc,char** argv) {
         // CPU worker alone owns the host endpoint and 8251A queues.
         std::unique_ptr<SerialBackend> serial;
         if(mainBoard || main8088Enabled) {
+            if(config.dipSerialMode==MachineConfig::SerialMode::Sync &&
+               config.serial0!="pty" && config.serial0!="none")
+                throw std::invalid_argument(
+                    "DIPSW.serial_mode=sync is unsupported on physical termios ports");
             serial=std::make_unique<SerialBackend>(
                 config.serial0,config.dipSerialBaudSwitches,false,
-                config.serialRtsCts);
+                config.serialRtsCts,
+                config.dipSerialCd==MachineConfig::SerialCd::CdAndDsr);
             if(serial->enabled())
                 std::cout<<(serial->physical()?"Serial device: ":"Serial PTY: ")
                          <<serial->label()<<"\n"<<std::flush;

@@ -26,6 +26,24 @@ int main() {
     {std::ofstream out(file);out<<"[serial]\nflow_control = invalid\n";}
     try {(void)parseMachineConfigFile(file);return 21;}
     catch(const std::runtime_error&) {}
+    // DIP SW2 affects RxRDY/receive IRQ; the physical DSR status
+    // bit remains an independent reflection of the modem pin.
+    Usart8251 dipUart;
+    dipUart.reset();
+    dipUart.requireCarrierAndDsr(true);
+    dipUart.writeCommand(0x4e);
+    dipUart.writeCommand(0x05);
+    dipUart.receive('A');
+    dipUart.setModemInputs(true,true,false);
+    if(dipUart.rxReady() || (dipUart.status()&2))return 28;
+    dipUart.setModemInputs(true,false,true);
+    if(dipUart.rxReady() || (dipUart.status()&0x82))return 29;
+    dipUart.setModemInputs(true,true,true);
+    if(!dipUart.rxReady() || dipUart.readData()!='A')return 30;
+    dipUart.writeCommand(0x40);
+    dipUart.writeCommand(0x4e);
+    dipUart.writeCommand(0x05);
+    if(!dipUart.carrierAndDsrRequired())return 31;
     SerialBackend none("none");
     Usart8251 virtualUart;
     virtualUart.reset();

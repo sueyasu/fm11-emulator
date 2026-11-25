@@ -11,8 +11,8 @@ HDD = false
 # Stage 2-A additional physical DIP settings: parsed only, not yet applied.
 boot_drive = 0          # BootLoader SW1-2: 0..3
 bubble = false          # BootLoader SW5 (128 KiB bubble)
-serial_cd = ignore      # Communication SW2: ignore | cd_dsr
-serial_mode = async     # Communication SW3: async | sync
+serial_cd = ignore      # Communication SW2: ignore | cd_dsr (RX gating)
+serial_mode = async     # Communication SW3: async | sync (no physical sync)
 serial_baud_sw4_8 = 4    # Communication SW4-8: 00100 (ooxoo), ASYNC 4800 baud
 display_lines = 400     # System Select SW1: 200 | 400
 

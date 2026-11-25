@@ -9,6 +9,19 @@ int main() {
        lookup(8).asyncBaud!=75 || lookup(9).asyncBaud!=150 ||
        lookup(6).divider!=0 || lookup(31).asyncBaud!=0 ||
        lookup(32).divider!=0 || lookup(26).divider!=4096)return 1;
+    // SW2 gating is also effective after the timed shift register fills.
+    Usart8251 gated;
+    gated.reset();gated.requireCarrierAndDsr(true);
+    gated.setBaudRate(1000);
+    gated.writeCommand(0x4e);gated.writeCommand(0x05);
+    gated.receive('C');
+    gated.setModemInputs(true,false,true);
+    gated.advanceNanoseconds(10000000);
+    if(gated.rxReady() || (gated.status()&0x82))return 15;
+    gated.setModemInputs(true,true,false);
+    if(gated.rxReady())return 16;
+    gated.setModemInputs(true,true,true);
+    if(!gated.rxReady() || gated.readData()!='C')return 17;
     Usart8251 u;
     u.reset();
     u.setBaudRate(1000);

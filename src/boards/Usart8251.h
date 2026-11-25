@@ -24,6 +24,10 @@ public:
         // reset when the USART itself receives a RESET signal.
     }
     void setTxIrqEnabled(bool enabled) {txIrqEnabled_=enabled;}
+    // External Communication DIP SW2: policy persists through USART reset.
+    void requireCarrierAndDsr(bool required) {requireCarrierAndDsr_=required;}
+    bool carrierAndDsrRequired() const {return requireCarrierAndDsr_;}
+    bool carrierAndDsrPresent() const {return dcd_ && dsr_;}
     void setModemInputs(bool cts,bool dsr,bool dcd=true) {
         cts_=cts;dsr_=dsr;dcd_=dcd;
     }
@@ -111,6 +115,7 @@ public:
     }
     bool rxReady() const {
         return phase_==ControlPhase::Command && (command_&0x04) &&
+               (!requireCarrierAndDsr_ || carrierAndDsrPresent()) &&
                (baud_ ? rxHoldingFull_ : !input_.empty());
     }
     // Advance only when an external baud clock is configured. The default
@@ -211,6 +216,7 @@ private:
     BYTE txHolding_=0,txShift_=0,rxHolding_=0,rxShift_=0;
     ControlPhase phase_=ControlPhase::Mode;
     bool txIrqEnabled_=true,cts_=true,dsr_=true,dcd_=true;
+    bool requireCarrierAndDsr_=false;
     bool syncDetected_=false;
     bool txHoldingFull_=false,txShiftBusy_=false,rxHoldingFull_=false,rxShiftBusy_=false;
     unsigned baud_=0;

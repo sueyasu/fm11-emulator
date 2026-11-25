@@ -19,8 +19,9 @@
 class SerialBackend {
 public:
     explicit SerialBackend(const std::string& endpoint,unsigned baudDip=0,
-                           bool fast=false,bool rtscts=false):endpoint_(endpoint),
-                           rtscts_(rtscts) {
+                           bool fast=false,bool rtscts=false,
+                           bool requireCarrierAndDsr=false):endpoint_(endpoint),
+                           rtscts_(rtscts),requireCarrierAndDsr_(requireCarrierAndDsr) {
         const auto rate=Fm11SerialClock::lookup(baudDip);
         baud_=fast?rate.fastBaud:rate.asyncBaud;
         if(endpoint_=="none")return;
@@ -132,6 +133,9 @@ private:
         int pins=0;
         if(ioctl(fd_,TIOCMGET,&pins)!=0) {
             if(unsupportedModemIoctl(errno)) {
+                if(requireCarrierAndDsr_)
+                    throw std::runtime_error(
+                        "serial_cd=cd_dsr requires readable modem inputs (TIOCMGET)");
                 modemSupported_=false;
                 // Leave CTS/DSR asserted as the existing virtual default
                 // for adapters without modem-pin support.
@@ -210,6 +214,7 @@ private:
     bool modemSupported_=true;
     bool ctsAllowed_=true;
     bool rtscts_=false;
+    bool requireCarrierAndDsr_=false;
     termios original_{};
     std::vector<unsigned char> pending_;
 };

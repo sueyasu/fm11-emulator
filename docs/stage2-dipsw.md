@@ -40,8 +40,18 @@ All 32 values are accepted, including patterns for which the manual
 does not specify a baud rate. This is a switch configuration, not a
 baud-rate number.
 
-**New keys are configuration storage only.** They do not yet affect FD23,
-boot-device selection, USART, 200/400-line hardware mode, or printer.
+**Stage 2-C (in progress):** Communication SW2 now gates USART RxRDY and
+receive IRQ when `serial_cd=cd_dsr`, using both CD and DSR inputs.
+`ignore` preserves existing behavior. The policy persists through 8251
+reset and works with immediate/clocked PTY transport. Physical serial ports
+read TIOCMGET, and reject `cd_dsr` when modem inputs are unavailable.
+SW3 synchronous mode is rejected for physical POSIX termios ports; the
+existing virtual USART sync register setup remains available. SW4-8
+continue to provide defined baud rates to clocked PTY and physical
+serial ports. Synchronous line timing/clock selection remains to do.
+
+The unrelated DIP keys remain configuration storage only: they do not yet
+affect FD23, boot-device selection, 200/400-line hardware mode, or printer.
 Previously supported keys keep their current behavior, including
 `[display].height` as the SDL viewport setting. Legacy `[main]` and
 `[boot]` aliases remain supported. Removed reserved/fixed-switch keys
