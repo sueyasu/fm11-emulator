@@ -1,5 +1,23 @@
 #include "Main8088Bus.h"
 #include <vector>
+#include <algorithm>
+#include <cstdint>
+
+// Emulate the machine's event scheduler when driving a bare 8088 bus.
+// A single 140/200-ms time jump cannot service per-byte DRQ and is
+// intentionally an overrun in Stage B2.
+static void advanceFdc(Main8088Bus& bus,FloppyDevice& fdc,std::uint64_t ns)
+{
+    while(ns) {
+        const auto next=fdc.nextTypeIIEventNanoseconds();
+        const auto step=next==UINT64_MAX?ns:
+            std::min(ns,std::max<std::uint64_t>(1,next));
+        fdc.advanceSeekNanoseconds(step);
+        bus.serviceTimedFloppy();
+        ns-=step;
+    }
+}
+
 #include <memory>
 
 static void channel0(Main8088Bus& b,WORD address,BYTE mode)
@@ -101,8 +119,7 @@ int main()
     timed.writeIo(0x1a,1);
     timed.writeIo(0xfd30,0x80);
     if((timed.readIo(0xfd30)&1)==0)return 11;
-    timedFdc->advanceSeekNanoseconds(200000000);
-    timed.serviceTimedFloppy();
+    advanceFdc(timed,*timedFdc,200000000);
     if(timed.readIo(0xfd30)!=0 || timed.readRam(0x4000)!=0x71)return 11;
     timed.writeIo(0xfd33,1);
     timed.writeIo(0xfd30,0x1a); // SEEK to C1
@@ -118,8 +135,7 @@ int main()
     timed.writeIo(0x1a,1);
     timed.writeIo(0xfd30,0x80);
     if((timed.readIo(0xfd30)&1)==0)return 14;
-    timedFdc->advanceSeekNanoseconds(200000000);
-    timed.serviceTimedFloppy();
+    advanceFdc(timed,*timedFdc,200000000);
     if(timed.readIo(0xfd30)!=0 || timed.readRam(0x4100)!=0x72)return 14;
     return 0;
 }
