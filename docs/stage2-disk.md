@@ -1,3 +1,15 @@
+## Stage 2-B3: READ ADDRESS (C0h)
+
+READ ADDRESS returns six bytes, C/H/R/N/CRC high/CRC low, through the
+existing FDC data FIFO and the 6809 HD6844 or 8088 8237 DMA paths.
+Fast mode transfers the six bytes immediately; timed mode waits for
+the rotational sector ID and issues one DRQ per byte. The physical
+sector register is updated to the encountered sector ID. For normalized
+RAW/D88 images without stored ID CRC fields, a deterministic CRC16 is
+synthesized over FE+CHRN. Full magnetic encoding and on-media CRC
+error reproduction are outside the current scope. CTest
+`fdc_read_address` exercises both controllers and timing modes.
+
 # Stage 2-Disk — opt-in FDC timing
 
 The 2D and 2HD FDCs now share a small per-drive mechanical head state.
