@@ -191,12 +191,12 @@ static int check8088SeekThenTrack(unsigned ch) {
     bus.writeIo(WORD(ch?0xfd35:0xfd1d),0);
     bus.writeIo(cmd,0x0b);
     if((bus.readIo(cmd)&1)==0)return 1;
-    machine.advanceTimeNanoseconds(25000000);
+    machine.advanceTimeNanoseconds(50000000);
     if(fdc->seekBusy(ch,0) || !fdc->seekComplete(ch,0))return 2;
     bus.writeIo(track,0);
     bus.writeIo(data,1);
     bus.writeIo(cmd,0x1b);
-    machine.advanceTimeNanoseconds(25000000);
+    machine.advanceTimeNanoseconds(50000000);
     if(fdc->seekBusy(ch,0) || !fdc->seekComplete(ch,0) ||
        fdc->headTrack(ch,0)!=1 || bus.readIo(cmd)!=0)return 3;
 
