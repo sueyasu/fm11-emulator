@@ -166,6 +166,64 @@ static int check8088RejectedTrack(unsigned ch,bool seekPending) {
     return 0;
 }
 
+
+static int check8088SeekThenTrack(unsigned ch) {
+    Machine machine;
+    auto card=std::make_unique<Main8088Board>(CpuType::I8088);
+    auto* cpu=card.get();
+    machine.addBoard(std::move(card));
+    auto fdc=machine.systemBoard().floppyDevice();
+    if(ch)fdc->load2hd(std::vector<BYTE>(77u*2*26*256,0xe5));
+    else fdc->load2d(std::vector<BYTE>(40u*2*16*256,0xe5));
+    machine.reset();
+    fdc->enableSeekTiming(true);
+    auto& bus=cpu->bus();
+    const WORD cmd=WORD(ch?0xfd30:0xfd18);
+    const WORD track=WORD(ch?0xfd31:0xfd19);
+    const WORD data=WORD(ch?0xfd33:0xfd1b);
+    const WORD irq=WORD(ch?0xfd37:0xfd1f);
+    const unsigned length=ch?10900:6400;
+    const unsigned sectors=ch?26:16;
+    const WORD addr=0x2000;
+
+    // Exercise the CP/M BIOS sequence rather than starting with an
+    // already-positioned head: RESTORE, SEEK, then WRITE TRACK.
+    bus.writeIo(WORD(ch?0xfd35:0xfd1d),0);
+    bus.writeIo(cmd,0x0b);
+    if((bus.readIo(cmd)&1)==0)return 1;
+    machine.advanceTimeNanoseconds(25000000);
+    if(fdc->seekBusy(ch,0) || !fdc->seekComplete(ch,0))return 2;
+    bus.writeIo(track,0);
+    bus.writeIo(data,1);
+    bus.writeIo(cmd,0x1b);
+    machine.advanceTimeNanoseconds(25000000);
+    if(fdc->seekBusy(ch,0) || !fdc->seekComplete(ch,0) ||
+       fdc->headTrack(ch,0)!=1 || bus.readIo(cmd)!=0)return 3;
+
+    const auto bytes=formatStream(1,0,sectors,length);
+    for(unsigned j=0;j<length;++j)bus.writeMemory(addr+j,bytes[j]);
+    bus.writeIo(0x1c,0);
+    bus.writeIo(WORD(0x10+ch*2),BYTE(addr));
+    bus.writeIo(WORD(0x10+ch*2),BYTE(addr>>8));
+    bus.writeIo(WORD(0x11+ch*2),BYTE(length-1));
+    bus.writeIo(WORD(0x11+ch*2),BYTE((length-1)>>8));
+    bus.writeIo(WORD(0x20+ch),0);
+    bus.writeIo(0x1b,BYTE(0x48+ch));
+    bus.writeIo(0x1a,BYTE(ch));
+    bus.writeIo(WORD(ch?0xfd34:0xfd1c),0);
+    bus.writeIo(track,1);
+    bus.writeIo(cmd,0xf0);
+    if(!fdc->trackBusy(ch,0) || fdc->seekComplete(ch,0) ||
+       bus.readIo(cmd)!=0x01)return 4;
+    machine.advanceTimeNanoseconds(230000000);
+    const auto& medium=ch?fdc->raw2hd():fdc->raw2d();
+    const unsigned offset=2*sectors*256; // C1/H0/S1
+    if(bus.readIo(cmd)!=0 || (bus.readIo(irq)&0x40)==0 ||
+       bus.dmaChannel(ch).count!=0xffff ||
+       medium[offset]!=1)return 5;
+    return 0;
+}
+
 int main() {
     for(unsigned ch=0;ch<2;++ch) {
         if(int r=check6809(ch))return 10+ch*10+r;
@@ -173,6 +231,7 @@ int main() {
         if(int r=check8088(ch,true))return 50+ch*10+r;
         if(int r=check8088RejectedTrack(ch,false))return 70+ch*10+r;
         if(int r=check8088RejectedTrack(ch,true))return 90+ch*10+r;
+        if(int r=check8088SeekThenTrack(ch))return 110+ch*10+r;
     }
     return 0;
 }

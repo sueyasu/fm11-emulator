@@ -65,6 +65,10 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
             const unsigned side=floppy_->registerValue(channel==0?0x1c:0x34)&1;
             if(floppy_->seekTimingEnabled()) {
                 if(floppy_->beginTrackWrite(channel,drive,track,side)) {
+                    // Preserve an in-flight SEEK for beginTrackWrite's
+                    // validation, but discard a completed Type-I status
+                    // before exposing the new Type-III command status.
+                    floppy_->cancelSeek(channel,selected);
                     floppy_->finishTransfer();
                     floppy_->writeRegister(channel==0?0x1f:0x37,0);
                 } else {
