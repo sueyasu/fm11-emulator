@@ -188,6 +188,7 @@ private:
     void synchronizeFd05Selection();
     void updateZ80MasterMapping();
     void advanceFloppyCpuCycles(std::uint64_t cycles,std::uint64_t hz);
+    void advanceTimedFloppyNanoseconds(std::uint64_t ns);
     void serviceTimedFloppy();
     void advanceSerialCpuCycles(std::uint64_t cycles,std::uint64_t hz);
     void publishSerialIrq();
