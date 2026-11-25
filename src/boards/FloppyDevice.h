@@ -140,8 +140,10 @@ public:
         if(ch>1 || !typeII_[ch].pending || typeII_[ch].remainingNs)return false;
         auto& t=typeII_[ch];
         command=t.command;
-        completed=t.transferring;
-        if(completed || !t.transferNs) {
+        // A missing ID has no data phase: it completes with RNF
+        // immediately after the five-revolution search timeout.
+        completed=t.transferring || !t.transferNs;
+        if(completed) {
             typeIIResult_[ch]=!t.transferNs?0x10:
                 (t.bytePaced && (t.lostData || t.byteServed!=t.byteCount))?0x04:0;
             t=TypeIIState{};
