@@ -101,8 +101,10 @@ int main()
     timed.writeIo(0x1a,1);
     timed.writeIo(0xfd30,0x80);
     if((timed.readIo(0xfd30)&1)==0)return 11;
-    timedFdc->advanceSeekNanoseconds(200000000);
-    timed.serviceTimedFloppy();
+    for(unsigned tick=0;tick<30000;++tick) {
+        timedFdc->advanceSeekNanoseconds(8000);
+        timed.serviceTimedFloppy();
+    }
     if(timed.readIo(0xfd30)!=0 || timed.readRam(0x4000)!=0x71)return 11;
     timed.writeIo(0xfd33,1);
     timed.writeIo(0xfd30,0x1a); // SEEK to C1
@@ -118,8 +120,10 @@ int main()
     timed.writeIo(0x1a,1);
     timed.writeIo(0xfd30,0x80);
     if((timed.readIo(0xfd30)&1)==0)return 14;
-    timedFdc->advanceSeekNanoseconds(200000000);
-    timed.serviceTimedFloppy();
+    for(unsigned tick=0;tick<30000;++tick) {
+        timedFdc->advanceSeekNanoseconds(8000);
+        timed.serviceTimedFloppy();
+    }
     if(timed.readIo(0xfd30)!=0 || timed.readRam(0x4100)!=0x72)return 14;
     return 0;
 }
