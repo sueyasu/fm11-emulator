@@ -53,3 +53,35 @@ path. The stock Fujitsu display ROM's higher-level Kanji command
 protocol and OpenGL presentation still need an OS-level visual
 regression with a user-supplied Kanji ROM, as the test uses a synthetic
 sub-CPU program rather than the stock firmware.
+
+## Stock-ROM / SDL final verification
+
+The portable `display_kanji_subcpu` test confirms the guest-executed
+AFF4/5/6/7 -> VRAM -> software graphics path. The OpenGL renderer
+uploads the **same physical VRAM bytes** to its graphics texture; it
+does not fetch the Kanji ROM or implement a separate Kanji glyph
+overlay. Thus neither renderer needs a Kanji-specific text shader.
+
+For a full OS-level visual check, supply the original display, ANK
+and 128-KiB Kanji ROMs via the example config and run the normal
+FM-11 boot with:
+
+```sh
+./build/fm11-sdl --config config/fm11emu.conf --trace-kanji --renderer software
+./build/fm11-sdl --config config/fm11emu.conf --trace-kanji --renderer gl
+```
+
+Use an OS program that requests a Kanji glyph through the original
+display ROM. `--trace-kanji` reports the number of accepted AFF5
+selections and the successful left/right ROM-byte reads every 2 seconds
+for either renderer. For a complete 16x16 glyph, 16 left and 16 right
+bytes should be read, though higher-level firmware may cache or
+interleave accesses. The existing video-revision value indicates that
+display state was updated; it is **not** proof that the particular
+glyph was drawn. Comparing the resulting image on both renderers
+provides visual confirmation. No host-side glyph injection is used.
+
+This manual OS/ROM test cannot be declared PASS on CI alone: the original
+ROMs are user-supplied and the guest-side command sequence depends on
+the OS program. `--trace-kanji` is diagnostic only; the default runtime
+behavior and ANK output are unchanged.

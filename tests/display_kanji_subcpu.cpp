@@ -50,6 +50,9 @@ int main() {
     for(unsigned i=0;i<500 && m.displaySharedByte(3)!=0x77;++i)
         if(!m.systemBoard().displayCpu().executeOne())return 2;
     if(m.displaySharedByte(3)!=0x77)return 3;
+    if(const auto stats=m.displaySubsystem().kanjiStatistics();
+       stats.selections!=1 || stats.leftReads!=16 || stats.rightReads!=16)
+        return 8;
     for(unsigned row=0;row<16;++row) {
         const unsigned offset=row*80;
         if(m.displayPhysicalVramByte(offset)!=(0x80u>>(row%8)) ||

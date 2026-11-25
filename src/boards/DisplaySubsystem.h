@@ -47,6 +47,9 @@ public:
         kanjiSelectHigh_=kanjiSelectLow_=0;
         kanjiStart_=0;
         kanjiLeft_=kanjiRight_=32;
+        kanjiSelectCount_.store(0,std::memory_order_relaxed);
+        kanjiLeftReadCount_.store(0,std::memory_order_relaxed);
+        kanjiRightReadCount_.store(0,std::memory_order_relaxed);
         rtcRegisters_.fill(0);
         subFirqLatch_=keyboardStatusLatch_=keyboardDataLatch_=0;
         {
@@ -78,6 +81,18 @@ public:
         return ankRom_.at(std::size_t(character)*16+row);
     }
     BYTE kanjiRomByte(std::size_t offset) const {return kanjiRom_.at(offset);}
+    // Guest-originated Kanji port activity, safe for asynchronous SDL
+    // diagnostic sampling without holding the display CPU's bus lock.
+    struct KanjiStatistics {
+        std::uint64_t selections=0,leftReads=0,rightReads=0;
+    };
+    KanjiStatistics kanjiStatistics() const {
+        return {
+            kanjiSelectCount_.load(std::memory_order_relaxed),
+            kanjiLeftReadCount_.load(std::memory_order_relaxed),
+            kanjiRightReadCount_.load(std::memory_order_relaxed)
+        };
+    }
     BYTE textByte(std::size_t offset) const {return ram_.at(offset&0x0fffu);}
     // Diagnostic observer for sub-CPU writes to the undecoded A000-BFFF
     // aperture and known sub-I/O latches. Observation is non-invasive:
@@ -287,6 +302,7 @@ public:
             if((kanjiSelectHigh_&0x80) || kanjiLeft_>=32)return 0;
             const auto result=kanjiRom_[kanjiStart_+kanjiLeft_];
             kanjiLeft_+=2;
+            kanjiLeftReadCount_.fetch_add(1,std::memory_order_relaxed);
             return result;
         }
         if(address==0xaff7) {
@@ -294,6 +310,7 @@ public:
             if(kanjiRight_>=32)return 1;
             const auto result=kanjiRom_[kanjiStart_+kanjiRight_];
             kanjiRight_+=2;
+            kanjiRightReadCount_.fetch_add(1,std::memory_order_relaxed);
             return result;
         }
         if(address==0xaff0)return dmaChannel0_; // original write target is DMA channel 0
@@ -407,6 +424,7 @@ public:
             const auto start=std::size_t(
                 (unsigned(kanjiSelectHigh_)<<8)|kanjiSelectLow_)*32u;
             if(start<kKanjiRomSize) {
+                kanjiSelectCount_.fetch_add(1,std::memory_order_relaxed);
                 kanjiStart_=start;
                 kanjiLeft_=0;
                 kanjiRight_=1;
@@ -470,6 +488,9 @@ private:
     RomImage rom_{};
     AnkRomImage ankRom_{};
     KanjiRomImage kanjiRom_{};
+    mutable std::atomic<std::uint64_t> kanjiSelectCount_{0};
+    mutable std::atomic<std::uint64_t> kanjiLeftReadCount_{0};
+    mutable std::atomic<std::uint64_t> kanjiRightReadCount_{0};
     BYTE kanjiSelectHigh_=0,kanjiSelectLow_=0;
     std::size_t kanjiStart_=0;
     mutable unsigned kanjiLeft_=32,kanjiRight_=32;

@@ -85,7 +85,7 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--beep-test] [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-fdc] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--kanji-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software] [--scanlines]\n"
+    std::cout<<"usage: fm11-sdl [--beep-test] [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-fdc] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--kanji-rom FILE] [--trace-kanji] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software] [--scanlines]\n"
              <<"  ROM defaults to [display_cpu].rom (external/roms/display6809.bin); CPU ROM paths may be set in the config file\n"
              <<"  Initial window height: [display].height=200|400 (default 400); --high forces 400\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
@@ -93,6 +93,7 @@ void usage() {
              <<"  --speed N: main CPU multiplier (default 10, 1=real-time);\n"
              <<"             display CPU uses the same multiplier, capped at 8 MHz.\n"
              <<"             0=unlimited main CPU, 8 MHz display CPU; PTM stays real-time.\n"
+             <<"  --trace-kanji: report sub-CPU AFF4/5/6/7 activity every 2 seconds.\n"
              <<"  --renderer auto (default): prefer OpenGL 3.3, fall back to software.\n"
              <<"  200-line display uses 2x vertical pixels; --scanlines adds CRT-style dark rows.\n"
              <<"  Mode is user-selected until hardware mode bits are decoded.\n";
@@ -106,6 +107,7 @@ int main(int argc,char** argv) {
         std::string rendererMode="auto";
         bool scanlines=false;
         bool beepTest=false;
+        bool traceKanji=false;
         unsigned floppyDrive=0;
         unsigned bootDip=0x9f;
         bool bootDipOverridden=false;
@@ -117,6 +119,7 @@ int main(int argc,char** argv) {
             if(arg=="--high"){high=true;highOverridden=true;continue;}
             if(arg=="--scanlines"){scanlines=true;continue;}
             if(arg=="--beep-test"){beepTest=true;continue;}
+            if(arg=="--trace-kanji"){traceKanji=true;continue;}
              if(arg=="--trace-cpm80"){traceCpm80=true;continue;}
             if(arg=="--cpu-speed"){cpuSpeed=true;continue;}
             if(arg=="--test-pattern"){testPattern=true;continue;}
@@ -454,6 +457,7 @@ int main(int argc,char** argv) {
         if(diagnostics)
             machine.setDisplayIoWriteObserver([&](DisplaySubsystem::IoWriteTrace){++ioWrites;});
         auto lastLog=std::chrono::steady_clock::now();
+        auto lastKanjiLog=std::chrono::steady_clock::now();
         // Match the original emulator's approximately 32 ms paint cadence.
         auto lastFrame=lastLog-std::chrono::milliseconds(32);
         CpuSpeedMeter cpuMeter;
@@ -871,6 +875,20 @@ int main(int argc,char** argv) {
                 if(SDL_RenderDrawRect(ui.renderer,&border)!=0)
                     throw std::runtime_error(SDL_GetError());
                 SDL_RenderPresent(ui.renderer);
+                }
+            }
+            // The two renderers consume the same sub-CPU-written graphics
+            // VRAM; report guest Kanji reads regardless of renderer mode.
+            if(traceKanji) {
+                const auto current=std::chrono::steady_clock::now();
+                if(current-lastKanjiLog>=std::chrono::seconds(2)) {
+                    const auto state=machine.displaySubsystem().kanjiStatistics();
+                    std::cerr<<"KANJI selections="<<state.selections
+                             <<" left="<<state.leftReads
+                             <<" right="<<state.rightReads
+                             <<" videoRevision="<<machine.displayRevision()
+                             <<"\n";
+                    lastKanjiLog=current;
                 }
             }
             // The main CPU no longer depends on SDL paint cadence. Yield
