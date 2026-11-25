@@ -143,6 +143,16 @@ CTest `timed_floppy_force_interrupt` covers command cancellation,
 immediate and conditional interrupt delivery and rejected timed
 WRITE TRACK on both controllers and CPU families.
 
+## Stage 2-B3: fast-mode Force Interrupt parity
+
+Fast mode now shares D0/D8 behavior with timed mode: D0 clears active
+transfer state without an interrupt, and D8 asserts INTRQ immediately.
+D1/D2 Ready-change conditions are checked on status reads; D4 INDEX
+is approximated by 256 status polls, without delaying any transfer.
+Ordinary commands cancel pending Force Interrupt conditions. Immediate
+DMA/PIO, SEEK and WRITE TRACK behavior is otherwise unchanged.
+CTest `fast_floppy_force_interrupt` covers both CPU families and 2D/2HD.
+
 ## Opt-in sector-arrival diagnostics
 
 Use `fm11-sdl --trace-fdc` with `[floppy] timing = timed` when a

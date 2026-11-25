@@ -48,7 +48,7 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
     const unsigned base=channel==0?0x18:0x30;
     const auto decoded=FloppyDevice::decodeCommand(command);
     const unsigned selectedDrive=floppy_->registerValue(channel==0?0x1d:0x35)&3;
-    if(floppy_->seekTimingEnabled() && (command&0xf0)==0xd0) {
+    if((command&0xf0)==0xd0) {
         const bool immediate=floppy_->forceInterrupt(channel,selectedDrive,command);
         floppy_->writeRegister(channel==0?0x1f:0x37,immediate?0x40:0);
         return;
@@ -214,7 +214,7 @@ BYTE Main8088Bus::readIo(WORD port) const
     // The 2HD ROM waits for FD37 bit 6 (INTRQ), not FD30 BUSY.
     // The shared latch remains low during rotational search and
     // transfers, and rises only at FDC command completion.
-    if(port==0xfd37 && floppy_->seekTimingEnabled())
+    if(port==0xfd37)
         return floppy_->registerValue(0x37);
     if(port==0xfd36 && mainBoard_) {
         BYTE ready=0xc0;
@@ -241,6 +241,10 @@ BYTE Main8088Bus::readIo(WORD port) const
         (port>=0xfd30 && port<=0xfd35 && floppy_->hasAny2hd()))) {
         if(port==0xfd18 || port==0xfd30){
             const unsigned channel=port==0xfd18?0:1;
+            if(floppy_->pollFastForceInterrupt(channel)) {
+                floppy_->takeForceInterrupt(channel);
+                floppy_->writeRegister(channel==0?0x1f:0x37,0x40);
+            }
             const unsigned selected=floppy_->registerValue(channel==0?0x1d:0x35)&3;
             if(floppy_->trackBusy(channel,selected))return 0x01;
             if(floppy_->typeIIBusy(channel,selected)) {

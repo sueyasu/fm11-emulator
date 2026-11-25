@@ -617,6 +617,11 @@ BYTE Main6809Board::readIo(WORD address)
         }
         return ioRegisters_[0x33];
     case 0x30: {
+        if(floppy_->pollFastForceInterrupt(1)) {
+            floppy_->takeForceInterrupt(1);
+            ioRegisters_[0x37]=0x40;
+            setExtendedIrqSource(0x40,true);
+        }
         if(floppy_->trackBusy(1,ioRegisters_[0x35]&3))return 0x01;
         if(floppy_->typeIIBusy(1,ioRegisters_[0x35]&3)) {
             if(floppy_->typeIIBytePaced(1))
@@ -662,6 +667,11 @@ BYTE Main6809Board::readIo(WORD address)
         mainIrqStatus();
         return floppy_->registerValue(0x1f);
     case 0x18: {
+        if(floppy_->pollFastForceInterrupt(0)) {
+            floppy_->takeForceInterrupt(0);
+            floppy_->writeRegister(0x1f,0x40);
+            setMainIrqSource(0x08,true);
+        }
         if(floppy_->trackBusy(0,floppy_->registerValue(0x1d)&3))return 0x01;
         if(floppy_->typeIIBusy(0,floppy_->registerValue(0x1d)&3)) {
             if(floppy_->typeIIBytePaced(0))
@@ -825,7 +835,7 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         break;
     case 0x30: {
         if(!timedTypeIIDispatch_)floppy_->cancelTypeII(1);
-        if(floppy_->seekTimingEnabled() && (value&0xf0)==0xd0) {
+        if((value&0xf0)==0xd0) {
             const bool immediate=floppy_->forceInterrupt(1,ioRegisters_[0x35]&3,value);
             ioRegisters_[0x30]=0;
             ioRegisters_[0x37]=immediate?0x40:0;
@@ -1028,7 +1038,7 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         break;
     case 0x18:
         if(!timedTypeIIDispatch_)floppy_->cancelTypeII(0);
-        if(floppy_->seekTimingEnabled() && (value&0xf0)==0xd0) {
+        if((value&0xf0)==0xd0) {
             const bool immediate=floppy_->forceInterrupt(0,
                 floppy_->registerValue(0x1d)&3,value);
             floppyStatus_=0;

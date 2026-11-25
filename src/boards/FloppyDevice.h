@@ -107,8 +107,7 @@ public:
     // Stage 2-B3: D0 aborts without IRQ, D8 interrupts immediately;
     // D4/D2/D1 interrupt on the next INDEX / ready-down / ready-up edge.
     bool forceInterrupt(unsigned ch,unsigned drive,BYTE command) {
-        if(!seekTimed_ || ch>1 || drive>3 ||
-           (command&0xf0)!=0xd0)return false;
+        if(ch>1 || drive>3 || (command&0xf0)!=0xd0)return false;
         cancelTypeII(ch);
         cancelTrackWrite(ch);
         cancelSeek(ch,drive);
@@ -134,6 +133,24 @@ public:
         if(!forceInterruptPending(ch))return false;
         force_[ch].irq=false;
         return true;
+    }
+    // Fast mode can observe conditional interrupts on FDC status polling.
+    // No mechanical delays or DMA pacing are introduced.
+    bool pollFastForceInterrupt(unsigned ch) {
+        if(seekTimed_ || ch>1)return false;
+        auto& q=force_[ch];
+        if(!q.armed)return false;
+        const bool ready=ch?has2hd(q.drive):has2d(q.drive);
+        const bool changed=ready!=q.lastReady;
+        const bool readyDown=changed && !ready && (q.mask&0x02);
+        const bool readyUp=changed && ready && (q.mask&0x01);
+        const bool index=(q.mask&0x04) && ready && (++q.polls%256u)==0u;
+        q.lastReady=ready;
+        if(index || readyDown || readyUp) {
+            q.armed=false;
+            q.irq=true;
+        }
+        return q.irq;
     }
     // Stage 2-B2 timed WRITE TRACK: all DMA bytes span one revolution.
     // The medium is updated only after the complete stream arrives.
@@ -767,6 +784,7 @@ private:
         unsigned drive=0;
         BYTE mask=0;
         bool armed=false,irq=false,lastReady=false;
+        unsigned polls=0;
     };
     std::array<ForceInterruptState,2> force_{};
     struct TrackWriteState {
