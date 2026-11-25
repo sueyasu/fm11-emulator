@@ -369,8 +369,8 @@ void Main8088Bus::writeIo(WORD port,BYTE value)
     if(port>=0xfc80 && port<=0xfcff && mainBoard_)
         mainBoard_->writeDisplayShared(port-0xfc80,value);
     else if(port>=0xfc00 && port<=0xfcff) cardIoRam_[port&0xff]=value;
-    else if(((port==0xfd04 || port==0xfd05 || port==0xfd06 || port==0xfd07 ||
-              port==0xfda0) ||
+    else if(((port==0xfd03 || port==0xfd04 || port==0xfd05 ||
+              port==0xfd06 || port==0xfd07 || port==0xfda0) ||
              (port>=0xfd38 && port<=0xfd3f) ||
              (port>=0xfd98 && port<=0xfd9f)) && mainBoard_) {
         mainBoard_->writeIo(port,value);

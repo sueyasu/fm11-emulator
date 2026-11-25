@@ -10,6 +10,7 @@
 #include "DisplayBitmap.h"
 #include "RomFiles.h"
 #include "HostImageSync.h"
+#include "SdlBeeper.h"
 #include <SDL.h>
 #include <array>
 #include <algorithm>
@@ -367,6 +368,9 @@ int main(int argc,char** argv) {
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"0");
         ui.setMode(high);
         std::cerr<<"FM-11 renderer: "<<(ui.glRenderer?"OpenGL 3.3":"software")<<"\n";
+        // Audio device owns an SDL callback but never touches guest CPU
+        // state. A missing host audio device must not block OS boot.
+        SdlBeeper audio(machine.systemBoard().beeperDevice());
         // CPU worker alone owns the host endpoint and 8251A queues.
         std::unique_ptr<SerialBackend> serial;
         if(mainBoard || main8088Enabled) {

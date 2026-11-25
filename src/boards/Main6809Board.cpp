@@ -1425,7 +1425,8 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         refreshSerialIrq();
         break;
     case 0x03:
-        // FD03 is a read-only IRQ status register (write controls beep).
+        // Read: IRQ status. Write: independent common-board beeper.
+        if(mainBoard_)mainBoard_->writeIo(address,value);
         break;
     case 0x04:
         if(!mainBoard_ || !mainBoard_->writeIo(address,value))

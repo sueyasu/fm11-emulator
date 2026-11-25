@@ -2,6 +2,7 @@
 #include "FloppyDevice.h"
 #include "MdcHddDevice.h"
 #include "Usart8251.h"
+#include "BeeperDevice.h"
 #include "Ptm6840.h"
 #include "DisplaySubsystem.h"
 #include "DisplayCpu6809.h"
@@ -42,6 +43,7 @@ public:
     std::shared_ptr<FloppyDevice> floppyDevice() const { return floppy_; }
     std::shared_ptr<MdcHddDevice> hddDevice() const { return hdd_; }
     std::shared_ptr<Usart8251> usartDevice() const {return usart_;}
+    std::shared_ptr<BeeperDevice> beeperDevice() const {return beeper_;}
     // Serial transport belongs to the system board, not the 6809 CPU.
     void queueSerialInput(BYTE value) {usart_->receive(value);}
     bool takeSerialOutput(BYTE& value) {return usart_->takeOutput(value);}
@@ -76,6 +78,7 @@ public:
         resetTimebase();
         externalIrqLines_=0;
         usart_->reset();
+        beeper_->reset();
         {
             std::lock_guard<std::mutex> lock(ptmMutex_);
             ptm_->reset();
@@ -249,6 +252,7 @@ public:
     bool writeIo(std::uint16_t address,BYTE value) {
         const unsigned reg=address&0xff;
         if(reg>=0xc0 && reg<=0xc3) {hdd_->write(reg,value);return true;}
+        if(reg==0x03) {beeper_->writeControl(value);return true;}
         if(reg==0xa0) {
             auto lock=lockDisplay();
             displayControl_=value;
@@ -349,5 +353,6 @@ private:
     std::shared_ptr<FloppyDevice> floppy_=std::make_shared<FloppyDevice>();
     std::shared_ptr<MdcHddDevice> hdd_=std::make_shared<MdcHddDevice>();
     std::shared_ptr<Usart8251> usart_=std::make_shared<Usart8251>();
+    std::shared_ptr<BeeperDevice> beeper_=std::make_shared<BeeperDevice>();
     std::shared_ptr<Ptm6840> ptm_=std::make_shared<Ptm6840>();
 };
