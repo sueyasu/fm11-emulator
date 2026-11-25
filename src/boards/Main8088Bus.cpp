@@ -57,12 +57,20 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
             const unsigned drive=floppy_->registerValue(channel==0?0x1d:0x35)&3;
             const unsigned track=floppy_->registerValue(base+1);
             const unsigned side=floppy_->registerValue(channel==0?0x1c:0x34)&1;
-            if(floppy_->beginTrackWrite(channel,drive,track,side)) {
-                floppy_->finishTransfer();
-                floppy_->writeRegister(channel==0?0x1f:0x37,0);
+            if(floppy_->seekTimingEnabled()) {
+                if(floppy_->beginTrackWrite(channel,drive,track,side)) {
+                    floppy_->finishTransfer();
+                    floppy_->writeRegister(channel==0?0x1f:0x37,0);
+                } else {
+                    // A timed WRITE TRACK must never fall back to an
+                    // instantaneous DMA/format operation on seek or media
+                    // errors. Report the failure through the FDC status.
+                    floppy_->transferError(0x20);
+                    floppy_->writeRegister(channel==0?0x1f:0x37,0x40);
+                }
                 return;
             }
-            // In untimed mode preserve synchronous WRITE TRACK behavior.
+            // Untimed mode alone preserves synchronous WRITE TRACK behavior.
             // FM-11 original: Mini-FDC 6400 bytes, standard FDC 10900.
             // 8237 channel 0/1 supplies the raw WRITE TRACK stream.
             const unsigned length=channel==0?6400:10900;
