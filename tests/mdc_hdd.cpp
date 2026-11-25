@@ -52,7 +52,8 @@ int main() {
     if(result(hdd)[0]!=0x10 || reads!=1)return 5;
     // Drive 1 must not alias the one and only installed HDD.
     command(hdd,0x22,{1,0,0,0,0,1,1,0});
-    if(result(hdd)[0]!=0x80 || reads!=1)return 6;
+    // MDC result byte 0 includes the selected AD code (drive 1).
+    if(result(hdd)[0]!=0x81 || reads!=1)return 6;
     // Host write failure must not mutate the in-memory disk.
     hdd.setHostWriter([](std::size_t,const BYTE*,std::size_t){return false;});
     command(hdd,0x23,{0,0,0,0,0,1,1,0});
