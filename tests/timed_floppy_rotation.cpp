@@ -69,8 +69,10 @@ int main() {
     if((cpu->readCpu(0xfd30)&1)==0)return 17;
     // At C0/H0/S1 the 2HD sector arrives after about 2.6 ms:
     // DRQ must appear before the 4.096 ms payload interval finishes.
-    machine.advanceTimeNanoseconds(2000000);
-    if((cpu->readCpu(0xfd30)&3)!=3)return 27;
+    // C0/H0/S1 arrives at ~2.604 ms. Stop before ID arrival;
+    // jumping to 3 ms would miss over 20 MFM DRQ slots.
+    machine.advanceTimeNanoseconds(1600000);
+    if((cpu->readCpu(0xfd30)&1)==0)return 27;
     // B2 PIO: read bytes during their DRQ windows instead of letting
     // the whole sector elapse without any service (which is LOST DATA).
     unsigned received=0;
