@@ -65,9 +65,6 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
             // In untimed mode preserve synchronous WRITE TRACK behavior.
             // FM-11 original: Mini-FDC 6400 bytes, standard FDC 10900.
             // 8237 channel 0/1 supplies the raw WRITE TRACK stream.
-            const unsigned drive=floppy_->registerValue(channel==0?0x1d:0x35)&3;
-            const unsigned track=floppy_->registerValue(base+1);
-            const unsigned side=floppy_->registerValue(channel==0?0x1c:0x34)&1;
             const unsigned length=channel==0?6400:10900;
             std::vector<BYTE> bytes;
             bytes.reserve(length);
@@ -296,7 +293,7 @@ void Main8088Bus::writeIo(WORD port,BYTE value)
     if(port>=0xfdc0 && port<=0xfdc3 && mainBoard_) {
         if(port==0xfdc0 || port==0xfdc1) {
             mainBoard_->hddDevice()->setDmaTransfer(
-                [this](unsigned channel,bool writing,std::vector<BYTE>& bytes) {
+                [this](unsigned channel,bool /*writing*/,std::vector<BYTE>& bytes) {
                     if(channel>=4)return false;
                     const auto oldReader=dmaReaders_[channel];
                     const auto oldWriter=dmaWriters_[channel];
