@@ -5,6 +5,11 @@
 #include <memory>
 #include <vector>
 
+// The optional level-2 Kanji ROM must not add 128 KiB to each
+// stack-allocated DisplaySubsystem. This test creates many of them.
+static_assert(sizeof(DisplaySubsystem)<500*1024,
+              "DisplaySubsystem became too large for stack-based tests");
+
 int main()
 {
     MainBoard board;
