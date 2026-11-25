@@ -239,6 +239,9 @@ if(FM11_BUILD_TESTS)
     add_executable(timed_floppy_byte_drq tests/timed_floppy_byte_drq.cpp)
     target_link_libraries(timed_floppy_byte_drq PRIVATE fm11_core)
     add_test(NAME timed_floppy_byte_drq COMMAND timed_floppy_byte_drq)
+    add_executable(timed_floppy_write_track tests/timed_floppy_write_track.cpp)
+    target_link_libraries(timed_floppy_write_track PRIVATE fm11_core)
+    add_test(NAME timed_floppy_write_track COMMAND timed_floppy_write_track)
 
 
     add_executable(main8088_cycles tests/main8088_cycles.cpp)
