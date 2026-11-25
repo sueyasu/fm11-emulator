@@ -221,7 +221,7 @@ public:
             const auto& t=tracks_[ch];
             if(!t.active)continue;
             const auto rev=revolutionNanoseconds(ch);
-            next=std::min(next,rev>t.elapsed?rev-t.elapsed:0ULL);
+            next=std::min<std::uint64_t>(next,rev>t.elapsed?rev-t.elapsed:0);
             if(t.slots+1<t.length) {
                 const auto boundary=((t.slots+1)*rev+t.length-1)/t.length;
                 if(boundary>t.elapsed)
