@@ -129,6 +129,24 @@ public:
         for(const auto& t:typeII_)if(t.pending && t.remainingNs==0)return true;
         return false;
     }
+    // Time to the next ID, byte DRQ, or Type-II completion. Used by
+    // the machine scheduler to service hardware DMA even when one CPU
+    // instruction spans multiple disk byte times.
+    std::uint64_t nextTypeIIEventNanoseconds() const {
+        std::uint64_t next=UINT64_MAX;
+        for(const auto& t:typeII_) {
+            if(!t.pending)continue;
+            next=std::min(next,t.remainingNs);
+            if(t.transferring && t.bytePaced && t.bytePeriodNs &&
+               t.byteSlots+1<t.byteCount) {
+                const auto elapsed=t.transferNs-t.remainingNs;
+                const auto boundary=(t.byteSlots+1)*t.bytePeriodNs;
+                if(boundary>elapsed)
+                    next=std::min(next,boundary-elapsed);
+            }
+        }
+        return next;
+    }
     bool typeIITransferring(unsigned ch,unsigned drive) const {
         return ch<2 && drive<4 && typeII_[ch].pending &&
                typeII_[ch].drive==drive && typeII_[ch].transferring;
