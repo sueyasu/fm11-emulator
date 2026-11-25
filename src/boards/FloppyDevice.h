@@ -75,10 +75,18 @@ public:
             const auto idPhase=((std::uint64_t(sector-1)*rev)/count+rev/64)%rev;
             const auto search=(idPhase+rev-rotationNs_[ch][drive])%rev;
             const auto bytes=sectorLength(ch,track,side,sector,drive);
-            const auto bitrate=ch?500000ULL:250000ULL;
+            // FM-11's 2HD C0/H0 is a 26x128-byte single-density
+            // boot track (250 kbps). The remaining 2HD tracks are
+            // 500 kbps MFM. The original 6809 ROM reads C0/H0 by PIO,
+            // so 16us DRQ there would make an otherwise valid boot fail.
+            const auto bitrate=(ch==1 && track==0 && side==0 &&
+                                disk.sectorsPerTrack==26 &&
+                                bytes==128)?250000ULL:
+                                (ch?500000ULL:250000ULL);
             const auto transfer=(std::uint64_t(bytes)*8*1000000000ULL+bitrate-1)/bitrate;
             t.remainingNs=search;
             t.transferNs=transfer;
+            t.bytePeriodNs=1000000000ULL*8/bitrate;
             t.byteCount=bytes;
         }
         return true;
@@ -95,7 +103,9 @@ public:
         auto& t=typeII_[ch];
         if(!t.pending || !t.transferring || !t.byteCount)return;
         t.bytePaced=true;
-        t.bytePeriodNs=ch?16000ULL:32000ULL;
+        // Transfer rate is selected from the actual physical track,
+        // not merely the controller channel.
+        if(!t.bytePeriodNs)return;
         t.byteReady=true; // first byte when the data field arrives
         const auto elapsed=t.transferNs-t.remainingNs;
         const auto slots=elapsed/t.bytePeriodNs;
