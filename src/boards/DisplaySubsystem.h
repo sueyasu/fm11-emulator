@@ -9,6 +9,7 @@
 #include <utility>
 #include <mutex>
 #include <atomic>
+#include <memory>
 
 // Main-board display/sub-CPU memory. I/O and display scanout are deliberately
 // not decoded yet: the reference map still labels those regions tentative.
@@ -79,11 +80,11 @@ public:
     void loadAnkRom(const AnkRomImage& image) {ankRom_=image;markVideoChanged();}
     void loadKanjiRom(const KanjiRomImage& image) {kanjiRom_=image;markVideoChanged();}
     void loadKanji2Rom(const KanjiRomImage& image) {
-        kanji2Rom_=image;
-        kanji2Installed_=true;
+        if(!kanji2Rom_)kanji2Rom_=std::make_unique<KanjiRomImage>();
+        *kanji2Rom_=image;
         markVideoChanged();
     }
-    bool kanji2Installed() const {return kanji2Installed_;}
+    bool kanji2Installed() const {return static_cast<bool>(kanji2Rom_);}
     BYTE ankGlyphRow(BYTE character,unsigned row) const {
         return ankRom_.at(std::size_t(character)*16+row);
     }
@@ -307,7 +308,7 @@ public:
         // AFF6 and AFF7 have independently advancing left/right row cursors.
         if(address==0xaff6) {
             if((kanjiSelectHigh_&0x80) || kanjiLeft_>=32)return 0;
-            const auto result=(kanjiSelectedBank_?kanji2Rom_:kanjiRom_)[kanjiStart_+kanjiLeft_];
+            const auto result=(kanjiSelectedBank_?*kanji2Rom_:kanjiRom_)[kanjiStart_+kanjiLeft_];
             kanjiLeft_+=2;
             kanjiLeftReadCount_.fetch_add(1,std::memory_order_relaxed);
             return result;
@@ -315,7 +316,7 @@ public:
         if(address==0xaff7) {
             if(kanjiSelectHigh_&0x80)return rtcRegisters_[kanjiSelectHigh_&0x0f];
             if(kanjiRight_>=32)return 1;
-            const auto result=(kanjiSelectedBank_?kanji2Rom_:kanjiRom_)[kanjiStart_+kanjiRight_];
+            const auto result=(kanjiSelectedBank_?*kanji2Rom_:kanjiRom_)[kanjiStart_+kanjiRight_];
             kanjiRight_+=2;
             kanjiRightReadCount_.fetch_add(1,std::memory_order_relaxed);
             return result;
@@ -433,7 +434,7 @@ public:
             const unsigned bank=(high>>4)&1u;
             const auto start=std::size_t(
                 ((high&0x0fu)<<8)|kanjiSelectLow_)*32u;
-            if((high&0xe0u)==0 && (!bank || kanji2Installed_)) {
+            if((high&0xe0u)==0 && (!bank || kanji2Installed())) {
                 kanjiSelectCount_.fetch_add(1,std::memory_order_relaxed);
                 kanjiSelectedBank_=bank;
                 kanjiStart_=start;
@@ -499,8 +500,10 @@ private:
     RomImage rom_{};
     AnkRomImage ankRom_{};
     KanjiRomImage kanjiRom_{};
-    KanjiRomImage kanji2Rom_{};
-    bool kanji2Installed_=false;
+    // Optional card is heap-allocated only when a second ROM is loaded.
+    // A large number of local DisplaySubsystem instances in regression
+    // tests must not consume another 128 KiB of thread stack apiece.
+    std::unique_ptr<KanjiRomImage> kanji2Rom_;
     unsigned kanjiSelectedBank_=0;
     mutable std::atomic<std::uint64_t> kanjiSelectCount_{0};
     mutable std::atomic<std::uint64_t> kanjiLeftReadCount_{0};
