@@ -454,7 +454,9 @@ void Machine::advanceTimedFloppyNanoseconds(std::uint64_t ns)
     // Split a long instruction's virtual time at each FDC DRQ/command
     // edge, so a slow CPU instruction cannot create fictitious Lost Data.
     while(ns) {
-        if(fdc->nextTypeIIEventNanoseconds()==0)serviceTimedFloppy();
+        if(fdc->nextTypeIIEventNanoseconds()==0 ||
+           fdc->trackByteReady(0) || fdc->trackByteReady(1))
+            serviceTimedFloppy();
         const auto next=fdc->nextTypeIIEventNanoseconds();
         const auto step=next==UINT64_MAX?ns:
                         std::min(ns,std::max<std::uint64_t>(1,next));
@@ -468,7 +470,9 @@ void Machine::serviceTimedFloppy()
 {
     auto fdc=mainBoard_->floppyDevice();
     if(!fdc->typeIIReady() && !fdc->typeIIByteReady(0) &&
-       !fdc->typeIIByteReady(1))return;
+       !fdc->typeIIByteReady(1) &&
+       !fdc->trackByteReady(0) && !fdc->trackByteReady(1) &&
+       !fdc->trackDone(0) && !fdc->trackDone(1))return;
     if(activeExecution_.kind==ExecutionKind::Main6809 &&
        activeExecution_.main6809)
         activeExecution_.main6809->serviceTimedFloppy();
