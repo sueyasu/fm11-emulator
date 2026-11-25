@@ -1302,40 +1302,89 @@ CpuType Main6809Board::Core::type() const
 
 void Main6809Board::serviceTimedFloppy()
 {
-    if(!floppy_->typeIIReady())return;
     for(unsigned channel=0;channel<2;++channel) {
+        const unsigned selectReg=channel?0x35:0x1d;
+        const unsigned drive=floppy_->registerValue(selectReg)&3;
         BYTE command=0;
         bool completed=false;
-        // A single scheduler step can cross ID arrival and the end of
-        // the data interval; consume both edges in chronological order.
+        // Stage 2-B2: sector arrival arms the FDC data register. The
+        // shared clock raises one DRQ per byte; the HD6844 consumes
+        // exactly one byte per request, without an atomic DMA burst.
         while(floppy_->takeTypeIIEvent(channel,command,completed)) {
             if(!completed) {
-                timedTypeIIDispatch_=true;
-                writeIo(WORD(channel==0?0xfd18:0xfd30),command);
-                timedTypeIIDispatch_=false;
-                if(floppy_->typeIIBusy(channel,
-                     floppy_->registerValue(channel==0?0x1d:0x35)&3)) {
+                const unsigned track=floppy_->registerValue(channel?0x31:0x19);
+                const unsigned side=floppy_->registerValue(channel?0x34:0x1c)&1;
+                const unsigned sector=floppy_->registerValue(channel?0x32:0x1a);
+                const bool writing=(command&0x20)!=0;
+                if(floppy_->beginSector(channel,track,side,sector,drive,writing)) {
+                    floppy_->startTypeIIBytePacing(channel);
                     if(channel==0) {
-                        floppy_->writeRegister(0x1c,
-                            floppy_->registerValue(0x1c)&0x01);
-                        floppy_->writeRegister(0x1f,0);
-                        setMainIrqSource(0x08,false);
+                        floppyOffset_=0;
+                        floppyWritePio_=writing && !(ioRegisters_[0x50]&0x04);
+                        floppyStatus_=0x02;
                     } else {
-                        ioRegisters_[0x37]=0;
-                        setExtendedIrqSource(0x40,false);
+                        ioRegisters_[0x30]=0x03;
                     }
+                } else {
+                    floppy_->transferError(0x10);
+                }
+                if(channel==0) {
+                    floppy_->writeRegister(0x1c,floppy_->registerValue(0x1c)&1);
+                    floppy_->writeRegister(0x1f,0);
+                    setMainIrqSource(0x08,false);
+                } else {
+                    ioRegisters_[0x37]=0;
+                    setExtendedIrqSource(0x40,false);
                 }
             } else {
+                const BYTE result=BYTE(floppy_->typeIIResult(channel) |
+                                      (floppy_->transferStatus()&0x14));
+                if(result)floppy_->transferError(result);
                 if(channel==0) {
-                    floppy_->writeRegister(0x1c,
-                        floppy_->registerValue(0x1c)|0x40);
+                    floppyStatus_=result;
+                    floppyOffset_=256;
+                    floppyWritePio_=false;
+                    floppy_->writeRegister(0x1c,floppy_->registerValue(0x1c)|0x40);
                     floppy_->writeRegister(0x1f,floppy_->registerValue(0x1c));
                     setMainIrqSource(0x08,true);
                 } else {
+                    ioRegisters_[0x30]=result;
                     ioRegisters_[0x37]=0x40;
                     setExtendedIrqSource(0x40,true);
                 }
             }
+        }
+        if(!floppy_->typeIIByteReady(channel))continue;
+        const unsigned ctl=channel?0x51:0x50;
+        if(!(ioRegisters_[ctl]&0x04))continue; // PIO: CPU accesses data register
+        const unsigned addrH=channel?0x44:0x40;
+        const unsigned countH=channel?0x46:0x42;
+        const unsigned bankReg=channel?0x95:0x94;
+        const unsigned count=(unsigned(ioRegisters_[countH])<<8)|
+                              ioRegisters_[countH+1];
+        if(!count || floppy_->transferPosition()>=floppy_->transferLength())
+            continue;
+        const WORD addr=WORD((unsigned(ioRegisters_[addrH])<<8)|
+                             ioRegisters_[addrH+1]);
+        const std::uint32_t physical=(std::uint32_t(ioRegisters_[bankReg]&15)<<16)|addr;
+        if(physical>=memory_->size())continue;
+        const bool writing=(ioRegisters_[ctl]&1)!=0;
+        if(writing)
+            floppy_->transferWrite(readPhysical(physical));
+        else
+            writePhysical(physical,floppy_->transferRead());
+        floppy_->acceptTypeIIByte(channel);
+        const WORD next=WORD(addr+((ioRegisters_[ctl]&8)?-1:1));
+        ioRegisters_[addrH]=BYTE(next>>8);
+        ioRegisters_[addrH+1]=BYTE(next);
+        const unsigned remaining=count-1;
+        ioRegisters_[countH]=BYTE(remaining>>8);
+        ioRegisters_[countH+1]=BYTE(remaining);
+        if(!remaining) {
+            ioRegisters_[ctl]=BYTE((ioRegisters_[ctl]|0x80)&~0x40);
+            refreshDmaCompletion();
+        } else {
+            ioRegisters_[ctl]|=0x40;
         }
     }
 }
