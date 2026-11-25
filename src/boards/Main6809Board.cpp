@@ -162,7 +162,8 @@ void Main6809Board::writeFloppySector()
         return;
     }
     const unsigned count=(ioRegisters_[0x42]<<8)|ioRegisters_[0x43];
-    if((ioRegisters_[0x50]&0x01)==0 || count!=256) {
+    if((ioRegisters_[0x50]&0x01)==0 ||
+       (fastMultiDma2d_?count<256:count!=256)) {
         floppyStatus_=0x10;
         ioRegisters_[0x50]|=0x40;
         return;
@@ -193,10 +194,13 @@ void Main6809Board::writeFloppySector()
     const WORD advanced=WORD(startAddress+(down?-256:256));
     ioRegisters_[0x40]=BYTE(advanced>>8);
     ioRegisters_[0x41]=BYTE(advanced);
-    ioRegisters_[0x42]=0;
-    ioRegisters_[0x43]=0;
+    const unsigned remaining=count-256;
+    ioRegisters_[0x42]=BYTE(remaining>>8);
+    ioRegisters_[0x43]=BYTE(remaining);
 
-    ioRegisters_[0x50]=static_cast<BYTE>((ioRegisters_[0x50]|0x80)&~0x40);
+    if(!remaining)
+        ioRegisters_[0x50]=static_cast<BYTE>((ioRegisters_[0x50]|0x80)&~0x40);
+    else ioRegisters_[0x50]|=0x40;
     // Completion is visible both in the per-channel status and in the
     // DMA common completion latch, until the channel status is read.
     refreshDmaCompletion();
@@ -924,6 +928,63 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             refreshDmaCompletion();
                 status=floppy_->transferStatus();
             }
+        } else if(((value&0xf0)==0x90 || (value&0xf0)==0xb0) &&
+                  (ioRegisters_[0x51]&4)) {
+            // Fast 2HD multi-sector DMA: retain the HD6844 address and
+            // count between sectors, and stop at DMA TC or side-track end.
+            const unsigned drive=ioRegisters_[0x35]&3;
+            const unsigned track=ioRegisters_[0x31];
+            const unsigned side=ioRegisters_[0x34]&1;
+            const bool write=(value&0x20)!=0;
+            unsigned sector=ioRegisters_[0x32];
+            for(;;) {
+                std::size_t offset=0;
+                if(!floppy_->sectorOffset(1,track,side,sector,drive,offset)) {
+                    status=0x10;break;
+                }
+                const unsigned size=unsigned(floppy_->sectorLength(
+                    1,track,side,sector,drive));
+                const unsigned count=(unsigned(ioRegisters_[0x46])<<8)|
+                                      ioRegisters_[0x47];
+                if(!count)break;
+                const unsigned n=std::min(count,size);
+                const WORD start=WORD((unsigned(ioRegisters_[0x44])<<8)|
+                                      ioRegisters_[0x45]);
+                const unsigned bank=unsigned(ioRegisters_[0x95]&15)<<16;
+                const bool down=(ioRegisters_[0x51]&8)!=0;
+                if(write) {
+                    std::array<BYTE,1024> sectorData{};
+                    for(unsigned j=0;j<size;++j)
+                        sectorData[j]=floppy_->read(1,offset+j,drive);
+                    for(unsigned j=0;j<n;++j) {
+                        const WORD at=WORD(start+(down?-int(j):int(j)));
+                        sectorData[j]=readPhysical(bank|at);
+                    }
+                    if(!floppy_->writeSector(1,offset,sectorData.data(),drive)) {
+                        status=0x10;break;
+                    }
+                } else {
+                    for(unsigned j=0;j<n;++j) {
+                        const WORD at=WORD(start+(down?-int(j):int(j)));
+                        writePhysical(bank|at,floppy_->read(1,offset+j,drive));
+                    }
+                }
+                const WORD next=WORD(start+(down?-int(n):int(n)));
+                ioRegisters_[0x44]=BYTE(next>>8);
+                ioRegisters_[0x45]=BYTE(next);
+                const unsigned left=count-n;
+                ioRegisters_[0x46]=BYTE(left>>8);
+                ioRegisters_[0x47]=BYTE(left);
+                if(!left) {
+                    ioRegisters_[0x51]=BYTE((ioRegisters_[0x51]|0x80)&~0x40);
+                    refreshDmaCompletion();
+                    break;
+                }
+                ioRegisters_[0x51]|=0x40;
+                if(n<size || sector>=floppy_->sectorsPerTrack(1,drive))break;
+                ++sector;
+                ioRegisters_[0x32]=BYTE(sector);
+            }
         } else if((value&0xc0)==0x80) {
             ++hdReadAttempts_;
             if(!hasDisk) {
@@ -954,6 +1015,7 @@ void Main6809Board::writeIo(WORD address, BYTE value)
                     if(!dma) {
                         ++hdReadSuccesses_;
                         floppy_->beginSector(1,track,side,sector,drive,(value&0x20)!=0);
+                        fastMultiPio_[1]=(value&0x10)!=0;
                         status=0x03;
                     } else {
                         const unsigned count=(unsigned(ioRegisters_[0x46])<<8)|ioRegisters_[0x47];
@@ -1160,8 +1222,30 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             }
             break;
         }
-        case FloppyDevice::Command::ReadSector: readFloppySector(); break;
-        case FloppyDevice::Command::WriteSector: writeFloppySector(); break;
+        case FloppyDevice::Command::ReadSector:
+        case FloppyDevice::Command::WriteSector: {
+            const bool multi=(value&0xf0)==0x90 || (value&0xf0)==0xb0;
+            const bool write=(value&0x20)!=0;
+            const bool dma=(ioRegisters_[0x50]&4)!=0;
+            fastMultiPio_[0]=multi && !dma;
+            fastMultiDma2d_=multi && dma;
+            for(;;) {
+                if(write)writeFloppySector();
+                else readFloppySector();
+                if(!multi || !dma || floppyStatus_!=0)break;
+                const unsigned left=(unsigned(ioRegisters_[0x42])<<8)|
+                                     ioRegisters_[0x43];
+                const unsigned next=floppy_->registerValue(0x1a)+1u;
+                std::size_t off=0;
+                if(left==0 || !floppy_->sectorOffset(0,
+                        floppy_->registerValue(0x19),
+                        floppy_->registerValue(0x1c)&1,next,
+                        floppy_->registerValue(0x1d)&3,off))break;
+                floppy_->writeRegister(0x1a,BYTE(next));
+            }
+            fastMultiDma2d_=false;
+            break;
+        }
         default:
             floppy_->finishTransfer();
             floppyOffset_=256;

@@ -192,6 +192,8 @@ private:
     std::shared_ptr<MainBoard> mainBoard_;
     std::shared_ptr<FloppyDevice> floppy_=std::make_shared<FloppyDevice>();
     bool floppyWritePio_ = false;
+    std::array<bool,2> fastMultiPio_{{false,false}};
+    bool fastMultiDma2d_=false;
     std::size_t floppyWriteOffset_ = 0;
     std::array<BYTE,256> floppySector_{};
     unsigned floppyOffset_ = 256;
