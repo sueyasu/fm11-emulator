@@ -10,6 +10,10 @@ int main() {
     f.load2d(std::vector<BYTE>(40u*2*16*256,0x5a));
     f.load2hd(std::vector<BYTE>(77u*2*26*256,0xa5));
     f.enableSeekTiming(true);
+    std::vector<std::string> timingEvents;
+    f.setTimingTrace([&timingEvents](const std::string& message) {
+        timingEvents.push_back(message);
+    });
     if(!f.indexPulse(0,0) || !f.indexPulse(1,0))return 1;
     f.advanceSeekNanoseconds(3000000);
     if(f.indexPulse(0,0) || f.indexPulse(1,0))return 2;
@@ -18,6 +22,8 @@ int main() {
     f.advanceSeekNanoseconds(133333334);
     if(!f.indexPulse(1,0))return 4;
     if(!f.beginTypeII(0,0,0,0,1,0x80))return 5;
+    if(timingEvents.empty() || timingEvents.back().find("begin ch=0")==std::string::npos)
+        return 30;
     if(!f.typeIIBusy(0,0) || f.typeIIReady())return 6;
     f.advanceSeekNanoseconds(1000000);
     if(f.typeIIReady())return 7;
@@ -27,6 +33,8 @@ int main() {
     bool completed=false;
     if(!f.takeTypeIIEvent(0,command,completed) || command!=0x80 ||
        completed || !f.typeIITransferring(0,0))return 9;
+    if(timingEvents.back().find("sector-arrival")==std::string::npos)
+        return 31;
     if(!f.takeTypeIIEvent(0,command,completed) || !completed ||
        f.typeIIBusy(0,0))return 9;
     if(!f.beginTypeII(1,0,0,0,27,0x80))return 10;
