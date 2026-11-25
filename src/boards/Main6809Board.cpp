@@ -1391,7 +1391,11 @@ void Main6809Board::serviceTimedFloppy()
                 " mode="+std::to_string(ioRegisters_[ctl])+
                 " remaining=0");
         } else {
-            ioRegisters_[ctl]|=0x40;
+            // A byte transfer with a nonzero remaining count is normal
+            // progress, not HD6844 B/R (bit 6, block-not-ended error).
+            // B/R is raised only when a programmed DMA block cannot
+            // complete (for example, a short count vs sector length).
+            // Leave the channel control/status unchanged until TC.
         }
     }
 }
