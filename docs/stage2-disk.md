@@ -86,6 +86,23 @@ The `fast` mode bypasses this new scheduling and keeps the existing
 immediate transfer behavior. `--speed` is not forcibly changed: both
 FDC and CPU time advance from the same modeled CPU cycle counts.
 
+## Stage 2-B2 diagnostic retry branch
+
+The `stage2-b2-diag-retry` branch enables byte-paced DRQ for the
+6809 HD6844 and 8088/V20 8237 floppy interfaces in `timed` mode.
+The `fast` controller path retains sector-atomic transfers.
+
+The 8237 now uses one DMA service per DRQ byte; masked or disabled
+channels leave DRQ unserviced and cause Lost Data at the subsequent
+byte slot. 2HD C0/H0 FM uses 32 microseconds per byte and normal
+2HD MFM uses 16 microseconds. Legacy PIO regression tests must
+consume each byte while DRQ is asserted: reading after a full
+revolution correctly fails under B2.
+
+Run `ctest --test-dir build --output-on-failure` first, then boot
+`fm11-diag` with both 2D and 2HD diagnostic ROMs. Do not merge
+into main until the test suite and both diagnostic OS boots pass.
+
 ## Opt-in sector-arrival diagnostics
 
 Use `fm11-sdl --trace-fdc` with `[floppy] timing = timed` when a
