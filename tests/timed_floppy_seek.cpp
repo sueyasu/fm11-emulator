@@ -30,10 +30,18 @@ int main() {
     cpu->writeCpu(0xfd51,0); // PIO
     cpu->writeCpu(0xfd30,0x80); // READ sector at track 0
     if((cpu->readCpu(0xfd30)&1)==0)return 5;
-    machine.advanceTimeNanoseconds(200000000);
-    if((cpu->readCpu(0xfd30)&2)==0)return 5;
-    for(unsigned i=0;i<256;++i)
-        if(cpu->readCpu(0xfd33)!=0x5a)return 6;
+    // Stage B2: consume PIO bytes as DRQ arrives. Waiting an entire
+    // revolution before reading would correctly cause LOST DATA.
+    unsigned readBytes=0;
+    for(unsigned tick=0;tick<40000 && readBytes<256;++tick) {
+        machine.advanceTimeNanoseconds(8000);
+        if(cpu->readCpu(0xfd30)&2) {
+            if(cpu->readCpu(0xfd33)!=0x5a)return 6;
+            ++readBytes;
+        }
+    }
+    if(readBytes!=256)return 5;
+    machine.advanceTimeNanoseconds(16000); // data field completion
     // Seek-clock progress must not erase a non-SEEK completion IRQ.
     machine.advanceTimeNanoseconds(1000000);
     if((cpu->readCpu(0xfd37)&0x40)==0)return 7;
