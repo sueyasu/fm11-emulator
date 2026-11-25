@@ -55,6 +55,7 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
     }
     floppy_->cancelForceInterrupt(channel);
     const bool writing=decoded==FloppyDevice::Command::WriteSector;
+    const bool address=decoded==FloppyDevice::Command::ReadAddress;
     if(decoded==FloppyDevice::Command::Other) {
         floppy_->finishTransfer();
         const unsigned selected=floppy_->registerValue(channel==0?0x1d:0x35)&3;
@@ -142,7 +143,10 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
     // Bit 7 of FD1D controls motor/drive selection; only the bottom
     // two bits identify the physical drive (as in the reference FM-11).
     const unsigned drive=floppy_->registerValue(channel==0?0x1d:0x35)&3;
-    const bool started=floppy_->beginSector(channel,floppy_->registerValue(base+1),
+    const bool started=address?
+        floppy_->beginReadAddress(channel,floppy_->registerValue(base+1),
+            floppy_->registerValue(channel==0?0x1c:0x34)&1,drive):
+        floppy_->beginSector(channel,floppy_->registerValue(base+1),
             floppy_->registerValue(channel==0?0x1c:0x34),
             floppy_->registerValue(base+2),drive,writing);
     if(started) {

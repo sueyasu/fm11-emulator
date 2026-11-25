@@ -64,31 +64,37 @@ public:
     bool beginTypeII(unsigned ch,unsigned drive,unsigned track,unsigned side,
                      unsigned sector,BYTE command) {
         if(!seekTimed_ || ch>1 || drive>3 ||
-           ((command&0xf0)!=0x80 && (command&0xf0)!=0xa0))return false;
+           ((command&0xf0)!=0x80 && (command&0xf0)!=0xa0 &&
+            (command&0xf0)!=0xc0))return false;
         auto& t=typeII_[ch];
         t=TypeIIState{};
         typeIIResult_[ch]=0;
         t.pending=true;t.drive=drive;t.command=command;
-        std::size_t offset=0;
+        const bool address=(command&0xf0)==0xc0;
         const auto rev=revolutionNanoseconds(ch);
-        if(!sectorOffset(ch,track,side,sector,drive,offset)) {
+        const auto& disk=medium(ch,drive);
+        const unsigned n=disk.sectorsPerTrack;
+        const unsigned chosen=address && n?
+            unsigned(rotationNs_[ch][drive]*n/rev)%n+1:sector;
+        t.addressSector=chosen;
+        std::size_t offset=0;
+        if(!sectorOffset(ch,track,side,chosen,drive,offset)) {
             t.remainingNs=5*rev; // Record Not Found after five revolutions
             traceTiming("begin ch="+std::to_string(ch)+" d="+std::to_string(drive)+
                 " C="+std::to_string(track)+" H="+std::to_string(side)+
                 " R="+std::to_string(sector)+" no sector/head match; RNF pending");
         } else {
-            const auto& disk=medium(ch,drive);
             const auto count=std::uint64_t(disk.sectorsPerTrack);
-            const auto idPhase=((std::uint64_t(sector-1)*rev)/count+rev/64)%rev;
+            const auto idPhase=((std::uint64_t(chosen-1)*rev)/count+rev/64)%rev;
             const auto search=(idPhase+rev-rotationNs_[ch][drive])%rev;
-            const auto bytes=sectorLength(ch,track,side,sector,drive);
+            const auto bytes=address?6:sectorLength(ch,track,side,chosen,drive);
             // FM-11's 2HD C0/H0 is a 26x128-byte single-density
             // boot track (250 kbps). The remaining 2HD tracks are
             // 500 kbps MFM. The original 6809 ROM reads C0/H0 by PIO,
             // so 16us DRQ there would make an otherwise valid boot fail.
             const auto bitrate=(ch==1 && track==0 && side==0 &&
                                 disk.sectorsPerTrack==26 &&
-                                bytes==128)?250000ULL:
+                                (address || bytes==128))?250000ULL:
                                 (ch?500000ULL:250000ULL);
             const auto transfer=(std::uint64_t(bytes)*8*1000000000ULL+bitrate-1)/bitrate;
             t.remainingNs=search;
@@ -693,11 +699,12 @@ public:
     BYTE registerValue(unsigned reg) const {return registers_.at(reg);}
     void writeRegister(unsigned reg,BYTE value) {registers_.at(reg)=value;}
     void resetRegisters() {registers_.fill(0);resetSeekTiming();}
-    enum class Command : BYTE { Other, ReadSector, WriteSector };
+    enum class Command : BYTE { Other, ReadSector, WriteSector, ReadAddress };
     static Command decodeCommand(BYTE value) {
         switch(value&0xf0) {
         case 0x80: return Command::ReadSector;
         case 0xa0: return Command::WriteSector;
+        case 0xc0: return Command::ReadAddress;
         default: return Command::Other;
         }
     }
@@ -705,6 +712,38 @@ public:
     // Reset/seek commands still need their own controller implementation.
     // Shared FDC transfer FIFO. CPU-specific DMA controllers only move bytes
     // through this interface; the sector buffer belongs to the system device.
+    // READ ADDRESS returns the ID of the next passing sector.
+    // RAW and normalized D88 have no saved ID CRC, so compute CRC16.
+    bool beginReadAddress(unsigned channel,unsigned track,unsigned side,
+                          unsigned drive,unsigned sector=0) {
+        if(channel>1 || drive>3)return false;
+        if(!sector)sector=seekTimed_?typeII_[channel].addressSector:1;
+        transferChannel_=channel;transferDrive_=drive;
+        transferWriting_=false;transferLength_=0;transferPosition_=0;
+        std::size_t off=0;
+        if(!sectorOffset(channel,track,side,sector,drive,off)) {
+            status_=0x10;return false;
+        }
+        const auto len=sectorLength(channel,track,side,sector,drive);
+        BYTE n=0;
+        while(n<3 && (128u<<n)<len)++n;
+        transferBuffer_[0]=BYTE(track);
+        transferBuffer_[1]=BYTE(side);
+        transferBuffer_[2]=BYTE(sector);
+        transferBuffer_[3]=n;
+        std::uint16_t crc=0xffff;
+        const auto add=[&](BYTE c){
+            crc^=std::uint16_t(c)<<8;
+            for(unsigned j=0;j<8;++j)
+                crc=std::uint16_t((crc<<1)^((crc&0x8000)?0x1021:0));
+        };
+        add(0xfe);
+        for(unsigned j=0;j<4;++j)add(transferBuffer_[j]);
+        transferBuffer_[4]=BYTE(crc>>8);transferBuffer_[5]=BYTE(crc);
+        transferLength_=6;status_=0x02;
+        writeRegister(channel?0x32:0x1a,BYTE(sector));
+        return true;
+    }
     bool beginSector(unsigned channel,unsigned track,unsigned side,unsigned sector,
                      unsigned drive,bool writing) {
         transferChannel_=channel;
@@ -773,7 +812,7 @@ private:
     };
     struct TypeIIState {
         bool pending=false;
-        unsigned drive=0;
+        unsigned drive=0,addressSector=0;
         BYTE command=0;
         std::uint64_t remainingNs=0,transferNs=0,overrunNs=0;
         bool transferring=false;

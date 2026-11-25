@@ -6,7 +6,8 @@ int main()
     using C=FloppyDevice::Command;
     for(unsigned value=0;value<256;++value) {
         const auto expected=(value&0xf0)==0x80?C::ReadSector:
-                            (value&0xf0)==0xa0?C::WriteSector:C::Other;
+                            (value&0xf0)==0xa0?C::WriteSector:
+                            (value&0xf0)==0xc0?C::ReadAddress:C::Other;
         if(FloppyDevice::decodeCommand(static_cast<BYTE>(value))!=expected)
             return 1;
     }
@@ -43,5 +44,10 @@ int main()
     if(!fdc.sectorOffset(0,1,0,1,0,seekOffset))return 21;
     fdc.enableSeekTiming(false);
     if(fdc.beginTypeI(0,0,0x10))return 18;
+    if(!fdc.beginReadAddress(0,0,0,0))return 22;
+    if(fdc.transferRead()!=0 || fdc.transferRead()!=0 ||
+       fdc.transferRead()!=1 || fdc.transferRead()!=1)return 23;
+    (void)fdc.transferRead();(void)fdc.transferRead();
+    if(fdc.transferStatus()!=0)return 24;
     return 0;
 }

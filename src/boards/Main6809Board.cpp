@@ -708,7 +708,10 @@ BYTE Main6809Board::readIo(WORD address)
         const BYTE value=floppy_->transferRead();
         ++floppyOffset_;
         if(paced)floppy_->acceptTypeIIByte(0);
-        else if(floppyOffset_==256)floppyStatus_=0;
+        else if(floppy_->transferPosition()==floppy_->transferLength()) {
+            floppyOffset_=256;
+            floppyStatus_=0;
+        }
         return value;
     }
     case 0x06: {
@@ -894,6 +897,33 @@ void Main6809Board::writeIo(WORD address, BYTE value)
             case 0x60: --ioRegisters_[0x31]; break;
             }
             if((value&0x04) && !hasDisk)status=0x80;
+        } else if((value&0xf0)==0xc0) {
+            const unsigned drive=ioRegisters_[0x35]&3;
+            if(!floppy_->beginReadAddress(1,ioRegisters_[0x31],
+                                          ioRegisters_[0x34]&1,drive))
+                status=0x10;
+            else if(!(ioRegisters_[0x51]&4))status=0x03;
+            else {
+                const unsigned ctl=0x51,addrReg=0x44,countReg=0x46,bankReg=0x95;
+            const unsigned count=(unsigned(ioRegisters_[countReg])<<8)|ioRegisters_[countReg+1];
+            const unsigned n=std::min(6u,count);
+            const WORD start=WORD((unsigned(ioRegisters_[addrReg])<<8)|ioRegisters_[addrReg+1]);
+            const unsigned bank=unsigned(ioRegisters_[bankReg]&15)<<16;
+            const bool down=(ioRegisters_[ctl]&8)!=0;
+            for(unsigned j=0;j<n;++j) {
+                const WORD at=WORD(start+(down?-int(j):int(j)));
+                writePhysical(bank|at,floppy_->transferRead());
+            }
+            const WORD next=WORD(start+(down?-int(n):int(n)));
+            ioRegisters_[addrReg]=BYTE(next>>8);ioRegisters_[addrReg+1]=BYTE(next);
+            const unsigned remaining=count-n;
+            ioRegisters_[countReg]=BYTE(remaining>>8);
+            ioRegisters_[countReg+1]=BYTE(remaining);
+            if(!remaining)ioRegisters_[ctl]=BYTE((ioRegisters_[ctl]|0x80)&~0x40);
+            else ioRegisters_[ctl]|=0x40;
+            refreshDmaCompletion();
+                status=floppy_->transferStatus();
+            }
         } else if((value&0xc0)==0x80) {
             ++hdReadAttempts_;
             if(!hasDisk) {
@@ -1099,6 +1129,37 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         floppy_->writeRegister(0x1f,floppy_->registerValue(0x1c));
         floppyTypeIStatus_=(value&0x80)==0;
         switch(FloppyDevice::decodeCommand(value)) {
+        case FloppyDevice::Command::ReadAddress: {
+            const unsigned drive=floppy_->registerValue(0x1d)&3;
+            if(!floppy_->beginReadAddress(0,floppy_->registerValue(0x19),
+                                          floppy_->registerValue(0x1c)&1,drive)) {
+                floppyStatus_=0x10;floppyOffset_=256;
+            } else if(!(ioRegisters_[0x50]&4)) {
+                floppyOffset_=0;floppyStatus_=0x02;
+            } else {
+                const unsigned ctl=0x50,addrReg=0x40,countReg=0x42,bankReg=0x94;
+            const unsigned count=(unsigned(ioRegisters_[countReg])<<8)|ioRegisters_[countReg+1];
+            const unsigned n=std::min(6u,count);
+            const WORD start=WORD((unsigned(ioRegisters_[addrReg])<<8)|ioRegisters_[addrReg+1]);
+            const unsigned bank=unsigned(ioRegisters_[bankReg]&15)<<16;
+            const bool down=(ioRegisters_[ctl]&8)!=0;
+            for(unsigned j=0;j<n;++j) {
+                const WORD at=WORD(start+(down?-int(j):int(j)));
+                writePhysical(bank|at,floppy_->transferRead());
+            }
+            const WORD next=WORD(start+(down?-int(n):int(n)));
+            ioRegisters_[addrReg]=BYTE(next>>8);ioRegisters_[addrReg+1]=BYTE(next);
+            const unsigned remaining=count-n;
+            ioRegisters_[countReg]=BYTE(remaining>>8);
+            ioRegisters_[countReg+1]=BYTE(remaining);
+            if(!remaining)ioRegisters_[ctl]=BYTE((ioRegisters_[ctl]|0x80)&~0x40);
+            else ioRegisters_[ctl]|=0x40;
+            refreshDmaCompletion();
+                floppyStatus_=floppy_->transferStatus();
+                floppyOffset_=256;
+            }
+            break;
+        }
         case FloppyDevice::Command::ReadSector: readFloppySector(); break;
         case FloppyDevice::Command::WriteSector: writeFloppySector(); break;
         default:
@@ -1443,7 +1504,9 @@ void Main6809Board::serviceTimedFloppy()
                 const unsigned sector=channel?ioRegisters_[0x32]:
                                               floppy_->registerValue(0x1a);
                 const bool writing=(command&0x20)!=0;
-                if(floppy_->beginSector(channel,track,side,sector,drive,writing)) {
+                if(((command&0xf0)==0xc0?
+                       floppy_->beginReadAddress(channel,track,side,drive):
+                       floppy_->beginSector(channel,track,side,sector,drive,writing))) {
                     floppy_->startTypeIIBytePacing(channel);
                     floppy_->traceTiming("DRQ start ch="+std::to_string(channel)+
                         " bytes="+std::to_string(floppy_->transferLength()));
