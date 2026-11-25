@@ -30,10 +30,18 @@ int main() {
     cpu->writeCpu(0xfd51,0); // PIO
     cpu->writeCpu(0xfd30,0x80); // READ sector at track 0
     if((cpu->readCpu(0xfd30)&1)==0)return 5;
-    machine.advanceTimeNanoseconds(200000000);
-    if((cpu->readCpu(0xfd30)&2)==0)return 5;
-    for(unsigned i=0;i<256;++i)
-        if(cpu->readCpu(0xfd33)!=0x5a)return 6;
+    // 2HD byte DRQ occurs every 16 us; do not skip 200 ms and
+    // then drain 256 bytes without advancing the FDC clock.
+    unsigned received=0;
+    for(unsigned i=0;i<40000 && received<256;++i) {
+        machine.advanceTimeNanoseconds(8000);
+        if(cpu->readCpu(0xfd30)&0x02) {
+            if(cpu->readCpu(0xfd33)!=0x5a)return 6;
+            ++received;
+        }
+    }
+    if(received!=256)return 5;
+    machine.advanceTimeNanoseconds(20000);
     // Seek-clock progress must not erase a non-SEEK completion IRQ.
     machine.advanceTimeNanoseconds(1000000);
     if((cpu->readCpu(0xfd37)&0x40)==0)return 7;
