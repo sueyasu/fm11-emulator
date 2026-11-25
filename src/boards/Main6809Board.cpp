@@ -617,6 +617,7 @@ BYTE Main6809Board::readIo(WORD address)
         }
         return ioRegisters_[0x33];
     case 0x30: {
+        if(floppy_->trackBusy(1,ioRegisters_[0x35]&3))return 0x01;
         if(floppy_->typeIIBusy(1,ioRegisters_[0x35]&3)) {
             if(floppy_->typeIIBytePaced(1))
                 return BYTE(0x01 | (floppy_->typeIIByteReady(1)?0x02:0) |
@@ -661,6 +662,7 @@ BYTE Main6809Board::readIo(WORD address)
         mainIrqStatus();
         return floppy_->registerValue(0x1f);
     case 0x18: {
+        if(floppy_->trackBusy(0,floppy_->registerValue(0x1d)&3))return 0x01;
         if(floppy_->typeIIBusy(0,floppy_->registerValue(0x1d)&3)) {
             if(floppy_->typeIIBytePaced(0))
                 return BYTE(0x01 | (floppy_->typeIIByteReady(0)?0x02:0) |
@@ -823,6 +825,15 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         break;
     case 0x30: {
         if(!timedTypeIIDispatch_)floppy_->cancelTypeII(1);
+        if((value&0xf0)==0xf0 &&
+           floppy_->beginTrackWrite(1,ioRegisters_[0x35]&3,
+                 floppy_->registerValue(0x31),ioRegisters_[0x34]&1)) {
+            ioRegisters_[0x30]=0x01;
+            ioRegisters_[0x37]=0;
+            setExtendedIrqSource(0x40,false);
+            break;
+        }
+        if((value&0xf0)!=0xf0)floppy_->cancelTrackWrite(1);
         if(floppy_->beginTypeI(1,ioRegisters_[0x35]&3,value)) {
             floppy_->finishTransfer();
             ioRegisters_[0x30]=0x01;ioRegisters_[0x37]=0;
@@ -1002,6 +1013,18 @@ void Main6809Board::writeIo(WORD address, BYTE value)
         break;
     case 0x18:
         if(!timedTypeIIDispatch_)floppy_->cancelTypeII(0);
+        if((value&0xf0)==0xf0 &&
+           floppy_->beginTrackWrite(0,floppy_->registerValue(0x1d)&3,
+                  floppy_->registerValue(0x19),
+                  floppy_->registerValue(0x1c)&1)) {
+            floppyStatus_=0x01;
+            floppyTypeIStatus_=false;
+            floppy_->writeRegister(0x1c,floppy_->registerValue(0x1c)&1);
+            floppy_->writeRegister(0x1f,0);
+            setMainIrqSource(0x08,false);
+            break;
+        }
+        if((value&0xf0)!=0xf0)floppy_->cancelTrackWrite(0);
         if(floppy_->beginTypeI(0,floppy_->registerValue(0x1d)&3,value)) {
             floppy_->finishTransfer();
             floppyOffset_=256;floppyWritePio_=false;
@@ -1303,6 +1326,50 @@ CpuType Main6809Board::Core::type() const
 void Main6809Board::serviceTimedFloppy()
 {
     for(unsigned channel=0;channel<2;++channel) {
+        // Type-III WRITE TRACK: the HD6844 writes one byte on each
+        // rotational DRQ, completing its block before the FDC INTRQ.
+        if(floppy_->trackByteReady(channel)) {
+            const unsigned ctl=channel?0x51:0x50;
+            const unsigned ah=channel?0x44:0x40;
+            const unsigned ch=channel?0x46:0x42;
+            const unsigned bank=channel?0x95:0x94;
+            const unsigned count=(unsigned(ioRegisters_[ch])<<8)|ioRegisters_[ch+1];
+            if((ioRegisters_[ctl]&0x05)==0x05 && count) {
+                const WORD address=WORD((unsigned(ioRegisters_[ah])<<8)|
+                                        ioRegisters_[ah+1]);
+                const std::uint32_t physical=
+                    (std::uint32_t(ioRegisters_[bank]&15)<<16)|address;
+                if(physical<memory_->size() &&
+                   floppy_->takeTrackByte(channel,readPhysical(physical))) {
+                    const WORD next=WORD(address+((ioRegisters_[ctl]&8)?-1:1));
+                    ioRegisters_[ah]=BYTE(next>>8);
+                    ioRegisters_[ah+1]=BYTE(next);
+                    const unsigned remaining=count-1;
+                    ioRegisters_[ch]=BYTE(remaining>>8);
+                    ioRegisters_[ch+1]=BYTE(remaining);
+                    if(!remaining) {
+                        ioRegisters_[ctl]=BYTE((ioRegisters_[ctl]|0x80)&~0x40);
+                        refreshDmaCompletion();
+                    }
+                }
+            }
+        }
+        if(floppy_->trackDone(channel)) {
+            const bool ok=floppy_->finishTrackWrite(channel);
+            const unsigned ctl=channel?0x51:0x50;
+            if(!ok)ioRegisters_[ctl]|=0x40; // incomplete DMA block
+            if(channel==0) {
+                floppyStatus_=ok?0:0x04;
+                floppy_->writeRegister(0x1c,
+                    floppy_->registerValue(0x1c)|0x40);
+                floppy_->writeRegister(0x1f,floppy_->registerValue(0x1c));
+                setMainIrqSource(0x08,true);
+            } else {
+                ioRegisters_[0x30]=ok?0:0x04;
+                ioRegisters_[0x37]=0x40;
+                setExtendedIrqSource(0x40,true);
+            }
+        }
         const unsigned drive=channel?(ioRegisters_[0x35]&3):
                                       (floppy_->registerValue(0x1d)&3);
         BYTE command=0;
