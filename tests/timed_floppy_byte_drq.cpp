@@ -86,6 +86,15 @@ int main() {
     c09->writeCpu(0xfd43,0);
     c09->writeCpu(0xfd50,0x04); // DMA on, FDC -> RAM
     c09->writeCpu(0xfd18,0x80);
+    // With a 3.125-ms ID delay and 32-us data bytes, the first
+    // few bytes have arrived, but the DMA block is not yet complete.
+    // In-progress transfer must NOT assert HD6844 B/R (0x40).
+    machine09.advanceTimeNanoseconds(3200000);
+    const unsigned partial=(unsigned(c09->readCpu(0xfd42))<<8)|c09->readCpu(0xfd43);
+    if(partial==0 || partial>=256 ||
+       (c09->readCpu(0xfd50)&0xc0)!=0 ||
+       (*c09->physicalMemory())[0x2000]!=0x7e)
+        return 32;
     machine09.advanceTimeNanoseconds(200000000);
     if(c09->readCpu(0xfd18)!=0 ||
        (*c09->physicalMemory())[0x2000]!=0x7e ||
@@ -203,6 +212,14 @@ int main() {
     mfmCpu->writeCpu(0xfd47,0x00); // exactly 256 bytes
     mfmCpu->writeCpu(0xfd51,0x04); // HD6844 channel 1, FDC -> RAM
     mfmCpu->writeCpu(0xfd30,0x80);
+    // Channel 1 must also keep B/R clear while bytes remain.
+    mfmDmaMachine.advanceTimeNanoseconds(3000000);
+    const unsigned mfmPartial=(unsigned(mfmCpu->readCpu(0xfd46))<<8)|
+                               mfmCpu->readCpu(0xfd47);
+    if(mfmPartial==0 || mfmPartial>=256 ||
+       (mfmCpu->readCpu(0xfd51)&0xc0)!=0 ||
+       (*mfmCpu->physicalMemory())[0x600]!=1)
+        return 33;
     mfmDmaMachine.advanceTimeNanoseconds(200000000);
     if(mfmCpu->readCpu(0xfd30)!=0 ||
        (mfmCpu->readCpu(0xfd37)&0x40)==0 ||
