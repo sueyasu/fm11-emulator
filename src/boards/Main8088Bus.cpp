@@ -33,12 +33,25 @@ void Main8088Bus::loadFloppy2hd(const std::vector<BYTE>& image)
 
 BYTE Main8088Bus::floppyReadData()
 {
-    return floppy_->transferRead();
+    if(floppy_->seekTimingEnabled() &&
+       floppy_->typeIITransferring(floppy_->transferChannel(),
+           floppy_->registerValue(floppy_->transferChannel()?0x35:0x1d)&3) &&
+       !floppy_->typeIIByteReady(floppy_->transferChannel()))return 0xff;
+    const BYTE value=floppy_->transferRead();
+    if(floppy_->typeIIByteReady(floppy_->transferChannel()))
+        floppy_->acceptTypeIIByte(floppy_->transferChannel());
+    return value;
 }
 
 void Main8088Bus::floppyWriteData(BYTE value)
 {
+    if(floppy_->seekTimingEnabled() &&
+       floppy_->typeIITransferring(floppy_->transferChannel(),
+           floppy_->registerValue(floppy_->transferChannel()?0x35:0x1d)&3) &&
+       !floppy_->typeIIByteReady(floppy_->transferChannel()))return;
     floppy_->transferWrite(value);
+    if(floppy_->typeIIByteReady(floppy_->transferChannel()))
+        floppy_->acceptTypeIIByte(floppy_->transferChannel());
 }
 
 void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
@@ -116,7 +129,10 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
             floppy_->registerValue(channel==0?0x1c:0x34),
             floppy_->registerValue(base+2),drive,writing);
     if(started) {
-        // The 8237 remains the bus master; the system FDC supplies data.
+        // In Stage 2-B2 the byte clock, rather than a single immediate
+        // DMA burst, generates each DRQ. DMA remains owned by the 8237.
+        if(timedTypeIIDispatch_ && floppy_->seekTimingEnabled())
+            return;
         setDmaRequest(channel,true);
         for(unsigned i=0;i<floppy_->transferLength();++i) {
             if(!serviceDma() || floppy_->transferPosition()==floppy_->transferLength())
@@ -547,27 +563,36 @@ bool Main8088Bus::serviceDma()
 
 void Main8088Bus::serviceTimedFloppy()
 {
-    if(!floppy_->typeIIReady())return;
     for(unsigned channel=0;channel<2;++channel) {
         BYTE command=0;
         bool completed=false;
-        // Issue the DMA transfer at sector arrival, but keep FDC
-        // BUSY active until the physical data interval has elapsed.
+        // At sector arrival arm the shared data register and start the
+        // DRQ byte clock; BUSY stays set until the data interval ends.
         while(floppy_->takeTypeIIEvent(channel,command,completed)) {
             if(!completed) {
                 timedTypeIIDispatch_=true;
                 floppyCommand(command,channel);
                 timedTypeIIDispatch_=false;
-                if(floppy_->typeIIBusy(channel,
-                       floppy_->registerValue(channel==0?0x1d:0x35)&3)) {
-                    // The synchronous DMA helper raises the completion
-                    // latch immediately. Keep it deasserted until the
-                    // modeled data interval ends, for BOTH FDC channels.
-                    floppy_->writeRegister(channel==0?0x1f:0x37,0);
-                }
+                if(floppy_->transferStatus()&0x02)
+                    floppy_->startTypeIIBytePacing(channel);
+                floppy_->writeRegister(channel==0?0x1f:0x37,0);
             } else {
+                const BYTE result=floppy_->typeIIResult(channel);
+                if(result)floppy_->transferError(result);
                 floppy_->writeRegister(channel==0?0x1f:0x37,0x40);
             }
+        }
+        // The 8237 sees one DREQ per FDC byte time. A masked channel,
+        // wrong mode or late CPU transfer leaves DRQ pending and will
+        // assert LOST DATA on the following byte boundary.
+        if(floppy_->typeIIByteReady(channel)) {
+            const auto before=floppy_->transferPosition();
+            setDmaRequest(channel,true);
+            serviceDma();
+            setDmaRequest(channel,false);
+            // PIO callers consume DRQ in floppyReadData/floppyWriteData.
+            // serviceDma() acknowledges only if it actually moved a byte.
+            (void)before;
         }
     }
 }
