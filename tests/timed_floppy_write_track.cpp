@@ -117,11 +117,62 @@ static int check8088(unsigned ch,bool masked) {
     }
     return 0;
 }
+
+static int check8088RejectedTrack(unsigned ch,bool seekPending) {
+    Machine machine;
+    auto card=std::make_unique<Main8088Board>(CpuType::I8088);
+    auto* cpu=card.get();
+    machine.addBoard(std::move(card));
+    auto fdc=machine.systemBoard().floppyDevice();
+    if(ch)fdc->load2hd(std::vector<BYTE>(77u*2*26*256,0xe5));
+    else fdc->load2d(std::vector<BYTE>(40u*2*16*256,0xe5));
+    machine.reset();
+    fdc->enableSeekTiming(true);
+    auto& bus=cpu->bus();
+    const unsigned length=ch?10900:6400;
+    const WORD addr=0x2000;
+    const WORD cmd=WORD(ch?0xfd30:0xfd18);
+    const WORD track=WORD(ch?0xfd31:0xfd19);
+    bus.writeIo(0x1c,0);
+    bus.writeIo(WORD(0x10+ch*2),BYTE(addr));
+    bus.writeIo(WORD(0x10+ch*2),BYTE(addr>>8));
+    bus.writeIo(WORD(0x11+ch*2),BYTE(length-1));
+    bus.writeIo(WORD(0x11+ch*2),BYTE((length-1)>>8));
+    bus.writeIo(WORD(0x20+ch),0);
+    bus.writeIo(0x1b,BYTE(0x48+ch));
+    bus.writeIo(0x1a,BYTE(ch));
+    bus.writeIo(WORD(ch?0xfd34:0xfd1c),0);
+    bus.writeIo(WORD(ch?0xfd35:0xfd1d),0);
+    if(seekPending) {
+        // Start physical SEEK while the logical track register remains 0.
+        fdc->writeRegister(ch?0x33:0x1b,1);
+        if(!fdc->beginTypeI(ch,0,0x1b) || !fdc->seekBusy(ch,0))
+            return 1;
+    } else {
+        // Changing the track register does not move the physical head.
+        bus.writeIo(track,1);
+    }
+    const WORD before=bus.dmaChannel(ch).count;
+    bus.writeIo(cmd,0xf0);
+    // Rejected timed WRITE TRACK must report an error immediately, without
+    // starting DMA or silently using the legacy synchronous formatter.
+    if(bus.readIo(cmd)!=0x20 || fdc->trackBusy(ch,0) ||
+       bus.dmaChannel(ch).count!=before || fdc->seekBusy(ch,0))
+        return 2;
+    machine.advanceTimeNanoseconds(300000000);
+    if(bus.readIo(cmd)!=0x20 || bus.dmaChannel(ch).count!=before ||
+       (ch?fdc->raw2hd()[0]:fdc->raw2d()[0])!=0xe5)
+        return 3;
+    return 0;
+}
+
 int main() {
     for(unsigned ch=0;ch<2;++ch) {
         if(int r=check6809(ch))return 10+ch*10+r;
         if(int r=check8088(ch,false))return 30+ch*10+r;
         if(int r=check8088(ch,true))return 50+ch*10+r;
+        if(int r=check8088RejectedTrack(ch,false))return 70+ch*10+r;
+        if(int r=check8088RejectedTrack(ch,true))return 90+ch*10+r;
     }
     return 0;
 }

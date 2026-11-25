@@ -52,7 +52,6 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
         floppy_->finishTransfer();
         const unsigned selected=floppy_->registerValue(channel==0?0x1d:0x35)&3;
         if(floppy_->beginTypeI(channel,selected,command))return;
-        floppy_->cancelSeek(channel,selected);
         if((command&0xf0)==0xf0) {
             const unsigned drive=floppy_->registerValue(channel==0?0x1d:0x35)&3;
             const unsigned track=floppy_->registerValue(base+1);
@@ -65,6 +64,7 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
                     // A timed WRITE TRACK must never fall back to an
                     // instantaneous DMA/format operation on seek or media
                     // errors. Report the failure through the FDC status.
+                    floppy_->cancelSeek(channel,selected);
                     floppy_->transferError(0x20);
                     floppy_->writeRegister(channel==0?0x1f:0x37,0x40);
                 }
@@ -91,6 +91,7 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
             if(channel==0)floppy_->writeRegister(0x1f,0x40);
             return;
         }
+        floppy_->cancelSeek(channel,selected);
         // Mini-FDC type I commands update the track register. The
         // standard 8088 ROM uses RESTORE (0Ah) and SEEK (1Ah) before
         // reading its two-sector disk IPL.

@@ -2,8 +2,8 @@
 
 The 2D and 2HD FDCs now share a small per-drive mechanical head state.
 `[floppy] timing = fast` remains the default, preserving pre-existing
-immediate transfer and boot behavior. `timing = timed` opts in to a first
-mechanical approximation, not strict WD179x conformance.
+immediate transfer and boot behavior. `timing = timed` enables the
+Stage 2-B2 mechanical and byte-DRQ model, not strict WD179x conformance.
 
 ## Initial Type-I stage (retained)
 
@@ -23,15 +23,14 @@ mechanical approximation, not strict WD179x conformance.
   physical track. A logical track-register write alone cannot reposition
   the head.
 
-## Limitations of the initial Type-I stage
+## Type-I history and remaining limits
 
-The original implementation was only a **first** timed-mode change, not a complete FDC rewrite.
-FDC status differences between the 2D and 2HD controller adapters remain,
-as do approximations in interrupt publication and RESET behavior.
-READ/WRITE command timing, disk rotation, INDEX pulses, DMA byte pacing,
-Lost Data, seek verification against on-media IDs, and motor spin-up
-were **not modeled by the initial Type-I stage**. See Stage 2-A/B below
-for the subsequently added rotation, INDEX and sector command delay. The current fast mode is the regression baseline.
+The initial Type-I implementation covered mechanical SEEK but not
+rotation, INDEX, Type-II timing or byte-level DRQ. These were added
+subsequently (see below). FDC status differences between the 2D and
+2HD adapters, interrupt/RESET approximations, on-media seek verification
+and motor spin-up remain limitations. `fast` remains the compatibility
+baseline.
 
 ## Configuration and validation
 
@@ -52,7 +51,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-## Stage 2-A/B: rotational timing and Type-II commands
+## Stage 2-A/B1: rotational timing and Type-II commands (historical baseline)
 
 With `[floppy] timing=timed`, each physical drive now tracks its spindle
 phase in CPU-derived virtual nanoseconds. Nominal rates are 300 rpm (2D)
@@ -61,26 +60,17 @@ than the number of polling reads; the two FDC channels share a common
 virtual timebase while each drive retains its own phase.
 
 READ/WRITE SECTOR enters BUSY until the requested sector arrives.
-At ID arrival, the adapter starts the existing atomic DMA or PIO transfer;
-the modeled data-transfer interval continues to elapse before the FDC
-completes the command and publishes its final interrupt. In PIO mode,
-DRQ becomes visible at ID arrival, while DMA terminal count can precede
-FDC completion. The first-stage transfer-rate approximations are
-250 kbps (2D) and 500 kbps (2HD). Sector IDs are provisionally uniformly distributed around the
+In the B1 baseline, DMA/PIO transfer was atomic at sector arrival.
+B2 replaces that with individual DRQ deadlines (described below).
+Nominal transfer-rate approximations are 250 kbps (2D) and 500 kbps
+(2HD). Sector IDs are provisionally uniformly distributed around the
 track, with a small lead-in offset. Absent IDs or mismatched physical
 cylinders report RNF after five revolutions rather than immediately.
-Both timing events are serviced on the owning CPU thread, and new commands
-cancel a pending Type-II request.
 
-**Known limitation / Stage 2-C boundary:** the actual DMA/PIO byte
-transfer remains atomic after the timed interval; it is *not* paced by
-individual DRQ assertions. Therefore this implementation does not yet
-reproduce Lost Data, the separate DMA terminal-count and FDC completion
-edges, physical gap/CRC spacing, or the exact temporal placement of
-individual bytes. Full WRITE TRACK/READ TRACK, READ ADDRESS, Force
-Interrupt modes, motor spin-up and media-error timing remain separate
-future work. These approximations are intended for compatibility testing,
-not cycle-accurate WD179x emulation.
+The current B2 implementation retains approximations in physical
+gap/CRC spacing, full READ TRACK and READ ADDRESS, Force Interrupt
+modes, motor spin-up and media-error timing. It is not cycle-accurate
+WD179x emulation.
 
 The `fast` mode bypasses this new scheduling and keeps the existing
 immediate transfer behavior. `--speed` is not forcibly changed: both
@@ -102,7 +92,9 @@ FDC completion/INTRQ occurs only at the end of the revolution.
 The backing RAW/D88 track is updated only if every DRQ was serviced
 and the stream parses successfully; missed bytes (e.g. a masked
 DMA channel) report an error without committing a partial track.
-`--trace-fdc` reports WRITE TRACK begin/completion and bytes served.
+A timed WRITE TRACK rejected by a mismatched physical head position or
+ongoing SEEK reports an FDC error and never falls back to synchronous
+DMA. `--trace-fdc` reports WRITE TRACK begin/completion and bytes served.
 
 Untimed `fast` mode retains its prior immediate WRITE TRACK behavior.
 The rotational model does not yet simulate individual index/ID gaps,
@@ -110,7 +102,8 @@ CRC timing or mechanical track-to-track stepping beyond existing
 seek timing.
 
 CTest `timed_floppy_write_track` checks both CPU families and both
-FDC channels, partial progress, completion and masked-DMA failure.
+FDC channels, partial progress, completion, masked-DMA failure, and
+8088 adapter rejection for mismatched head position and pending SEEK.
 
 ## Stage 2-B2 diagnostic retry branch
 
@@ -126,8 +119,10 @@ consume each byte while DRQ is asserted: reading after a full
 revolution correctly fails under B2.
 
 Run `ctest --test-dir build --output-on-failure` first, then boot
-`fm11-diag` with both 2D and 2HD diagnostic ROMs. Do not merge
-into main until the test suite and both diagnostic OS boots pass.
+`fm11-diag` with both 2D and 2HD diagnostic ROMs. In addition,
+regress 2D/2HD NitrOS-9 L1/L2, CP/M-86 and CP/M-80 where available
+before integration into main. Boot and FORMAT have been exercised
+manually, but the final post-commit full CTest remains a separate check.
 
 ## Opt-in sector-arrival diagnostics
 
