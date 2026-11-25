@@ -70,9 +70,18 @@ int main() {
     // DRQ must appear before the 4.096 ms payload interval finishes.
     machine.advanceTimeNanoseconds(2000000);
     if((cpu->readCpu(0xfd30)&3)!=3)return 27;
-    machine.advanceTimeNanoseconds(200000000);
-    if((cpu->readCpu(0xfd30)&2)==0)return 18;
-    if(cpu->readCpu(0xfd33)!=0x6c)return 19;
+    // B2 PIO: read bytes during their DRQ windows instead of letting
+    // the whole sector elapse without any service (which is LOST DATA).
+    unsigned received=0;
+    for(unsigned tick=0;tick<40000 && received<256;++tick) {
+        machine.advanceTimeNanoseconds(8000);
+        if(cpu->readCpu(0xfd30)&2) {
+            if(cpu->readCpu(0xfd33)!=0x6c)return 19;
+            ++received;
+        }
+    }
+    if(received!=256)return 18;
+    machine.advanceTimeNanoseconds(16000);
     // An absent ID does not return RNF before five revolutions.
     cpu->writeCpu(0xfd32,27);
     cpu->writeCpu(0xfd30,0x80);
@@ -114,8 +123,10 @@ int main() {
     machine86.advanceTimeNanoseconds(3000000);
     if(bus.readRam(0x2000)==0x73 || (bus.readIo(0xfd18)&1)==0)return 28;
     machine86.advanceTimeNanoseconds(1000000);
-    // 8237 terminal count is now asserted, but FDC is still BUSY.
-    if(bus.readRam(0x2000)!=0x73 || (bus.readIo(0xfd18)&1)==0)return 29;
+    // Byte-paced 8237 has begun the sector but cannot reach terminal
+    // count until all 256 DRQ slots (8.192 ms) have elapsed.
+    if(bus.readRam(0x2000)!=0x73 || (bus.readIo(0xfd18)&1)==0 ||
+       (bus.readIo(0x18)&1)!=0)return 29;
     machine86.advanceTimeNanoseconds(200000000);
     if(bus.readRam(0x2000)!=0x73 || bus.readIo(0xfd18)!=0)return 21;
     // WRITE SECTOR must not modify backing media until timed completion.
