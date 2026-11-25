@@ -143,28 +143,43 @@ void Main8088Bus::floppyCommand(BYTE command,unsigned channel)
     // Bit 7 of FD1D controls motor/drive selection; only the bottom
     // two bits identify the physical drive (as in the reference FM-11).
     const unsigned drive=floppy_->registerValue(channel==0?0x1d:0x35)&3;
-    const bool started=address?
-        floppy_->beginReadAddress(channel,floppy_->registerValue(base+1),
-            floppy_->registerValue(channel==0?0x1c:0x34)&1,drive):
-        floppy_->beginSector(channel,floppy_->registerValue(base+1),
-            floppy_->registerValue(channel==0?0x1c:0x34),
-            floppy_->registerValue(base+2),drive,writing);
-    if(started) {
+    const bool multi=(command&0xf0)==0x90 || (command&0xf0)==0xb0;
+    const unsigned track=floppy_->registerValue(base+1);
+    const unsigned side=floppy_->registerValue(channel==0?0x1c:0x34)&1;
+    unsigned sector=floppy_->registerValue(base+2);
+    // In fast mode a multi-sector command keeps the FDC active through
+    // successive sector IDs while the 8237 still has DMA capacity.
+    for(;;) {
+        const bool started=address?
+            floppy_->beginReadAddress(channel,track,side,drive):
+            floppy_->beginSector(channel,track,side,sector,drive,writing);
+        if(!started)break;
         if(timedTypeIIDispatch_) {
-            // B2: sector arrival arms the data field, not an atomic DMA
-            // burst. The machine clock services exactly one byte per DRQ.
             floppy_->startTypeIIBytePacing(channel);
             return;
         }
-        // Fast mode retains the legacy atomic sector transfer.
         setDmaRequest(channel,true);
-        for(unsigned i=0;i<floppy_->transferLength();++i) {
-            if(!serviceDma() || floppy_->transferPosition()==floppy_->transferLength())
-                break;
+        for(unsigned n=0;n<floppy_->transferLength();++n) {
+            if(!serviceDma() ||
+               floppy_->transferPosition()==floppy_->transferLength())break;
         }
         setDmaRequest(channel,false);
-        if(floppy_->transferPosition()!=floppy_->transferLength())
-            floppy_->transferError();
+        if(floppy_->transferPosition()!=floppy_->transferLength()) {
+            // Preserve legacy short-DMA handling for single-sector
+            // commands. A multi-sector command may legitimately stop
+            // at DMA terminal count within the final sector.
+            if(!multi || dmaChannels_[channel].count!=0xffff)
+                floppy_->transferError();
+            break;
+        }
+        if(!multi || dmaChannels_[channel].count==0xffff ||
+           (dmaMask_&(1u<<channel))!=0)break;
+        const unsigned nextSector=sector+1;
+        std::size_t nextOffset=0;
+        if(!floppy_->sectorOffset(channel,track,side,nextSector,drive,
+                                 nextOffset))break;
+        sector=nextSector;
+        floppy_->writeRegister(base+2,BYTE(sector));
     }
     // The source emulator completes synchronous 8088 FDC commands by
     // setting FD1F bit 6, including failed sector reads.
