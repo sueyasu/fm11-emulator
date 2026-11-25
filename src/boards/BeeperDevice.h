@@ -17,8 +17,30 @@ public:
         std::lock_guard<std::mutex> g(mutex_);
         speaker_=active_=false;
         pulseFrames_=0;
+        pulseRemainingNs_=0;
+        pulsePending_=false;
         sampleRate_=0;
         phase_=0;
+    }
+    // Host PCM frames drive timing when an output device exists; otherwise
+    // virtual CPU time advances a pending one-shot (also in headless).
+    void setAudioDriven(bool enabled) {
+        std::lock_guard<std::mutex> g(mutex_);
+        audioDriven_=enabled;
+    }
+    bool audioDriven() const {
+        std::lock_guard<std::mutex> g(mutex_);
+        return audioDriven_;
+    }
+    void advanceNanoseconds(std::uint64_t ns) {
+        std::lock_guard<std::mutex> g(mutex_);
+        if(audioDriven_ || !active_ || !pulseRemainingNs_)return;
+        if(ns>=pulseRemainingNs_) {
+            pulseRemainingNs_=0;
+            pulseFrames_=0;
+            pulsePending_=false;
+            active_=false;
+        } else pulseRemainingNs_-=ns;
     }
     void writeControl(std::uint8_t value) {
         std::lock_guard<std::mutex> g(mutex_);
@@ -26,8 +48,11 @@ public:
         if(!speaker_) {
             active_=false;
             pulseFrames_=0;
+            pulseRemainingNs_=0;
+            pulsePending_=false;
         } else if(value&0x40u) {
             active_=true;
+            pulseRemainingNs_=std::uint64_t(kPulseMilliseconds)*1000000ULL;
             // The remaining one-shot duration is calculated at render rate
             // so it stays 205 ms of audible time at accelerated CPU speeds.
             pulseFrames_=sampleRate_?
@@ -36,6 +61,7 @@ public:
         } else {
             pulsePending_=false;
             pulseFrames_=0;
+            pulseRemainingNs_=0;
             active_=(value&0x80u)!=0;
         }
     }
@@ -74,6 +100,8 @@ public:
 private:
     mutable std::mutex mutex_;
     bool speaker_=false,active_=false,pulsePending_=false;
+    bool audioDriven_=false;
+    std::uint64_t pulseRemainingNs_=0;
     unsigned sampleRate_=0;
     std::uint64_t pulseFrames_=0;
     unsigned phase_=0;

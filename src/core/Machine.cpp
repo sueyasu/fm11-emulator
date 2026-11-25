@@ -364,6 +364,7 @@ void Machine::reset()
     serialFractionHz_=0;
     floppyFraction_=floppyClockHz_=0;
     hddFraction_=hddClockHz_=0;
+    beeperFraction_=beeperClockHz_=0;
     deterministicDisplay_.reset();
     synchronizeFd05Selection();
     if(wasRealtime)startRealtimePtm();
@@ -375,6 +376,7 @@ void Machine::advanceTimeNanoseconds(std::uint64_t nanoseconds)
     mainBoard_->advanceTimeNanoseconds(nanoseconds);
     advanceTimedFloppyNanoseconds(nanoseconds);
     mainBoard_->hddDevice()->advanceNanoseconds(nanoseconds);
+    mainBoard_->beeperDevice()->advanceNanoseconds(nanoseconds);
     if(mainBoard_->hddDevice()->timingEnabled())
         for(auto* cpu:main6809Boards_)
             cpu->setExtendedIrqSource(
@@ -433,6 +435,17 @@ void Machine::advanceSerialCpuCycles(std::uint64_t cycles,std::uint64_t hz)
     serialNanosecondFraction_=numerator%hz;
     mainBoard_->usartDevice()->advanceNanoseconds(nanos);
     publishSerialIrq();
+}
+
+void Machine::advanceBeeperCpuCycles(std::uint64_t cycles,std::uint64_t hz)
+{
+    const auto sound=mainBoard_->beeperDevice();
+    if(sound->audioDriven() || !cycles || !hz)return;
+    if(beeperClockHz_!=hz){beeperClockHz_=hz;beeperFraction_=0;}
+    constexpr std::uint64_t billion=1000000000ULL;
+    const auto remainder=(cycles%hz)*billion+beeperFraction_;
+    sound->advanceNanoseconds((cycles/hz)*billion+remainder/hz);
+    beeperFraction_=remainder%hz;
 }
 
 void Machine::advanceHddCpuCycles(std::uint64_t cycles,std::uint64_t hz)
@@ -548,6 +561,7 @@ void Machine::executeOne(bool ptmIrqSyncedBefore)
             advanceSerialCpuCycles(lastExecutionCycles_,hz);
             advanceFloppyCpuCycles(lastExecutionCycles_,hz);
             advanceHddCpuCycles(lastExecutionCycles_,hz);
+            advanceBeeperCpuCycles(lastExecutionCycles_,hz);
             if(!displayCpuThreadEnabled())
                 deterministicDisplay_.advanceCpuCycles(lastExecutionCycles_,hz);
             // SDL samples the real-time PTM immediately before the
@@ -568,6 +582,7 @@ void Machine::executeOne(bool ptmIrqSyncedBefore)
             advanceSerialCpuCycles(lastExecutionCycles_,hz);
             advanceFloppyCpuCycles(lastExecutionCycles_,hz);
             advanceHddCpuCycles(lastExecutionCycles_,hz);
+            advanceBeeperCpuCycles(lastExecutionCycles_,hz);
             if(!displayCpuThreadEnabled())
                 deterministicDisplay_.advanceCpuCycles(lastExecutionCycles_,hz);
             for(auto* cpu6809:main6809Boards_)

@@ -30,12 +30,15 @@ public:
             return;
         }
         sampleRate_=static_cast<unsigned>(obtained.freq);
+        device_->setAudioDriven(true);
         SDL_PauseAudioDevice(id_,0);
     }
     ~SdlBeeper() {
         if(id_)SDL_CloseAudioDevice(id_);
+        device_->setAudioDriven(false);
         if(audioInitialized_)SDL_QuitSubSystem(SDL_INIT_AUDIO);
     }
+    bool available() const {return id_!=0;}
     SdlBeeper(const SdlBeeper&)=delete;
     SdlBeeper& operator=(const SdlBeeper&)=delete;
 private:

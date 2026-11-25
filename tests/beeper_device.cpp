@@ -53,5 +53,27 @@ int main() {
     if(!sound->active())return 12;
     m.reset();
     if(sound->active() || sound->speakerEnabled())return 13;
+    // A headless machine without SDL expires the 205ms beep on CPU time.
+    cpu->writeCpu(0xfd03,0x41);
+    m.advanceTimeNanoseconds(204999999);
+    if(!sound->active())return 14;
+    m.advanceTimeNanoseconds(1);
+    if(sound->active())return 15;
+    // Reset clears an as-yet-unrendered one-shot latch.
+    cpu->writeCpu(0xfd03,0x41);
+    m.reset();
+    sound->renderMono(samples.data(),samples.size(),48000);
+    if(sound->active() ||
+       std::any_of(samples.begin(),samples.end(),[](auto v){return v!=0;}))
+        return 16;
+    // SDL audio owns the countdown and is not double-clocked by CPU time.
+    sound->setAudioDriven(true);
+    cpu->writeCpu(0xfd03,0x41);
+    m.advanceTimeNanoseconds(1000000000);
+    if(!sound->active())return 17;
+    std::vector<std::int16_t> pcm(9840);
+    sound->renderMono(pcm.data(),pcm.size(),48000);
+    if(sound->active())return 18;
+    sound->setAudioDriven(false);
     return 0;
 }

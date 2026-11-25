@@ -85,10 +85,11 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-fdc] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software] [--scanlines]\n"
+    std::cout<<"usage: fm11-sdl [--beep-test] [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--main-rom FILE] [--trace-boot] [--trace-fdc] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software] [--scanlines]\n"
              <<"  ROM defaults to [display_cpu].rom (external/roms/display6809.bin); CPU ROM paths may be set in the config file\n"
              <<"  Initial window height: [display].height=200|400 (default 400); --high forces 400\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
+             <<"  --beep-test: audible 205ms pulse, pause, continuous tone, then stop.\n"
              <<"  --speed N: main CPU multiplier (default 10, 1=real-time);\n"
              <<"             display CPU uses the same multiplier, capped at 8 MHz.\n"
              <<"             0=unlimited main CPU, 8 MHz display CPU; PTM stays real-time.\n"
@@ -104,6 +105,7 @@ int main(int argc,char** argv) {
         unsigned speed=10;
         std::string rendererMode="auto";
         bool scanlines=false;
+        bool beepTest=false;
         unsigned floppyDrive=0;
         unsigned bootDip=0x9f;
         bool bootDipOverridden=false;
@@ -114,6 +116,7 @@ int main(int argc,char** argv) {
             if(arg=="--help"){usage();return 0;}
             if(arg=="--high"){high=true;highOverridden=true;continue;}
             if(arg=="--scanlines"){scanlines=true;continue;}
+            if(arg=="--beep-test"){beepTest=true;continue;}
              if(arg=="--trace-cpm80"){traceCpm80=true;continue;}
             if(arg=="--cpu-speed"){cpuSpeed=true;continue;}
             if(arg=="--test-pattern"){testPattern=true;continue;}
@@ -371,6 +374,20 @@ int main(int argc,char** argv) {
         // Audio device owns an SDL callback but never touches guest CPU
         // state. A missing host audio device must not block OS boot.
         SdlBeeper audio(machine.systemBoard().beeperDevice());
+        if(beepTest) {
+            if(!audio.available())
+                throw std::runtime_error("--beep-test requires an SDL audio output device");
+            std::cout<<"Beeper self-test: pulse, pause, continuous tone\n"<<std::flush;
+            auto& bus=machine.systemBoard();
+            bus.writeIo(0xfd03,0x41);
+            SDL_Delay(270);
+            bus.writeIo(0xfd03,0);
+            SDL_Delay(120);
+            bus.writeIo(0xfd03,0x81);
+            SDL_Delay(350);
+            bus.writeIo(0xfd03,0);
+            std::cout<<"Beeper self-test finished\n"<<std::flush;
+        }
         // CPU worker alone owns the host endpoint and 8251A queues.
         std::unique_ptr<SerialBackend> serial;
         if(mainBoard || main8088Enabled) {

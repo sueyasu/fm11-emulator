@@ -189,6 +189,7 @@ private:
     void updateZ80MasterMapping();
     void advanceFloppyCpuCycles(std::uint64_t cycles,std::uint64_t hz);
     void advanceHddCpuCycles(std::uint64_t cycles,std::uint64_t hz);
+    void advanceBeeperCpuCycles(std::uint64_t cycles,std::uint64_t hz);
     void advanceTimedFloppyNanoseconds(std::uint64_t ns);
     void serviceTimedFloppy();
     void advanceSerialCpuCycles(std::uint64_t cycles,std::uint64_t hz);
@@ -212,6 +213,7 @@ private:
     std::uint64_t serialNanosecondFraction_=0;
     std::uint64_t serialFractionHz_=0;
     std::uint64_t floppyFraction_=0,floppyClockHz_=0;
+    std::uint64_t beeperFraction_=0,beeperClockHz_=0;
     std::uint64_t clock8088Hz_ = 0;
     std::uint64_t clockZ80Hz_ = 4000000;
     std::uint64_t displayCpuClockHz_ = 0;
