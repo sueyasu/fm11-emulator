@@ -5,8 +5,10 @@ int main()
 {
     using C=FloppyDevice::Command;
     for(unsigned value=0;value<256;++value) {
-        const auto expected=(value&0xf0)==0x80?C::ReadSector:
-                            (value&0xf0)==0xa0?C::WriteSector:
+        const auto expected=((value&0xf0)==0x80 ||
+                             (value&0xf0)==0x90)?C::ReadSector:
+                            ((value&0xf0)==0xa0 ||
+                             (value&0xf0)==0xb0)?C::WriteSector:
                             (value&0xf0)==0xc0?C::ReadAddress:C::Other;
         if(FloppyDevice::decodeCommand(static_cast<BYTE>(value))!=expected)
             return 1;
