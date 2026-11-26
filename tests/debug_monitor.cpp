@@ -31,6 +31,44 @@ int main() {
     std::string content((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());
     std::remove("monitor-test.log");
     if(content.find("regs")==std::string::npos || content.find("PC=")==std::string::npos)return 12;
+    // Logging is off by default, and repeated stop/start operations are safe.
+    const std::string logPath="monitor-lifecycle-test.log";
+    std::remove(logPath.c_str());
+    if(mon.execute("log status",paused)!="Logging: off\n")return 22;
+    mon.recordInput("help"); // must not create a log before start
+    if(std::ifstream(logPath).good())return 23;
+    if(mon.execute("log stop",paused).find("not active")==std::string::npos)return 24;
+    if(mon.execute("log start "+logPath,paused).find("started")==std::string::npos)return 25;
+    if(mon.execute("log status",paused).find(logPath)==std::string::npos)return 26;
+    if(mon.execute("log start "+logPath,paused).find("Already logging")==std::string::npos)return 27;
+    mon.recordInput("info cpus");
+    mon.emit(mon.execute("info cpus",paused));
+    if(mon.execute("log stop",paused).find("stopped")==std::string::npos)return 28;
+    if(mon.execute("log status",paused)!="Logging: off\n")return 29;
+    {
+        std::ifstream logged(logPath);
+        const std::string transcript((std::istreambuf_iterator<char>(logged)),
+                                      std::istreambuf_iterator<char>());
+        if(transcript.find("info cpus")==std::string::npos ||
+           transcript.find("main6809")==std::string::npos ||
+           transcript.find("Logging stopped")==std::string::npos)return 30;
+    }
+    if(mon.execute("log start "+logPath,paused).find("started")==std::string::npos)return 31;
+    mon.recordInput("help");
+    mon.emit(mon.execute("help",paused));
+    if(mon.execute("log stop",paused).find("stopped")==std::string::npos)return 32;
+    {
+        std::ifstream logged(logPath);
+        const std::string transcript((std::istreambuf_iterator<char>(logged)),
+                                      std::istreambuf_iterator<char>());
+        if(transcript.find("info cpus")==std::string::npos ||
+           transcript.find("help")==std::string::npos)return 33;
+    }
+    std::remove(logPath.c_str());
+    // Dump length and step count use decimal by default, address uses hex.
+    if(mon.execute("x 10 10",paused).find("0010:")==std::string::npos)return 34;
+    if(mon.execute("x 10 0x10",paused).find("0010:")==std::string::npos)return 35;
+    if(mon.execute("step 0",paused).find("1..10000")==std::string::npos)return 36;
     // Selection is debugger-only; the guest CPU owner remains unchanged.
     machine.addBoard(std::make_unique<Main8088Board>(CpuType::NECV20));
     machine.addBoard(std::make_unique<MainZ80Board>());
