@@ -40,7 +40,7 @@ for listing entries; atomic bitmaps allow the execution workers to read them
 safely without blocking. Main8088 breakpoints
 are matched against the 20-bit physical CS:IP address.
 
-Stage 3-B-1: external MAME `unidasm` integration
+Stage 3-B-1: external MAME `unidasm` integration (complete)
 
 Obtain the MAME `unidasm` executable for Stage 3-B-1. **Ubuntu 24.04 LTS
 `mame-tools` does not include `unidasm`** (confirmed against the Ubuntu
@@ -85,10 +85,46 @@ CPU mapping (MAME's architecture identifiers):
   original 8088 is not verified by this general-purpose mode)
 - V20 native mode: `nec`
 
-**V20 8080 emulation mode is not yet supported in Stage 3-B-1.** The
-monitor explicitly reports this condition instead of displaying native
-NEC instructions. Stage 3-B-2 will enable it using a small patch to
-MAME's `unidasm` mode selection (not to the FM-11 CPU core).
+Stage 3-B-2: V20 8080 mode integration
+
+MAME's `nec_disassembler` already implements native mode and 8080
+emulation mode (including V20-specific `CALLN` and `RETEM`). The
+`tools/mame/unidasm-nec80.patch` patch changes only MAME's
+`src/tools/unidasm.cpp`: it registers a new `nec80` architecture
+that selects MAME's existing 8080 decoder. No MAME opcode tables or
+emulator CPU code are changed.
+
+For an existing MAME source checkout, with the FM-11 checkout in
+`/path/to/fm11-emulator`:
+
+```sh
+cd /path/to/mame
+git apply --check /path/to/fm11-emulator/tools/mame/unidasm-nec80.patch
+git apply /path/to/fm11-emulator/tools/mame/unidasm-nec80.patch
+make TOOLS=1 EMULATOR=0 -j"$(nproc)"
+# The executable location depends on the MAME build setup:
+export FM11_UNIDASM="/absolute/path/to/patched/unidasm"
+```
+
+The patch was prepared against the upstream MAME `src/tools/unidasm.cpp`
+structure. If `git apply --check` fails on a different source version,
+do not force it: inspect the mode configuration and architecture table
+before adapting the two small hunks.
+
+You can smoke-test the two NEC modes:
+
+```sh
+printf '\\220' | "$FM11_UNIDASM" - -arch nec -basepc 100 -count 1
+printf '\\000' | "$FM11_UNIDASM" - -arch nec80 -basepc 100 -count 1
+```
+
+The monitor automatically selects `v20`/MAME `nec` or
+`v20_8080`/MAME `nec80` using the V20 CPU's `emulation8080()`
+state. A stock unpatched `unidasm` remains supported for all
+Stage 3-B-1 CPU modes, but will explicitly report the need for a
+patched binary if an 8080-mode V20 disassembly is requested.
+`FM11_UNIDASM` must point at the rebuilt version when using
+`nec80`; no separate CPU-mode selection command is necessary.
 
 The adapter converts the monitor's instruction count into a bounded
 byte-span for `unidasm -count`, because MAME's `-count` argument counts
