@@ -478,6 +478,21 @@ BYTE Main6809Board::readCpu(WORD address)
     return ramPagePointers_[address >> 12][address & (kMmrPageSize-1)];
 }
 
+BYTE Main6809Board::peekCpu(WORD address) const
+{
+    if(address>=0x5000 && address<=0x5fff && (mmrControl_[3]&1u)==0)
+        return bootRom_[address&0x0fff];
+    if(address>=0x7c00 && address<=0x7fff && (mmrControl_[3]&0x40u)!=0)
+        return readPhysical(windowPhysicalAddress(address));
+    if(address>=0xfc00) {
+        if(address>=0xfc80 && address<=0xfcff && mainBoard_)
+            return mainBoard_->displaySubsystem().peekMemory(WORD(0x9f80+address-0xfc80));
+        if((address&0xff00)==0xfd00)return 0xff; // I/O is deliberately not read
+        return onboardRam_[address&0x0fff];
+    }
+    return ramPagePointers_[address>>12][address&(kMmrPageSize-1)];
+}
+
 void Main6809Board::writeCpu(WORD address, BYTE value)
 {
     // Writes are ignored while the boot ROM is visible.

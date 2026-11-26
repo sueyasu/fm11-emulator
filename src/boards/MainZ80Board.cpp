@@ -21,6 +21,16 @@ BYTE MainZ80Board::readMemory(WORD address) const
     return (*memory_)[physical%installedRamBytes_];
 }
 
+BYTE MainZ80Board::peekMemory(WORD address) const
+{
+    if(address>=0xfc00) {
+        if(address>=0xfc80 && address<=0xfcff && mainBoard_)
+            return mainBoard_->displaySubsystem().peekMemory(WORD(0x9f80+address-0xfc80));
+        return 0xff;
+    }
+    return (*memory_)[physicalAddress(address)%installedRamBytes_];
+}
+
 void MainZ80Board::writeMemory(WORD address,BYTE value)
 {
     if(address>=0xfc00) {writeIo(address,value);return;}

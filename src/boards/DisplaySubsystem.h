@@ -250,6 +250,22 @@ public:
     std::uint64_t sharedWriteRevision() const {
         return sharedWriteRevision_.load(std::memory_order_relaxed);
     }
+    // Side-effect-free display address-space inspection. I/O is not sampled.
+    BYTE peekMemory(std::uint16_t address) const {
+        if(address<0x8000) {
+            if(!gvuEnabled_)return vram_[vramWindow_*kVramSize+address];
+            return vram_[gvuPlane_*0x10000+graphicsAddress(address)];
+        }
+        if(address<0xa000) {
+            if(address>=0x9f80) {
+                std::lock_guard<std::mutex> lock(sharedRamMutex_);
+                return ram_[address-0x8000];
+            }
+            return ram_[address-0x8000];
+        }
+        if(address>=0xb000)return rom_[address-0xb000];
+        return 0xff;
+    }
     BYTE readMemory(std::uint16_t address) const {
         if(address<0x8000) {
             if(!gvuEnabled_)return vram_[vramWindow_*kVramSize+address];

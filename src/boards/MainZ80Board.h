@@ -33,6 +33,7 @@ public:
     }
     std::size_t ramKiB() const {return installedRamBytes_/1024;}
     BYTE readMemory(WORD address) const;
+    BYTE peekMemory(WORD address) const;
     void writeMemory(WORD address,BYTE value);
     BYTE readIo(WORD address) const;
     void writeIo(WORD address,BYTE value);

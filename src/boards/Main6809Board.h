@@ -106,6 +106,8 @@ public:
     void advanceCpuCycles(std::uint64_t cycles);
 
     BYTE readCpu(WORD address);
+    // Debugger-only read: never poll or acknowledge memory-mapped I/O.
+    BYTE peekCpu(WORD address) const;
     void writeCpu(WORD address, BYTE value);
 
     std::shared_ptr<std::vector<BYTE>> physicalMemory() const {return memory_;}
