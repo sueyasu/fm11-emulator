@@ -5,8 +5,9 @@
 #include "MainZ80Board.h"
 #include "Sim09.h"
 #include "SimZ80.h"
-#include "MonitorDisassembler.h"
 #include <fstream>
+#include <cstdio>
+#include <cstdlib>
 #include <atomic>
 #include <mutex>
 #include <set>
@@ -217,7 +218,7 @@ public:
                 // Print the instruction at the new PC after a step.
                 // This is inspection only and cannot advance CPU state.
                 const auto result=registers();
-                return result+disassemble(disArchitecture(),disPc(),1);
+                return result+externalDisassemble(disArchitecture(),disPc(),1);
             }
             if(command=="dis" || command=="u") {
                 if(args.size()>3)return "Usage: dis [HEXADDR] [COUNT]\n";
@@ -227,7 +228,7 @@ public:
                 if(amount<1 || amount>64)return "Instruction count must be 1..64.\n";
                 if(pc>=disLimit())return "Disassembly address out of range.\n";
                 pause_(true);paused=true;
-                return disassemble(cpu,static_cast<std::uint32_t>(pc),static_cast<unsigned>(amount));
+                return externalDisassemble(cpu,static_cast<std::uint32_t>(pc),static_cast<unsigned>(amount));
             }
             if(command=="x" || command=="xp") {
                 if(args.size()<2 || args.size()>3)return "Usage: x|xp HEXADDR [HEXLEN]\n";
@@ -339,18 +340,18 @@ private:
         }
         return out.str();
     }
-    MonitorDisassembler::Architecture disArchitecture() const {
-        using Arch=MonitorDisassembler::Architecture;
+    // Architecture selection only. Decoding is delegated to external tools.
+    std::string disArchitecture() const {
         if(selected_=="sub")
-            return m_.systemBoard().displayCpu().is6309Enabled()?Arch::HD6309:Arch::M6809;
+            return m_.systemBoard().displayCpu().is6309Enabled()?"hd6309":"m6809";
         const auto* b=board(selected_);
         if(!b)throw std::runtime_error("CPU not installed");
         switch(b->cpu().type()) {
-            case CpuType::MC6809:return Arch::M6809;
-            case CpuType::HD6309:return Arch::HD6309;
-            case CpuType::Z80:return Arch::Z80;
-            case CpuType::I8088:return Arch::I8088;
-            case CpuType::NECV20:return Arch::V20;
+            case CpuType::MC6809:return "m6809";
+            case CpuType::HD6309:return "hd6309";
+            case CpuType::Z80:return "z80";
+            case CpuType::I8088:return "i8088";
+            case CpuType::NECV20:return "v20";
         }
         throw std::runtime_error("unknown CPU architecture");
     }
@@ -366,26 +367,42 @@ private:
     std::uint32_t disLimit() const {
         return selected_=="main8088"?0x100000u:0x10000u;
     }
-    std::string disassemble(MonitorDisassembler::Architecture arch,
-                            std::uint32_t pc,unsigned count) const {
-        const auto limit=disLimit();
-        // All instruction reads use the same side-effect-free peek path as x.
-        auto guard=m_.lockDisplay();
-        const auto read=[&](std::uint32_t a)->std::uint8_t {
-            return peek(a%limit,false);
-        };
-        std::ostringstream out;
-        for(unsigned i=0;i<count;++i) {
-            const auto decoded=MonitorDisassembler::decode(arch,read,pc);
-            const auto length=std::max(1u,std::min(decoded.size,16u));
-            out<<hex(pc,limit>65536?5:4)<<"  ";
-            for(unsigned n=0;n<length;++n)
-                out<<hex(read((pc+n)%limit),2)<<" ";
-            for(unsigned n=length;n<6;++n)out<<"   ";
-            out<<" "<<decoded.mnemonic<<"\n";
-            pc=(pc+length)%limit;
+    std::string externalDisassemble(const std::string& arch,
+                                    std::uint32_t pc,unsigned count) const {
+        // Only serialization of guest bytes lives in the emulator.
+        // The external helper invokes Capstone or DeZ80.
+        const auto boundary=disLimit();
+        std::string bytes;
+        bytes.reserve(2048*2);
+        {
+            auto guard=m_.lockDisplay();
+            for(unsigned i=0;i<2048;++i)
+                bytes+=hex(peek((pc+i)%boundary,false),2);
         }
-        return out.str();
+#ifndef FM11_DISASM_SCRIPT
+        return "External disassembler not configured (FM11_DISASM_SCRIPT).\\n";
+#else
+        // Quote the configured script path for popen; all other values are
+        // generated locally and contain only letters, digits and hex.
+        const std::string script=FM11_DISASM_SCRIPT;
+        std::string quoted="'";
+        for(const char ch:script) {
+            if(ch=='\\'')quoted+="'\\\\''";
+            else quoted+=ch;
+        }
+        quoted+="'";
+        const auto command="python3 "+quoted+" "+arch+" "+hex(pc,boundary>65536?5:4)+
+                           " "+std::to_string(count)+" "+bytes+" 2>&1";
+        FILE* pipe=popen(command.c_str(),"r");
+        if(!pipe)return "Cannot launch external disassembler.\\n";
+        std::string output;
+        char buffer[1024];
+        while(std::fgets(buffer,sizeof(buffer),pipe))
+            output+=buffer;
+        const int status=pclose(pipe);
+        if(status!=0)return "External disassembler failed:\\n"+output;
+        return output.empty()?"No instructions decoded.\\n":output;
+#endif
     }
     BYTE peek(std::uint64_t addr,bool physical) const {
         if(physical) {
