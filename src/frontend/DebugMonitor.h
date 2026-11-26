@@ -368,6 +368,16 @@ private:
     }
     std::string externalDisassemble(const std::string& arch,
                                     std::uint32_t pc,unsigned count) const {
+        // V20's 8080 mode needs the separate MAME NEC-mode extension.
+        // Never misinterpret 8080 instructions as 16-bit NEC instructions.
+        if(arch=="v20") {
+            if(const auto* target=board(selected_)) {
+                if(const auto* core=dynamic_cast<const Main8088Board::Core*>(&target->cpu())) {
+                    if(core->emulation8080())
+                        return "V20 8080 mode disassembly requires Stage 3-B-2.\n";
+                }
+            }
+        }
         // CPU memory inspection only. MAME unidasm does all decoding.
         const auto boundary=disLimit();
         std::string bytes;
