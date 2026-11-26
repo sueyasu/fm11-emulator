@@ -86,8 +86,6 @@ if(FM11_BUILD_SDL)
         endif()
         add_executable(fm11-sdl src/frontend/sdl_main.cpp src/frontend/OpenGlRenderer.cpp)
         target_link_libraries(fm11-sdl PRIVATE fm11_core)
-        target_compile_definitions(fm11-sdl PRIVATE
-            FM11_DISASM_SCRIPT="${CMAKE_CURRENT_SOURCE_DIR}/tools/disassemble.py")
         if(FM11_BUILD_TESTS)
             add_test(NAME sdl_help COMMAND fm11-sdl --help)
         endif()
@@ -508,14 +506,7 @@ if(FM11_BUILD_TESTS)
     add_executable(debug_monitor tests/debug_monitor.cpp)
     target_include_directories(debug_monitor PRIVATE src/frontend)
     target_link_libraries(debug_monitor PRIVATE fm11_core)
-    target_compile_definitions(debug_monitor PRIVATE
-        FM11_DISASM_SCRIPT="${CMAKE_CURRENT_SOURCE_DIR}/tools/disassemble.py")
     add_test(NAME debug_monitor COMMAND debug_monitor)
-    if(UNIX)
-        add_test(NAME external_disassembler
-                 COMMAND ${Python3_EXECUTABLE}
-                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/external_disassembler.py)
-    endif()
     add_executable(display_cpu6809 tests/display_cpu6809.cpp)
     target_link_libraries(display_cpu6809 PRIVATE fm11_core)
     add_test(NAME display_cpu6809 COMMAND display_cpu6809)
