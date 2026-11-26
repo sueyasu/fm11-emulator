@@ -37,6 +37,26 @@ class TestInstalledUnidasm(unittest.TestCase):
                 self.assertEqual(len(lines), 1)
                 self.assertIn("nop", lines[0])
 
+    def test_nec80_extended_instructions_when_available(self):
+        # A stock unidasm lacks -arch nec80. Keep Stage 3-B-1 viable,
+        # but verify MAME's CALLN and RETEM decoder when patched.
+        import subprocess
+        binary = os.environ.get("FM11_UNIDASM") or shutil.which("unidasm")
+        probe = subprocess.run(
+            [binary, "-", "-arch", "nec80", "-basepc", "0", "-count", "3"],
+            input=bytes.fromhex("ED ED 03"), capture_output=True, check=False,
+        )
+        if probe.returncode:
+            self.skipTest("MAME unidasm does not have the nec80 patch")
+        calln = adapter.disassemble(
+            "v20_8080", 0, 1, bytes.fromhex("ED ED 03")
+        ).lower()
+        self.assertIn("calln", calln)
+        retem = adapter.disassemble(
+            "v20_8080", 0, 1, bytes.fromhex("ED FD 00")
+        ).lower()
+        self.assertIn("retem", retem)
+
     def test_instruction_count_is_not_byte_count(self):
         lines = adapter.disassemble("z80", 0x1234, 3, b"\x00" * 64).splitlines()
         self.assertEqual(len(lines), 3)
