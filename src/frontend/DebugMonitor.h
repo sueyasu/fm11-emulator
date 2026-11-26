@@ -56,8 +56,13 @@ public:
                     watchProbe(Target::Z80,addr,write,value);
                 });
         }
+        m_.systemBoard().displayCpu().setMemoryAccessObserver(
+            [this](WORD addr,bool write,BYTE value) {
+                watchProbe(Target::Sub,addr,write,value);
+            });
     }
     ~DebugMonitor() {
+        m_.systemBoard().displayCpu().setMemoryAccessObserver({});
         for(std::size_t i=0;i<m_.boardCount();++i) {
             auto& board=m_.board(i);
             if(auto* p=dynamic_cast<Main6809Board*>(&board))
@@ -173,7 +178,7 @@ public:
                 if(args.size()!=3 || (args[1]!="r" && args[1]!="w" && args[1]!="rw"))
                     return "Usage: w r|w|rw HEXADDR\n";
                 const auto cpu=parseTarget(selected_);
-                if(cpu==Target::Sub)return "Sub-CPU watchpoints are not yet supported.\n";
+
                 const auto addr=address(args[2]);
                 if(addr>=limit(cpu))return "Watchpoint address out of range.\n";
                 std::lock_guard<std::mutex> lock(breakMutex_);
