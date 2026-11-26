@@ -95,7 +95,7 @@ public:
         const auto& command=args[0];
         try {
             if(command=="help" || command=="?")return
-                "help, info cpus, cpu NAME, stop, cont, step [COUNT], regs, "
+                "help, info cpus, info machine, info io FDXX, cpu NAME, stop, cont, step [COUNT], regs, "
                 "x HEXADDR [HEXLEN], xp HEXADDR [HEXLEN], dis [HEXADDR] [COUNT], "
                 "b HEXADDR, bl, bc [HEXADDR], "
                 "log start FILE, log stop, log status\n";
@@ -181,6 +181,50 @@ public:
                 }
                 out<<"sub  "<<(m_.systemBoard().displayCpu().is6309Enabled()?"HD6309":"MC6809")
                    <<" INDEPENDENT"<<(selected_=="sub"?" SELECTED":"")<<"\n";
+                return out.str();
+            }
+            if(command=="info" && args.size()==2 && args[1]=="machine") {
+                pause_(true);paused=true;
+                std::ostringstream out;
+                out<<"Active main CPU: "<<type(m_.activeCpuType())<<"\n";
+                for(std::size_t i=0;i<m_.boardCount();++i) {
+                    auto& b=m_.board(i);
+                    out<<name(b)<<" ("<<type(b.cpu().type())<<")";
+                    if(m_.activeBoard()==&b)out<<" ACTIVE";
+                    if(auto* p=dynamic_cast<Main6809Board*>(&b)) {
+                        out<<" RAM="<<p->ramKiB()<<" KiB"
+                           <<" IRQ="<<(p->irqPending()?"pending":"clear")
+                           <<" IRQ-accepted="<<p->acceptedIrqCount()
+                           <<" FDC-status="<<hex(p->fdcStatus(),2)
+                           <<" FDC-track="<<hex(p->fdcTrack(),2)
+                           <<" FDC-sector="<<hex(p->fdcSector(),2);
+                    } else if(auto* p=dynamic_cast<Main8088Board*>(&b)) {
+                        out<<" RAM="<<p->bus().ramKiB()<<" KiB"
+                           <<" PIC-mask="<<hex(p->bus().interruptMask(),2)
+                           <<" DMA-mask="<<hex(p->bus().dmaMask(),2);
+                    } else if(auto* p=dynamic_cast<MainZ80Board*>(&b)) {
+                        out<<" RAM="<<p->ramKiB()<<" KiB"
+                           <<" bank="<<hex(p->bank(),2);
+                    }
+                    out<<"\n";
+                }
+                return out.str();
+            }
+            if(command=="info" && args.size()==3 && args[1]=="io") {
+                // Non-invasive counters and write latch; never call readIo().
+                const auto value=number(args[2]);
+                if(value<0xfd00 || value>0xfdff)
+                    return "Usage: info io FD00..FDFF (6809 I/O counters)\n";
+                pause_(true);paused=true;
+                auto* b=board("main6809");
+                auto* p=dynamic_cast<Main6809Board*>(b);
+                if(!p)return "6809 board is not installed.\n";
+                const auto reg=static_cast<unsigned>(value&0xffu);
+                std::ostringstream out;
+                out<<"FD"<<hex(reg,2)
+                   <<" reads="<<p->ioReadCount(reg)
+                   <<" writes="<<p->ioWriteCount(reg)
+                   <<" last-write="<<hex(p->lastIoWrite(reg),2)<<"\n";
                 return out.str();
             }
             if(command=="cpu") {
