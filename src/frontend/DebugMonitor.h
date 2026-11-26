@@ -48,7 +48,7 @@ public:
         std::lock_guard<std::mutex> lock(breakMutex_);
         if(!breakPending_.exchange(false,std::memory_order_acq_rel))return {};
         stoppedAt_=hit_;
-        return "Breakpoint: "+hit_.first+" PC="+hex(hit_.second,hit_.first=="main8088"?5:4)+"\\n";
+        return "Breakpoint: "+hit_.first+" PC="+hex(hit_.second,hit_.first=="main8088"?5:4)+"\n";
     }
     static std::string cpuName(const CpuBoard& b) {return name(b);}
     std::string prompt() const {return "fm11["+selected_+"]> ";}
@@ -89,24 +89,24 @@ public:
                 return "Usage: log start FILE | log stop | log status\n";
             }
             if(command=="b" || command=="break") {
-                if(args.size()!=2)return "Usage: b HEXADDR\\n";
+                if(args.size()!=2)return "Usage: b HEXADDR\n";
                 const auto addr=address(args[1]);
                 const auto limit=selected_=="main8088"?0x100000u:0x10000u;
-                if(addr>=limit)return "Breakpoint address out of range.\\n";
+                if(addr>=limit)return "Breakpoint address out of range.\n";
                 {std::lock_guard<std::mutex> lock(breakMutex_);breaks_.insert({selected_,static_cast<std::uint32_t>(addr)});
                  hasBreaks_.store(true,std::memory_order_release);}
-                return "Breakpoint set: "+selected_+" PC="+hex(addr,limit>65536?5:4)+"\\n";
+                return "Breakpoint set: "+selected_+" PC="+hex(addr,limit>65536?5:4)+"\n";
             }
             if(command=="bl") {
-                if(args.size()!=1)return "Usage: bl\\n";
+                if(args.size()!=1)return "Usage: bl\n";
                 std::lock_guard<std::mutex> lock(breakMutex_);
                 std::ostringstream out;
                 for(const auto& entry:breaks_)
-                    out<<entry.first<<" PC="<<hex(entry.second,entry.first=="main8088"?5:4)<<"\\n";
-                return out.str().empty()?"No breakpoints.\\n":out.str();
+                    out<<entry.first<<" PC="<<hex(entry.second,entry.first=="main8088"?5:4)<<"\n";
+                return out.str().empty()?"No breakpoints.\n":out.str();
             }
             if(command=="bc") {
-                if(args.size()>2)return "Usage: bc [HEXADDR]\\n";
+                if(args.size()>2)return "Usage: bc [HEXADDR]\n";
                 std::lock_guard<std::mutex> lock(breakMutex_);
                 if(args.size()==1) {
                     for(auto it=breaks_.begin();it!=breaks_.end();) {
@@ -117,7 +117,7 @@ public:
                     breaks_.erase({selected_,static_cast<std::uint32_t>(addr)});
                 }
                 hasBreaks_.store(!breaks_.empty(),std::memory_order_release);
-                return "Breakpoint(s) cleared for "+selected_+".\\n";
+                return "Breakpoint(s) cleared for "+selected_+".\n";
             }
             if(command=="info" && args.size()==2 && args[1]=="cpus") {
                 std::ostringstream out;
