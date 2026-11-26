@@ -72,21 +72,38 @@ int main() {
     // Per-CPU breakpoints are non-invasive and checked before fetch.
     if(mon.execute("b c010",paused).find("Breakpoint set")==std::string::npos)return 37;
     if(mon.execute("bl",paused).find("C010")==std::string::npos)return 38;
-    if(mon.probe("sub",0xc010)!=false)return 39; // selected main6809
-    if(!mon.probe("main6809",0xc010) || !mon.breakPending())return 40;
+    if(mon.probe(DebugMonitor::Target::Sub,0xc010)!=false)return 39; // selected main6809
+    if(!mon.probe(DebugMonitor::Target::Main6809,0xc010) || !mon.breakPending())return 40;
     if(mon.takeBreak().find("main6809 PC=C010")==std::string::npos)return 41;
     if(mon.execute("cont",paused).find("running")==std::string::npos)return 42;
-    if(mon.probe("main6809",0xc010))return 43; // skip precisely once
-    if(!mon.probe("main6809",0xc010))return 44;
+    if(mon.probe(DebugMonitor::Target::Main6809,0xc010))return 43; // skip precisely once
+    if(!mon.probe(DebugMonitor::Target::Main6809,0xc010))return 44;
     if(mon.takeBreak().empty())return 45;
     if(mon.execute("bc c010",paused).find("cleared")==std::string::npos)return 46;
-    if(mon.probe("main6809",0xc010))return 47;
+    if(mon.probe(DebugMonitor::Target::Main6809,0xc010))return 47;
     if(mon.execute("cpu sub",paused).find("Selected")==std::string::npos)return 48;
     if(mon.execute("b c000",paused).find("set")==std::string::npos)return 49;
-    if(!mon.probe("sub",0xc000))return 50;
+    if(!mon.probe(DebugMonitor::Target::Sub,0xc000))return 50;
     if(mon.takeBreak().find("sub PC=C000")==std::string::npos)return 51;
     if(mon.execute("bc",paused).find("cleared")==std::string::npos)return 52;
     if(mon.execute("bl",paused).find("No breakpoints")==std::string::npos)return 53;
+    // Cross-CPU address spaces are independent, including the 16-bit ceiling.
+    if(mon.execute("cpu main6809",paused).find("Selected")==std::string::npos)return 62;
+    if(mon.execute("b ffff",paused).find("set")==std::string::npos)return 63;
+    if(mon.execute("b ffff",paused).find("set")==std::string::npos)return 64; // idempotent
+    if(!mon.probe(DebugMonitor::Target::Main6809,0xffff))return 65;
+    if(mon.takeBreak().empty())return 66;
+    if(mon.execute("bc ffff",paused).find("cleared")==std::string::npos)return 67;
+    if(mon.probe(DebugMonitor::Target::Main6809,0xffff))return 68;
+    if(mon.execute("b 10000",paused).find("out of range")==std::string::npos)return 69;
+    if(mon.execute("cpu sub",paused).find("Selected")==std::string::npos)return 70;
+    if(mon.execute("b ffff",paused).find("set")==std::string::npos)return 71;
+    if(mon.probe(DebugMonitor::Target::Main6809,0xffff))return 72;
+    if(!mon.probe(DebugMonitor::Target::Sub,0xffff))return 73;
+    if(mon.takeBreak().empty())return 74;
+    if(mon.execute("bc",paused).find("cleared")==std::string::npos)return 75;
+    if(mon.execute("bl",paused).find("No breakpoints")==std::string::npos)return 76;
+    if(mon.probe(DebugMonitor::Target::Sub,0xffff))return 77;
     // Selection is debugger-only; the guest CPU owner remains unchanged.
     machine.addBoard(std::make_unique<Main8088Board>(CpuType::NECV20));
     machine.addBoard(std::make_unique<MainZ80Board>());
@@ -97,13 +114,13 @@ int main() {
     if(multi.execute("x 0000:0000 1",paused).find(":")==std::string::npos)return 15;
     if(multi.execute("step",paused).find("not the active")==std::string::npos)return 16;
     if(multi.execute("b 0000:0000",paused).find("set")==std::string::npos)return 54;
-    if(!multi.probe("main8088",0))return 55;
+    if(!multi.probe(DebugMonitor::Target::Main8088,0))return 55;
     if(multi.takeBreak().find("PC=00000")==std::string::npos)return 56;
     if(multi.execute("bc 0000:0000",paused).find("cleared")==std::string::npos)return 57;
     if(multi.execute("cpu z80",paused).find("Selected")==std::string::npos)return 17;
     if(multi.execute("regs",paused).find("AF=")==std::string::npos)return 18;
     if(multi.execute("b 1234",paused).find("set")==std::string::npos)return 58;
-    if(!multi.probe("z80",0x1234))return 59;
+    if(!multi.probe(DebugMonitor::Target::Z80,0x1234))return 59;
     if(multi.takeBreak().find("z80 PC=1234")==std::string::npos)return 60;
     if(multi.execute("bc",paused).find("cleared")==std::string::npos)return 61;
 
