@@ -77,9 +77,11 @@ to the requested number of instructions. MAME's original mnemonics and
 operand formatting are preserved. Guest memory is not modified.
 
 For automated verification, `unidasm_adapter` uses a mocked external
-process and has no MAME dependency; `debug_monitor` checks the output
-when MAME is installed and the missing-tool error otherwise. Neither
-Python nor MAME is needed for the core emulator's normal execution.
+process and has no MAME dependency. `unidasm_live` checks the installed
+MAME decoders for all five targets, skipping when `unidasm` is absent.
+`debug_monitor` checks the output when MAME is installed and the
+missing-tool error otherwise. Neither Python nor MAME is needed for
+the core emulator's normal execution.
 
 Memory watchpoints and machine register inspection remain Stage 3-C work.
 Input editing uses the terminal's
