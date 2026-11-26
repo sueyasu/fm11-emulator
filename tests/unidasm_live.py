@@ -47,6 +47,8 @@ class TestInstalledUnidasm(unittest.TestCase):
             input=bytes.fromhex("ED ED 03"), capture_output=True, check=False,
         )
         if probe.returncode:
+            if os.environ.get("FM11_REQUIRE_NEC80") == "1":
+                self.fail("FM11_REQUIRE_NEC80=1 but MAME unidasm lacks nec80")
             self.skipTest("MAME unidasm does not have the nec80 patch")
         calln = adapter.disassemble(
             "v20_8080", 0, 1, bytes.fromhex("ED ED 03")
