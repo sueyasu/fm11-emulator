@@ -4,8 +4,8 @@
 Usage: disassemble.py ARCH START_HEX COUNT HEX_BYTES
 No local instruction decoding: raw guest bytes are sent to MAME's
 unidasm through stdin, and its listing is limited to COUNT instructions.
-ARCH: m6809, hd6309, z80, i8088, v20.
-V20/8080 mode is intentionally deferred to Stage 3-B-2.
+ARCH: m6809, hd6309, z80, i8088, v20, v20_8080.
+The v20_8080 target requires the tools/mame/unidasm-nec80.patch extension.
 """
 import os
 import re
@@ -19,6 +19,7 @@ ARCHITECTURES = {
     "z80": "z80",
     "i8088": "x86_16",
     "v20": "nec",
+    "v20_8080": "nec80",
 }
 
 # Standard unidasm emits "ADDRESS: RAW-BYTES  MNEMONIC OPERANDS".
@@ -31,7 +32,7 @@ def disassemble(arch, start, count, data, executable=None):
         raise ValueError("Unsupported CPU architecture: " + arch)
     if not 1 <= count <= 64:
         raise ValueError("Instruction count must be 1..64")
-    if not 0 <= start <= (0xFFFFF if arch in ("i8088", "v20") else 0xFFFF):
+    if not 0 <= start <= (0xFFFFF if arch in ("i8088", "v20", "v20_8080") else 0xFFFF):
         raise ValueError("Disassembly address is out of range")
     if not 1 <= len(data) <= 4096:
         raise ValueError("Instruction byte window must be 1..4096 bytes")
@@ -60,6 +61,13 @@ def disassemble(arch, start, count, data, executable=None):
         detail = result.stderr.decode("utf-8", "replace").strip()
         if not detail:
             detail = result.stdout.decode("utf-8", "replace").strip()
+        if arch == "v20_8080":
+            raise RuntimeError(
+                "MAME unidasm could not disassemble NEC 8080 mode. "
+                "Build MAME with tools/mame/unidasm-nec80.patch, "
+                "and set FM11_UNIDASM to that executable. "
+                f"Detail: {detail[:240]}"
+            )
         raise RuntimeError(f"MAME unidasm failed ({result.returncode}): {detail[:600]}")
 
     lines = []
