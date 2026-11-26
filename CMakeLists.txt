@@ -511,6 +511,11 @@ if(FM11_BUILD_TESTS)
     target_compile_definitions(debug_monitor PRIVATE
         FM11_DISASM_SCRIPT="${CMAKE_CURRENT_SOURCE_DIR}/tools/disassemble.py")
     add_test(NAME debug_monitor COMMAND debug_monitor)
+    if(UNIX)
+        add_test(NAME external_disassembler
+                 COMMAND ${Python3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/external_disassembler.py)
+    endif()
     add_executable(display_cpu6809 tests/display_cpu6809.cpp)
     target_link_libraries(display_cpu6809 PRIVATE fm11_core)
     add_test(NAME display_cpu6809 COMMAND display_cpu6809)
