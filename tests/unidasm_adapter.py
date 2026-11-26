@@ -20,6 +20,7 @@ class TestUnidasmAdapter(unittest.TestCase):
         cases = {
             "m6809": "m6809", "hd6309": "hd6309",
             "z80": "z80", "i8088": "x86_16", "v20": "nec",
+            "v20_8080": "nec80",
         }
         for arch, mame in cases.items():
             with self.subTest(arch=arch):
@@ -31,7 +32,7 @@ class TestUnidasmAdapter(unittest.TestCase):
                 self.assertEqual(cmd[:4], ["unidasm", "-", "-arch", mame])
                 self.assertEqual(cmd[-2:], ["-count", "32"])
                 self.assertEqual(run.call_args.kwargs["input"], bytes([0x12] * 48))
-                pad = 5 if arch in ("i8088", "v20") else 4
+                pad = 5 if arch in ("i8088", "v20", "v20_8080") else 4
                 self.assertEqual(text.splitlines(), [
                     f"{0:0{pad}X}: 12  nop", f"{1:0{pad}X}: 12  nop"
                 ])
@@ -77,6 +78,19 @@ class TestUnidasmAdapter(unittest.TestCase):
                           side_effect=subprocess.TimeoutExpired("unidasm", 15)):
             with self.assertRaisesRegex(RuntimeError, "timed out"):
                 adapter.disassemble("z80", 0, 1, b"\x00", "unidasm")
+
+    def test_unpatched_nec80_binary(self):
+        with patch.object(adapter.subprocess, "run", return_value=
+                          subprocess.CompletedProcess([], 1, b"", b"unknown architecture: nec80")):
+            with self.assertRaisesRegex(RuntimeError, "unidasm-nec80.patch"):
+                adapter.disassemble("v20_8080", 0, 1, b"\x00", "unidasm")
+
+    def test_nec80_still_has_20bit_address_space(self):
+        result = subprocess.CompletedProcess([], 0, b"fffff: ed ed 03  calln $03\n", b"")
+        with patch.object(adapter.subprocess, "run", return_value=result) as run:
+            text = adapter.disassemble("v20_8080", 0xfffff, 1, b"\xed\xed\x03", "unidasm")
+        self.assertEqual(run.call_args.args[0][3], "nec80")
+        self.assertTrue(text.startswith("FFFFF:"))
 
     def test_empty_output(self):
         with patch.object(adapter.subprocess, "run", return_value=
