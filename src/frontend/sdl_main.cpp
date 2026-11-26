@@ -462,7 +462,21 @@ int main(int argc,char** argv) {
 #ifdef FM11_SETTINGS_GUI
         // Separate SDL2 renderer: the emulated CRT's GL/software backend and
         // guest framebuffer are unaffected by the editor window.
-        auto settingsGui=std::make_unique<SettingsGui>(config);
+        MachineConfig effectiveConfig=config;
+        effectiveConfig.main6809Rom=rom6809;
+        effectiveConfig.main8088Rom=rom8088;
+        effectiveConfig.displayRom=romPath;
+        effectiveConfig.ankRom=ankPath;
+        effectiveConfig.kanjiRom=kanjiPath;
+        effectiveConfig.kanji2Rom=kanji2Path;
+        effectiveConfig.displayHeight=high?400:200;
+        if(!floppyPath.empty())effectiveConfig.floppy2d[floppyDrive]=floppyPath;
+        if(bootDipOverridden) {
+            effectiveConfig.boot2dFdd=(bootDip&0x20)==0;
+            effectiveConfig.boot2hdFdd=(bootDip&0x40)==0;
+            effectiveConfig.bootHdd=(bootDip&0x80)==0;
+        }
+        auto settingsGui=std::make_unique<SettingsGui>(effectiveConfig);
 #endif
         std::cerr<<"FM-11 renderer: "<<(ui.glRenderer?"OpenGL 3.3":"software")<<"\n";
         if(testKanji) {
@@ -941,6 +955,13 @@ int main(int argc,char** argv) {
                 // Only the snapshot copy is serialized with the sub-CPU.
                 // All OpenGL uploads, uniforms, drawing and swap occur after
                 // releasing the display-bus lock.
+#ifdef FM11_SETTINGS_GUI
+                // The settings SDL_Renderer may switch the current OpenGL
+                // context. Restore the guest renderer's context explicitly.
+                if(SDL_GL_MakeCurrent(ui.window,ui.glContext)!=0)
+                    throw std::runtime_error(SDL_GL_GetCurrentContext()?
+                        "cannot restore guest OpenGL context":SDL_GetError());
+#endif
                 const auto snapshot=OpenGlRenderer::capture(machine,!ankPath.empty() && !testKanji);
                 int outputW=0,outputH=0;
                 SDL_GL_GetDrawableSize(ui.window,&outputW,&outputH);
