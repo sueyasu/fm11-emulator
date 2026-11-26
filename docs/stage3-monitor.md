@@ -5,7 +5,7 @@ launching terminal. SDL rendering remains active. A polling stdin
 thread only collects full lines; SDL's UI thread executes commands
 after the main CPU, sub CPU and realtime PTM workers acknowledge pause.
 
-Commands (numbers are **hexadecimal**):
+Commands (addresses are **hexadecimal**; step counts and dump lengths are **decimal** by default, or `0x`-prefixed hexadecimal):
 - `help`: command summary
 - `info cpus`: installed CPUs and current execution owner
 - `cpu main6809|main8088|z80|sub`: change debugger target ONLY
@@ -14,7 +14,7 @@ Commands (numbers are **hexadecimal**):
 - `regs`: show target CPU register bank
 - `x ADDRESS [LENGTH]`: side-effect-free target CPU memory dump (main8088 also accepts `SEG:OFF`)
 - `xp ADDRESS [LENGTH]`: 1 MiB main physical RAM dump
-- `log start FILE`, `log stop`, `log status`: append session I/O to a log
+- `log start FILE`, `log stop`, `log status`: append monitor input/output to a log. Logging is off by default; repeated `log start` does not reopen the file and `log stop` closes it. Starting again appends to the same file
 
 `step` on an inactive main/optional card is refused; select that
 card using guest hardware mechanisms first. The sub CPU can be stepped
