@@ -20,9 +20,11 @@ Commands (addresses are **hexadecimal**; step counts and dump lengths are **deci
 - `b HEXADDR`: set an execution breakpoint on the selected CPU; main8088 accepts `SEG:OFF` and stores its 20-bit physical address
 - `bl`: list all CPU-specific execution breakpoints
 - `bc [HEXADDR]`: clear one breakpoint, or all breakpoints for the selected CPU
-- `w r|w|rw HEXADDR`: set a one-byte memory access watchpoint on the selected main CPU (read, write, or both)
+- `w r|w|rw HEXADDR`: set a one-byte memory access watchpoint on the selected CPU (including `sub`; read, write, or both)
 - `wl`: list memory watchpoints
 - `wc [HEXADDR]`: clear watchpoints on the selected CPU (all if address omitted)
+- `wp r|w|rw PHYSADDR`: set a 20-bit physical memory access watchpoint for the 6809 board, including DMA accesses
+- `wpc [PHYSADDR]`: clear the physical-memory watchpoint at the address, or all physical watchpoints
 - `log start FILE`, `log stop`, `log status`: append monitor input/output to a log. Logging is off by default; repeated `log start` does not reopen the file and `log stop` closes it. Starting again appends to the same file
 
 `step` on an inactive main/optional card is refused; select that
@@ -215,8 +217,8 @@ Watchpoint: main8088 write 1DC00 value=C3
 fm11[main8088]> wc 1DC00
 ```
 
-6809 and Z80 watchpoint addresses are 16-bit **CPU-visible logical**
-addresses, including memory-mapped I/O addresses read/written through
+6809, Z80, and display-sub-CPU (`sub`) watchpoint addresses are
+16-bit **CPU-visible logical** addresses, including memory-mapped I/O addresses read/written through
 their CPU memory access entry points. Z80 IN/OUT instructions use a
 separate I/O port path and are not included. The 8088/V20 watchpoint
 addresses are 20-bit bus addresses; for the current V20 CP/M-80 memory
@@ -228,19 +230,36 @@ can also match instruction fetch bytes when they travel through the
 CPU's ordinary memory read entry point. Watchpoints monitor bus
 access attempts, including writes that hardware may discard.
 
-**Current scope limits:** 6809 DMA accesses that go through
-`readPhysical`/`writePhysical` rather than CPU memory access methods
-are not observed; display-sub-CPU watchpoints are not yet supported.
-8088/V20 DMA accesses do pass through the shared bus methods and can
-trigger a watchpoint, but the current report does not distinguish the
-initiating DMA channel from CPU instructions. Shared-memory accesses
-by other boards are only reported under the board whose observed entry
-point was called. Thus these commands must not yet be treated as a
-complete physical-memory access tracer.
+The additional `wp` command watches the **6809 board's 20-bit
+physical memory accessor**. It can capture FDD/HDD DMA paths that go
+through `readPhysical`/`writePhysical`, independently of the
+CPU-visible 16-bit MMU address. The event is labeled `physical`:
+this does not prove the access came from DMA; the 6809's 7C00-window
+CPU accesses also use these physical methods. For example:
 
-Stage 3-C remaining: DMA-aware physical-memory observation, display
-sub-CPU coverage, and explicit read/write I/O access tracking with
-source attribution. Memory access observers remain uninstalled in
+```text
+wp rw 2DC00
+wl
+wpc 2DC00
+```
+
+The display sub-CPU is observed at its `GetMemByte`/`SetMemByte`
+entry points; debugger inspection and host display rendering do not
+trigger these CPU-specific watchpoints.
+
+**Scope limits:** 8088/V20 DMA accesses use the shared bus and may
+trigger a `main8088` watchpoint, without identifying the DMA channel.
+6809 DMA transfers are visible through `wp` only when they use the
+instrumented physical memory methods. Fast mapped host-pointer RAM
+accesses or writes performed by other devices outside these APIs
+are not claimed to be globally traced. Shared RAM access is attributed
+to the observed board/access path, not automatically to a bus master.
+Port-based I/O on Z80 and 8088/V20 is not covered by memory watchpoints.
+At present the report identifies the accessed byte, not the precise
+instruction PC or DMA channel that initiated it.
+
+Stage 3-C remaining: explicit port-I/O watchpoints with source
+attribution, if needed. Memory access observers remain uninstalled in
 normal execution without `--monitor` and do not poll memory.
 
 
