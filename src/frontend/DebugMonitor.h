@@ -6,6 +6,10 @@
 #include "Sim09.h"
 #include "SimZ80.h"
 #include <fstream>
+#include <atomic>
+#include <mutex>
+#include <set>
+#include <tuple>
 #include <cstdint>
 #include <stdexcept>
 #include <utility>
@@ -24,6 +28,28 @@ public:
     DebugMonitor(Machine& machine,PauseFn pause):m_(machine),pause_(std::move(pause)) {
         selected_ = m_.activeBoard()?name(*m_.activeBoard()):"sub";
     }
+    // Called from an emulation worker before instruction fetch. The hot path
+    // never inspects guest memory and never patches instruction bytes.
+    bool probe(const std::string& cpu,std::uint32_t pc) {
+        if(breakPending_.load(std::memory_order_acquire))return true;
+        std::lock_guard<std::mutex> lock(breakMutex_);
+        const auto key=std::make_pair(cpu,pc);
+        if(skip_==key) {skip_={"",0};return false;}
+        if(!breaks_.count(key))return false;
+        hit_=key;
+        breakPending_.store(true,std::memory_order_release);
+        return true;
+    }
+    bool breakPending() const {return breakPending_.load(std::memory_order_acquire);}
+    // Called by the SDL event thread, after all workers have acknowledged pause.
+    std::string takeBreak() {
+        if(!breakPending_.load(std::memory_order_acquire))return {};
+        std::lock_guard<std::mutex> lock(breakMutex_);
+        if(!breakPending_.exchange(false,std::memory_order_acq_rel))return {};
+        stoppedAt_=hit_;
+        return "Breakpoint: "+hit_.first+" PC="+hex(hit_.second,hit_.first=="main8088"?5:4)+"\\n";
+    }
+    static std::string cpuName(const CpuBoard& b) {return name(b);}
     std::string prompt() const {return "fm11["+selected_+"]> ";}
     void emit(const std::string& s) {
         std::cout<<s<<std::flush;
@@ -60,6 +86,35 @@ public:
                     return "Logging started (append): "+file_+"\n";
                 }
                 return "Usage: log start FILE | log stop | log status\n";
+            }
+            if(command=="b" || command=="break") {
+                if(args.size()!=2)return "Usage: b HEXADDR\\n";
+                const auto addr=address(args[1]);
+                const auto limit=selected_=="main8088"?0x100000u:0x10000u;
+                if(addr>=limit)return "Breakpoint address out of range.\\n";
+                {std::lock_guard<std::mutex> lock(breakMutex_);breaks_.insert({selected_,static_cast<std::uint32_t>(addr)});}
+                return "Breakpoint set: "+selected_+" PC="+hex(addr,limit>65536?5:4)+"\\n";
+            }
+            if(command=="bl") {
+                if(args.size()!=1)return "Usage: bl\\n";
+                std::lock_guard<std::mutex> lock(breakMutex_);
+                std::ostringstream out;
+                for(const auto& entry:breaks_)
+                    out<<entry.first<<" PC="<<hex(entry.second,entry.first=="main8088"?5:4)<<"\\n";
+                return out.str().empty()?"No breakpoints.\\n":out.str();
+            }
+            if(command=="bc") {
+                if(args.size()>2)return "Usage: bc [HEXADDR]\\n";
+                std::lock_guard<std::mutex> lock(breakMutex_);
+                if(args.size()==1) {
+                    for(auto it=breaks_.begin();it!=breaks_.end();) {
+                        if(it->first==selected_)it=breaks_.erase(it);else ++it;
+                    }
+                } else {
+                    const auto addr=address(args[1]);
+                    breaks_.erase({selected_,static_cast<std::uint32_t>(addr)});
+                }
+                return "Breakpoint(s) cleared for "+selected_+".\\n";
             }
             if(command=="info" && args.size()==2 && args[1]=="cpus") {
                 std::ostringstream out;
@@ -228,6 +283,10 @@ private:
         if(auto* p=dynamic_cast<MainZ80Board*>(b))return p->peekMemory(static_cast<WORD>(addr));
         throw std::runtime_error("unsupported CPU");
     }
+    std::mutex breakMutex_;
+    std::set<std::pair<std::string,std::uint32_t>> breaks_;
+    std::pair<std::string,std::uint32_t> hit_{"",0},stoppedAt_{"",0},skip_{"",0};
+    std::atomic<bool> breakPending_{false};
     Machine& m_;
     PauseFn pause_;
     std::string selected_;
