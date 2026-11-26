@@ -84,7 +84,41 @@ if(FM11_BUILD_SDL)
         if(FM11_BUILD_TESTS)
             add_test(NAME host_image_sync COMMAND host_image_sync)
         endif()
+        # Stage 4-A settings window: pinned Dear ImGui, independent SDL2
+        # renderer so the guest can keep its existing OpenGL/software backend.
+        # Disable for offline builds that do not have a cached ImGui checkout.
+        option(FM11_SETTINGS_GUI "Build SDL settings window (Dear ImGui)" ON)
+        if(FM11_SETTINGS_GUI)
+            include(FetchContent)
+            FetchContent_Declare(fm11_imgui
+                GIT_REPOSITORY https://github.com/ocornut/imgui.git
+                GIT_TAG v1.91.9b
+                GIT_SHALLOW TRUE)
+            FetchContent_GetProperties(fm11_imgui)
+            if(NOT fm11_imgui_POPULATED)
+                FetchContent_Populate(fm11_imgui)
+            endif()
+            add_library(fm11_imgui_lib STATIC
+                ${fm11_imgui_SOURCE_DIR}/imgui.cpp
+                ${fm11_imgui_SOURCE_DIR}/imgui_draw.cpp
+                ${fm11_imgui_SOURCE_DIR}/imgui_tables.cpp
+                ${fm11_imgui_SOURCE_DIR}/imgui_widgets.cpp
+                ${fm11_imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
+                ${fm11_imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer2.cpp)
+            target_include_directories(fm11_imgui_lib PUBLIC
+                ${fm11_imgui_SOURCE_DIR} ${fm11_imgui_SOURCE_DIR}/backends)
+            if(TARGET SDL2::SDL2)
+                target_link_libraries(fm11_imgui_lib PUBLIC SDL2::SDL2)
+            else()
+                target_include_directories(fm11_imgui_lib PRIVATE ${SDL2_INCLUDE_DIRS})
+                target_link_libraries(fm11_imgui_lib PUBLIC ${SDL2_LIBRARIES})
+            endif()
+        endif()
         add_executable(fm11-sdl src/frontend/sdl_main.cpp src/frontend/OpenGlRenderer.cpp)
+        if(FM11_SETTINGS_GUI)
+            target_link_libraries(fm11-sdl PRIVATE fm11_imgui_lib)
+            target_compile_definitions(fm11-sdl PRIVATE FM11_SETTINGS_GUI=1)
+        endif()
         target_link_libraries(fm11-sdl PRIVATE fm11_core)
         target_compile_definitions(fm11-sdl PRIVATE
             FM11_DISASM_SCRIPT="${CMAKE_CURRENT_SOURCE_DIR}/tools/disassemble.py")
