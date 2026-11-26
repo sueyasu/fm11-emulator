@@ -503,6 +503,10 @@ if(FM11_BUILD_TESTS)
                      ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_display_test_roms.py
                      --handshake)
 
+    add_executable(debug_monitor tests/debug_monitor.cpp)
+    target_include_directories(debug_monitor PRIVATE src/frontend)
+    target_link_libraries(debug_monitor PRIVATE fm11_core)
+    add_test(NAME debug_monitor COMMAND debug_monitor)
     add_executable(display_cpu6809 tests/display_cpu6809.cpp)
     target_link_libraries(display_cpu6809 PRIVATE fm11_core)
     add_test(NAME display_cpu6809 COMMAND display_cpu6809)
