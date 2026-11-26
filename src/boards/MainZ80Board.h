@@ -5,6 +5,7 @@
 #include "SimZ80.h"
 #include <cstdint>
 #include <memory>
+#include <functional>
 #include <stdexcept>
 #include <vector>
 
@@ -32,6 +33,7 @@ public:
         installedRamBytes_=kib*1024;
     }
     std::size_t ramKiB() const {return installedRamBytes_/1024;}
+    void setMemoryAccessObserver(std::function<void(WORD,bool,BYTE)> observer) { memoryAccessObserver_=std::move(observer); }
     BYTE readMemory(WORD address) const;
     BYTE peekMemory(WORD address) const;
     void writeMemory(WORD address,BYTE value);
@@ -64,6 +66,7 @@ private:
     private:
         MainZ80Board& board_;
     };
+    mutable std::function<void(WORD,bool,BYTE)> memoryAccessObserver_;
     std::shared_ptr<std::vector<BYTE>> memory_ =
         std::make_shared<std::vector<BYTE>>(1u<<20,0);
     std::size_t installedRamBytes_=1u<<20;
