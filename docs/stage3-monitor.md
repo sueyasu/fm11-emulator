@@ -10,9 +10,9 @@ Commands (addresses are **hexadecimal**; step counts and dump lengths are **deci
 - `info cpus`: installed CPUs and current execution owner
 - `cpu main6809|main8088|z80|sub`: change debugger target ONLY
 - `stop` and `cont`: stop/restart all workers
-- `step [COUNT]`: single-step selected CPU while other CPUs remain stopped; prints registers and the next instruction
+- `step [COUNT]`: single-step selected CPU while other CPUs remain stopped; prints registers (next-instruction display resumes when unidasm is integrated)
 - `regs`: show target CPU register bank
-- `dis [ADDRESS] [COUNT]` (alias `u`): inspect instructions from ADDRESS, or the current PC; default 8, maximum 64 instructions; addresses hexadecimal, COUNT decimal by default
+- `dis [ADDRESS] [COUNT]` (alias `u`): command syntax retained; temporarily reports that unidasm integration is pending
 - `x ADDRESS [LENGTH]`: side-effect-free target CPU memory dump (main8088 also accepts `SEG:OFF`)
 - `xp ADDRESS [LENGTH]`: 1 MiB main physical RAM dump
 - `b HEXADDR`: set an execution breakpoint on the selected CPU; main8088 accepts `SEG:OFF` and stores its 20-bit physical address
@@ -40,44 +40,18 @@ for listing entries; atomic bitmaps allow the execution workers to read them
 safely without blocking. Main8088 breakpoints
 are matched against the 20-bit physical CS:IP address.
 
-Stage 3-B instruction inspection uses **external disassemblers only**.
-The locally implemented `MonitorDisassembler.h` and its private test
-have been deleted. No instruction decoder, instruction tables or
-disassembler classes are built into the emulator.
+Stage 3-B disassembly backend transition (cleanup commit):
 
-- MC6809/HD6309: Capstone M680X (`CS_MODE_M680X_6809` / `CS_MODE_M680X_6309`)
-- 8088/V20: Capstone x86 16-bit mode. V20-specific native and 8080
-  compatibility opcodes require further upstream validation; the tool does
-  **not** claim to recognize those extensions.
-- Z80: DeZ80 4.0.1, via a separate small Rust command-line adapter.
-  The adapter calls DeZ80's `Instruction::decode_one`; no opcode tables
-  or locally implemented decoder are used.
-
-**Installation on Ubuntu** (for `dis`; not required for emulation, building
-`fm11-sdl` or running the portable CTest suite):
-
-```sh
-sudo apt install python3-capstone cargo
-cargo build --manifest-path tools/dez80-bridge/Cargo.toml --release
-```
-
-The Capstone Python module must be available to `python3`, for example
-using `python3 -c "import capstone"`. If distro Python cannot import it,
-install Capstone into a suitable Python environment instead.
-
-On `dis [ADDRESS] [COUNT]` or after `step`, the monitor copies a bounded,
-read-only instruction byte window and invokes `tools/disassemble.py` as a
-separate process. The script uses Capstone or the DeZ80 Rust adapter and
-returns formatted instructions. Neither dependency is loaded into the
-emulator process, and no decoding work is added to the guest hot path.
-You can override the Rust adapter path with `FM11_DEZ80_BRIDGE`.
-External errors (missing Python module or unbuilt Rust adapter) are
-reported in the monitor; no silent fallback to the removed decoder occurs.
-
-The optional `external_disassembler` CTest checks Capstone and DeZ80 when
-installed and skips absent optional backends. The regular `debug_monitor`
-test also runs without them. Capstone is BSD-licensed; DeZ80 is MIT-licensed.
-Dependencies are installed separately and are not vendored in the emulator.
+- The experimental Capstone/DeZ80 Python frontend, Rust adapter, and their
+  optional smoke test have been removed before adopting MAME `unidasm`.
+- No locally implemented instruction decoder or opcode table remains in the
+  emulator.
+- The `dis`/`u` command and `step` command remain available, but
+  disassembly output is temporarily unavailable and explicitly reports
+  "unidasm integration pending". Stepping, CPU execution, breakpoints,
+  memory dumps, and monitor logging remain unchanged.
+- Stage 3-B-1 will restore disassembly with the system-provided
+  MAME `unidasm`. Stage 3-B-2 will add the V20/8080 mode extension.
 
 Memory watchpoints and machine register inspection remain Stage 3-C work.
 Input editing uses the terminal's
