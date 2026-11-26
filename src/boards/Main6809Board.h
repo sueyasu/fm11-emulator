@@ -188,6 +188,8 @@ private:
     BYTE readCpuUnobserved(WORD address);
     void writeCpuUnobserved(WORD address, BYTE value);
     std::function<void(WORD,bool,BYTE)> memoryAccessObserver_;
+    BYTE readIoUnobserved(WORD address);
+    void writeIoUnobserved(WORD address,BYTE value);
     mutable std::function<void(WORD,bool,BYTE)> ioAccessObserver_;
     mutable std::function<void(std::uint32_t,bool,BYTE)> physicalAccessObserver_;
     std::shared_ptr<std::vector<BYTE>> memory_;
