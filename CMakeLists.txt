@@ -503,6 +503,9 @@ if(FM11_BUILD_TESTS)
                      ${CMAKE_CURRENT_SOURCE_DIR}/tools/make_display_test_roms.py
                      --handshake)
 
+    add_executable(monitor_disassembler tests/monitor_disassembler.cpp)
+    target_include_directories(monitor_disassembler PRIVATE src/frontend)
+    add_test(NAME monitor_disassembler COMMAND monitor_disassembler)
     add_executable(debug_monitor tests/debug_monitor.cpp)
     target_include_directories(debug_monitor PRIVATE src/frontend)
     target_link_libraries(debug_monitor PRIVATE fm11_core)
