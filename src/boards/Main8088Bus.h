@@ -59,6 +59,7 @@ public:
     }
     void setMemoryAccessObserver(std::function<void(std::uint32_t,bool,BYTE)> observer) { memoryAccessObserver_=std::move(observer); }
     BYTE readMemory(std::uint32_t address) const;
+    BYTE peekMemory(std::uint32_t address) const {return readMemoryUnobserved(address);}
     void writeMemory(std::uint32_t address, BYTE value);
     BYTE readIo(WORD port) const;
     void writeIo(WORD port, BYTE value);
