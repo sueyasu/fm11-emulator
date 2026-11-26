@@ -221,12 +221,13 @@ public:
             }
             if(command=="dis" || command=="u") {
                 if(args.size()>3)return "Usage: dis [HEXADDR] [COUNT]\n";
-                const auto cpu=disArchitecture();
-                const auto pc=args.size()>1?address(args[1]):disPc();
                 const auto amount=args.size()>2?count(args[2]):8;
                 if(amount<1 || amount>64)return "Instruction count must be 1..64.\n";
-                if(pc>=disLimit())return "Disassembly address out of range.\n";
+                // Stop all workers before sampling the selected CPU's PC.
                 pause_(true);paused=true;
+                const auto cpu=disArchitecture();
+                const auto pc=args.size()>1?address(args[1]):disPc();
+                if(pc>=disLimit())return "Disassembly address out of range.\n";
                 return externalDisassemble(cpu,static_cast<std::uint32_t>(pc),static_cast<unsigned>(amount));
             }
             if(command=="x" || command=="xp") {
