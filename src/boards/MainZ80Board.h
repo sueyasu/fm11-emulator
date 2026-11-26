@@ -37,7 +37,13 @@ public:
     BYTE readMemory(WORD address) const;
     BYTE peekMemory(WORD address) const;
     void writeMemory(WORD address,BYTE value);
+    // Optional debugger observer: reports I/O bus transactions after completion.
+    void setIoAccessObserver(std::function<void(BYTE,bool,BYTE)> callback) {
+        ioAccessObserver_=std::move(callback);
+    }
     BYTE readIo(WORD address) const;
+    BYTE readPort(BYTE port) const;
+    void writePort(BYTE port,BYTE value);
     void writeIo(WORD address,BYTE value);
     BYTE bank() const {return bank_;}
 private:
@@ -46,8 +52,8 @@ private:
         explicit Core(MainZ80Board& board):board_(board){}
         BYTE GetMem(WORD addr) override {return board_.readMemory(addr);}
         void SetMem(WORD addr,BYTE data) override {board_.writeMemory(addr,data);}
-        BYTE GetIO(BYTE port) override {return board_.readIo(port);}
-        void SetIO(BYTE port,BYTE data) override {board_.writeIo(port,data);}
+        BYTE GetIO(BYTE port) override {return board_.readPort(port);}
+        void SetIO(BYTE port,BYTE data) override {board_.writePort(port,data);}
         void reset() override {
             regs=ZREGS{};
             instructionCycles_=0;
@@ -69,6 +75,7 @@ private:
     BYTE readMemoryUnobserved(WORD address) const;
     void writeMemoryUnobserved(WORD address, BYTE value);
     mutable std::function<void(WORD,bool,BYTE)> memoryAccessObserver_;
+    mutable std::function<void(BYTE,bool,BYTE)> ioAccessObserver_;
     std::shared_ptr<std::vector<BYTE>> memory_ =
         std::make_shared<std::vector<BYTE>>(1u<<20,0);
     std::size_t installedRamBytes_=1u<<20;
