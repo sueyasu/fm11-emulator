@@ -201,12 +201,25 @@ void Main8088Bus::setRamKiB(std::size_t kib)
 
 BYTE Main8088Bus::readMemory(std::uint32_t address) const
 {
+    const BYTE value=readMemoryUnobserved(address);
+    if(memoryAccessObserver_)memoryAccessObserver_(address,false,value);
+    return value;
+}
+
+BYTE Main8088Bus::readMemoryUnobserved(std::uint32_t address) const
+{
     address &= 0xfffff;
     return !conformanceRam_ && address >= kRomBase
         ? bootRom_[address-kRomBase] : (*memory_)[decodedRamAddress(address)];
 }
 
 void Main8088Bus::writeMemory(std::uint32_t address, BYTE value)
+{
+    writeMemoryUnobserved(address,value);
+    if(memoryAccessObserver_)memoryAccessObserver_(address,true,value);
+}
+
+void Main8088Bus::writeMemoryUnobserved(std::uint32_t address, BYTE value)
 {
     (*memory_)[decodedRamAddress(address)]=value;
 }
