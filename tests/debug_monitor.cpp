@@ -96,8 +96,17 @@ int main() {
     if(multi.execute("regs",paused).find("CS:IP=")==std::string::npos)return 14;
     if(multi.execute("x 0000:0000 1",paused).find(":")==std::string::npos)return 15;
     if(multi.execute("step",paused).find("not the active")==std::string::npos)return 16;
+    if(multi.execute("b 0000:0000",paused).find("set")==std::string::npos)return 54;
+    if(!multi.probe("main8088",0))return 55;
+    if(multi.takeBreak().find("PC=00000")==std::string::npos)return 56;
+    if(multi.execute("bc 0000:0000",paused).find("cleared")==std::string::npos)return 57;
     if(multi.execute("cpu z80",paused).find("Selected")==std::string::npos)return 17;
     if(multi.execute("regs",paused).find("AF=")==std::string::npos)return 18;
+    if(multi.execute("b 1234",paused).find("set")==std::string::npos)return 58;
+    if(!multi.probe("z80",0x1234))return 59;
+    if(multi.takeBreak().find("z80 PC=1234")==std::string::npos)return 60;
+    if(multi.execute("bc",paused).find("cleared")==std::string::npos)return 61;
+
     if(machine.activeCpuType()!=CpuType::MC6809)return 19;
     machine.setDisplayCpu6309Enabled(true);
     if(multi.execute("cpu sub",paused).find("Selected")==std::string::npos)return 20;
