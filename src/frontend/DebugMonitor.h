@@ -76,7 +76,7 @@ public:
         stoppedAt_=hit;
         const auto cpu=decodeCpu(hit);
         const auto pc=decodePc(hit);
-        return "Breakpoint: "+targetName(cpu)+" PC="+hex(pc,cpu==Target::Main8088?5:4)+"\\n";
+        return "Breakpoint: "+targetName(cpu)+" PC="+hex(pc,cpu==Target::Main8088?5:4)+"\n";
     }
     std::string prompt() const {return "fm11["+selected_+"]> ";}
     void emit(const std::string& s) {
@@ -117,10 +117,10 @@ public:
                 return "Usage: log start FILE | log stop | log status\n";
             }
             if(command=="b" || command=="break") {
-                if(args.size()!=2)return "Usage: b HEXADDR\\n";
+                if(args.size()!=2)return "Usage: b HEXADDR\n";
                 const auto addr=address(args[1]);
                 const auto cpu=parseTarget(selected_);
-                if(addr>=limit(cpu))return "Breakpoint address out of range.\\n";
+                if(addr>=limit(cpu))return "Breakpoint address out of range.\n";
                 {
                     std::lock_guard<std::mutex> lock(breakMutex_);
                     if(breaks_.insert({selected_,static_cast<std::uint32_t>(addr)}).second) {
@@ -130,18 +130,18 @@ public:
                         hasBreaks_.store(true,std::memory_order_release);
                     }
                 }
-                return "Breakpoint set: "+selected_+" PC="+hex(addr,cpu==Target::Main8088?5:4)+"\\n";
+                return "Breakpoint set: "+selected_+" PC="+hex(addr,cpu==Target::Main8088?5:4)+"\n";
             }
             if(command=="bl") {
-                if(args.size()!=1)return "Usage: bl\\n";
+                if(args.size()!=1)return "Usage: bl\n";
                 std::lock_guard<std::mutex> lock(breakMutex_);
                 std::ostringstream out;
                 for(const auto& entry:breaks_)
-                    out<<entry.first<<" PC="<<hex(entry.second,entry.first=="main8088"?5:4)<<"\\n";
-                return out.str().empty()?"No breakpoints.\\n":out.str();
+                    out<<entry.first<<" PC="<<hex(entry.second,entry.first=="main8088"?5:4)<<"\n";
+                return out.str().empty()?"No breakpoints.\n":out.str();
             }
             if(command=="bc") {
-                if(args.size()>2)return "Usage: bc [HEXADDR]\\n";
+                if(args.size()>2)return "Usage: bc [HEXADDR]\n";
                 std::lock_guard<std::mutex> lock(breakMutex_);
                 const auto cpu=parseTarget(selected_);
                 auto remove=[&](std::uint32_t addr) {
@@ -163,11 +163,11 @@ public:
                     }
                 } else {
                     const auto addr=address(args[1]);
-                    if(addr>=limit(cpu))return "Breakpoint address out of range.\\n";
+                    if(addr>=limit(cpu))return "Breakpoint address out of range.\n";
                     remove(static_cast<std::uint32_t>(addr));
                 }
                 hasBreaks_.store(breakCount_!=0,std::memory_order_release);
-                return "Breakpoint(s) cleared for "+selected_+".\\n";
+                return "Breakpoint(s) cleared for "+selected_+".\n";
             }
             if(command=="info" && args.size()==2 && args[1]=="cpus") {
                 std::ostringstream out;
@@ -192,7 +192,7 @@ public:
                 skip_.store(stoppedAt_,std::memory_order_release);
                 stoppedAt_=0;
                 pause_(false);paused=false;
-                return "Emulation running.\\n";
+                return "Emulation running.\n";
             }
             if(command=="r" || command=="regs") {
                 pause_(true);paused=true;return registers();
