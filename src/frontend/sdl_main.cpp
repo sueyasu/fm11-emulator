@@ -802,6 +802,13 @@ int main(int argc,char** argv) {
                 }
 #endif
                 if(event.type==SDL_QUIT)running=false;
+#ifdef FM11_SETTINGS_GUI
+                // With two SDL windows, closing the CRT does not necessarily
+                // generate SDL_QUIT. Closing Settings only hides that window.
+                if(event.type==SDL_WINDOWEVENT &&
+                   event.window.event==SDL_WINDOWEVENT_CLOSE &&
+                   event.window.windowID==SDL_GetWindowID(ui.window))running=false;
+#endif
                 if(event.type==SDL_TEXTINPUT && !paused && !testPattern && !testKanji) {
                     for(const unsigned char* p=reinterpret_cast<const unsigned char*>(event.text.text);
                         *p;++p) {
