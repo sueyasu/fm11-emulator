@@ -42,12 +42,32 @@ are matched against the 20-bit physical CS:IP address.
 
 Stage 3-B-1: external MAME `unidasm` integration
 
-Install the MAME command-line tools on Ubuntu:
+Obtain the MAME `unidasm` executable for Stage 3-B-1. **Ubuntu 24.04 LTS
+`mame-tools` does not include `unidasm`** (confirmed against the Ubuntu
+package file list), whereas newer Ubuntu releases such as 26.04 do.
+
+On a release that packages it:
 
 ```sh
 sudo apt install mame-tools
 command -v unidasm
 ```
+
+For Ubuntu 24.04, build from the [MAME source](https://github.com/mamedev/mame)
+using the [official build instructions](https://docs.mamedev.org/initialsetup/compilingmame.html).
+The build system supports `TOOLS=1 EMULATOR=0` to build utility programs
+without the MAME emulator executable. After building, provide the resulting
+`unidasm` executable via your `PATH` or set `FM11_UNIDASM` to its
+absolute path. MAME build dependencies are separate from fm11-emulator's.
+
+```sh
+# Run inside an appropriately prepared MAME source checkout:
+make TOOLS=1 EMULATOR=0 -j"$(nproc)"
+export FM11_UNIDASM="/absolute/path/to/built/unidasm"
+```
+
+Verify the path with `"$FM11_UNIDASM" -arch z80` (this command displays
+usage because an input file is required).
 
 The monitor keeps its `dis`/`u` interface and invokes
 `tools/disassemble.py` only on demand. The Python adapter sends the
