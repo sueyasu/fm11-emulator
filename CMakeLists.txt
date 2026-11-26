@@ -515,6 +515,9 @@ if(FM11_BUILD_TESTS)
         add_test(NAME unidasm_adapter
                  COMMAND ${Python3_EXECUTABLE}
                          ${CMAKE_CURRENT_SOURCE_DIR}/tests/unidasm_adapter.py)
+        add_test(NAME unidasm_live
+                 COMMAND ${Python3_EXECUTABLE}
+                         ${CMAKE_CURRENT_SOURCE_DIR}/tests/unidasm_live.py)
     endif()
     add_executable(display_cpu6809 tests/display_cpu6809.cpp)
     target_link_libraries(display_cpu6809 PRIVATE fm11_core)
