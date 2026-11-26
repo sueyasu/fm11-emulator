@@ -490,7 +490,7 @@ BYTE Main6809Board::peekCpu(WORD address) const
     if(address>=0x5000 && address<=0x5fff && (mmrControl_[3]&1u)==0)
         return bootRom_[address&0x0fff];
     if(address>=0x7c00 && address<=0x7fff && (mmrControl_[3]&0x40u)!=0)
-        return readPhysical(windowPhysicalAddress(address));
+        return peekPhysical(windowPhysicalAddress(address));
     if(address>=0xfc00) {
         if(address>=0xfc80 && address<=0xfcff && mainBoard_)
             return mainBoard_->displaySubsystem().peekMemory(WORD(0x9f80+address-0xfc80));
@@ -538,11 +538,18 @@ void Main6809Board::setRamKiB(std::size_t kib)
     rebuildRamPageMappings();
 }
 
-BYTE Main6809Board::readPhysical(std::uint32_t address) const
+BYTE Main6809Board::peekPhysical(std::uint32_t address) const
 {
     if (address >= kPhysicalMemorySize)
         throw std::out_of_range("Main6809Board physical read outside 20-bit bus");
     return (*memory_)[decodedPhysical(address)];
+}
+
+BYTE Main6809Board::readPhysical(std::uint32_t address) const
+{
+    const BYTE value=peekPhysical(address);
+    if(physicalAccessObserver_)physicalAccessObserver_(address,false,value);
+    return value;
 }
 
 void Main6809Board::writePhysical(std::uint32_t address, BYTE value)
@@ -550,6 +557,7 @@ void Main6809Board::writePhysical(std::uint32_t address, BYTE value)
     if (address >= kPhysicalMemorySize)
         throw std::out_of_range("Main6809Board physical write outside 20-bit bus");
     (*memory_)[decodedPhysical(address)] = value;
+    if(physicalAccessObserver_)physicalAccessObserver_(address,true,value);
 }
 
 bool Main6809Board::isMmrRegister(WORD address) const
