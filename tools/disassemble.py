@@ -38,7 +38,7 @@ def disassemble(arch, start, count, data, executable=None):
 
     executable = executable or os.environ.get("FM11_UNIDASM") or shutil.which("unidasm")
     if not executable:
-        raise RuntimeError("MAME unidasm not found; install mame-tools (sudo apt install mame-tools)")
+        raise RuntimeError("MAME unidasm not found. Ubuntu 24.04 mame-tools omits it; build unidasm from MAME source or set FM11_UNIDASM")
 
     # -count is a PC/byte span, NOT an instruction count. It must
     # include enough input bytes for COUNT maximum-length instructions.
