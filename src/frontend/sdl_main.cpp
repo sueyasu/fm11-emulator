@@ -1046,11 +1046,14 @@ int main(int argc,char** argv) {
             // host time to the three emulation workers between UI polls.
             SDL_Delay(1);
         }
-        monitorInput.reset();
-        monitor.reset();
+        // The worker probes retain a non-owning monitor pointer. Stop
+        // every worker before destroying the monitor to avoid use-after-free.
         cpuWorker.stop();
         machine.stopDisplayCpu();
         machine.stopRealtimePtm();
+        monitorProbe.store(nullptr,std::memory_order_release);
+        monitorInput.reset();
+        monitor.reset();
         // No whole-image rewrite on exit. Ensure all immediately pwrite'd
         // disk updates are fdatasync'd after emulated writers have stopped.
         if(!imageSync.shutdown()) {
