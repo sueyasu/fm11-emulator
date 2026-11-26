@@ -20,6 +20,9 @@ Commands (addresses are **hexadecimal**; step counts and dump lengths are **deci
 - `b HEXADDR`: set an execution breakpoint on the selected CPU; main8088 accepts `SEG:OFF` and stores its 20-bit physical address
 - `bl`: list all CPU-specific execution breakpoints
 - `bc [HEXADDR]`: clear one breakpoint, or all breakpoints for the selected CPU
+- `w r|w|rw HEXADDR`: set a one-byte memory access watchpoint on the selected main CPU (read, write, or both)
+- `wl`: list memory watchpoints
+- `wc [HEXADDR]`: clear watchpoints on the selected CPU (all if address omitted)
 - `log start FILE`, `log stop`, `log status`: append monitor input/output to a log. Logging is off by default; repeated `log start` does not reopen the file and `log stop` closes it. Starting again appends to the same file
 
 `step` on an inactive main/optional card is refused; select that
@@ -195,12 +198,50 @@ fm11[main6809]> info machine
 fm11[main6809]> info io FD06
 ```
 
-Stage 3-C remaining: non-invasive memory read/write watchpoints and
-additional hardware register inspection. These require explicit
-instrumentation of the CPU, DMA, and I/O access routes so that an
-access is not silently missed or attributed to the wrong CPU.
-A watchpoint must not be implemented by repeatedly polling memory
-during normal emulation.
+Stage 3-C-B: main-CPU memory watchpoints (initial integration)
+
+The `w`, `wl`, and `wc` commands use optional access observers on the
+6809, Z80 and 8088/V20 memory bus entry points. Read and write bitmaps
+are per target. The worker only sets an atomic event when an access
+matches; the SDL thread pauses workers and formats the event afterward.
+Execution occurs through the watched instruction, so a watchpoint
+stops *after* the reported memory access rather than before it.
+
+```text
+fm11[main8088]> w rw 1DC00
+fm11[main8088]> wl
+fm11[main8088]> c
+Watchpoint: main8088 write 1DC00 value=C3
+fm11[main8088]> wc 1DC00
+```
+
+6809 and Z80 watchpoint addresses are 16-bit **CPU-visible logical**
+addresses, including memory-mapped I/O addresses read/written through
+their CPU memory access entry points. Z80 IN/OUT instructions use a
+separate I/O port path and are not included. The 8088/V20 watchpoint
+addresses are 20-bit bus addresses; for the current V20 CP/M-80 memory
+layout, 8080 logical DC00 maps to physical 1DC00.
+
+The regular debugger `x`/`dis` inspection uses peek methods and
+does not trigger a watchpoint or consume I/O input. A `read` watchpoint
+can also match instruction fetch bytes when they travel through the
+CPU's ordinary memory read entry point. Watchpoints monitor bus
+access attempts, including writes that hardware may discard.
+
+**Current scope limits:** 6809 DMA accesses that go through
+`readPhysical`/`writePhysical` rather than CPU memory access methods
+are not observed; display-sub-CPU watchpoints are not yet supported.
+8088/V20 DMA accesses do pass through the shared bus methods and can
+trigger a watchpoint, but the current report does not distinguish the
+initiating DMA channel from CPU instructions. Shared-memory accesses
+by other boards are only reported under the board whose observed entry
+point was called. Thus these commands must not yet be treated as a
+complete physical-memory access tracer.
+
+Stage 3-C remaining: DMA-aware physical-memory observation, display
+sub-CPU coverage, and explicit read/write I/O access tracking with
+source attribution. Memory access observers remain uninstalled in
+normal execution without `--monitor` and do not poll memory.
 
 
 Input editing uses the terminal's
