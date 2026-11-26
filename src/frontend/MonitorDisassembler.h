@@ -262,6 +262,64 @@ inline Instruction decode8088(const Reader& rd,unsigned pc) {
     auto word=[&](){const unsigned x=byte();return x|(byte()<<8);};
     static constexpr const char* r8[]={"AL","CL","DL","BL","AH","CH","DH","BH"};
     static constexpr const char* r16[]={"AX","CX","DX","BX","SP","BP","SI","DI"};
+    struct Operand {unsigned field;std::string rm;};
+    auto operand=[&](bool wide)->Operand {
+        const unsigned m=byte(),mode=m>>6,field=(m>>3)&7,reg=m&7;
+        const auto regName=[&](unsigned i){return std::string(wide?r16[i]:r8[i]);};
+        if(mode==3)return {field,regName(reg)};
+        static constexpr const char* ea[]={
+            "BX+SI","BX+DI","BP+SI","BP+DI","SI","DI","BP","BX"};
+        if(mode==0 && reg==6)return {field,"[$"+hex(word(),4)+"]"};
+        std::string addr=ea[reg];
+        if(mode==1) {
+            const int d=static_cast<std::int8_t>(byte());
+            if(d)addr+=(d<0?"-":"+")+std::string("$")+hex(d<0?-d:d);
+        } else if(mode==2) {
+            const int d=static_cast<std::int16_t>(word());
+            if(d)addr+=(d<0?"-":"+")+std::string("$")+hex(d<0?-d:d,4);
+        }
+        return {field,"["+addr+"]"};
+    };
+    if(op>=0x70 && op<=0x7f) {
+        static constexpr const char* jump[]={
+            "JO","JNO","JB","JNB","JZ","JNZ","JBE","JA",
+            "JS","JNS","JP","JNP","JL","JGE","JLE","JG"};
+        const int d=static_cast<std::int8_t>(byte());
+        return done(std::string(jump[op-0x70])+" $"+hex((pc+n+d)&0xfffff,5));
+    }
+    if((op>=0x88 && op<=0x8b) || op==0x86 || op==0x87) {
+        const bool wide=op&1;
+        const auto m=operand(wide);
+        const std::string reg=wide?r16[m.field]:r8[m.field];
+        const bool direction=op&2;
+        return done(std::string(op==0x86||op==0x87?"XCHG ":"MOV ")+
+                    (direction?reg+","+m.rm:m.rm+","+reg));
+    }
+    if(op==0x8d) {
+        const auto m=operand(true);
+        return done(std::string("LEA ")+r16[m.field]+","+m.rm);
+    }
+    if(op==0xc6 || op==0xc7) {
+        const bool wide=op&1;
+        const auto m=operand(wide);
+        return done(std::string("MOV ")+m.rm+",$"+(wide?hex(word(),4):hex(byte())));
+    }
+    if(op==0x80 || op==0x81 || op==0x82 || op==0x83) {
+        const bool wide=op==0x81 || op==0x83;
+        const auto m=operand(wide);
+        static constexpr const char* alu[]={
+            "ADD","OR","ADC","SBB","AND","SUB","XOR","CMP"};
+        const unsigned imm=wide && op==0x81?word():byte();
+        return done(std::string(alu[m.field])+" "+m.rm+",$"+hex(imm,(wide&&op==0x81)?4:2));
+    }
+    if((op<=0x3b && (op&7)<=3) || (op>=0x84 && op<=0x85)) {
+        static constexpr const char* names[]={"ADD","OR","ADC","SBB","AND","SUB","XOR","CMP"};
+        const bool test=op>=0x84;
+        const auto m=operand(op&1);
+        const std::string reg=(op&1)?r16[m.field]:r8[m.field];
+        return done(std::string(test?"TEST":names[(op>>3)&7])+" "+
+                    ((op&2)&&!test?reg+","+m.rm:m.rm+","+reg));
+    }
     if(op>=0xb0 && op<=0xb7)return done(std::string("MOV ")+r8[op-0xb0]+",$"+hex(byte()));
     if(op>=0xb8 && op<=0xbf)return done(std::string("MOV ")+r16[op-0xb8]+",$"+hex(word(),4));
     if(op>=0x40 && op<=0x47)return done(std::string("INC ")+r16[op-0x40]);
