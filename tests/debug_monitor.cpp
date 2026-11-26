@@ -193,7 +193,10 @@ int main() {
     if(multi.takeBreak().find("z80 write 1234 value=5A")==std::string::npos)return 106;
     if(multi.execute("wc",paused).find("cleared")==std::string::npos)return 107;
     if(multi.execute("cpu sub",paused).find("Selected")==std::string::npos)return 108;
-    if(multi.execute("w w 2000",paused).find("not yet supported")==std::string::npos)return 109;
+    if(multi.execute("w w 2000",paused).find("Watchpoint set")==std::string::npos)return 109;
+    machine.systemBoard().displayCpu().SetMemByte(0x2000,0x19);
+    if(multi.takeBreak().find("sub write 2000 value=19")==std::string::npos)return 118;
+    if(multi.execute("wc",paused).find("cleared")==std::string::npos)return 119;
     if(multi.execute("cpu main6809",paused).find("Selected")==std::string::npos)return 110;
     if(multi.execute("w w 2000",paused).find("set")==std::string::npos)return 111;
     auto* m6809=dynamic_cast<Main6809Board*>(&machine.board(0));
