@@ -19,6 +19,12 @@ int main() {
     if(mon.execute("regs",paused).find("PC=C000")==std::string::npos || !paused)return 3;
     if(mon.execute("step",paused).find("PC=C001")==std::string::npos)return 4;
     if(mon.execute("x c000 2",paused).find("12 12")==std::string::npos)return 5;
+    const auto dis=mon.execute("dis c000 2",paused);
+    if(dis.find("C000  12")==std::string::npos ||
+       dis.find("C001  12")==std::string::npos ||
+       dis.find("NOP")==std::string::npos)return 83;
+    if(mon.execute("dis c000 0",paused).find("1..64")==std::string::npos)return 84;
+    if(mon.execute("dis 10000 1",paused).find("out of range")==std::string::npos)return 85;
     if(mon.execute("x afe4 1",paused).find("FF")==std::string::npos)return 6;
     if(mon.execute("cpu main6809",paused).find("Selected")==std::string::npos)return 7;
     if(mon.execute("xp 0 1",paused).find("00")==std::string::npos)return 8;
