@@ -50,7 +50,8 @@ rom = external/roms/boot8088.bin
 type = none
 clock_hz = 4000000
 
-# The display subsystem currently supports MC6809 only.
+# Select the independent display sub-CPU (6809 or 6309).
+# Original display ROM runs in HD6309 compatibility mode with cpu = 6309.
 [display_cpu]
 cpu = 6809
 clock_hz = 2000000

@@ -17,7 +17,7 @@ int main() {
               "[main_8088]\ninstalled = true\ncpu = v20\nclock_hz = 8000000\nrom = test-8088.rom\n"
               "[DIPSW]\nmain_cpu = 8088\n2D_FDD = true\n2HD_FDD = false\nHDD = false\n"
               "[optional_cpu]\ntype = z80\nclock_hz = 4000000\n"
-              "[display_cpu]\ncpu = 6809\nclock_hz = 2000000\nrom = test-display.rom\nank_rom = test-ank.rom\n"
+              "[display_cpu]\ncpu = 6309\nclock_hz = 2000000\nrom = test-display.rom\nank_rom = test-ank.rom\n"
               "[memory]\nram_kib = 384\n"
               "[display]\nheight = 200\n"
               "[floppy_2d]\ndrive0 = system.d88\ndrive3 = extra.d88\n"
@@ -33,6 +33,7 @@ int main() {
        config.main8088ClockHz!=8000000 ||
        config.main6809Rom!="test-6809.rom" ||
        config.main8088Rom!="test-8088.rom" ||
+       config.displayCpu!=CpuType::HD6309 ||
        config.displayRom!="test-display.rom" ||
        config.displayHeight!=200 ||
        config.ankRom!="test-ank.rom" ||
@@ -50,6 +51,7 @@ int main() {
     MachineConfig defaults;
     if(defaults.hddTimed)return 24;
     if(defaults.displayHeight!=400)return 19;
+    if(defaults.displayCpu!=CpuType::MC6809)return 29;
     if(defaults.ramKiB!=1024)return 23;
     if(defaults.bootDip()!=0x9f)return 10;
     // Verify all three independently controlled SW6..SW8 bits.
@@ -62,6 +64,13 @@ int main() {
     if(defaults.bootDip()!=0x1f)return 12;
 
     Machine machine;
+    if(machine.systemBoard().displayCpu().is6309Enabled())return 30;
+    machine.setDisplayCpu6309Enabled(config.displayCpu==CpuType::HD6309);
+    if(!machine.systemBoard().displayCpu().is6309Enabled())return 31;
+    machine.reset();
+    if(!machine.systemBoard().displayCpu().is6309Enabled())return 32;
+    machine.setDisplayCpu6309Enabled(false);
+    if(machine.systemBoard().displayCpu().is6309Enabled())return 33;
     auto m6809=std::make_unique<Main6809Board>(config.main6809Cpu);
     m6809->setCpuClockHz(config.main6809ClockHz);
     auto* board6809=m6809.get();
@@ -183,6 +192,16 @@ int main() {
     }
     {std::ofstream out(path);out<<"[floppy]\ntiming = strict\n";}
     try {(void)parseMachineConfigFile(path);return 28;}
+    catch(const std::runtime_error&) {}
+    std::remove(path.c_str());
+    for(const char* value:{"6809","6309"}) {
+        {std::ofstream out(path);out<<"[display_cpu]\ncpu="<<value<<"\n";}
+        const auto parsed=parseMachineConfigFile(path);
+        if(parsed.displayCpu!=(std::string(value)=="6309"?CpuType::HD6309:CpuType::MC6809))
+            return 34;
+    }
+    {std::ofstream out(path);out<<"[display_cpu]\ncpu=6502\n";}
+    try {(void)parseMachineConfigFile(path);return 35;}
     catch(const std::runtime_error&) {}
     std::remove(path.c_str());
     return 0;

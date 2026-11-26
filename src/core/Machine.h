@@ -14,6 +14,7 @@
 #include <chrono>
 #include <atomic>
 #include <mutex>
+#include <stdexcept>
 #include <vector>
 
 class Main6809Board;
