@@ -592,7 +592,8 @@ int main(int argc,char** argv) {
         std::atomic<DebugMonitor*> monitorProbe{nullptr};
         if(monitorEnabled)machine.setDisplayBreakProbe([&](std::uint32_t pc) {
             auto* mon=monitorProbe.load(std::memory_order_acquire);
-            return !mon || !mon->probe(DebugMonitor::Target::Sub,pc);
+            return !mon || !mon->needsProbe() ||
+                   !mon->probe(DebugMonitor::Target::Sub,pc);
         });
         if(machine.boardCount())machine.startRealtimePtm();
         machine.startDisplayCpu();
@@ -627,7 +628,9 @@ int main(int argc,char** argv) {
                         const auto* active=machine.activeBoard();
                         if(!active)break;
                         if(auto* mon=monitorProbe.load(std::memory_order_acquire)) {
-                            if(mon->probe(DebugMonitor::cpuTarget(active->cpu().type()),active->cpu().pc()))
+                            if(mon->needsProbe() &&
+                               mon->probe(DebugMonitor::cpuTarget(active->cpu().type()),
+                                          active->cpu().pc()))
                                 break;
                         }
                         const bool ptmIrqSyncedBefore=
