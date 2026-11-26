@@ -16,6 +16,13 @@ std::uint32_t MainZ80Board::physicalAddress(WORD address) const
 
 BYTE MainZ80Board::readMemory(WORD address) const
 {
+    const BYTE value=readMemoryUnobserved(address);
+    if(memoryAccessObserver_)memoryAccessObserver_(address,false,value);
+    return value;
+}
+
+BYTE MainZ80Board::readMemoryUnobserved(WORD address) const
+{
     if(address>=0xfc00)return readIo(address);
     const auto physical=physicalAddress(address);
     return (*memory_)[physical%installedRamBytes_];
@@ -32,6 +39,12 @@ BYTE MainZ80Board::peekMemory(WORD address) const
 }
 
 void MainZ80Board::writeMemory(WORD address,BYTE value)
+{
+    writeMemoryUnobserved(address,value);
+    if(memoryAccessObserver_)memoryAccessObserver_(address,true,value);
+}
+
+void MainZ80Board::writeMemoryUnobserved(WORD address,BYTE value)
 {
     if(address>=0xfc00) {writeIo(address,value);return;}
     const auto physical=physicalAddress(address);
