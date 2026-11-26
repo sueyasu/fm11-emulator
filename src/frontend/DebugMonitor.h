@@ -6,6 +6,7 @@
 #include "Sim09.h"
 #include "SimZ80.h"
 #include <fstream>
+#include <cstdio>
 #include <atomic>
 #include <mutex>
 #include <set>
@@ -365,10 +366,40 @@ private:
     std::uint32_t disLimit() const {
         return selected_=="main8088"?0x100000u:0x10000u;
     }
-    // Stage 3-B transition: the previous Capstone/DeZ80 backend was
-    // removed. The command interface is retained for the unidasm backend.
-    std::string externalDisassemble(const std::string&,std::uint32_t,unsigned) const {
-        return "External disassembler unavailable: unidasm integration pending.\n";
+    std::string externalDisassemble(const std::string& arch,
+                                    std::uint32_t pc,unsigned count) const {
+        // CPU memory inspection only. MAME unidasm does all decoding.
+        const auto boundary=disLimit();
+        std::string bytes;
+        bytes.reserve(2048*2);
+        {
+            auto guard=m_.lockDisplay();
+            for(unsigned i=0;i<2048;++i)
+                bytes+=hex(peek((pc+i)%boundary,false),2);
+        }
+#ifndef FM11_DISASM_SCRIPT
+        return "External disassembler not configured (FM11_DISASM_SCRIPT).\n";
+#else
+        // Safely quote the compile-time path, including literal apostrophes.
+        const std::string script=FM11_DISASM_SCRIPT;
+        std::string quoted="'";
+        for(const char ch:script) {
+            if(ch==39)quoted+=std::string(1,39)+"\\'"+std::string(1,39);
+            else quoted+=ch;
+        }
+        quoted+="'";
+        const auto command="python3 "+quoted+" "+arch+" "+hex(pc,boundary>65536?5:4)+
+                           " "+std::to_string(count)+" "+bytes+" 2>&1";
+        FILE* pipe=popen(command.c_str(),"r");
+        if(!pipe)return "Cannot launch external disassembler.\n";
+        std::string output;
+        char buffer[1024];
+        while(std::fgets(buffer,sizeof(buffer),pipe))
+            output+=buffer;
+        const int status=pclose(pipe);
+        if(status!=0)return "External disassembler failed:\n"+output;
+        return output.empty()?"No instructions decoded.\n":output;
+#endif
     }
     BYTE peek(std::uint64_t addr,bool physical) const {
         if(physical) {
