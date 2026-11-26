@@ -566,7 +566,7 @@ private:
         auto* b=board(selected_);
         if(!b)throw std::runtime_error("CPU not installed");
         if(auto* p=dynamic_cast<Main6809Board*>(b))return p->peekCpu(static_cast<WORD>(addr));
-        if(auto* p=dynamic_cast<Main8088Board*>(b))return p->bus().readMemory(addr);
+        if(auto* p=dynamic_cast<Main8088Board*>(b))return p->bus().peekMemory(addr);
         if(auto* p=dynamic_cast<MainZ80Board*>(b))return p->peekMemory(static_cast<WORD>(addr));
         throw std::runtime_error("unsupported CPU");
     }
