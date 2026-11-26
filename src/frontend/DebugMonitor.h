@@ -94,7 +94,8 @@ public:
         try {
             if(command=="help" || command=="?")return
                 "help, info cpus, cpu NAME, stop, cont, step [COUNT], regs, "
-                "x HEXADDR [HEXLEN], xp HEXADDR [HEXLEN], log start FILE, log stop, log status\n";
+                "x HEXADDR [HEXLEN], xp HEXADDR [HEXLEN], b HEXADDR, bl, bc [HEXADDR], "
+                "log start FILE, log stop, log status\n";
             if(command=="log") {
                 if(args.size()==2 && args[1]=="status")
                     return log_.is_open()?"Logging: "+file_+"\n":"Logging: off\n";
