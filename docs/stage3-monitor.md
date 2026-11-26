@@ -8,6 +8,8 @@ after the main CPU, sub CPU and realtime PTM workers acknowledge pause.
 Commands (addresses are **hexadecimal**; step counts and dump lengths are **decimal** by default, or `0x`-prefixed hexadecimal):
 - `help`: command summary
 - `info cpus`: installed CPUs and current execution owner
+- `info machine`: read-only board status (RAM, 6809 IRQ/FDC state, 8088 PIC/DMA masks, Z80 bank)
+- `info io FDXX`: 6809 FD00–FDFF register access counters and last write (does not read the actual I/O port)
 - `cpu main6809|main8088|z80|sub`: change debugger target ONLY
 - `stop` and `cont`: stop/restart all workers
 - `step [COUNT]`: single-step selected CPU while other CPUs remain stopped; prints registers and the next instruction when unidasm is installed
@@ -175,7 +177,32 @@ is absent (or the NEC extension is absent unless explicitly required).
 installed and validates the missing-tool error otherwise. Neither Python
 nor MAME is needed for the core emulator's normal execution.
 
-Memory watchpoints and machine register inspection remain Stage 3-C work.
+Stage 3-C-A: read-only machine/board diagnostics (in progress)
+
+`info machine` pauses guest workers, then displays per-board information
+using existing getters only. It does not read live device I/O ports or
+acknowledge IRQs. It includes installed memory size, active CPU board,
+6809 IRQ/FDC state and counters, 8088 PIC/DMA masks, and Z80 RAM bank.
+
+`info io FDXX` displays the 6809 board's cumulative read/write
+counters and the last written value for the named FDxx register. It
+does not return or consume the device's *current* register value.
+This is intentionally limited to the 6809 board's existing counters,
+not a universal I/O trace. For example:
+
+```text
+fm11[main6809]> info machine
+fm11[main6809]> info io FD06
+```
+
+Stage 3-C remaining: non-invasive memory read/write watchpoints and
+additional hardware register inspection. These require explicit
+instrumentation of the CPU, DMA, and I/O access routes so that an
+access is not silently missed or attributed to the wrong CPU.
+A watchpoint must not be implemented by repeatedly polling memory
+during normal emulation.
+
+
 Input editing uses the terminal's
 canonical/echo mode initially; history and Tab completion can be
 added independently with libedit. Existing --trace-* output does not
