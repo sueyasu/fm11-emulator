@@ -1,4 +1,5 @@
 #include "Machine.h"
+#include "DebugMonitor.h"
 #include "SdlCpuPacer.h"
 #include "OpenGlRenderer.h"
 #include "CpuSpeedMeter.h"
@@ -37,8 +38,46 @@
 #include <mutex>
 #include <atomic>
 #include <thread>
+#include <poll.h>
+#include <deque>
 
 namespace {
+// Poll stdin without blocking SDL shutdown while no line is entered.
+class MonitorInput {
+public:
+    MonitorInput():thread_([this]{readLoop();}) {}
+    ~MonitorInput() {stop_=true;if(thread_.joinable())thread_.join();}
+    bool pop(std::string& line) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if(queue_.empty())return false;
+        line=std::move(queue_.front());queue_.pop_front();return true;
+    }
+private:
+    void readLoop() {
+        std::string partial;
+        while(!stop_) {
+            pollfd fd{STDIN_FILENO,POLLIN|POLLHUP,0};
+            const int ready=::poll(&fd,1,100);
+            if(ready<0) {if(errno==EINTR)continue;return;}
+            if(ready==0)continue;
+            if(!(fd.revents&(POLLIN|POLLHUP)))return;
+            char buf[256];
+            const ssize_t n=::read(STDIN_FILENO,buf,sizeof(buf));
+            if(n<=0)return;
+            for(ssize_t i=0;i<n;++i) {
+                if(buf[i]=='\n') {
+                    if(!partial.empty() && partial.back()=='\r')partial.pop_back();
+                    {std::lock_guard<std::mutex> lock(mutex_);queue_.push_back(std::move(partial));}
+                    partial.clear();
+                } else if(partial.size()<4096)partial+=buf[i];
+            }
+        }
+    }
+    std::atomic<bool> stop_{false};
+    std::thread thread_;
+    std::mutex mutex_;
+    std::deque<std::string> queue_;
+};
 struct Sdl {
     Sdl() {
         if(SDL_Init(SDL_INIT_VIDEO|SDL_INIT_EVENTS)!=0)
@@ -87,7 +126,7 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--beep-test] [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--test-kanji] [--main-rom FILE] [--trace-boot] [--trace-fdc] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--kanji-rom FILE] [--kanji2-rom FILE] [--test-kanji-level 1|2] [--trace-kanji] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software] [--scanlines]\n"
+    std::cout<<"usage: fm11-sdl [--beep-test] [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--test-kanji] [--main-rom FILE] [--trace-boot] [--trace-fdc] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--kanji-rom FILE] [--kanji2-rom FILE] [--test-kanji-level 1|2] [--trace-kanji] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software] [--scanlines] [--monitor]\n"
              <<"  ROM defaults to [display_cpu].rom (external/roms/display6809.bin); CPU ROM paths may be set in the config file\n"
              <<"  Initial window height: [display].height=200|400 (default 400); --high forces 400\n"
              <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
@@ -121,7 +160,7 @@ int main(int argc,char** argv) {
         unsigned floppyDrive=0;
         unsigned bootDip=0x9f;
         bool bootDipOverridden=false;
-        bool high=false, highOverridden=false, testPattern=false, traceBoot=false, traceFdc=false, traceInkey=false, diagnostics=false, traceCpm80=false, cpuSpeed=false;
+        bool high=false, highOverridden=false, testPattern=false, traceBoot=false, traceFdc=false, traceInkey=false, diagnostics=false, traceCpm80=false, cpuSpeed=false, monitorEnabled=false;
         std::uint64_t instructions=10000;
         for(int i=1;i<argc;++i) {
             const std::string arg=argv[i];
@@ -133,6 +172,7 @@ int main(int argc,char** argv) {
             if(arg=="--trace-kanji"){traceKanji=true;continue;}
              if(arg=="--trace-cpm80"){traceCpm80=true;continue;}
             if(arg=="--cpu-speed"){cpuSpeed=true;continue;}
+            if(arg=="--monitor"){monitorEnabled=true;continue;}
             if(arg=="--test-pattern"){testPattern=true;continue;}
             if(arg=="--trace-boot"){traceBoot=true;continue;}
             if(arg=="--trace-fdc"){traceFdc=true;continue;}
