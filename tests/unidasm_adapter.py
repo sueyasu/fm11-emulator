@@ -65,7 +65,7 @@ class TestUnidasmAdapter(unittest.TestCase):
     def test_missing_executable(self):
         with patch.object(adapter.shutil, "which", return_value=None), \
              patch.dict(adapter.os.environ, {}, clear=True):
-            with self.assertRaisesRegex(RuntimeError, "install mame-tools"):
+            with self.assertRaisesRegex(RuntimeError, "MAME unidasm not found"):
                 adapter.disassemble("z80", 0, 1, b"\x00")
 
     def test_unidasm_failure_and_timeout(self):
