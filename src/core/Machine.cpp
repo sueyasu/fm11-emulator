@@ -69,6 +69,12 @@ void Machine::startDisplayCpu()
             for(unsigned i=0;i<8192 && credit>0 && !halted;) {
                 auto guard=mainBoard_->lockDisplay();
                 for(unsigned slice=0;slice<16 && i<8192 && credit>0;++slice,++i) {
+                    if(displayBreakProbe_ &&
+                       !displayBreakProbe_(mainBoard_->displayCpu().regs.r.w.PC)) {
+                        credit=0;
+                        halted=true;
+                        break;
+                    }
                     if(!mainBoard_->displayCpu().executeOne()) {
                         hardwareHalt=mainBoard_->displaySubsystem().haltRequested();
                         credit=0;
