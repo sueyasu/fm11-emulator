@@ -374,11 +374,15 @@ private:
                                     std::uint32_t pc,unsigned count) const {
         // CPU memory inspection only. MAME unidasm does all decoding.
         const auto boundary=disLimit();
+        // MAME's largest supported instruction is no longer than 16 bytes.
+        // Supply enough bytes for COUNT instructions without reading a
+        // fixed 2 KiB window even for a single instruction.
+        const auto window=static_cast<std::size_t>(count)*16;
         std::string bytes;
-        bytes.reserve(2048*2);
+        bytes.reserve(window*2);
         {
             auto guard=m_.lockDisplay();
-            for(unsigned i=0;i<2048;++i)
+            for(std::size_t i=0;i<window;++i)
                 bytes+=hex(peek((pc+i)%boundary,false),2);
         }
 #ifndef FM11_DISASM_SCRIPT
