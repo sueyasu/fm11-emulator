@@ -380,28 +380,28 @@ private:
                 bytes+=hex(peek((pc+i)%boundary,false),2);
         }
 #ifndef FM11_DISASM_SCRIPT
-        return "External disassembler not configured (FM11_DISASM_SCRIPT).\\n";
+        return "External disassembler not configured (FM11_DISASM_SCRIPT).\n";
 #else
         // Quote the configured script path for popen; all other values are
         // generated locally and contain only letters, digits and hex.
         const std::string script=FM11_DISASM_SCRIPT;
         std::string quoted="'";
         for(const char ch:script) {
-            if(ch=='\\'')quoted+="'\\\\''";
+            if(ch==39)quoted+=std::string("'")+char(34)+"'"+char(34)+"'";
             else quoted+=ch;
         }
         quoted+="'";
         const auto command="python3 "+quoted+" "+arch+" "+hex(pc,boundary>65536?5:4)+
                            " "+std::to_string(count)+" "+bytes+" 2>&1";
         FILE* pipe=popen(command.c_str(),"r");
-        if(!pipe)return "Cannot launch external disassembler.\\n";
+        if(!pipe)return "Cannot launch external disassembler.\n";
         std::string output;
         char buffer[1024];
         while(std::fgets(buffer,sizeof(buffer),pipe))
             output+=buffer;
         const int status=pclose(pipe);
-        if(status!=0)return "External disassembler failed:\\n"+output;
-        return output.empty()?"No instructions decoded.\\n":output;
+        if(status!=0)return "External disassembler failed:\n"+output;
+        return output.empty()?"No instructions decoded.\n":output;
 #endif
     }
     BYTE peek(std::uint64_t addr,bool physical) const {
