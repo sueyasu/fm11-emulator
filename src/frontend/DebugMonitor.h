@@ -32,6 +32,7 @@ public:
     // never inspects guest memory and never patches instruction bytes.
     bool probe(const std::string& cpu,std::uint32_t pc) {
         if(breakPending_.load(std::memory_order_acquire))return true;
+        if(!hasBreaks_.load(std::memory_order_acquire))return false;
         std::lock_guard<std::mutex> lock(breakMutex_);
         const auto key=std::make_pair(cpu,pc);
         if(skip_==key) {skip_={"",0};return false;}
@@ -92,7 +93,8 @@ public:
                 const auto addr=address(args[1]);
                 const auto limit=selected_=="main8088"?0x100000u:0x10000u;
                 if(addr>=limit)return "Breakpoint address out of range.\\n";
-                {std::lock_guard<std::mutex> lock(breakMutex_);breaks_.insert({selected_,static_cast<std::uint32_t>(addr)});}
+                {std::lock_guard<std::mutex> lock(breakMutex_);breaks_.insert({selected_,static_cast<std::uint32_t>(addr)});
+                 hasBreaks_.store(true,std::memory_order_release);}
                 return "Breakpoint set: "+selected_+" PC="+hex(addr,limit>65536?5:4)+"\\n";
             }
             if(command=="bl") {
@@ -114,6 +116,7 @@ public:
                     const auto addr=address(args[1]);
                     breaks_.erase({selected_,static_cast<std::uint32_t>(addr)});
                 }
+                hasBreaks_.store(!breaks_.empty(),std::memory_order_release);
                 return "Breakpoint(s) cleared for "+selected_+".\\n";
             }
             if(command=="info" && args.size()==2 && args[1]=="cpus") {
@@ -287,6 +290,7 @@ private:
     std::set<std::pair<std::string,std::uint32_t>> breaks_;
     std::pair<std::string,std::uint32_t> hit_{"",0},stoppedAt_{"",0},skip_{"",0};
     std::atomic<bool> breakPending_{false};
+    std::atomic<bool> hasBreaks_{false};
     Machine& m_;
     PauseFn pause_;
     std::string selected_;
