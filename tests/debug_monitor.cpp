@@ -69,6 +69,24 @@ int main() {
     if(mon.execute("x 10 10",paused).find("0010:")==std::string::npos)return 34;
     if(mon.execute("x 10 0x10",paused).find("0010:")==std::string::npos)return 35;
     if(mon.execute("step 0",paused).find("1..10000")==std::string::npos)return 36;
+    // Per-CPU breakpoints are non-invasive and checked before fetch.
+    if(mon.execute("b c010",paused).find("Breakpoint set")==std::string::npos)return 37;
+    if(mon.execute("bl",paused).find("C010")==std::string::npos)return 38;
+    if(mon.probe("sub",0xc010)!=false)return 39; // selected main6809
+    if(!mon.probe("main6809",0xc010) || !mon.breakPending())return 40;
+    if(mon.takeBreak().find("main6809 PC=C010")==std::string::npos)return 41;
+    if(mon.execute("cont",paused).find("running")==std::string::npos)return 42;
+    if(mon.probe("main6809",0xc010))return 43; // skip precisely once
+    if(!mon.probe("main6809",0xc010))return 44;
+    if(mon.takeBreak().empty())return 45;
+    if(mon.execute("bc c010",paused).find("cleared")==std::string::npos)return 46;
+    if(mon.probe("main6809",0xc010))return 47;
+    if(mon.execute("cpu sub",paused).find("Selected")==std::string::npos)return 48;
+    if(mon.execute("b c000",paused).find("set")==std::string::npos)return 49;
+    if(!mon.probe("sub",0xc000))return 50;
+    if(mon.takeBreak().find("sub PC=C000")==std::string::npos)return 51;
+    if(mon.execute("bc",paused).find("cleared")==std::string::npos)return 52;
+    if(mon.execute("bl",paused).find("No breakpoints")==std::string::npos)return 53;
     // Selection is debugger-only; the guest CPU owner remains unchanged.
     machine.addBoard(std::make_unique<Main8088Board>(CpuType::NECV20));
     machine.addBoard(std::make_unique<MainZ80Board>());
