@@ -17,7 +17,15 @@ int main() {
     if(mon.execute("info cpus",paused).find("sub  MC6809")==std::string::npos)return 1;
     if(mon.execute("cpu sub",paused).find("Selected: sub")==std::string::npos)return 2;
     if(mon.execute("regs",paused).find("PC=C000")==std::string::npos || !paused)return 3;
-    if(mon.execute("step",paused).find("PC=C001")==std::string::npos)return 4;
+    const auto stepped=mon.execute("step",paused);
+    if(stepped.find("PC=C001")==std::string::npos)return 4;
+    // The step command should display the next instruction as well as regs.
+    // Missing optional unidasm is acceptable; arbitrary backend errors are not.
+    if(stepped.find("External disassembler failed:")!=std::string::npos) {
+        if(stepped.find("unidasm not found")==std::string::npos)return 86;
+    } else if(stepped.find("C001:")==std::string::npos ||
+              (stepped.find("nop")==std::string::npos &&
+               stepped.find("NOP")==std::string::npos))return 86;
     if(mon.execute("x c000 2",paused).find("12 12")==std::string::npos)return 5;
     const auto dis=mon.execute("dis c000 2",paused);
     // Disassembly may be unavailable when optional MAME tools are absent,
