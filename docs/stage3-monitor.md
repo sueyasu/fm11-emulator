@@ -29,8 +29,14 @@ Stage 3-B (in progress): execution breakpoints are checked before instruction
 execution for main6809, main8088, z80 and the independent display CPU (sub).
 They do not patch guest memory. On a hit, all CPU/PTM workers pause and the
 monitor prints the CPU and PC. `cont` skips the triggering breakpoint once
-to avoid immediately stopping at the same instruction. With no breakpoints
-the CPU hot path performs only an atomic enabled check. Main8088 breakpoints
+to avoid immediately stopping at the same instruction. With no breakpoints,
+the main CPU hot path checks only an atomic enabled flag before reading
+CPU type or PC. With breakpoints, each CPU uses a compact, per-CPU atomic
+bitset (main8088: 20-bit physical addresses; other CPUs: 16-bit addresses).
+The execution threads perform no string conversions, allocations, set lookups,
+or mutex acquisitions to test breakpoints. UI commands retain an ordered set
+for listing entries; atomic bitmaps allow the execution workers to read them
+safely without blocking. Main8088 breakpoints
 are matched against the 20-bit physical CS:IP address.
 
 Disassembly and step/disassembly integration remain Stage 3-B work;
