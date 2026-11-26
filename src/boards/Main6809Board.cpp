@@ -599,6 +599,13 @@ void Main6809Board::writeMmrRegister(WORD address, BYTE value)
 
 BYTE Main6809Board::readIo(WORD address)
 {
+    const BYTE value=readIoUnobserved(address);
+    if(ioAccessObserver_)ioAccessObserver_(address,false,value);
+    return value;
+}
+
+BYTE Main6809Board::readIoUnobserved(WORD address)
+{
     if (isMmrRegister(address))
         return readMmrRegister(address);
 
@@ -814,6 +821,12 @@ BYTE Main6809Board::readIo(WORD address)
 }
 
 void Main6809Board::writeIo(WORD address, BYTE value)
+{
+    writeIoUnobserved(address,value);
+    if(ioAccessObserver_)ioAccessObserver_(address,true,value);
+}
+
+void Main6809Board::writeIoUnobserved(WORD address, BYTE value)
 {
     if (isMmrRegister(address)) {
         writeMmrRegister(address, value);
