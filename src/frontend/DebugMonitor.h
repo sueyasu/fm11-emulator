@@ -220,12 +220,12 @@ public:
                 return result+disassemble(disArchitecture(),disPc(),1);
             }
             if(command=="dis" || command=="u") {
-                if(args.size()>3)return "Usage: dis [HEXADDR] [COUNT]\\n";
+                if(args.size()>3)return "Usage: dis [HEXADDR] [COUNT]\n";
                 const auto cpu=disArchitecture();
                 const auto pc=args.size()>1?address(args[1]):disPc();
                 const auto amount=args.size()>2?count(args[2]):8;
-                if(amount<1 || amount>64)return "Instruction count must be 1..64.\\n";
-                if(pc>=disLimit())return "Disassembly address out of range.\\n";
+                if(amount<1 || amount>64)return "Instruction count must be 1..64.\n";
+                if(pc>=disLimit())return "Disassembly address out of range.\n";
                 pause_(true);paused=true;
                 return disassemble(cpu,static_cast<std::uint32_t>(pc),static_cast<unsigned>(amount));
             }
@@ -382,7 +382,7 @@ private:
             for(unsigned n=0;n<length;++n)
                 out<<hex(read((pc+n)%limit),2)<<" ";
             for(unsigned n=length;n<6;++n)out<<"   ";
-            out<<" "<<decoded.mnemonic<<"\\n";
+            out<<" "<<decoded.mnemonic<<"\n";
             pc=(pc+length)%limit;
         }
         return out.str();
