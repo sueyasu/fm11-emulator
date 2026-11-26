@@ -92,6 +92,41 @@ class TestUnidasmAdapter(unittest.TestCase):
         self.assertEqual(run.call_args.args[0][3], "nec80")
         self.assertTrue(text.startswith("FFFFF:"))
 
+    def test_maximum_instruction_count_and_byte_span(self):
+        # The monitor captures at most 64*16 bytes for 64 instructions.
+        listing = b"".join(
+            f"{i:04x}: 00  nop\n".encode("ascii") for i in range(65)
+        )
+        result = subprocess.CompletedProcess([], 0, listing, b"")
+        with patch.object(adapter.subprocess, "run", return_value=result) as run:
+            lines = adapter.disassemble("z80", 0, 64, b"\x00" * 1024, "unidasm")
+        self.assertEqual(len(lines.splitlines()), 64)
+        self.assertEqual(run.call_args.args[0][-2:], ["-count", "1024"])
+        self.assertEqual(len(run.call_args.kwargs["input"]), 1024)
+
+    def test_one_instruction_requires_only_sixteen_bytes(self):
+        result = subprocess.CompletedProcess([], 0, b"fffe: 12  nop\n", b"")
+        with patch.object(adapter.subprocess, "run", return_value=result) as run:
+            lines = adapter.disassemble("m6809", 0xfffe, 1, b"\x12" * 16, "unidasm")
+        self.assertEqual(lines, "FFFE: 12  nop\n")
+        self.assertEqual(run.call_args.args[0][-2:], ["-count", "16"])
+
+    def test_v20_8080_cpm_address_and_listing(self):
+        result = subprocess.CompletedProcess(
+            [], 0,
+            b"1dc00: c3 5c df  jmp  $df5c\n1dc03: c3 58 df  jmp  $df58\n",
+            b"",
+        )
+        with patch.object(adapter.subprocess, "run", return_value=result):
+            lines = adapter.disassemble(
+                "v20_8080", 0x1dc00, 2, bytes.fromhex("C3 5C DF C3 58 DF"),
+                "unidasm",
+            ).splitlines()
+        self.assertEqual(
+            lines,
+            ["1DC00: c3 5c df  jmp  $df5c", "1DC03: c3 58 df  jmp  $df58"],
+        )
+
     def test_empty_output(self):
         with patch.object(adapter.subprocess, "run", return_value=
                           subprocess.CompletedProcess([], 0, b"banner\n", b"")):
