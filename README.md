@@ -291,6 +291,48 @@ switch still selects 200/400 emulated scanout lines, and the aspect
 ratio remains the same in both modes. Use `--renderer gl` and
 `--renderer software` to compare presentation backends.
 
+## Stage 4-A: SDL settings editor
+
+The SDL frontend has a separate Dear ImGui settings window, toggled with
+**Ctrl+F10**. It keeps the FM-11 CRT window intact, in both OpenGL and
+software rendering modes. Edit configuration values under Disks, CPU/RAM,
+ROM/Display, Serial, DIP switches, and Timing, then click **Save user
+configuration**.
+
+This first stage is **editing and saving only**: edits do not alter the
+running emulation. FDD hot-swap is Stage 4-B; reset-and-apply (including
+CPU board/RAM rebuilding) is Stage 4-C. In Stage 4-A the disk image
+entries are paths, not file picker widgets.
+
+The save destination is always the user's XDG location:
+
+- `$XDG_CONFIG_HOME/fm11emu/fm11emu.conf` if XDG_CONFIG_HOME is absolute
+- otherwise `$HOME/.config/fm11emu/fm11emu.conf`
+
+The program continues to load settings in the order `--config`, user
+config, `/etc/fm11emu.conf`, built-in defaults. The GUI never writes
+`/etc` or an explicitly loaded `--config` path. If you keep passing
+`--config /etc/fm11emu.conf` on subsequent launches, it will still
+override the GUI-saved user configuration. The GUI displays its save path
+and warns about this. Saving writes a complete INI file to a 0600
+temporary file and atomically renames it over the user file after
+syncing, rejecting invalid entries before replacement.
+
+Stage 4-A uses **Dear ImGui v1.91.9b** fetched by CMake when building the
+SDL frontend. This is a build-time dependency, not a new runtime package.
+If building offline and the ImGui sources are not cached, configure with
+`-DFM11_SETTINGS_GUI=OFF` to retain the existing SDL frontend without
+the settings editor. After first configuring with network access, the
+fetched sources remain in the build directory.
+
+```sh
+cmake -S . -B build -DFM11_SETTINGS_GUI=ON
+cmake --build build -j$(nproc)
+ctest --test-dir build -R 'machine_config|sdl_help' --output-on-failure
+ctest --test-dir build --output-on-failure
+./build/fm11-sdl
+```
+
 ## SDL2 display frontend (experimental)
 
 Install `libsdl2-dev` on Ubuntu, then reconfigure CMake so it can
