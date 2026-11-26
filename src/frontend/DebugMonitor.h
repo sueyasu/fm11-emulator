@@ -34,6 +34,38 @@ public:
             bitmaps_[i]=std::make_unique<std::atomic<std::uint64_t>[]>(wordCounts_[i]);
             for(std::size_t w=0;w<wordCounts_[i];++w)
                 bitmaps_[i][w].store(0,std::memory_order_relaxed);
+            watchReads_[i]=std::make_unique<std::atomic<std::uint64_t>[]>(wordCounts_[i]);
+            watchWrites_[i]=std::make_unique<std::atomic<std::uint64_t>[]>(wordCounts_[i]);
+            for(std::size_t w=0;w<wordCounts_[i];++w) {
+                watchReads_[i][w].store(0,std::memory_order_relaxed);
+                watchWrites_[i][w].store(0,std::memory_order_relaxed);
+            }
+        }
+        for(std::size_t i=0;i<m_.boardCount();++i) {
+            auto& board=m_.board(i);
+            if(auto* p=dynamic_cast<Main6809Board*>(&board))
+                p->setMemoryAccessObserver([this](WORD addr,bool write,BYTE value) {
+                    watchProbe(Target::Main6809,addr,write,value);
+                });
+            else if(auto* p=dynamic_cast<Main8088Board*>(&board))
+                p->bus().setMemoryAccessObserver([this](std::uint32_t addr,bool write,BYTE value) {
+                    watchProbe(Target::Main8088,addr&0xfffff,write,value);
+                });
+            else if(auto* p=dynamic_cast<MainZ80Board*>(&board))
+                p->setMemoryAccessObserver([this](WORD addr,bool write,BYTE value) {
+                    watchProbe(Target::Z80,addr,write,value);
+                });
+        }
+    }
+    ~DebugMonitor() {
+        for(std::size_t i=0;i<m_.boardCount();++i) {
+            auto& board=m_.board(i);
+            if(auto* p=dynamic_cast<Main6809Board*>(&board))
+                p->setMemoryAccessObserver({});
+            else if(auto* p=dynamic_cast<Main8088Board*>(&board))
+                p->bus().setMemoryAccessObserver({});
+            else if(auto* p=dynamic_cast<MainZ80Board*>(&board))
+                p->setMemoryAccessObserver({});
         }
     }
     enum class Target : std::uint8_t { Main6809, Main8088, Z80, Sub };
@@ -63,6 +95,18 @@ public:
         hit_.compare_exchange_strong(none,encoded,std::memory_order_acq_rel);
         return true;
     }
+    void watchProbe(Target cpu,std::uint32_t addr,bool write,BYTE value) {
+        if(!hasWatches_.load(std::memory_order_relaxed) ||
+           hit_.load(std::memory_order_relaxed)!=0 || addr>=limit(cpu))return;
+        const auto& bits=(write?watchWrites_:watchReads_)[index(cpu)];
+        const auto word=bits[addr>>6].load(std::memory_order_relaxed);
+        if(!(word&(std::uint64_t{1}<<(addr&63))))return;
+        const std::uint64_t event=(std::uint64_t{1}<<63) |
+            (std::uint64_t(write)<<40) | (std::uint64_t(value)<<32) |
+            encode(cpu,addr);
+        std::uint64_t none=0;
+        hit_.compare_exchange_strong(none,event,std::memory_order_acq_rel);
+    }
     bool breakPending() const {return hit_.load(std::memory_order_acquire)!=0;}
     // Cheap guard for instruction loops. Avoid reading CPU type or PC when
     // no execution breakpoint is configured and no stop is pending.
@@ -74,9 +118,16 @@ public:
     std::string takeBreak() {
         const auto hit=hit_.exchange(0,std::memory_order_acq_rel);
         if(!hit)return {};
-        stoppedAt_=hit;
         const auto cpu=decodeCpu(hit);
         const auto pc=decodePc(hit);
+        if(hit&(std::uint64_t{1}<<63)) {
+            stoppedAt_=0;
+            const bool write=(hit&(std::uint64_t{1}<<40))!=0;
+            const auto value=static_cast<BYTE>((hit>>32)&0xff);
+            return "Watchpoint: "+targetName(cpu)+(write?" write ":" read ")+
+                hex(pc,cpu==Target::Main8088?5:4)+" value="+hex(value,2)+"\n";
+        }
+        stoppedAt_=hit;
         return "Breakpoint: "+targetName(cpu)+" PC="+hex(pc,cpu==Target::Main8088?5:4)+"\n";
     }
     std::string prompt() const {return "fm11["+selected_+"]> ";}
@@ -479,7 +530,7 @@ private:
         return (std::uint64_t(index(t)+1)<<20)|pc;
     }
     static Target decodeCpu(std::uint64_t k) {
-        return static_cast<Target>((k>>20)-1);
+        return static_cast<Target>(((k>>20)&7)-1);
     }
     static std::uint32_t decodePc(std::uint64_t k) {
         return static_cast<std::uint32_t>(k&0xfffffu);
@@ -503,6 +554,10 @@ private:
     // 1 MiB / 64 bits for main8088, 64 KiB / 64 bits for the others.
     static constexpr std::array<std::size_t,4> wordCounts_{{1024,16384,1024,1024}};
     std::array<std::unique_ptr<std::atomic<std::uint64_t>[]>,4> bitmaps_;
+    std::array<std::unique_ptr<std::atomic<std::uint64_t>[]>,4> watchReads_;
+    std::array<std::unique_ptr<std::atomic<std::uint64_t>[]>,4> watchWrites_;
+    std::set<std::tuple<std::string,char,std::uint32_t>> watches_;
+    std::atomic<bool> hasWatches_{false};
     std::mutex breakMutex_; // monitor command thread only; never on hot path
     std::set<std::pair<std::string,std::uint32_t>> breaks_;
     std::size_t breakCount_=0;
