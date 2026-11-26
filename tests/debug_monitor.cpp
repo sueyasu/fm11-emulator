@@ -15,6 +15,16 @@ int main() {
     bool paused=false;
     DebugMonitor mon(machine,[&](bool stop){paused=stop;});
     if(mon.execute("info cpus",paused).find("sub  MC6809")==std::string::npos)return 1;
+    const auto machineInfo=mon.execute("info machine",paused);
+    if(machineInfo.find("Active main CPU: MC6809")==std::string::npos ||
+       machineInfo.find("RAM=")==std::string::npos ||
+       machineInfo.find("FDC-status=")==std::string::npos ||
+       !paused)return 87;
+    const auto ioInfo=mon.execute("info io FD06",paused);
+    if(ioInfo.find("FD06 reads=")==std::string::npos ||
+       ioInfo.find("writes=")==std::string::npos ||
+       ioInfo.find("last-write=")==std::string::npos)return 88;
+    if(mon.execute("info io FC06",paused).find("FD00..FDFF")==std::string::npos)return 89;
     if(mon.execute("cpu sub",paused).find("Selected: sub")==std::string::npos)return 2;
     if(mon.execute("regs",paused).find("PC=C000")==std::string::npos || !paused)return 3;
     const auto stepped=mon.execute("step",paused);
@@ -142,6 +152,10 @@ int main() {
     if(multi.takeBreak().find("PC=FFFFF")==std::string::npos)return 80;
     if(multi.execute("bc ffff:000f",paused).find("cleared")==std::string::npos)return 81;
     if(multi.probe(DebugMonitor::Target::Main8088,0xfffff))return 82;
+    const auto multiInfo=multi.execute("info machine",paused);
+    if(multiInfo.find("PIC-mask=")==std::string::npos ||
+       multiInfo.find("DMA-mask=")==std::string::npos ||
+       multiInfo.find("bank=")==std::string::npos)return 90;
     if(multi.execute("cpu z80",paused).find("Selected")==std::string::npos)return 17;
     if(multi.execute("regs",paused).find("AF=")==std::string::npos)return 18;
     if(multi.execute("b 1234",paused).find("set")==std::string::npos)return 58;
