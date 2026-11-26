@@ -78,10 +78,6 @@ public:
 	// Zero denotes an instruction without verified timing data.
 	std::uint32_t LastInstructionCycles() const { return lastInstructionCycles_; }
 
-	char *DisInd(WORD *ptr);
-	char *DisPhs(BYTE pt, BYTE op);
-	char *DisReg(BYTE pt);
-	WORD Dis09(char *tmp, WORD addr);
 
 private:
 	void BeginInstructionTiming(WORD opcode);
