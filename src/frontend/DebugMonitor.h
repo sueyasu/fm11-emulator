@@ -5,6 +5,7 @@
 #include "MainZ80Board.h"
 #include "Sim09.h"
 #include "SimZ80.h"
+#include "MonitorDisassembler.h"
 #include <fstream>
 #include <atomic>
 #include <mutex>
@@ -95,7 +96,8 @@ public:
         try {
             if(command=="help" || command=="?")return
                 "help, info cpus, cpu NAME, stop, cont, step [COUNT], regs, "
-                "x HEXADDR [HEXLEN], xp HEXADDR [HEXLEN], b HEXADDR, bl, bc [HEXADDR], "
+                "x HEXADDR [HEXLEN], xp HEXADDR [HEXLEN], dis [HEXADDR] [COUNT], "
+                "b HEXADDR, bl, bc [HEXADDR], "
                 "log start FILE, log stop, log status\n";
             if(command=="log") {
                 if(args.size()==2 && args[1]=="status")
@@ -212,7 +214,20 @@ public:
                         return "CPU is not the active execution owner.\n";
                     for(unsigned i=0;i<n;++i)m_.executeOne();
                 }
-                return registers();
+                // Print the instruction at the new PC after a step.
+                // This is inspection only and cannot advance CPU state.
+                const auto result=registers();
+                return result+disassemble(disArchitecture(),disPc(),1);
+            }
+            if(command=="dis" || command=="u") {
+                if(args.size()>3)return "Usage: dis [HEXADDR] [COUNT]\\n";
+                const auto cpu=disArchitecture();
+                const auto pc=args.size()>1?address(args[1]):disPc();
+                const auto amount=args.size()>2?count(args[2]):8;
+                if(amount<1 || amount>64)return "Instruction count must be 1..64.\\n";
+                if(pc>=disLimit())return "Disassembly address out of range.\\n";
+                pause_(true);paused=true;
+                return disassemble(cpu,static_cast<std::uint32_t>(pc),static_cast<unsigned>(amount));
             }
             if(command=="x" || command=="xp") {
                 if(args.size()<2 || args.size()>3)return "Usage: x|xp HEXADDR [HEXLEN]\n";
@@ -321,6 +336,54 @@ private:
                    <<" I="<<hex(r.r.b.I,2)<<" R="<<hex(r.r.b.R,2)
                    <<" IFF1="<<unsigned(r.f.IFF1)<<" IFF2="<<unsigned(r.f.IFF2)<<"\n";
             }
+        }
+        return out.str();
+    }
+    MonitorDisassembler::Architecture disArchitecture() const {
+        using Arch=MonitorDisassembler::Architecture;
+        if(selected_=="sub")
+            return m_.systemBoard().displayCpu().is6309Enabled()?Arch::HD6309:Arch::M6809;
+        const auto* b=board(selected_);
+        if(!b)throw std::runtime_error("CPU not installed");
+        switch(b->cpu().type()) {
+            case CpuType::MC6809:return Arch::M6809;
+            case CpuType::HD6309:return Arch::HD6309;
+            case CpuType::Z80:return Arch::Z80;
+            case CpuType::I8088:return Arch::I8088;
+            case CpuType::NECV20:return Arch::V20;
+        }
+        throw std::runtime_error("unknown CPU architecture");
+    }
+    std::uint32_t disPc() const {
+        if(selected_=="sub") {
+            auto lock=m_.lockDisplay();
+            return m_.systemBoard().displayCpu().regs.r.w.PC;
+        }
+        const auto* b=board(selected_);
+        if(!b)throw std::runtime_error("CPU not installed");
+        return b->cpu().pc();
+    }
+    std::uint32_t disLimit() const {
+        return selected_=="main8088"?0x100000u:0x10000u;
+    }
+    std::string disassemble(MonitorDisassembler::Architecture arch,
+                            std::uint32_t pc,unsigned count) const {
+        const auto limit=disLimit();
+        // All instruction reads use the same side-effect-free peek path as x.
+        auto guard=m_.lockDisplay();
+        const auto read=[&](std::uint32_t a)->std::uint8_t {
+            return peek(a%limit,false);
+        };
+        std::ostringstream out;
+        for(unsigned i=0;i<count;++i) {
+            const auto decoded=MonitorDisassembler::decode(arch,read,pc);
+            const auto length=std::max(1u,std::min(decoded.size,16u));
+            out<<hex(pc,limit>65536?5:4)<<"  ";
+            for(unsigned n=0;n<length;++n)
+                out<<hex(read((pc+n)%limit),2)<<" ";
+            for(unsigned n=length;n<6;++n)out<<"   ";
+            out<<" "<<decoded.mnemonic<<"\\n";
+            pc=(pc+length)%limit;
         }
         return out.str();
     }
