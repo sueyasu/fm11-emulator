@@ -226,6 +226,66 @@ public:
                 }
                 return "Usage: log start FILE | log stop | log status\n";
             }
+            if(command=="wi") {
+                if(args.size()!=3 || (args[1]!="r" && args[1]!="w" && args[1]!="rw"))
+                    return "Usage: wi r|w|rw PORT\n";
+                const auto cpu=parseTarget(selected_);
+                if(cpu==Target::Sub || cpu==Target::Physical)
+                    return "Use 'w' for memory-mapped sub-CPU I/O.\n";
+                const auto port=number(args[2]);
+                const auto ceiling=cpu==Target::Z80?0x100u:0x10000u;
+                if(port>=ceiling || (cpu==Target::Main6809 &&
+                   (port<0xfd00 || port>0xfdff)))
+                    return "I/O watchpoint port out of range.\n";
+                std::lock_guard<std::mutex> lock(breakMutex_);
+                for(const char mode:args[1]) {
+                    if(!ioWatches_.insert({selected_,mode,static_cast<std::uint32_t>(port)}).second)
+                        continue;
+                    auto& bits=(mode=='w'?ioWrites_:ioReads_)[index(cpu)];
+                    bits[port>>6].fetch_or(std::uint64_t{1}<<(port&63),std::memory_order_release);
+                }
+                hasIoWatches_.store(!ioWatches_.empty(),std::memory_order_release);
+                return "I/O watchpoint set: "+selected_+" "+args[1]+" "+
+                    hex(port,cpu==Target::Z80?2:4)+"\n";
+            }
+            if(command=="wil") {
+                if(args.size()!=1)return "Usage: wil\n";
+                std::lock_guard<std::mutex> lock(breakMutex_);
+                std::ostringstream out;
+                for(const auto& entry:ioWatches_) {
+                    const auto& name=std::get<0>(entry);
+                    out<<name<<" "<<std::get<1>(entry)<<" port="<<hex(
+                        std::get<2>(entry),name=="z80"?2:4)<<"\n";
+                }
+                return out.str().empty()?"No I/O watchpoints.\n":out.str();
+            }
+            if(command=="wic") {
+                if(args.size()>2)return "Usage: wic [PORT]\n";
+                const auto cpu=parseTarget(selected_);
+                if(cpu==Target::Sub || cpu==Target::Physical)
+                    return "Use 'wc' for memory-mapped sub-CPU I/O.\n";
+                std::uint64_t port=0;
+                if(args.size()==2) {
+                    port=number(args[1]);
+                    const auto ceiling=cpu==Target::Z80?0x100u:0x10000u;
+                    if(port>=ceiling || (cpu==Target::Main6809 &&
+                       (port<0xfd00 || port>0xfdff)))
+                        return "I/O watchpoint port out of range.\n";
+                }
+                std::lock_guard<std::mutex> lock(breakMutex_);
+                for(auto it=ioWatches_.begin();it!=ioWatches_.end();) {
+                    if(std::get<0>(*it)!=selected_ ||
+                       (args.size()==2 && std::get<2>(*it)!=port)) {++it;continue;}
+                    const char mode=std::get<1>(*it);
+                    const auto address=std::get<2>(*it);
+                    auto& bits=(mode=='w'?ioWrites_:ioReads_)[index(cpu)];
+                    bits[address>>6].fetch_and(
+                        ~(std::uint64_t{1}<<(address&63)),std::memory_order_release);
+                    it=ioWatches_.erase(it);
+                }
+                hasIoWatches_.store(!ioWatches_.empty(),std::memory_order_release);
+                return "I/O watchpoint(s) cleared for "+selected_+".\n";
+            }
             if(command=="w" || command=="watch" || command=="wp") {
                 if(args.size()!=3 || (args[1]!="r" && args[1]!="w" && args[1]!="rw"))
                     return "Usage: w r|w|rw HEXADDR | wp r|w|rw PHYSADDR\n";
