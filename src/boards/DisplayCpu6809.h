@@ -13,10 +13,16 @@ public:
         Set6309Enabled(false);
     }
     BYTE GetMemByte(WORD address) override {
-        return display_.readMemory(address);
+        const BYTE value=display_.readMemory(address);
+        if(memoryAccessObserver_)memoryAccessObserver_(address,false,value);
+        return value;
     }
     void SetMemByte(WORD address,BYTE value) override {
         display_.writeMemory(address,value);
+        if(memoryAccessObserver_)memoryAccessObserver_(address,true,value);
+    }
+    void setMemoryAccessObserver(std::function<void(WORD,bool,BYTE)> fn) {
+        memoryAccessObserver_=std::move(fn);
     }
     void set6309Enabled(bool enabled) {Set6309Enabled(enabled);}
     bool is6309Enabled() const {return Is6309Enabled();}
@@ -59,5 +65,6 @@ public:
 private:
     std::uint64_t nmiCycles_=0;
     DisplaySubsystem& display_;
+    std::function<void(WORD,bool,BYTE)> memoryAccessObserver_;
     std::function<void(std::uint16_t)> instructionObserver_;
 };
