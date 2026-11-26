@@ -63,6 +63,12 @@ public:
         return true;
     }
     bool breakPending() const {return hit_.load(std::memory_order_acquire)!=0;}
+    // Cheap guard for instruction loops. Avoid reading CPU type or PC when
+    // no execution breakpoint is configured and no stop is pending.
+    bool needsProbe() const {
+        return hasBreaks_.load(std::memory_order_relaxed) ||
+               hit_.load(std::memory_order_acquire)!=0;
+    }
     // Only called after both main and display workers are paused.
     std::string takeBreak() {
         const auto hit=hit_.exchange(0,std::memory_order_acq_rel);
