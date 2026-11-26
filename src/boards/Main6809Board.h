@@ -140,6 +140,10 @@ private:
     bool isMmrRegister(WORD address) const;
     BYTE readMmrRegister(WORD address) const;
     void writeMmrRegister(WORD address, BYTE value);
+    // Optional debugger observer: reports I/O bus transactions after completion.
+    void setIoAccessObserver(std::function<void(WORD,bool,BYTE)> callback) {
+        ioAccessObserver_=std::move(callback);
+    }
     BYTE readIo(WORD address);
     BYTE readPtm(BYTE port);
     void writePtm(BYTE port, BYTE value);
@@ -184,6 +188,7 @@ private:
     BYTE readCpuUnobserved(WORD address);
     void writeCpuUnobserved(WORD address, BYTE value);
     std::function<void(WORD,bool,BYTE)> memoryAccessObserver_;
+    mutable std::function<void(WORD,bool,BYTE)> ioAccessObserver_;
     mutable std::function<void(std::uint32_t,bool,BYTE)> physicalAccessObserver_;
     std::shared_ptr<std::vector<BYTE>> memory_;
     std::size_t installedRamBytes_=kPhysicalMemorySize;
