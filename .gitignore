@@ -12,3 +12,4 @@ CMakeUserPresets.json
 
 # Optional external DeZ80 bridge build outputs
 /tools/dez80-bridge/target/
+/tools/dez80-bridge/Cargo.lock
