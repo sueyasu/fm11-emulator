@@ -40,8 +40,39 @@ for listing entries; atomic bitmaps allow the execution workers to read them
 safely without blocking. Main8088 breakpoints
 are matched against the 20-bit physical CS:IP address.
 
-Stage 3-B instruction inspection is implemented as a separate, read-only decoder, so it does not execute instructions or alter the guest. It understands common MC6809/HD6309, Z80 and 8088/V20 instruction families, including indexed operands and branch targets for many common cases. It is **not yet an exhaustive decoder**: unknown byte patterns are shown as `FCB` (6809) or `DB` (Z80/8088), without guessing undocumented instruction lengths. In particular, 6309-specific, extended Z80 ED and the full 8088 ModR/M instruction space still need broader coverage. Do not rely on instruction boundaries following an unknown opcode. The disassembler is separate from the per-instruction breakpoint hot path and runs only upon a monitor command or explicit single-step.
+Stage 3-B instruction inspection uses **external disassemblers only**.
+The locally implemented `MonitorDisassembler.h` and its private test
+have been deleted. No instruction decoder, instruction tables or
+disassembler classes are built into the emulator.
 
+- MC6809/HD6309: Capstone M680X (`CS_MODE_M680X_6809` / `CS_MODE_M680X_6309`)
+- 8088/V20: Capstone x86 16-bit mode. V20-specific native and 8080
+  compatibility opcodes require further upstream validation; the tool does
+  **not** claim to recognize those extensions.
+- Z80: DeZ80 4.0.1, via a separate small Rust command-line adapter.
+  The adapter calls DeZ80's `Instruction::decode_one`; no opcode tables
+  or locally implemented decoder are used.
+
+**Installation on Ubuntu** (for `dis`; not required for emulation, building
+`fm11-sdl` or running the portable CTest suite):
+
+```sh
+sudo apt install python3-capstone cargo
+cargo build --manifest-path tools/dez80-bridge/Cargo.toml --release
+```
+
+The Capstone Python module must be available to `python3`, for example
+using `python3 -c "import capstone"`. If distro Python cannot import it,
+install Capstone into a suitable Python environment instead.
+
+On `dis [ADDRESS] [COUNT]` or after `step`, the monitor copies a bounded,
+read-only instruction byte window and invokes `tools/disassemble.py` as a
+separate process. The script uses Capstone or the DeZ80 Rust adapter and
+returns formatted instructions. Neither dependency is loaded into the
+emulator process, and no decoding work is added to the guest hot path.
+You can override the Rust adapter path with `FM11_DEZ80_BRIDGE`.
+External errors (missing Python module or unbuilt Rust adapter) are
+reported in the monitor; no silent fallback to the removed decoder occurs.
 
 memory watchpoints and machine register inspection are Stage 3-C.
  Input editing uses the terminal's
