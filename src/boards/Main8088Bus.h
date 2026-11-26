@@ -89,6 +89,8 @@ public:
     bool serviceDma();
 
 private:
+    BYTE readMemoryUnobserved(std::uint32_t address) const;
+    void writeMemoryUnobserved(std::uint32_t address, BYTE value);
     mutable std::function<void(std::uint32_t,bool,BYTE)> memoryAccessObserver_;
     std::shared_ptr<std::vector<BYTE>> memory_;
     std::size_t installedRamBytes_=kMemorySize;
