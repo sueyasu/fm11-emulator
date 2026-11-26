@@ -97,6 +97,8 @@ private:
     BYTE readMemoryUnobserved(std::uint32_t address) const;
     void writeMemoryUnobserved(std::uint32_t address, BYTE value);
     mutable std::function<void(std::uint32_t,bool,BYTE)> memoryAccessObserver_;
+    BYTE readIoUnobserved(WORD port) const;
+    void writeIoUnobserved(WORD port,BYTE value);
     mutable std::function<void(WORD,bool,BYTE)> ioAccessObserver_;
     std::shared_ptr<std::vector<BYTE>> memory_;
     std::size_t installedRamBytes_=kMemorySize;
