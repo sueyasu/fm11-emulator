@@ -117,6 +117,12 @@ int main() {
     if(!multi.probe(DebugMonitor::Target::Main8088,0))return 55;
     if(multi.takeBreak().find("PC=00000")==std::string::npos)return 56;
     if(multi.execute("bc 0000:0000",paused).find("cleared")==std::string::npos)return 57;
+    // The 8088/V20 physical-address bitmap covers the last byte of 1 MiB.
+    if(multi.execute("b ffff:000f",paused).find("FFFFF")==std::string::npos)return 78;
+    if(!multi.probe(DebugMonitor::Target::Main8088,0xfffff))return 79;
+    if(multi.takeBreak().find("PC=FFFFF")==std::string::npos)return 80;
+    if(multi.execute("bc ffff:000f",paused).find("cleared")==std::string::npos)return 81;
+    if(multi.probe(DebugMonitor::Target::Main8088,0xfffff))return 82;
     if(multi.execute("cpu z80",paused).find("Selected")==std::string::npos)return 17;
     if(multi.execute("regs",paused).find("AF=")==std::string::npos)return 18;
     if(multi.execute("b 1234",paused).find("set")==std::string::npos)return 58;
