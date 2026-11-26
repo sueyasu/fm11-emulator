@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <memory>
+#include <functional>
 #include <chrono>
 #include <atomic>
 #include <mutex>
@@ -31,6 +32,12 @@ public:
     void pauseRealtimePtm();
     void resumeRealtimePtm();
     bool realtimePtmEnabled() const {return mainBoard_->realtimePtmEnabled();}
+    // Optional instruction-boundary inspection for the display CPU.
+    // Install before starting the worker; return false to defer execution.
+    void setDisplayBreakProbe(std::function<bool(std::uint32_t)> probe) {
+        if(displayCpuThreadEnabled())throw std::logic_error("display worker is running");
+        displayBreakProbe_=std::move(probe);
+    }
     void startDisplayCpu();
     void stopDisplayCpu() noexcept;
     void pauseDisplayCpu();
@@ -233,6 +240,7 @@ private:
     std::unique_ptr<WorkerGroup> ptmWorker_;
     bool ptmPaused_=false;
     std::unique_ptr<WorkerGroup> displayWorker_;
+    std::function<bool(std::uint32_t)> displayBreakProbe_;
     std::atomic<bool> displayThreadActive_{false};
     std::atomic<std::uint64_t> displayResumeGeneration_{0};
     bool displayPaused_=false;
