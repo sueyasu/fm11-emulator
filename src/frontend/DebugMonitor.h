@@ -10,6 +10,8 @@
 #include <mutex>
 #include <set>
 #include <tuple>
+#include <array>
+#include <memory>
 #include <cstdint>
 #include <stdexcept>
 #include <utility>
@@ -27,30 +29,48 @@ public:
     using PauseFn=std::function<void(bool)>;
     DebugMonitor(Machine& machine,PauseFn pause):m_(machine),pause_(std::move(pause)) {
         selected_ = m_.activeBoard()?name(*m_.activeBoard()):"sub";
+        for(std::size_t i=0;i<bitmaps_.size();++i) {
+            bitmaps_[i]=std::make_unique<std::atomic<std::uint64_t>[]>(wordCounts_[i]);
+            for(std::size_t w=0;w<wordCounts_[i];++w)
+                bitmaps_[i][w].store(0,std::memory_order_relaxed);
+        }
     }
-    // Called from an emulation worker before instruction fetch. The hot path
-    // never inspects guest memory and never patches instruction bytes.
-    bool probe(const std::string& cpu,std::uint32_t pc) {
-        if(breakPending_.load(std::memory_order_acquire))return true;
-        if(!hasBreaks_.load(std::memory_order_acquire))return false;
-        std::lock_guard<std::mutex> lock(breakMutex_);
-        const auto key=std::make_pair(cpu,pc);
-        if(skip_==key) {skip_={"",0};return false;}
-        if(!breaks_.count(key))return false;
-        hit_=key;
-        breakPending_.store(true,std::memory_order_release);
+    enum class Target : std::uint8_t { Main6809, Main8088, Z80, Sub };
+    static Target cpuTarget(CpuType type) {
+        switch(type) {
+            case CpuType::MC6809: case CpuType::HD6309:return Target::Main6809;
+            case CpuType::I8088: case CpuType::NECV20:return Target::Main8088;
+            case CpuType::Z80:return Target::Z80;
+        }
+        return Target::Main6809;
+    }
+    // The emulator hot path uses only fixed-width integers and atomic operations.
+    // No string creation, set lookup or mutex acquisition is required.
+    bool probe(Target cpu,std::uint32_t pc) {
+        const auto pending=hit_.load(std::memory_order_acquire);
+        if(pending)return true;
+        if(!hasBreaks_.load(std::memory_order_relaxed))return false;
+        if(pc>=limit(cpu))return false;
+        const auto& bits=bitmaps_[index(cpu)];
+        const auto word=bits[pc>>6].load(std::memory_order_relaxed);
+        if(!(word&(std::uint64_t{1}<<(pc&63))))return false;
+        const auto encoded=encode(cpu,pc);
+        auto skip=encoded;
+        if(skip_.compare_exchange_strong(skip,0,std::memory_order_acq_rel))
+            return false;
+        std::uint64_t none=0;
+        hit_.compare_exchange_strong(none,encoded,std::memory_order_acq_rel);
         return true;
     }
-    bool breakPending() const {return breakPending_.load(std::memory_order_acquire);}
-    // Called by the SDL event thread, after all workers have acknowledged pause.
+    bool breakPending() const {return hit_.load(std::memory_order_acquire)!=0;}
+    // Only called after both main and display workers are paused.
     std::string takeBreak() {
-        if(!breakPending_.load(std::memory_order_acquire))return {};
-        std::lock_guard<std::mutex> lock(breakMutex_);
-        if(!breakPending_.exchange(false,std::memory_order_acq_rel))return {};
-        stoppedAt_=hit_;
-        return "Breakpoint: "+hit_.first+" PC="+hex(hit_.second,hit_.first=="main8088"?5:4)+"\n";
+        const auto hit=hit_.exchange(0,std::memory_order_acq_rel);
+        if(!hit)return {};
+        stoppedAt_=hit;
+        const auto cpu=decodeCpu(hit),pc=decodePc(hit);
+        return "Breakpoint: "+targetName(cpu)+" PC="+hex(pc,cpu==Target::Main8088?5:4)+"\\n";
     }
-    static std::string cpuName(const CpuBoard& b) {return name(b);}
     std::string prompt() const {return "fm11["+selected_+"]> ";}
     void emit(const std::string& s) {
         std::cout<<s<<std::flush;
@@ -89,35 +109,57 @@ public:
                 return "Usage: log start FILE | log stop | log status\n";
             }
             if(command=="b" || command=="break") {
-                if(args.size()!=2)return "Usage: b HEXADDR\n";
+                if(args.size()!=2)return "Usage: b HEXADDR\\n";
                 const auto addr=address(args[1]);
-                const auto limit=selected_=="main8088"?0x100000u:0x10000u;
-                if(addr>=limit)return "Breakpoint address out of range.\n";
-                {std::lock_guard<std::mutex> lock(breakMutex_);breaks_.insert({selected_,static_cast<std::uint32_t>(addr)});
-                 hasBreaks_.store(true,std::memory_order_release);}
-                return "Breakpoint set: "+selected_+" PC="+hex(addr,limit>65536?5:4)+"\n";
+                const auto cpu=parseTarget(selected_);
+                if(addr>=limit(cpu))return "Breakpoint address out of range.\\n";
+                {
+                    std::lock_guard<std::mutex> lock(breakMutex_);
+                    if(breaks_.insert({selected_,static_cast<std::uint32_t>(addr)}).second) {
+                        bitmaps_[index(cpu)][addr>>6].fetch_or(
+                            std::uint64_t{1}<<(addr&63),std::memory_order_release);
+                        ++breakCount_;
+                        hasBreaks_.store(true,std::memory_order_release);
+                    }
+                }
+                return "Breakpoint set: "+selected_+" PC="+hex(addr,cpu==Target::Main8088?5:4)+"\\n";
             }
             if(command=="bl") {
-                if(args.size()!=1)return "Usage: bl\n";
+                if(args.size()!=1)return "Usage: bl\\n";
                 std::lock_guard<std::mutex> lock(breakMutex_);
                 std::ostringstream out;
                 for(const auto& entry:breaks_)
-                    out<<entry.first<<" PC="<<hex(entry.second,entry.first=="main8088"?5:4)<<"\n";
-                return out.str().empty()?"No breakpoints.\n":out.str();
+                    out<<entry.first<<" PC="<<hex(entry.second,entry.first=="main8088"?5:4)<<"\\n";
+                return out.str().empty()?"No breakpoints.\\n":out.str();
             }
             if(command=="bc") {
-                if(args.size()>2)return "Usage: bc [HEXADDR]\n";
+                if(args.size()>2)return "Usage: bc [HEXADDR]\\n";
                 std::lock_guard<std::mutex> lock(breakMutex_);
+                const auto cpu=parseTarget(selected_);
+                auto remove=[&](std::uint32_t addr) {
+                    if(breaks_.erase({selected_,addr})) {
+                        bitmaps_[index(cpu)][addr>>6].fetch_and(
+                            ~(std::uint64_t{1}<<(addr&63)),std::memory_order_release);
+                        --breakCount_;
+                    }
+                };
                 if(args.size()==1) {
                     for(auto it=breaks_.begin();it!=breaks_.end();) {
-                        if(it->first==selected_)it=breaks_.erase(it);else ++it;
+                        if(it->first==selected_) {
+                            const auto addr=it->second;
+                            it=breaks_.erase(it);
+                            bitmaps_[index(cpu)][addr>>6].fetch_and(
+                                ~(std::uint64_t{1}<<(addr&63)),std::memory_order_release);
+                            --breakCount_;
+                        } else ++it;
                     }
                 } else {
                     const auto addr=address(args[1]);
-                    breaks_.erase({selected_,static_cast<std::uint32_t>(addr)});
+                    if(addr>=limit(cpu))return "Breakpoint address out of range.\\n";
+                    remove(static_cast<std::uint32_t>(addr));
                 }
-                hasBreaks_.store(!breaks_.empty(),std::memory_order_release);
-                return "Breakpoint(s) cleared for "+selected_+".\n";
+                hasBreaks_.store(breakCount_!=0,std::memory_order_release);
+                return "Breakpoint(s) cleared for "+selected_+".\\n";
             }
             if(command=="info" && args.size()==2 && args[1]=="cpus") {
                 std::ostringstream out;
@@ -138,16 +180,11 @@ public:
             }
             if(command=="stop") {pause_(true);paused=true;return "Emulation stopped.\n";}
             if(command=="cont" || command=="c") {
-                // Skip the breakpoint at the stopped PC for one instruction
-                // boundary; do not suppress any other CPU's breakpoint.
-                {
-                    std::lock_guard<std::mutex> lock(breakMutex_);
-                    skip_=stoppedAt_;
-                    stoppedAt_={"",0};
-                }
-                pause_(false);
-                paused=false;
-                return "Emulation running.\n";
+                // Exactly one instruction at the last stopped PC is allowed.
+                skip_.store(stoppedAt_,std::memory_order_release);
+                stoppedAt_=0;
+                pause_(false);paused=false;
+                return "Emulation running.\\n";
             }
             if(command=="r" || command=="regs") {
                 pause_(true);paused=true;return registers();
@@ -297,10 +334,44 @@ private:
         if(auto* p=dynamic_cast<MainZ80Board*>(b))return p->peekMemory(static_cast<WORD>(addr));
         throw std::runtime_error("unsupported CPU");
     }
-    std::mutex breakMutex_;
+    static constexpr std::size_t index(Target t) {return static_cast<std::size_t>(t);}
+    static constexpr std::uint32_t limit(Target t) {
+        return t==Target::Main8088?0x100000u:0x10000u;
+    }
+    static std::uint64_t encode(Target t,std::uint32_t pc) {
+        return (std::uint64_t(index(t)+1)<<20)|pc;
+    }
+    static Target decodeCpu(std::uint64_t k) {
+        return static_cast<Target>((k>>20)-1);
+    }
+    static std::uint32_t decodePc(std::uint64_t k) {
+        return static_cast<std::uint32_t>(k&0xfffffu);
+    }
+    static std::string targetName(Target t) {
+        switch(t) {
+            case Target::Main6809:return "main6809";
+            case Target::Main8088:return "main8088";
+            case Target::Z80:return "z80";
+            case Target::Sub:return "sub";
+        }
+        return "?";
+    }
+    static Target parseTarget(const std::string& s) {
+        if(s=="main6809")return Target::Main6809;
+        if(s=="main8088")return Target::Main8088;
+        if(s=="z80")return Target::Z80;
+        if(s=="sub")return Target::Sub;
+        throw std::invalid_argument("unknown CPU target");
+    }
+    // 1 MiB / 64 bits for main8088, 64 KiB / 64 bits for the others.
+    static constexpr std::array<std::size_t,4> wordCounts_{{1024,16384,1024,1024}};
+    std::array<std::unique_ptr<std::atomic<std::uint64_t>[]>,4> bitmaps_;
+    std::mutex breakMutex_; // monitor command thread only; never on hot path
     std::set<std::pair<std::string,std::uint32_t>> breaks_;
-    std::pair<std::string,std::uint32_t> hit_{"",0},stoppedAt_{"",0},skip_{"",0};
-    std::atomic<bool> breakPending_{false};
+    std::size_t breakCount_=0;
+    std::atomic<std::uint64_t> hit_{0};
+    std::atomic<std::uint64_t> skip_{0};
+    std::uint64_t stoppedAt_=0; // UI thread only
     std::atomic<bool> hasBreaks_{false};
     Machine& m_;
     PauseFn pause_;
