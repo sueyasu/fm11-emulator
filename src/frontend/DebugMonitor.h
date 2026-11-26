@@ -6,6 +6,9 @@
 #include "Sim09.h"
 #include "SimZ80.h"
 #include <fstream>
+#include <cstdint>
+#include <stdexcept>
+#include <utility>
 #include <functional>
 #include <iomanip>
 #include <iostream>
@@ -82,7 +85,7 @@ public:
             }
             if(command=="s" || command=="step") {
                 if(args.size()>2)return "Usage: step [COUNT]\n";
-                const auto n=args.size()==2?number(args[1]):1;
+                const auto n=args.size()==2?count(args[1]):1;
                 if(n==0 || n>10000)return "Step count must be 1..10000.\n";
                 pause_(true);paused=true;
                 if(selected_=="sub") {
@@ -99,7 +102,7 @@ public:
             }
             if(command=="x" || command=="xp") {
                 if(args.size()<2 || args.size()>3)return "Usage: x|xp HEXADDR [HEXLEN]\n";
-                auto addr=address(args[1]),len=args.size()==3?number(args[2]):128;
+                auto addr=address(args[1]),len=args.size()==3?count(args[2]):128;
                 const bool physical=command=="xp";
                 const auto limit=(physical || selected_=="main8088")?0x100000u:0x10000u;
                 if(!len || len>4096 || addr>=limit || len>limit-addr)
@@ -127,6 +130,11 @@ private:
     static std::uint64_t number(const std::string& s) {
         std::size_t at=0;auto n=std::stoull(s,&at,16);
         if(at!=s.size())throw std::invalid_argument("expected hexadecimal number");
+        return n;
+    }
+    static std::uint64_t count(const std::string& s) {
+        std::size_t at=0;auto n=std::stoull(s,&at,0);
+        if(at!=s.size())throw std::invalid_argument("expected decimal count or 0x-prefixed hexadecimal");
         return n;
     }
     std::uint64_t address(const std::string& s) const {
