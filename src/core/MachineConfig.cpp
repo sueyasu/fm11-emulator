@@ -3,6 +3,14 @@
 #include <cctype>
 #include <cstdlib>
 #include <fstream>
+#include <sstream>
+#include <filesystem>
+#include <cerrno>
+#include <cstring>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <vector>
 #include <stdexcept>
 #include <string>
 
@@ -229,10 +237,139 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
 }
 MachineConfig loadMachineConfig(const std::string& explicitPath) {
     if(!explicitPath.empty())return parseMachineConfigFile(explicitPath);
-    if(const char* home=std::getenv("HOME")) {
-        const auto path=std::string(home)+"/.config/fm11emu/fm11emu.conf";
-        if(exists(path))return parseMachineConfigFile(path);
-    }
+    const auto userPath=userMachineConfigPath();
+    if(!userPath.empty() && exists(userPath))return parseMachineConfigFile(userPath);
     if(exists("/etc/fm11emu.conf"))return parseMachineConfigFile("/etc/fm11emu.conf");
     return {};
+}
+
+
+std::string userMachineConfigPath() {
+    if(const char* xdg=std::getenv("XDG_CONFIG_HOME")) {
+        // XDG Base Directory: only absolute paths are valid.
+        if(*xdg=='/')return (std::filesystem::path(xdg)/"fm11emu"/"fm11emu.conf").string();
+    }
+    if(const char* home=std::getenv("HOME")) {
+        if(*home=='/')return (std::filesystem::path(home)/".config"/"fm11emu"/"fm11emu.conf").string();
+    }
+    return {};
+}
+
+std::string serializeMachineConfig(const MachineConfig& cfg) {
+    if(!cfg.main6809Installed && !cfg.main8088Installed)
+        throw std::invalid_argument("at least one main CPU card is required");
+    if((cfg.mainSelected==MachineConfig::MainSelection::Cpu6809 && !cfg.main6809Installed) ||
+       (cfg.mainSelected==MachineConfig::MainSelection::Cpu8088 && !cfg.main8088Installed))
+        throw std::invalid_argument("the selected main CPU card is not installed");
+    if(cfg.ramKiB<128 || cfg.ramKiB>1024 || cfg.ramKiB%128 ||
+       cfg.displayHeight!=200 && cfg.displayHeight!=400 ||
+       cfg.dipBootDrive>3 || cfg.dipSerialBaudSwitches>31 ||
+       (cfg.dipSystemDisplayLines!=200 && cfg.dipSystemDisplayLines!=400))
+        throw std::invalid_argument("invalid machine configuration field");
+    const auto clock=[](std::uint64_t hz) {
+        if(!hz || hz>1000000000ULL)throw std::invalid_argument("invalid CPU clock");
+        return hz;
+    };
+    clock(cfg.main6809ClockHz);clock(cfg.main8088ClockHz);
+    clock(cfg.z80ClockHz);clock(cfg.displayClockHz);
+    const auto validPath=[](const std::string& value) {
+        if(value.find_first_of("\r\n#;")!=std::string::npos)
+            throw std::invalid_argument("path contains INI delimiter or newline");
+        // The INI parser trims whitespace; preserving a path with leading or
+        // trailing whitespace would silently change its meaning on reload.
+        if(!value.empty() && (std::isspace(static_cast<unsigned char>(value.front())) ||
+                              std::isspace(static_cast<unsigned char>(value.back()))))
+            throw std::invalid_argument("path has leading/trailing whitespace");
+        return value;
+    };
+    for(const auto& name:{cfg.main6809Rom,cfg.main8088Rom,cfg.displayRom,
+                          cfg.ankRom,cfg.kanjiRom,cfg.kanji2Rom,cfg.hddImage,cfg.serial0})
+        validPath(name);
+    for(const auto& path:cfg.floppy2d)validPath(path);
+    for(const auto& path:cfg.floppy2hd)validPath(path);
+    if(cfg.serial0!="pty" && cfg.serial0!="none" && cfg.serial0.rfind("/dev/",0)!=0)
+        throw std::invalid_argument("serial0 must be pty, none or /dev/...");
+    const auto boolean=[](bool enabled){return enabled?"true":"false";};
+    std::ostringstream out;
+    out<<"# FM-11 emulator user configuration (Stage 4)\n"
+       <<"[main_6809]\ninstalled = "<<boolean(cfg.main6809Installed)
+       <<"\ncpu = "<<(cfg.main6809Cpu==CpuType::HD6309?"6309":"6809")
+       <<"\nclock_hz = "<<cfg.main6809ClockHz
+       <<"\nrom = "<<cfg.main6809Rom<<"\n\n"
+       <<"[main_8088]\ninstalled = "<<boolean(cfg.main8088Installed)
+       <<"\ncpu = "<<(cfg.main8088Cpu==CpuType::NECV20?"v20":"8088")
+       <<"\nclock_hz = "<<cfg.main8088ClockHz
+       <<"\nrom = "<<cfg.main8088Rom<<"\n\n"
+       <<"[optional_cpu]\ntype = "<<(cfg.z80Installed?"z80":"none")
+       <<"\nclock_hz = "<<cfg.z80ClockHz<<"\n\n"
+       <<"[display_cpu]\ncpu = "<<(cfg.displayCpu==CpuType::HD6309?"6309":"6809")
+       <<"\nclock_hz = "<<cfg.displayClockHz
+       <<"\nrom = "<<cfg.displayRom
+       <<"\nank_rom = "<<cfg.ankRom
+       <<"\nkanji_rom = "<<cfg.kanjiRom
+       <<"\nkanji2_rom = "<<cfg.kanji2Rom<<"\n\n"
+       <<"[memory]\nram_kib = "<<cfg.ramKiB<<"\n\n"
+       <<"[display]\nheight = "<<cfg.displayHeight<<"\n\n"
+       <<"[DIPSW]\nmain_cpu = "<<(cfg.mainSelected==MachineConfig::MainSelection::Cpu6809?"6809":"8088")
+       <<"\n2D_FDD = "<<boolean(cfg.boot2dFdd)
+       <<"\n2HD_FDD = "<<boolean(cfg.boot2hdFdd)
+       <<"\nHDD = "<<boolean(cfg.bootHdd)
+       <<"\nboot_drive = "<<cfg.dipBootDrive
+       <<"\nbubble = "<<boolean(cfg.dipBootBubble)
+       <<"\nserial_cd = "<<(cfg.dipSerialCd==MachineConfig::SerialCd::Ignore?"ignore":"cd_dsr")
+       <<"\nserial_mode = "<<(cfg.dipSerialMode==MachineConfig::SerialMode::Async?"async":"sync")
+       <<"\nserial_baud_sw4_8 = "<<cfg.dipSerialBaudSwitches
+       <<"\ndisplay_lines = "<<cfg.dipSystemDisplayLines<<"\n\n"
+       <<"[floppy_2d]\n";
+    for(unsigned i=0;i<4;++i)out<<"drive"<<i<<" = "<<cfg.floppy2d[i]<<"\n";
+    out<<"\n[floppy_2hd]\n";
+    for(unsigned i=0;i<4;++i)out<<"drive"<<i<<" = "<<cfg.floppy2hd[i]<<"\n";
+    out<<"\n[floppy]\ntiming = "<<(cfg.floppyTimed?"timed":"fast")
+       <<"\n\n[hdd]\nimage = "<<cfg.hddImage
+       <<"\ntiming = "<<(cfg.hddTimed?"timed":"fast")
+       <<"\n\n[serial]\nserial0 = "<<cfg.serial0
+       <<"\nflow_control = "<<(cfg.serialRtsCts?"rtscts":"none")
+       <<"\ntiming = "<<(cfg.serialClocked?"clocked":"immediate")<<"\n";
+    return out.str();
+}
+
+void saveUserMachineConfig(const MachineConfig& config) {
+    const auto destination=userMachineConfigPath();
+    if(destination.empty())throw std::runtime_error("HOME/XDG_CONFIG_HOME has no absolute path");
+    const auto contents=serializeMachineConfig(config);
+    const auto parent=std::filesystem::path(destination).parent_path();
+    std::error_code ec;
+    std::filesystem::create_directories(parent,ec);
+    if(ec)throw std::runtime_error("cannot create user config directory: "+ec.message());
+    // Do not follow a symlink at the destination; rename replaces the entry
+    // itself. The temporary file must be in the same directory for atomicity.
+    std::string pattern=destination+".tmp.XXXXXX";
+    std::vector<char> temporary(pattern.begin(),pattern.end());
+    temporary.push_back('\0');
+    const int fd=::mkstemp(temporary.data());
+    if(fd<0)throw std::runtime_error("cannot create config temp file: "+std::string(std::strerror(errno)));
+    const std::string tmp=temporary.data();
+    bool committed=false;
+    try {
+        if(::fchmod(fd,0600)!=0)throw std::runtime_error("cannot chmod config");
+        std::size_t offset=0;
+        while(offset<contents.size()) {
+            const auto written=::write(fd,contents.data()+offset,contents.size()-offset);
+            if(written<0 && errno==EINTR)continue;
+            if(written<=0)throw std::runtime_error("config write failed");
+            offset+=static_cast<std::size_t>(written);
+        }
+        if(::fsync(fd)!=0)throw std::runtime_error("config fsync failed");
+        if(::close(fd)!=0)throw std::runtime_error("config close failed");
+        if(::rename(tmp.c_str(),destination.c_str())!=0)
+            throw std::runtime_error("config rename failed: "+std::string(std::strerror(errno)));
+        committed=true;
+    } catch(...) {
+        // close may have already succeeded; closing a closed fd is harmless
+        // when no other fd has been allocated on this thread meanwhile.
+        ::close(fd);
+        ::unlink(tmp.c_str());
+        throw;
+    }
+    (void)committed;
 }
