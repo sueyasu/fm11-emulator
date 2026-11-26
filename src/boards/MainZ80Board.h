@@ -66,6 +66,8 @@ private:
     private:
         MainZ80Board& board_;
     };
+    BYTE readMemoryUnobserved(WORD address) const;
+    void writeMemoryUnobserved(WORD address, BYTE value);
     mutable std::function<void(WORD,bool,BYTE)> memoryAccessObserver_;
     std::shared_ptr<std::vector<BYTE>> memory_ =
         std::make_shared<std::vector<BYTE>>(1u<<20,0);
