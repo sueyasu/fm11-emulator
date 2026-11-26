@@ -31,6 +31,7 @@ type = none
 clock_hz = 4000000
 
 [display_cpu]
+# Choose 6809 or 6309 independently of the installed main CPU.
 cpu = 6809
 clock_hz = 2000000
 rom = external/roms/display6809.bin

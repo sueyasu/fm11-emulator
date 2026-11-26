@@ -67,6 +67,19 @@ int main() {
     if(machine.systemBoard().displayCpu().is6309Enabled())return 30;
     machine.setDisplayCpu6309Enabled(config.displayCpu==CpuType::HD6309);
     if(!machine.systemBoard().displayCpu().is6309Enabled())return 31;
+    // Execute an HD6309-only opcode, LDE #$5A ($11 $86 $5A),
+    // in the sub-CPU, not in the independent main CPU card.
+    DisplaySubsystem::RomImage subRom{};
+    subRom[0x1000]=0x11;
+    subRom[0x1001]=0x86;
+    subRom[0x1002]=0x5a;
+    subRom[0x4ffe]=0xc0;
+    subRom[0x4fff]=0x00;
+    machine.loadDisplayRom(subRom);
+    machine.reset();
+    if(machine.displayCpuPc()!=0xc000 ||
+       !machine.systemBoard().displayCpu().executeOne() ||
+       machine.systemBoard().displayCpu().regs.r.b.E!=0x5a)return 36;
     machine.reset();
     if(!machine.systemBoard().displayCpu().is6309Enabled())return 32;
     machine.setDisplayCpu6309Enabled(false);

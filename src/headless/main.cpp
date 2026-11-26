@@ -144,6 +144,7 @@ int main(int argc, char** argv) {
         if (floppyBootMode) {pc=0x0400;}
         const auto serialConfig=loadMachineConfig(configPath);
         Machine machine;
+        machine.setDisplayCpu6309Enabled(serialConfig.displayCpu==CpuType::HD6309);
         auto cpuBoard=std::make_unique<Main6809Board>(
             cpu=="6809" ? CpuType::MC6809 : CpuType::HD6309);
         auto* cpuPtr=cpuBoard.get();
