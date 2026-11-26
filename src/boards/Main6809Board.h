@@ -12,6 +12,7 @@
 #include <deque>
 #include <vector>
 #include <memory>
+#include <functional>
 #include <stdexcept>
 #include <utility>
 
@@ -105,6 +106,7 @@ public:
     void setExternalClocking(bool enabled) {externalClocking_=enabled;}
     void advanceCpuCycles(std::uint64_t cycles);
 
+    void setMemoryAccessObserver(std::function<void(WORD,bool,BYTE)> observer) { memoryAccessObserver_=std::move(observer); }
     BYTE readCpu(WORD address);
     // Debugger-only read: never poll or acknowledge memory-mapped I/O.
     BYTE peekCpu(WORD address) const;
@@ -175,6 +177,7 @@ private:
         std::uint64_t lastCycles_=0;
     };
 
+    std::function<void(WORD,bool,BYTE)> memoryAccessObserver_;
     std::shared_ptr<std::vector<BYTE>> memory_;
     std::size_t installedRamBytes_=kPhysicalMemorySize;
     std::size_t decodedPhysical(std::uint32_t address) const {
