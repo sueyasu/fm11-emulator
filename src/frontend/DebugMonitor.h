@@ -179,7 +179,9 @@ public:
             const auto value=static_cast<BYTE>((hit>>32)&0xff);
             if(hit&(std::uint64_t{1}<<62))
                 return "I/O watchpoint: "+targetName(cpu)+(write?" write ":" read ")+
-                    "port="+hex(pc,cpu==Target::Z80?2:4)+" value="+hex(value,2)+"\n";
+                    "port="+hex(pc,cpu==Target::Z80?2:4)+" value="+hex(value,2)+
+                    (cpu==Target::Z80?" path=z80-IN/OUT":(cpu==Target::Main6809?
+                     " path=6809-board-I/O":" path=8088-bus-I/O"))+"\n";
             return "Watchpoint: "+targetName(cpu)+(write?" write ":" read ")+
                 hex(pc,(cpu==Target::Main8088 || cpu==Target::Physical)?5:4)+" value="+hex(value,2)+"\n";
         }
