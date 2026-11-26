@@ -69,6 +69,10 @@ public:
     const DisplaySubsystem& displaySubsystem() const {return display_;}
     DisplayCpu6809& displayCpu() {return displayCpu_;}
     const DisplayCpu6809& displayCpu() const {return displayCpu_;}
+    void setDisplayCpu6309Enabled(bool enabled) {
+        auto lock=lockDisplay();
+        displayCpu_.set6309Enabled(enabled);
+    }
     // System reset is distinct from resetting an individual CPU card.
     // Disk media remain mounted; only any in-flight transfer is aborted.
     void reset() {

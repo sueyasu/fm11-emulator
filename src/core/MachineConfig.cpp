@@ -203,8 +203,9 @@ MachineConfig parseMachineConfigFile(const std::string& path) {
                 } else handled=false;
             } else if(section=="display_cpu") {
                 if(key=="cpu") {
-                    if(value!="6809")
-                        throw std::invalid_argument("display CPU supports 6809 only (6309 not implemented)");
+                    if(value=="6809")cfg.displayCpu=CpuType::MC6809;
+                    else if(value=="6309")cfg.displayCpu=CpuType::HD6309;
+                    else throw std::invalid_argument("display_cpu.cpu must be 6809 or 6309");
                 } else if(key=="clock_hz")cfg.displayClockHz=clockHz(value);
                 else if(key=="rom")cfg.displayRom=value;
                 else if(key=="ank_rom")cfg.ankRom=value;

@@ -23,6 +23,7 @@ struct MachineConfig {
     bool z80Installed=false;
     std::uint64_t z80ClockHz=4000000;
     std::uint64_t displayClockHz=2000000;
+    CpuType displayCpu=CpuType::MC6809;
     // Initial SDL viewport height, independent of guest video hardware.
     unsigned displayHeight=400;
     std::string displayRom="external/roms/display6809.bin";

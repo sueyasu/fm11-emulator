@@ -72,6 +72,12 @@ public:
     void setZ80ClockHz(std::uint64_t hz);
     // Display CPU scheduling is opt-in until the hardware clock is resolved.
     void setDisplayCpuClockHz(std::uint64_t hz);
+    // Independent of the main CPU. Configure before the display worker starts.
+    void setDisplayCpu6309Enabled(bool enabled) {
+        if(displayCpuThreadEnabled())
+            throw std::logic_error("stop display CPU worker before changing CPU type");
+        mainBoard_->setDisplayCpu6309Enabled(enabled);
+    }
     // Worker-only clock multiplier. The sub-CPU is provisionally capped
     // at 8 MHz, including --speed 0 (unlimited main CPU).
     // Deterministic headless scheduling stays at displayCpuClockHz_.
