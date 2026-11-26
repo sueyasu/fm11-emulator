@@ -120,6 +120,23 @@ inline Instruction decode6809(const Reader& rd,unsigned pc,bool hd) {
     }
     if(page==0x10 && c==0x3f)return done("SWI2");
     if(page==0x11 && c==0x3f)return done("SWI3");
+    if(page==0x10 && c>=0x83 && c<=0xff) {
+        const unsigned lo=c&15,mode=(c>>4)&3;
+        std::string mn;
+        switch(lo) {
+            case 3:if(c<0xc0)mn="CMPD";break;
+            case 12:if(c<0xc0)mn="CMPY";break;
+            case 14:mn=c<0xc0?"LDY":"LDS";break;
+            case 15:mn=c<0xc0?"STY":"STS";break;
+        }
+        if(!mn.empty() && !(mode==0 && lo==15))
+            return done(mn+" "+(mode==0?imm16():mode==1?direct():mode==2?indexed():extended()));
+    }
+    if(page==0x11 && ((c>=0x83 && c<=0xb3)||(c>=0xc3 && c<=0xf3)) && (c&15)==3) {
+        const unsigned mode=(c>>4)&3;
+        return done(std::string(c<0xc0?"CMPU":"CMPS")+" "+
+                    (mode==0?imm16():mode==1?direct():mode==2?indexed():extended()));
+    }
     (void)hd;
     return {1,"FCB $"+hex(op)};
 }
@@ -155,6 +172,23 @@ inline Instruction decodeZ80(const Reader& rd,unsigned pc) {
     }
     if(op==0xed) {
         const unsigned ed=byte(),ex=ed>>6,ey=(ed>>3)&7,ez=ed&7;
+        static constexpr const char* edBlock[4][4]={
+            {"LDI","CPI","INI","OUTI"},{"LDD","CPD","IND","OUTD"},
+            {"LDIR","CPIR","INIR","OTIR"},{"LDDR","CPDR","INDR","OTDR"}};
+        if(ex==2 && ey>=4 && ez<=3)
+            return done(edBlock[ey-4][ez]);
+        if(ex==1 && ez==0)
+            return done(std::string("IN ")+(ey==6?"(C)":std::string(r[ey])+",(C)"));
+        if(ex==1 && ez==1)
+            return done(std::string("OUT (C),")+(ey==6?"0":r[ey]));
+        if(ex==1 && ez==2)
+            return done(std::string(ey&1?"ADC HL,":"SBC HL,")+pair(ey>>1));
+        if(ed==0x67)return done("RRD");
+        if(ed==0x6f)return done("RLD");
+        if(ed==0x47)return done("LD I,A");
+        if(ed==0x4f)return done("LD R,A");
+        if(ed==0x57)return done("LD A,I");
+        if(ed==0x5f)return done("LD A,R");
         if(ex==1&&ez==4)return done("NEG");
         if(ex==1&&ez==5)return done(ey&1?"RETI":"RETN");
         if(ex==1&&ez==6)return done("IM "+std::to_string((ey==2||ey==6)?1:(ey==3||ey==7)?2:0));
