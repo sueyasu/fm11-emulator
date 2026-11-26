@@ -20,9 +20,14 @@ int main() {
     if(mon.execute("step",paused).find("PC=C001")==std::string::npos)return 4;
     if(mon.execute("x c000 2",paused).find("12 12")==std::string::npos)return 5;
     const auto dis=mon.execute("dis c000 2",paused);
-    // The obsolete external backend has been removed. Until unidasm is
-    // integrated, dis reports a clear transitional error.
-    if(dis.find("unidasm integration pending")==std::string::npos)return 83;
+    // Disassembly may be unavailable when optional MAME tools are absent,
+    // but an installed backend must produce valid instruction listings.
+    if(dis.find("External disassembler failed:")!=std::string::npos) {
+        if(dis.find("unidasm not found")==std::string::npos)return 83;
+    } else if(dis.find("C000:")==std::string::npos ||
+              dis.find("C001:")==std::string::npos ||
+              (dis.find("nop")==std::string::npos &&
+               dis.find("NOP")==std::string::npos))return 83;
     if(mon.execute("dis c000 0",paused).find("1..64")==std::string::npos)return 84;
     if(mon.execute("dis 10000 1",paused).find("out of range")==std::string::npos)return 85;
     if(mon.execute("x afe4 1",paused).find("FF")==std::string::npos)return 6;
