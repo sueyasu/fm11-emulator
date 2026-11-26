@@ -719,6 +719,34 @@ int main(int argc,char** argv) {
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
             });
 
+        // Command execution is serialized on the SDL/UI thread.
+        auto applyPauseState=[&]() {
+            if(paused==wasPaused)return;
+            if(paused) {
+                cpuWorker.pause();
+                machine.pauseRealtimePtm();
+                machine.pauseDisplayCpu();
+            } else {
+                machine.resumeDisplayCpu();
+                machine.resumeRealtimePtm();
+                cpuResumeGeneration.fetch_add(1,std::memory_order_release);
+                cpuWorker.resume();
+            }
+            if(cpuSpeed) {
+                {std::lock_guard<std::mutex> cpuLock(cpuMutex);cpuMeter.reset();}
+                lastSpeedReport=std::chrono::steady_clock::now();
+            }
+            wasPaused=paused;
+        };
+        std::unique_ptr<DebugMonitor> monitor;
+        std::unique_ptr<MonitorInput> monitorInput;
+        if(monitorEnabled) {
+            monitor=std::make_unique<DebugMonitor>(machine,[&](bool stop) {
+                paused=stop;applyPauseState();
+            });
+            monitorInput=std::make_unique<MonitorInput>();
+            monitor->emit("FM-11 Debug Monitor (Stage 3-A). Type help.\n"+monitor->prompt());
+        }
         while(running) {
             SDL_Event event;
             while(SDL_PollEvent(&event)) {
@@ -806,25 +834,15 @@ int main(int argc,char** argv) {
                     }
                 }
             }
-            if(paused!=wasPaused) {
-                if(paused) {
-                    cpuWorker.pause();
-                    machine.pauseRealtimePtm();
-                    machine.pauseDisplayCpu();
-                } else {
-                    machine.resumeDisplayCpu();
-                    machine.resumeRealtimePtm();
-                    cpuResumeGeneration.fetch_add(1,std::memory_order_release);
-                    cpuWorker.resume();
+            applyPauseState();
+            if(monitorInput) {
+                std::string line;
+                while(monitorInput->pop(line)) {
+                    monitor->recordInput(line);
+                    monitor->emit(monitor->execute(line,paused));
+                    monitor->emit(monitor->prompt());
                 }
             }
-            if(cpuSpeed && paused!=wasPaused) {
-                // Pause/resume should not dilute a measurement window.
-                {std::lock_guard<std::mutex> cpuLock(cpuMutex);
-                 cpuMeter.reset();}
-                lastSpeedReport=std::chrono::steady_clock::now();
-            }
-            wasPaused=paused;
             // CPU, PTM and display execution are independently scheduled.
             // The SDL thread only services host events and paints frames.
             if(!paused && !testPattern && !testKanji && !machine.boardCount())
@@ -1012,6 +1030,8 @@ int main(int argc,char** argv) {
             // host time to the three emulation workers between UI polls.
             SDL_Delay(1);
         }
+        monitorInput.reset();
+        monitor.reset();
         cpuWorker.stop();
         machine.stopDisplayCpu();
         machine.stopRealtimePtm();
