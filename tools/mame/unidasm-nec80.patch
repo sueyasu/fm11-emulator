@@ -1,0 +1,26 @@
+diff --git a/src/tools/unidasm.cpp b/src/tools/unidasm.cpp
+--- a/src/tools/unidasm.cpp
++++ b/src/tools/unidasm.cpp
+@@ -379,7 +379,13 @@
+ 	nec_unidasm_t() { mode = 1; }
+ 	virtual ~nec_unidasm_t() override = default;
+ 	virtual int get_mode() const override { return mode; }
+ } nec_unidasm;
++
++// V20/V30 8080 emulation mode: reuse MAME's existing nec_disassembler::dis80.
++struct nec80_unidasm_t : nec_disassembler::config
++{
++    virtual int get_mode() const override { return 0; }
++} nec80_unidasm;
+ 
+ 
+ static constexpr auto le = std::endian::little;
+@@ -597,7 +603,8 @@
+ 	{ "mn1880",          be,  0, []() -> util::disasm_interface * { return new mn1880_disassembler; } },
+ 	{ "msm65x2",         le,  0, []() -> util::disasm_interface * { return new msm65x2_disassembler; } },
+ 	{ "nanoprocessor",   le,  0, []() -> util::disasm_interface * { return new hp_nanoprocessor_disassembler; } },
+ 	{ "nec",             le,  0, []() -> util::disasm_interface * { return new nec_disassembler(&nec_unidasm); } },
++	{ "nec80",           le,  0, []() -> util::disasm_interface * { return new nec_disassembler(&nec80_unidasm); } },
+ 	{ "nintendo_nvc",    le,  0, []() -> util::disasm_interface * { return new nintendo_nvc_disassembler; } },
+ 	{ "nios2",           le,  0, []() -> util::disasm_interface * { return new nios2_disassembler; } },
+ 	{ "nova",            be, -1, []() -> util::disasm_interface * { return new nova_disassembler; } },
