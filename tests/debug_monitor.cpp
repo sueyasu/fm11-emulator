@@ -205,6 +205,19 @@ int main() {
     if(multi.takeBreak().find("main6809 write 2000 value=3C")==std::string::npos)return 113;
     if(multi.execute("wc",paused).find("cleared")==std::string::npos)return 114;
 
+    // Physical-memory watchpoints use a separate 20-bit address domain,
+    // allowing 6809 DMA reads and writes to be observed independently
+    // from the CPU's 16-bit logical address.
+    if(multi.execute("wp rw 2DC00",paused).find("physical rw 2DC00")==std::string::npos)return 120;
+    m6809->writePhysical(0x2dc00,0x77);
+    if(multi.takeBreak().find("physical write 2DC00 value=77")==std::string::npos)return 121;
+    if(multi.execute("xp 2DC00 1",paused).find("77")==std::string::npos)return 122;
+    if(multi.breakPending())return 123;
+    if(m6809->readPhysical(0x2dc00)!=0x77)return 124;
+    if(multi.takeBreak().find("physical read 2DC00 value=77")==std::string::npos)return 125;
+    if(multi.execute("wpc 2DC00",paused).find("cleared")==std::string::npos)return 126;
+    if(multi.execute("wl",paused).find("No watchpoints")==std::string::npos)return 127;
+
     if(machine.activeCpuType()!=CpuType::MC6809)return 19;
     machine.setDisplayCpu6309Enabled(true);
     if(multi.execute("cpu sub",paused).find("Selected")==std::string::npos)return 20;
