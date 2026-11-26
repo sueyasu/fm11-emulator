@@ -126,18 +126,54 @@ patched binary if an 8080-mode V20 disassembly is requested.
 `FM11_UNIDASM` must point at the rebuilt version when using
 `nec80`; no separate CPU-mode selection command is necessary.
 
+Stage 3-B-3: final integration checks
+
+The monitor captures at most `16 * COUNT` bytes, wrapping the selected
+CPU's visible address space at 64 KiB for 6809/6309/Z80 and 1 MiB for
+8088/V20. The external MAME backend remains the sole instruction decoder.
+A disassembly listing is linear from the requested address: a jump does
+not cause `dis` to follow its target, so subsequent data may appear as
+instructions. Stepping is distinct and executes a guest instruction.
+
 The adapter converts the monitor's instruction count into a bounded
 byte-span for `unidasm -count`, because MAME's `-count` argument counts
 PC units rather than decoded instructions. It then limits the output
 to the requested number of instructions. MAME's original mnemonics and
 operand formatting are preserved. Guest memory is not modified.
 
+Tests now cover: 6809 indexed addressing and page-10 opcodes; HD6309
+LDQ/TFM/BITMD; Z80 CB/ED/DD-CB prefixes; 8088 ModR/M and segment
+overrides; V20 native mode and V20/8080 jump sequences; V20 CALLN/RETEM;
+20-bit address labels, the 64-instruction limit, and next-instruction
+display after `step`. The unidasm integration checks do not implement
+CPU opcode decoding locally.
+
+To require *actual* patched MAME NEC 8080 verification, set
+`FM11_REQUIRE_NEC80=1`; this turns an otherwise skipped nec80
+integration check into a failure if the patch is missing.
+
+```sh
+export FM11_UNIDASM=/absolute/path/to/patched/unidasm
+export FM11_REQUIRE_NEC80=1
+cmake --build build
+ctest --test-dir build -R 'unidasm_|debug_monitor' --output-on-failure
+ctest --test-dir build --output-on-failure
+```
+
+For V20 CP/M-80 images that map 8080 address DC00 into physical
+address 1DC00, use `cpu main8088`, then `b 1DC00` to stop on that
+physical address. A displayed instruction's address is the physical
+address; `JMP $DF5C` still names the 8080 logical jump destination.
+This particular memory mapping must not be assumed for other guest
+configurations.
+
 For automated verification, `unidasm_adapter` uses a mocked external
 process and has no MAME dependency. `unidasm_live` checks the installed
-MAME decoders for all five targets, skipping when `unidasm` is absent.
-`debug_monitor` checks the output when MAME is installed and the
-missing-tool error otherwise. Neither Python nor MAME is needed for
-the core emulator's normal execution.
+MAME decoders for all CPU modes and skips tests if the required binary
+is absent (or the NEC extension is absent unless explicitly required).
+`debug_monitor` checks the output after `step` and `dis` when MAME is
+installed and validates the missing-tool error otherwise. Neither Python
+nor MAME is needed for the core emulator's normal execution.
 
 Memory watchpoints and machine register inspection remain Stage 3-C work.
 Input editing uses the terminal's
