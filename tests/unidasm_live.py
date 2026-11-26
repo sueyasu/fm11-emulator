@@ -57,6 +57,80 @@ class TestInstalledUnidasm(unittest.TestCase):
         ).lower()
         self.assertIn("retem", retem)
 
+    def test_6809_indexed_and_prefixed_instructions(self):
+        # Sources: MAME 6x09dasm opcode maps. No local decoding.
+        for code, mnemonic in (
+            ("A6 84", "lda"),     # LDA ,X (indexed postbyte)
+            ("10 3F", "swi2"),    # 6809 prefix 10
+        ):
+            with self.subTest(opcode=code):
+                listing = adapter.disassemble(
+                    "m6809", 0x2000, 1, bytes.fromhex(code)
+                ).lower()
+                self.assertIn(mnemonic, listing)
+                self.assertTrue(listing.startswith("2000:"))
+
+    def test_hd6309_exclusive_instructions(self):
+        # MAME 6x09dasm: CD = LDQ immediate, 11 38 = TFM.
+        for code, mnemonic in (
+            ("CD 12 34 56 78", "ldq"),
+            ("11 38 12", "tfm"),
+            ("11 3C 01", "bitmd"),
+        ):
+            with self.subTest(opcode=code):
+                listing = adapter.disassemble(
+                    "hd6309", 0x4000, 1, bytes.fromhex(code)
+                ).lower()
+                self.assertIn(mnemonic, listing)
+                self.assertTrue(listing.startswith("4000:"))
+
+    def test_z80_prefixed_instructions(self):
+        for code, mnemonic in (
+            ("CB 7E", "bit"),
+            ("ED B0", "ldir"),
+            ("DD CB 05 46", "bit"),
+        ):
+            with self.subTest(opcode=code):
+                listing = adapter.disassemble(
+                    "z80", 0x8000, 1, bytes.fromhex(code)
+                ).lower()
+                self.assertIn(mnemonic, listing)
+                self.assertTrue(listing.startswith("8000:"))
+
+    def test_x86_modrm_and_segment_override(self):
+        for code in (
+            "8B 46 FE",     # MOV AX,[BP-2] (ModR/M + displacement)
+            "26 8A 07",     # ES: MOV AL,[BX] (segment override)
+        ):
+            with self.subTest(opcode=code):
+                listing = adapter.disassemble(
+                    "i8088", 0x12345, 1, bytes.fromhex(code)
+                ).lower()
+                self.assertIn("mov", listing)
+                self.assertTrue(listing.startswith("12345:"))
+
+    def test_v20_8080_bootstrap_jumps_when_available(self):
+        import subprocess
+        executable = os.environ.get("FM11_UNIDASM") or shutil.which("unidasm")
+        probe = subprocess.run(
+            [executable, "-", "-arch", "nec80", "-basepc", "1dc00", "-count", "3"],
+            input=bytes.fromhex("C3 5C DF"), capture_output=True, check=False,
+        )
+        if probe.returncode:
+            if os.environ.get("FM11_REQUIRE_NEC80") == "1":
+                self.fail("FM11_REQUIRE_NEC80=1 but MAME unidasm lacks nec80")
+            self.skipTest("MAME unidasm lacks the nec80 patch")
+        lines = adapter.disassemble(
+            "v20_8080", 0x1dc00, 2,
+            bytes.fromhex("C3 5C DF C3 58 DF"),
+        ).lower().splitlines()
+        self.assertEqual(len(lines), 2)
+        self.assertTrue(lines[0].startswith("1dc00:"))
+        self.assertTrue(lines[1].startswith("1dc03:"))
+        self.assertIn("jmp", lines[0])
+        self.assertIn("df5c", lines[0])
+        self.assertIn("df58", lines[1])
+
     def test_instruction_count_is_not_byte_count(self):
         lines = adapter.disassemble("z80", 0x1234, 3, b"\x00" * 64).splitlines()
         self.assertEqual(len(lines), 3)
