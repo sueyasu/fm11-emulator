@@ -10,8 +10,9 @@ Commands (addresses are **hexadecimal**; step counts and dump lengths are **deci
 - `info cpus`: installed CPUs and current execution owner
 - `cpu main6809|main8088|z80|sub`: change debugger target ONLY
 - `stop` and `cont`: stop/restart all workers
-- `step [COUNT]`: single-step selected CPU while other CPUs remain stopped
+- `step [COUNT]`: single-step selected CPU while other CPUs remain stopped; prints registers and the next instruction
 - `regs`: show target CPU register bank
+- `dis [ADDRESS] [COUNT]` (alias `u`): inspect instructions from ADDRESS, or the current PC; default 8, maximum 64 instructions; addresses hexadecimal, COUNT decimal by default
 - `x ADDRESS [LENGTH]`: side-effect-free target CPU memory dump (main8088 also accepts `SEG:OFF`)
 - `xp ADDRESS [LENGTH]`: 1 MiB main physical RAM dump
 - `b HEXADDR`: set an execution breakpoint on the selected CPU; main8088 accepts `SEG:OFF` and stores its 20-bit physical address
@@ -39,7 +40,9 @@ for listing entries; atomic bitmaps allow the execution workers to read them
 safely without blocking. Main8088 breakpoints
 are matched against the 20-bit physical CS:IP address.
 
-Disassembly and step/disassembly integration remain Stage 3-B work;
+Stage 3-B instruction inspection is implemented as a separate, read-only decoder, so it does not execute instructions or alter the guest. It understands common MC6809/HD6309, Z80 and 8088/V20 instruction families, including indexed operands and branch targets for many common cases. It is **not yet an exhaustive decoder**: unknown byte patterns are shown as `FCB` (6809) or `DB` (Z80/8088), without guessing undocumented instruction lengths. In particular, 6309-specific, extended Z80 ED and the full 8088 ModR/M instruction space still need broader coverage. Do not rely on instruction boundaries following an unknown opcode. The disassembler is separate from the per-instruction breakpoint hot path and runs only upon a monitor command or explicit single-step.
+
+
 memory watchpoints and machine register inspection are Stage 3-C.
  Input editing uses the terminal's
 canonical/echo mode initially; history and Tab completion can be
