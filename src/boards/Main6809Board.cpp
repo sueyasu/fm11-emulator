@@ -455,6 +455,13 @@ void Main6809Board::writePtm(BYTE port,BYTE value)
 
 BYTE Main6809Board::readCpu(WORD address)
 {
+    const BYTE value=readCpuUnobserved(address);
+    if(memoryAccessObserver_)memoryAccessObserver_(address,false,value);
+    return value;
+}
+
+BYTE Main6809Board::readCpuUnobserved(WORD address)
+{
     // 5000-5FFF is the 4 KiB boot ROM while FD93 bit 0 is clear.
     if (address >= 0x5000 && address <= 0x5fff && (mmrControl_[3] & 0x01) == 0)
         return bootRom_[address & 0x0fff];
@@ -494,6 +501,12 @@ BYTE Main6809Board::peekCpu(WORD address) const
 }
 
 void Main6809Board::writeCpu(WORD address, BYTE value)
+{
+    writeCpuUnobserved(address,value);
+    if(memoryAccessObserver_)memoryAccessObserver_(address,true,value);
+}
+
+void Main6809Board::writeCpuUnobserved(WORD address, BYTE value)
 {
     // Writes are ignored while the boot ROM is visible.
     if (address >= 0x5000 && address <= 0x5fff && (mmrControl_[3] & 0x01) == 0)
