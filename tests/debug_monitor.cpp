@@ -218,6 +218,43 @@ int main() {
     if(multi.execute("wpc 2DC00",paused).find("cleared")==std::string::npos)return 126;
     if(multi.execute("wl",paused).find("No watchpoints")==std::string::npos)return 127;
 
+    // I/O watchpoints use a separate namespace from memory watchpoints.
+    // 6809 FDxx register read and write (no debugger-side port read).
+    if(multi.execute("cpu main6809",paused).find("Selected")==std::string::npos)return 128;
+    if(multi.execute("wi rw FD70",paused).find("I/O watchpoint set")==std::string::npos)return 129;
+    if(multi.execute("wil",paused).find("main6809 r port=FD70")==std::string::npos)return 130;
+    m6809->writeIo(0xfd70,0x42);
+    if(multi.takeBreak().find("main6809 write port=FD70 value=42")==std::string::npos)return 131;
+    const BYTE fd70=m6809->readIo(0xfd70);
+    if(multi.takeBreak().find("main6809 read port=FD70 value=")==std::string::npos)return 132;
+    (void)fd70;
+    if(multi.execute("wic FD70",paused).find("cleared")==std::string::npos)return 133;
+    if(multi.execute("wil",paused).find("No I/O watchpoints")==std::string::npos)return 134;
+    // 8088/V20 has 16-bit port addressing, independent of physical RAM.
+    if(multi.execute("cpu main8088",paused).find("Selected")==std::string::npos)return 135;
+    if(multi.execute("wi rw 0001",paused).find("set")==std::string::npos)return 136;
+    v20->bus().writeIo(0x0001,0xa5);
+    if(multi.takeBreak().find("main8088 write port=0001 value=A5")==std::string::npos)return 137;
+    if(v20->bus().readIo(0x0001)!=0xa5)return 138;
+    if(multi.takeBreak().find("main8088 read port=0001 value=A5")==std::string::npos)return 139;
+    if(multi.execute("wic",paused).find("cleared")==std::string::npos)return 140;
+    // Z80 port 20h and memory-mapped FD20h are not the same access.
+    if(multi.execute("cpu z80",paused).find("Selected")==std::string::npos)return 141;
+    if(multi.execute("wi rw 20",paused).find("set")==std::string::npos)return 142;
+    if(multi.execute("wi w 100",paused).find("out of range")==std::string::npos)return 143;
+    z80->writeIo(0xfd20,0x12); // memory-mapped: should NOT hit Z80 port 20h
+    if(multi.breakPending())return 144;
+    z80->writePort(0x20,0x56);
+    if(multi.takeBreak().find("z80 write port=20 value=56")==std::string::npos)return 145;
+    if(z80->readPort(0x20)!=0xff)return 146;
+    if(multi.takeBreak().find("z80 read port=20 value=FF")==std::string::npos)return 147;
+    if(multi.execute("wic",paused).find("cleared")==std::string::npos)return 148;
+    if(multi.execute("wil",paused).find("No I/O watchpoints")==std::string::npos)return 149;
+    if(multi.execute("cpu sub",paused).find("Selected")==std::string::npos)return 150;
+    if(multi.execute("wi r AFE0",paused).find("Use 'w'")==std::string::npos)return 151;
+    if(multi.execute("cpu main6809",paused).find("Selected")==std::string::npos)return 152;
+    if(multi.execute("wi r FC00",paused).find("out of range")==std::string::npos)return 153;
+
     if(machine.activeCpuType()!=CpuType::MC6809)return 19;
     machine.setDisplayCpu6309Enabled(true);
     if(multi.execute("cpu sub",paused).find("Selected")==std::string::npos)return 20;
