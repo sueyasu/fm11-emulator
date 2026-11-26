@@ -93,7 +93,6 @@ public:
 	std::uint64_t LastInstructionCycles() const {return instructionCycles_;}
 	void z80irq();
 	void z80nmi();
-	void z80dis(char *tmp, unsigned char *mem, unsigned short pc);
 
 	inline BYTE	GetOp() {
 		BYTE b = GetMem(regs.PC++);
