@@ -18,6 +18,8 @@ public:
     void SetMemByte(WORD address,BYTE value) override {
         display_.writeMemory(address,value);
     }
+    void set6309Enabled(bool enabled) {Set6309Enabled(enabled);}
+    bool is6309Enabled() const {return Is6309Enabled();}
     void resetCpu() {
         SimRESET();
         nmiCycles_=0;
