@@ -7,6 +7,9 @@
 #include "MainZ80Board.h"
 #include "Main8088Board.h"
 #include "MachineConfig.h"
+#ifdef FM11_SETTINGS_GUI
+#include "SettingsGui.h"
+#endif
 #include "SerialBackend.h"
 #include "DisplayBitmap.h"
 #include "KanjiTestPattern.h"
@@ -129,7 +132,7 @@ void usage() {
     std::cout<<"usage: fm11-sdl [--beep-test] [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--test-kanji] [--main-rom FILE] [--trace-boot] [--trace-fdc] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--kanji-rom FILE] [--kanji2-rom FILE] [--test-kanji-level 1|2] [--trace-kanji] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software] [--scanlines] [--monitor]\n"
              <<"  ROM defaults to [display_cpu].rom (external/roms/display6809.bin); CPU ROM paths may be set in the config file\n"
              <<"  Initial window height: [display].height=200|400 (default 400); --high forces 400\n"
-             <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F12 quit\n"
+             <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F10 settings; Ctrl+F12 quit\n"
              <<"  --beep-test: audible 205ms pulse, pause, continuous tone, then stop.\n"
              <<"  --test-kanji: ROM glyph gallery, PgUp/PgDn change page (40x25 glyphs).\n"
              <<"                Uses --kanji-rom FILE or external/roms/kanji.bin.\n"
@@ -456,6 +459,11 @@ int main(int argc,char** argv) {
         }
         SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"0");
         ui.setMode(high);
+#ifdef FM11_SETTINGS_GUI
+        // Separate SDL2 renderer: the emulated CRT's GL/software backend and
+        // guest framebuffer are unaffected by the editor window.
+        auto settingsGui=std::make_unique<SettingsGui>(config);
+#endif
         std::cerr<<"FM-11 renderer: "<<(ui.glRenderer?"OpenGL 3.3":"software")<<"\n";
         if(testKanji) {
             const std::string title="FM-11 Kanji level "+
@@ -770,6 +778,15 @@ int main(int argc,char** argv) {
         while(running) {
             SDL_Event event;
             while(SDL_PollEvent(&event)) {
+#ifdef FM11_SETTINGS_GUI
+                if(settingsGui && settingsGui->processEvent(event))continue;
+                if(event.type==SDL_KEYDOWN && !event.key.repeat &&
+                   event.key.keysym.sym==SDLK_F10 &&
+                   (event.key.keysym.mod&KMOD_CTRL)) {
+                    settingsGui->toggle();
+                    continue;
+                }
+#endif
                 if(event.type==SDL_QUIT)running=false;
                 if(event.type==SDL_TEXTINPUT && !paused && !testPattern && !testKanji) {
                     for(const unsigned char* p=reinterpret_cast<const unsigned char*>(event.text.text);
@@ -1054,6 +1071,9 @@ int main(int argc,char** argv) {
             }
             // The main CPU no longer depends on SDL paint cadence. Yield
             // host time to the three emulation workers between UI polls.
+#ifdef FM11_SETTINGS_GUI
+            if(settingsGui)settingsGui->render();
+#endif
             SDL_Delay(1);
         }
         // The worker probes retain a non-owning monitor pointer. Stop
