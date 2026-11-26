@@ -57,6 +57,7 @@ public:
             throw std::invalid_argument("invalid shared physical memory");
         memory_=std::move(memory);
     }
+    void setMemoryAccessObserver(std::function<void(std::uint32_t,bool,BYTE)> observer) { memoryAccessObserver_=std::move(observer); }
     BYTE readMemory(std::uint32_t address) const;
     void writeMemory(std::uint32_t address, BYTE value);
     BYTE readIo(WORD port) const;
@@ -88,6 +89,7 @@ public:
     bool serviceDma();
 
 private:
+    mutable std::function<void(std::uint32_t,bool,BYTE)> memoryAccessObserver_;
     std::shared_ptr<std::vector<BYTE>> memory_;
     std::size_t installedRamBytes_=kMemorySize;
     std::size_t decodedRamAddress(std::uint32_t address) const {
