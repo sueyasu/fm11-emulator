@@ -174,6 +174,10 @@ int main() {
     if(!multi.breakPending())return 95;
     const auto writeHit=multi.takeBreak();
     if(writeHit.find("main8088 write 1DC00 value=C3")==std::string::npos)return 96;
+    // Debugger read/inspection is excluded from watchpoint events.
+    if(multi.execute("dis 1DC00 1",paused).empty())return 115;
+    if(multi.execute("x 1DC00 1",paused).find("C3")==std::string::npos)return 116;
+    if(multi.breakPending())return 117;
     if(v20->bus().readMemory(0x1dc00)!=0xc3)return 97;
     if(!multi.breakPending())return 98;
     if(multi.takeBreak().find("main8088 read 1DC00 value=C3")==std::string::npos)return 99;
