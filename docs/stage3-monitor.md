@@ -203,7 +203,7 @@ fm11[main6809]> info machine
 fm11[main6809]> info io FD06
 ```
 
-Stage 3-C-B: main-CPU memory watchpoints (initial integration)
+Stage 3-C-B: CPU and physical-memory watchpoints
 
 The `w`, `wl`, and `wc` commands use optional access observers on the
 6809, Z80 and 8088/V20 memory bus entry points. Read and write bitmaps
@@ -260,6 +260,22 @@ to the observed board/access path, not automatically to a bus master.
 Port-based I/O on Z80 and 8088/V20 is not covered by memory watchpoints.
 At present the report identifies the accessed byte, not the precise
 instruction PC or DMA channel that initiated it.
+
+Stage 3-C regression checks:
+
+The `debug_monitor` CTest exercises 6809 FDxx register reads/writes,
+8088/V20 full-width I/O ports, Z80 `IN`/`OUT` ports, and the distinction
+between Z80 port `20` and Z80 memory-mapped `FD20`. It also asserts a
+single underlying I/O read per observed access, that clearing the
+watchpoint disables further notifications, and that the I/O watchpoint
+namespace does not overlap memory watchpoints.
+
+```sh
+git pull
+cmake --build build
+ctest --test-dir build -R debug_monitor --output-on-failure
+ctest --test-dir build --output-on-failure
+```
 
 Stage 3-C-C: I/O watchpoints
 
