@@ -74,7 +74,8 @@ public:
         const auto hit=hit_.exchange(0,std::memory_order_acq_rel);
         if(!hit)return {};
         stoppedAt_=hit;
-        const auto cpu=decodeCpu(hit),pc=decodePc(hit);
+        const auto cpu=decodeCpu(hit);
+        const auto pc=decodePc(hit);
         return "Breakpoint: "+targetName(cpu)+" PC="+hex(pc,cpu==Target::Main8088?5:4)+"\\n";
     }
     std::string prompt() const {return "fm11["+selected_+"]> ";}
