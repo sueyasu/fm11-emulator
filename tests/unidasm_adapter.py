@@ -31,7 +31,10 @@ class TestUnidasmAdapter(unittest.TestCase):
                 self.assertEqual(cmd[:4], ["unidasm", "-", "-arch", mame])
                 self.assertEqual(cmd[-2:], ["-count", "32"])
                 self.assertEqual(run.call_args.kwargs["input"], bytes([0x12] * 48))
-                self.assertEqual(text.splitlines(), ["0000: 12  nop", "0001: 12  nop"])
+                pad = 5 if arch in ("i8088", "v20") else 4
+                self.assertEqual(text.splitlines(), [
+                    f"{0:0{pad}X}: 12  nop", f"{1:0{pad}X}: 12  nop"
+                ])
 
     def test_wrap_and_width(self):
         result = subprocess.CompletedProcess([], 0, b"10000: 12  nop\n", b"")
