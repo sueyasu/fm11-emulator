@@ -102,7 +102,8 @@ inline Instruction decode6809(const Reader& rd,unsigned pc,bool hd) {
         }
         const unsigned hi=c>>4,lo=c&15;
         static constexpr const char* unary[]={"NEG","","","COM","LSR","","ROR","ASR","ASL","ROL","DEC","","INC","TST","JMP","CLR"};
-        if((hi==0||hi==4||hi==5||hi==6||hi==7) && unary[lo][0]) {
+        if((hi==0||hi==4||hi==5||hi==6||hi==7) &&
+           unary[lo][0] && !((hi==4||hi==5) && lo==14)) {
             const std::string m=unary[lo];
             if(hi==0)return done(m+" "+direct());
             if(hi==4||hi==5)return done(m+(hi==4?"A":"B"));
