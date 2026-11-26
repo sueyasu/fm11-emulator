@@ -71,7 +71,7 @@ def disassemble(arch, start, count, data, executable=None):
         raise RuntimeError(f"MAME unidasm failed ({result.returncode}): {detail[:600]}")
 
     lines = []
-    address_mask = 0xFFFFF if arch in ("i8088", "v20") else 0xFFFF
+    address_mask = 0xFFFFF if arch in ("i8088", "v20", "v20_8080") else 0xFFFF
     width = 5 if address_mask == 0xFFFFF else 4
     for raw_line in result.stdout.decode("utf-8", "replace").splitlines():
         match = LISTING.match(raw_line)
