@@ -1,6 +1,7 @@
 #include "MonitorDisassembler.h"
 #include <array>
 #include <cstdint>
+#include <initializer_list>
 #include <string>
 
 using namespace MonitorDisassembler;
@@ -31,5 +32,14 @@ int main() {
     if(!check(Architecture::I8088,{0xb8,0x34,0x12},3,"MOV AX,$1234"))return 14;
     if(!check(Architecture::V20,{0xcd,0x21},2,"INT $21"))return 15;
     if(!check(Architecture::V20,{0x62},1,"DB $62"))return 16;
+    if(!check(Architecture::M6809,{0x10,0x8e,0x12,0x34},4,"LDY #$1234"))return 17;
+    if(!check(Architecture::M6809,{0x11,0x83,0x00,0x01},4,"CMPU #$0001"))return 18;
+    if(!check(Architecture::Z80,{0xed,0xb0},2,"LDIR"))return 19;
+    if(!check(Architecture::Z80,{0xed,0x4a},2,"ADC HL,BC"))return 20;
+    if(!check(Architecture::Z80,{0xdd,0x7e,0xfe},3,"LD A,(IX-$02)"))return 21;
+    if(!check(Architecture::I8088,{0x8b,0x46,0x04},3,"MOV AX,[BP+$04]"))return 22;
+    if(!check(Architecture::V20,{0x75,0xfe},2,"JNZ $00000"))return 23;
+    if(!check(Architecture::I8088,{0xc7,0x06,0x34,0x12,0x78,0x56},6,
+              "MOV [$1234],$5678"))return 24;
     return 0;
 }
