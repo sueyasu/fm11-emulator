@@ -114,8 +114,8 @@ before adapting the two small hunks.
 You can smoke-test the two NEC modes:
 
 ```sh
-printf '\\220' | "$FM11_UNIDASM" - -arch nec -basepc 100 -count 1
-printf '\\000' | "$FM11_UNIDASM" - -arch nec80 -basepc 100 -count 1
+printf '\220' | "$FM11_UNIDASM" - -arch nec -basepc 100 -count 1
+printf '\000' | "$FM11_UNIDASM" - -arch nec80 -basepc 100 -count 1
 ```
 
 The monitor automatically selects `v20`/MAME `nec` or
