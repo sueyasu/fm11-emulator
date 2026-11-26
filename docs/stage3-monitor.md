@@ -25,6 +25,9 @@ Commands (addresses are **hexadecimal**; step counts and dump lengths are **deci
 - `wc [HEXADDR]`: clear watchpoints on the selected CPU (all if address omitted)
 - `wp r|w|rw PHYSADDR`: set a 20-bit physical memory access watchpoint for the 6809 board, including DMA accesses
 - `wpc [PHYSADDR]`: clear the physical-memory watchpoint at the address, or all physical watchpoints
+- `wi r|w|rw PORT`: watch actual I/O reads, writes, or both on the selected 6809, 8088/V20, or Z80 target
+- `wil`: list all I/O watchpoints
+- `wic [PORT]`: clear I/O watchpoints on the selected CPU (all if no port is specified)
 - `log start FILE`, `log stop`, `log status`: append monitor input/output to a log. Logging is off by default; repeated `log start` does not reopen the file and `log stop` closes it. Starting again appends to the same file
 
 `step` on an inactive main/optional card is refused; select that
@@ -258,9 +261,51 @@ Port-based I/O on Z80 and 8088/V20 is not covered by memory watchpoints.
 At present the report identifies the accessed byte, not the precise
 instruction PC or DMA channel that initiated it.
 
-Stage 3-C remaining: explicit port-I/O watchpoints with source
-attribution, if needed. Memory access observers remain uninstalled in
-normal execution without `--monitor` and do not poll memory.
+Stage 3-C-C: I/O watchpoints
+
+`wi r|w|rw PORT`, `wil`, and `wic [PORT]` independently monitor bus-I/O
+accesses. These use separate, byte-addressed atomic bitmaps and the same
+post-access stop mechanism as memory watchpoints.
+
+- `main6809` (MC6809/HD6309): FD00–FDFF only, including MMU control
+  registers accessed via `readIo`/`writeIo`. The I/O observer reads
+  the value already returned by the device; it never reads the device
+  a second time (important for interrupt-acknowledging registers).
+- `main8088` (8088/V20): 0000–FFFF I/O ports, including the card PIC,
+  8237 DMA controller, and FM-11 FDxx peripheral ports.
+- `z80`: 00–FF Z80 `IN`/`OUT` ports. The hardware's separate
+  `FCxx`/`FDxx` memory-mapped I/O accesses are NOT treated as
+  Z80 port accesses. Continue to use `w` for the CPU's memory-mapped
+  accesses.
+- `sub`: there is no separate x86/Z80-style port space; use `w`
+  for sub-CPU memory-mapped I/O such as AFE0–AFEF.
+
+Example:
+
+```text
+fm11[main6809]> wi rw FD06
+fm11[main6809]> wil
+fm11[main6809]> c
+I/O watchpoint: main6809 read port=FD06 value=... path=6809-board-I/O
+fm11[main6809]> wic FD06
+```
+
+The `path=` field names the entry point that actually recorded the
+transaction. **It does not claim that a particular instruction or DMA
+channel initiated the transaction.** Main8088 bus-level I/O may also be
+called by another device/host path. CPU memory watchpoints and I/O
+watchpoints are independent. An I/O-mapped memory access can trigger
+both when both are armed; only the first event is latched and reported
+on a given stop.
+
+Watchpoints report the address/port, transfer value, direction, and
+observable access path, but not yet the initiating PC, DMA channel,
+or a global total order of simultaneous CPU/sub-CPU accesses. Such
+source attribution would require explicit per-instruction/DMA context
+propagation through every hardware path. The high-frequency execution
+path performs no string formatting or heap allocation to test the
+atomic watch bits. Memory and I/O observers are absent from normal
+operation without `--monitor` and do not poll memory.
 
 
 Input editing uses the terminal's
