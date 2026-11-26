@@ -18,7 +18,7 @@
 class SettingsGui {
 public:
     explicit SettingsGui(const MachineConfig& effective)
-        :edited_(effective), initial_(serializeMachineConfig(effective)) {
+        :original_(effective),edited_(effective) {
         window_=SDL_CreateWindow("FM-11 Emulator - Settings",
             SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,780,650,
             SDL_WINDOW_HIDDEN|SDL_WINDOW_RESIZABLE);
@@ -209,10 +209,11 @@ private:
     }
     void dips() {
         bool selected6809=edited_.mainSelected==MachineConfig::MainSelection::Cpu6809;
-        if(ImGui::RadioButton("6809 boot",&selected6809)) {
-            edited_.mainSelected=selected6809?
-                MachineConfig::MainSelection::Cpu6809:MachineConfig::MainSelection::Cpu8088;
-        }
+        if(ImGui::RadioButton("6809 boot",selected6809))
+            edited_.mainSelected=MachineConfig::MainSelection::Cpu6809;
+        ImGui::SameLine();
+        if(ImGui::RadioButton("8088 boot",!selected6809))
+            edited_.mainSelected=MachineConfig::MainSelection::Cpu8088;
         ImGui::Checkbox("Boot from 2D FDD",&edited_.boot2dFdd);
         ImGui::Checkbox("Boot from 2HD FDD",&edited_.boot2hdFdd);
         ImGui::Checkbox("Boot from HDD",&edited_.bootHdd);
@@ -242,7 +243,6 @@ private:
     bool visible_=false;
     MachineConfig original_;
     MachineConfig edited_;
-    std::string initial_;
     std::string status_;
 };
 #endif
