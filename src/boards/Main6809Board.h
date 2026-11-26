@@ -177,6 +177,8 @@ private:
         std::uint64_t lastCycles_=0;
     };
 
+    BYTE readCpuUnobserved(WORD address);
+    void writeCpuUnobserved(WORD address, BYTE value);
     std::function<void(WORD,bool,BYTE)> memoryAccessObserver_;
     std::shared_ptr<std::vector<BYTE>> memory_;
     std::size_t installedRamBytes_=kPhysicalMemorySize;
