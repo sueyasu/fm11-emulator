@@ -63,6 +63,20 @@ BYTE MainZ80Board::readIo(WORD address) const
     return 0xff;
 }
 
+BYTE MainZ80Board::readPort(BYTE port) const
+{
+    // Z80 IN instructions are distinct from mapped FDxx memory cycles.
+    const BYTE value=readIo(port);
+    if(ioAccessObserver_)ioAccessObserver_(port,false,value);
+    return value;
+}
+
+void MainZ80Board::writePort(BYTE port,BYTE value)
+{
+    writeIo(port,value);
+    if(ioAccessObserver_)ioAccessObserver_(port,true,value);
+}
+
 void MainZ80Board::writeIo(WORD address,BYTE value)
 {
     if(address==0xfd2f) {bank_=value&0x0f;return;}
