@@ -19,7 +19,7 @@ class DebugMonitor {
 public:
     using PauseFn=std::function<void(bool)>;
     DebugMonitor(Machine& machine,PauseFn pause):m_(machine),pause_(std::move(pause)) {
-        selected_ = m_.boardCount()?name(m_.board(0)):"sub";
+        selected_ = m_.activeBoard()?name(*m_.activeBoard()):"sub";
     }
     std::string prompt() const {return "fm11["+selected_+"]> ";}
     void emit(const std::string& s) {
@@ -99,7 +99,7 @@ public:
             }
             if(command=="x" || command=="xp") {
                 if(args.size()<2 || args.size()>3)return "Usage: x|xp HEXADDR [HEXLEN]\n";
-                auto addr=number(args[1]),len=args.size()==3?number(args[2]):128;
+                auto addr=address(args[1]),len=args.size()==3?number(args[2]):128;
                 const bool physical=command=="xp";
                 const auto limit=(physical || selected_=="main8088")?0x100000u:0x10000u;
                 if(!len || len>4096 || addr>=limit || len>limit-addr)
@@ -128,6 +128,17 @@ private:
         std::size_t at=0;auto n=std::stoull(s,&at,16);
         if(at!=s.size())throw std::invalid_argument("expected hexadecimal number");
         return n;
+    }
+    std::uint64_t address(const std::string& s) const {
+        const auto colon=s.find(':');
+        if(colon==std::string::npos)return number(s);
+        if(selected_!="main8088")
+            throw std::invalid_argument("segment:offset requires main8088");
+        const auto seg=number(s.substr(0,colon));
+        const auto off=number(s.substr(colon+1));
+        if(seg>0xffff || off>0xffff)
+            throw std::out_of_range("segment and offset must be 16-bit");
+        return ((seg<<4)+off)&0xfffff;
     }
     static const char* type(CpuType t) {
         switch(t) {
