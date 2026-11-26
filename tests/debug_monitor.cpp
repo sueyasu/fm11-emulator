@@ -31,5 +31,20 @@ int main() {
     std::string content((std::istreambuf_iterator<char>(file)),std::istreambuf_iterator<char>());
     std::remove("monitor-test.log");
     if(content.find("regs")==std::string::npos || content.find("PC=")==std::string::npos)return 12;
+    // Selection is debugger-only; the guest CPU owner remains unchanged.
+    machine.addBoard(std::make_unique<Main8088Board>(CpuType::NECV20));
+    machine.addBoard(std::make_unique<MainZ80Board>());
+    machine.reset();
+    DebugMonitor multi(machine,[&](bool stop){paused=stop;});
+    if(multi.execute("cpu main8088",paused).find("Selected")==std::string::npos)return 13;
+    if(multi.execute("regs",paused).find("CS:IP=")==std::string::npos)return 14;
+    if(multi.execute("x 0000:0000 1",paused).find(":")==std::string::npos)return 15;
+    if(multi.execute("step",paused).find("not the active")==std::string::npos)return 16;
+    if(multi.execute("cpu z80",paused).find("Selected")==std::string::npos)return 17;
+    if(multi.execute("regs",paused).find("AF=")==std::string::npos)return 18;
+    if(machine.activeCpuType()!=CpuType::MC6809)return 19;
+    machine.setDisplayCpu6309Enabled(true);
+    if(multi.execute("cpu sub",paused).find("Selected")==std::string::npos)return 20;
+    if(multi.execute("regs",paused).find("MD=")==std::string::npos)return 21;
     return 0;
 }
