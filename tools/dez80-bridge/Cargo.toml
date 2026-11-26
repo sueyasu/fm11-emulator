@@ -1,9 +1,0 @@
-[package]
-name = "fm11-dez80-bridge"
-version = "0.1.0"
-edition = "2021"
-publish = false
-
-# The decoder itself is supplied by the external DeZ80 project.
-[dependencies]
-dez80 = "4.0.1"
