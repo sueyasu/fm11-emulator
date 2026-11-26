@@ -40,6 +40,14 @@ public:
                 watchReads_[i][w].store(0,std::memory_order_relaxed);
                 watchWrites_[i][w].store(0,std::memory_order_relaxed);
             }
+            if(i<ioReads_.size()) {
+                ioReads_[i]=std::make_unique<std::atomic<std::uint64_t>[]>(1024);
+                ioWrites_[i]=std::make_unique<std::atomic<std::uint64_t>[]>(1024);
+                for(std::size_t w=0;w<1024;++w) {
+                    ioReads_[i][w].store(0,std::memory_order_relaxed);
+                    ioWrites_[i][w].store(0,std::memory_order_relaxed);
+                }
+            }
         }
         for(std::size_t i=0;i<m_.boardCount();++i) {
             auto& board=m_.board(i);
@@ -51,15 +59,28 @@ public:
                     p->setPhysicalAccessObserver([this](std::uint32_t addr,bool write,BYTE value) {
                         watchProbe(Target::Physical,addr,write,value);
                     });
+                    p->setIoAccessObserver([this](WORD port,bool write,BYTE value) {
+                        ioWatchProbe(Target::Main6809,port,write,value);
+                    });
                 }
             else if(auto* p=dynamic_cast<Main8088Board*>(&board))
-                p->bus().setMemoryAccessObserver([this](std::uint32_t addr,bool write,BYTE value) {
-                    watchProbe(Target::Main8088,addr&0xfffff,write,value);
-                });
+                {
+                    p->bus().setMemoryAccessObserver([this](std::uint32_t addr,bool write,BYTE value) {
+                        watchProbe(Target::Main8088,addr&0xfffff,write,value);
+                    });
+                    p->bus().setIoAccessObserver([this](WORD port,bool write,BYTE value) {
+                        ioWatchProbe(Target::Main8088,port,write,value);
+                    });
+                }
             else if(auto* p=dynamic_cast<MainZ80Board*>(&board))
-                p->setMemoryAccessObserver([this](WORD addr,bool write,BYTE value) {
-                    watchProbe(Target::Z80,addr,write,value);
-                });
+                {
+                    p->setMemoryAccessObserver([this](WORD addr,bool write,BYTE value) {
+                        watchProbe(Target::Z80,addr,write,value);
+                    });
+                    p->setIoAccessObserver([this](BYTE port,bool write,BYTE value) {
+                        ioWatchProbe(Target::Z80,port,write,value);
+                    });
+                }
         }
         m_.systemBoard().displayCpu().setMemoryAccessObserver(
             [this](WORD addr,bool write,BYTE value) {
@@ -73,11 +94,18 @@ public:
             if(auto* p=dynamic_cast<Main6809Board*>(&board)) {
                 p->setMemoryAccessObserver({});
                 p->setPhysicalAccessObserver({});
+                p->setIoAccessObserver({});
             }
             else if(auto* p=dynamic_cast<Main8088Board*>(&board))
-                p->bus().setMemoryAccessObserver({});
+                {
+                    p->bus().setMemoryAccessObserver({});
+                    p->bus().setIoAccessObserver({});
+                }
             else if(auto* p=dynamic_cast<MainZ80Board*>(&board))
-                p->setMemoryAccessObserver({});
+                {
+                    p->setMemoryAccessObserver({});
+                    p->setIoAccessObserver({});
+                }
         }
     }
     enum class Target : std::uint8_t { Main6809, Main8088, Z80, Sub, Physical };
@@ -119,6 +147,19 @@ public:
         std::uint64_t none=0;
         hit_.compare_exchange_strong(none,event,std::memory_order_acq_rel);
     }
+    void ioWatchProbe(Target cpu,std::uint16_t port,bool write,BYTE value) {
+        if(!hasIoWatches_.load(std::memory_order_relaxed) ||
+           hit_.load(std::memory_order_relaxed)!=0 ||
+           index(cpu)>=ioReads_.size())return;
+        const auto& bits=(write?ioWrites_:ioReads_)[index(cpu)];
+        const auto word=bits[port>>6].load(std::memory_order_relaxed);
+        if(!(word&(std::uint64_t{1}<<(port&63))))return;
+        const std::uint64_t event=(std::uint64_t{1}<<63) |
+            (std::uint64_t{1}<<62) | (std::uint64_t(write)<<40) |
+            (std::uint64_t(value)<<32) | encode(cpu,port);
+        std::uint64_t none=0;
+        hit_.compare_exchange_strong(none,event,std::memory_order_acq_rel);
+    }
     bool breakPending() const {return hit_.load(std::memory_order_acquire)!=0;}
     // Cheap guard for instruction loops. Avoid reading CPU type or PC when
     // no execution breakpoint is configured and no stop is pending.
@@ -136,6 +177,9 @@ public:
             stoppedAt_=0;
             const bool write=(hit&(std::uint64_t{1}<<40))!=0;
             const auto value=static_cast<BYTE>((hit>>32)&0xff);
+            if(hit&(std::uint64_t{1}<<62))
+                return "I/O watchpoint: "+targetName(cpu)+(write?" write ":" read ")+
+                    "port="+hex(pc,cpu==Target::Z80?2:4)+" value="+hex(value,2)+"\n";
             return "Watchpoint: "+targetName(cpu)+(write?" write ":" read ")+
                 hex(pc,(cpu==Target::Main8088 || cpu==Target::Physical)?5:4)+" value="+hex(value,2)+"\n";
         }
@@ -161,6 +205,7 @@ public:
                 "help, info cpus, info machine, info io FDXX, cpu NAME, stop, cont, step [COUNT], regs, "
                 "x HEXADDR [HEXLEN], xp HEXADDR [HEXLEN], dis [HEXADDR] [COUNT], "
                 "b HEXADDR, bl, bc [HEXADDR], w r|w|rw HEXADDR, wp r|w|rw PHYSADDR, wl, wc [HEXADDR], wpc [PHYSADDR], "
+                "wi r|w|rw PORT, wil, wic [PORT], "
                 "log start FILE, log stop, log status\n";
             if(command=="log") {
                 if(args.size()==2 && args[1]=="status")
@@ -623,6 +668,10 @@ private:
     std::array<std::unique_ptr<std::atomic<std::uint64_t>[]>,5> bitmaps_;
     std::array<std::unique_ptr<std::atomic<std::uint64_t>[]>,5> watchReads_;
     std::array<std::unique_ptr<std::atomic<std::uint64_t>[]>,5> watchWrites_;
+    std::array<std::unique_ptr<std::atomic<std::uint64_t>[]>,4> ioReads_;
+    std::array<std::unique_ptr<std::atomic<std::uint64_t>[]>,4> ioWrites_;
+    std::set<std::tuple<std::string,char,std::uint32_t>> ioWatches_;
+    std::atomic<bool> hasIoWatches_{false};
     std::set<std::tuple<std::string,char,std::uint32_t>> watches_;
     std::atomic<bool> hasWatches_{false};
     std::mutex breakMutex_; // monitor command thread only; never on hot path
