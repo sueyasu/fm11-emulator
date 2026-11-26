@@ -123,7 +123,11 @@ public:
     // matching the alias test used by FM-11 NitrOS-9 Level 2.
     void setRamKiB(std::size_t kib);
     std::size_t ramKiB() const {return installedRamBytes_/1024;}
+    void setPhysicalAccessObserver(std::function<void(std::uint32_t,bool,BYTE)> observer) {
+        physicalAccessObserver_=std::move(observer);
+    }
     BYTE readPhysical(std::uint32_t address) const;
+    BYTE peekPhysical(std::uint32_t address) const;
     void writePhysical(std::uint32_t address, BYTE value);
 
 private:
@@ -180,6 +184,7 @@ private:
     BYTE readCpuUnobserved(WORD address);
     void writeCpuUnobserved(WORD address, BYTE value);
     std::function<void(WORD,bool,BYTE)> memoryAccessObserver_;
+    mutable std::function<void(std::uint32_t,bool,BYTE)> physicalAccessObserver_;
     std::shared_ptr<std::vector<BYTE>> memory_;
     std::size_t installedRamBytes_=kPhysicalMemorySize;
     std::size_t decodedPhysical(std::uint32_t address) const {
