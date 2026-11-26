@@ -44,9 +44,14 @@ public:
         for(std::size_t i=0;i<m_.boardCount();++i) {
             auto& board=m_.board(i);
             if(auto* p=dynamic_cast<Main6809Board*>(&board))
-                p->setMemoryAccessObserver([this](WORD addr,bool write,BYTE value) {
-                    watchProbe(Target::Main6809,addr,write,value);
-                });
+                {
+                    p->setMemoryAccessObserver([this](WORD addr,bool write,BYTE value) {
+                        watchProbe(Target::Main6809,addr,write,value);
+                    });
+                    p->setPhysicalAccessObserver([this](std::uint32_t addr,bool write,BYTE value) {
+                        watchProbe(Target::Physical,addr,write,value);
+                    });
+                }
             else if(auto* p=dynamic_cast<Main8088Board*>(&board))
                 p->bus().setMemoryAccessObserver([this](std::uint32_t addr,bool write,BYTE value) {
                     watchProbe(Target::Main8088,addr&0xfffff,write,value);
@@ -65,15 +70,17 @@ public:
         m_.systemBoard().displayCpu().setMemoryAccessObserver({});
         for(std::size_t i=0;i<m_.boardCount();++i) {
             auto& board=m_.board(i);
-            if(auto* p=dynamic_cast<Main6809Board*>(&board))
+            if(auto* p=dynamic_cast<Main6809Board*>(&board)) {
                 p->setMemoryAccessObserver({});
+                p->setPhysicalAccessObserver({});
+            }
             else if(auto* p=dynamic_cast<Main8088Board*>(&board))
                 p->bus().setMemoryAccessObserver({});
             else if(auto* p=dynamic_cast<MainZ80Board*>(&board))
                 p->setMemoryAccessObserver({});
         }
     }
-    enum class Target : std::uint8_t { Main6809, Main8088, Z80, Sub };
+    enum class Target : std::uint8_t { Main6809, Main8088, Z80, Sub, Physical };
     static Target cpuTarget(CpuType type) {
         switch(type) {
             case CpuType::MC6809: case CpuType::HD6309:return Target::Main6809;
@@ -561,7 +568,7 @@ private:
         if(physical) {
             for(std::size_t i=0;i<m_.boardCount();++i) {
                 auto& b=m_.board(i);
-                if(auto* p=dynamic_cast<Main6809Board*>(&b))return p->readPhysical(addr);
+                if(auto* p=dynamic_cast<Main6809Board*>(&b))return p->peekPhysical(addr);
                 if(auto* p=dynamic_cast<Main8088Board*>(&b))return p->bus().readRam(addr);
                 if(auto* p=dynamic_cast<MainZ80Board*>(&b))return (*p->physicalMemory())[addr];
             }
@@ -577,7 +584,7 @@ private:
     }
     static constexpr std::size_t index(Target t) {return static_cast<std::size_t>(t);}
     static constexpr std::uint32_t limit(Target t) {
-        return t==Target::Main8088?0x100000u:0x10000u;
+        return (t==Target::Main8088 || t==Target::Physical)?0x100000u:0x10000u;
     }
     static std::uint64_t encode(Target t,std::uint32_t pc) {
         return (std::uint64_t(index(t)+1)<<20)|pc;
@@ -594,6 +601,7 @@ private:
             case Target::Main8088:return "main8088";
             case Target::Z80:return "z80";
             case Target::Sub:return "sub";
+            case Target::Physical:return "physical";
         }
         return "?";
     }
@@ -605,10 +613,10 @@ private:
         throw std::invalid_argument("unknown CPU target");
     }
     // 1 MiB / 64 bits for main8088, 64 KiB / 64 bits for the others.
-    static constexpr std::array<std::size_t,4> wordCounts_{{1024,16384,1024,1024}};
-    std::array<std::unique_ptr<std::atomic<std::uint64_t>[]>,4> bitmaps_;
-    std::array<std::unique_ptr<std::atomic<std::uint64_t>[]>,4> watchReads_;
-    std::array<std::unique_ptr<std::atomic<std::uint64_t>[]>,4> watchWrites_;
+    static constexpr std::array<std::size_t,5> wordCounts_{{1024,16384,1024,1024,16384}};
+    std::array<std::unique_ptr<std::atomic<std::uint64_t>[]>,5> bitmaps_;
+    std::array<std::unique_ptr<std::atomic<std::uint64_t>[]>,5> watchReads_;
+    std::array<std::unique_ptr<std::atomic<std::uint64_t>[]>,5> watchWrites_;
     std::set<std::tuple<std::string,char,std::uint32_t>> watches_;
     std::atomic<bool> hasWatches_{false};
     std::mutex breakMutex_; // monitor command thread only; never on hot path
