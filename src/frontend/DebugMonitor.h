@@ -160,7 +160,7 @@ public:
             if(command=="help" || command=="?")return
                 "help, info cpus, info machine, info io FDXX, cpu NAME, stop, cont, step [COUNT], regs, "
                 "x HEXADDR [HEXLEN], xp HEXADDR [HEXLEN], dis [HEXADDR] [COUNT], "
-                "b HEXADDR, bl, bc [HEXADDR], w r|w|rw HEXADDR, wl, wc [HEXADDR], "
+                "b HEXADDR, bl, bc [HEXADDR], w r|w|rw HEXADDR, wp r|w|rw PHYSADDR, wl, wc [HEXADDR], wpc [PHYSADDR], "
                 "log start FILE, log stop, log status\n";
             if(command=="log") {
                 if(args.size()==2 && args[1]=="status")
@@ -181,22 +181,24 @@ public:
                 }
                 return "Usage: log start FILE | log stop | log status\n";
             }
-            if(command=="w" || command=="watch") {
+            if(command=="w" || command=="watch" || command=="wp") {
                 if(args.size()!=3 || (args[1]!="r" && args[1]!="w" && args[1]!="rw"))
-                    return "Usage: w r|w|rw HEXADDR\n";
-                const auto cpu=parseTarget(selected_);
-
-                const auto addr=address(args[2]);
+                    return "Usage: w r|w|rw HEXADDR | wp r|w|rw PHYSADDR\n";
+                const bool physical=command=="wp";
+                const auto cpu=physical?Target::Physical:parseTarget(selected_);
+                const auto addr=physical?number(args[2]):address(args[2]);
                 if(addr>=limit(cpu))return "Watchpoint address out of range.\n";
+                const std::string label=physical?"physical":selected_;
                 std::lock_guard<std::mutex> lock(breakMutex_);
                 for(const char mode:args[1]) {
-                    if(!watches_.insert({selected_,mode,static_cast<std::uint32_t>(addr)}).second)
+                    if(!watches_.insert({label,mode,static_cast<std::uint32_t>(addr)}).second)
                         continue;
                     auto& bits=(mode=='w'?watchWrites_:watchReads_)[index(cpu)];
                     bits[addr>>6].fetch_or(std::uint64_t{1}<<(addr&63),std::memory_order_release);
                 }
                 hasWatches_.store(!watches_.empty(),std::memory_order_release);
-                return "Watchpoint set: "+selected_+" "+args[1]+" "+hex(addr,cpu==Target::Main8088?5:4)+"\n";
+                return "Watchpoint set: "+label+" "+args[1]+" "+
+                    hex(addr,(cpu==Target::Main8088 || cpu==Target::Physical)?5:4)+"\n";
             }
             if(command=="wl") {
                 if(args.size()!=1)return "Usage: wl\n";
@@ -204,21 +206,24 @@ public:
                 std::ostringstream out;
                 for(const auto& entry:watches_) {
                     const auto& name=std::get<0>(entry);
-                    out<<name<<" "<<std::get<1>(entry)<<" "<<hex(std::get<2>(entry),name=="main8088"?5:4)<<"\n";
+                    out<<name<<" "<<std::get<1>(entry)<<" "<<hex(std::get<2>(entry),
+                        (name=="main8088" || name=="physical")?5:4)<<"\n";
                 }
-                return out.str().empty()?"No watchpoints.\\n":out.str();
+                return out.str().empty()?"No watchpoints.\n":out.str();
             }
-            if(command=="wc") {
-                if(args.size()>2)return "Usage: wc [HEXADDR]\n";
-                const auto cpu=parseTarget(selected_);
+            if(command=="wc" || command=="wpc") {
+                if(args.size()>2)return "Usage: wc [HEXADDR] | wpc [PHYSADDR]\n";
+                const bool physical=command=="wpc";
+                const auto cpu=physical?Target::Physical:parseTarget(selected_);
+                const std::string label=physical?"physical":selected_;
                 std::uint64_t addr=0;
                 if(args.size()==2) {
-                    addr=address(args[1]);
+                    addr=physical?number(args[1]):address(args[1]);
                     if(addr>=limit(cpu))return "Watchpoint address out of range.\n";
                 }
                 std::lock_guard<std::mutex> lock(breakMutex_);
                 for(auto it=watches_.begin();it!=watches_.end();) {
-                    if(std::get<0>(*it)!=selected_ ||
+                    if(std::get<0>(*it)!=label ||
                        (args.size()==2 && std::get<2>(*it)!=addr)) {++it;continue;}
                     const char mode=std::get<1>(*it);
                     const auto a=std::get<2>(*it);
@@ -227,7 +232,7 @@ public:
                     it=watches_.erase(it);
                 }
                 hasWatches_.store(!watches_.empty(),std::memory_order_release);
-                return "Watchpoint(s) cleared for "+selected_+".\n";
+                return "Watchpoint(s) cleared for "+label+".\n";
             }
             if(command=="b" || command=="break") {
                 if(args.size()!=2)return "Usage: b HEXADDR\n";
@@ -610,6 +615,7 @@ private:
         if(s=="main8088")return Target::Main8088;
         if(s=="z80")return Target::Z80;
         if(s=="sub")return Target::Sub;
+        if(s=="physical")return Target::Physical;
         throw std::invalid_argument("unknown CPU target");
     }
     // 1 MiB / 64 bits for main8088, 64 KiB / 64 bits for the others.
