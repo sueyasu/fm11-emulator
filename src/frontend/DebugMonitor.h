@@ -137,7 +137,18 @@ public:
                 selected_=args[1];return "Selected: "+selected_+"\n";
             }
             if(command=="stop") {pause_(true);paused=true;return "Emulation stopped.\n";}
-            if(command=="cont" || command=="c") {pause_(false);paused=false;return "Emulation running.\n";}
+            if(command=="cont" || command=="c") {
+                // Skip the breakpoint at the stopped PC for one instruction
+                // boundary; do not suppress any other CPU's breakpoint.
+                {
+                    std::lock_guard<std::mutex> lock(breakMutex_);
+                    skip_=stoppedAt_;
+                    stoppedAt_={"",0};
+                }
+                pause_(false);
+                paused=false;
+                return "Emulation running.\n";
+            }
             if(command=="r" || command=="regs") {
                 pause_(true);paused=true;return registers();
             }
