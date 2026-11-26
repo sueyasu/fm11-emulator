@@ -61,6 +61,10 @@ public:
     BYTE readMemory(std::uint32_t address) const;
     BYTE peekMemory(std::uint32_t address) const {return readMemoryUnobserved(address);}
     void writeMemory(std::uint32_t address, BYTE value);
+    // Optional debugger observer: reports I/O bus transactions after completion.
+    void setIoAccessObserver(std::function<void(WORD,bool,BYTE)> callback) {
+        ioAccessObserver_=std::move(callback);
+    }
     BYTE readIo(WORD port) const;
     void writeIo(WORD port, BYTE value);
     void setSystemIo(IoReader reader, IoWriter writer);
@@ -93,6 +97,7 @@ private:
     BYTE readMemoryUnobserved(std::uint32_t address) const;
     void writeMemoryUnobserved(std::uint32_t address, BYTE value);
     mutable std::function<void(std::uint32_t,bool,BYTE)> memoryAccessObserver_;
+    mutable std::function<void(WORD,bool,BYTE)> ioAccessObserver_;
     std::shared_ptr<std::vector<BYTE>> memory_;
     std::size_t installedRamBytes_=kMemorySize;
     std::size_t decodedRamAddress(std::uint32_t address) const {
