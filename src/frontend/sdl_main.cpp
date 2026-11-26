@@ -753,12 +753,19 @@ int main(int argc,char** argv) {
         std::unique_ptr<DebugMonitor> monitor;
         std::unique_ptr<MonitorInput> monitorInput;
         if(monitorEnabled) {
+            // Install memory access hooks only while every guest worker is
+            // paused; std::function replacement is not thread-safe.
+            const bool startupPaused=paused;
+            paused=true;
+            applyPauseState();
             monitor=std::make_unique<DebugMonitor>(machine,[&](bool stop) {
                 paused=stop;applyPauseState();
             });
             monitorProbe.store(monitor.get(),std::memory_order_release);
             monitorInput=std::make_unique<MonitorInput>();
-            monitor->emit("FM-11 Debug Monitor (Stage 3-A). Type help.\n"+monitor->prompt());
+            monitor->emit("FM-11 Debug Monitor (Stage 3-C). Type help.\n"+monitor->prompt());
+            paused=startupPaused;
+            applyPauseState();
         }
         while(running) {
             SDL_Event event;
