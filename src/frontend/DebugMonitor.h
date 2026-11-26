@@ -137,7 +137,7 @@ public:
             const bool write=(hit&(std::uint64_t{1}<<40))!=0;
             const auto value=static_cast<BYTE>((hit>>32)&0xff);
             return "Watchpoint: "+targetName(cpu)+(write?" write ":" read ")+
-                hex(pc,cpu==Target::Main8088?5:4)+" value="+hex(value,2)+"\n";
+                hex(pc,(cpu==Target::Main8088 || cpu==Target::Physical)?5:4)+" value="+hex(value,2)+"\n";
         }
         stoppedAt_=hit;
         return "Breakpoint: "+targetName(cpu)+" PC="+hex(pc,cpu==Target::Main8088?5:4)+"\n";
