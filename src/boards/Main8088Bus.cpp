@@ -237,6 +237,13 @@ void Main8088Bus::setSystemIo(IoReader reader,IoWriter writer)
 
 BYTE Main8088Bus::readIo(WORD port) const
 {
+    const BYTE value=readIoUnobserved(port);
+    if(ioAccessObserver_)ioAccessObserver_(port,false,value);
+    return value;
+}
+
+BYTE Main8088Bus::readIoUnobserved(WORD port) const
+{
     // SingleStepTests runs CPU instructions without FM-11 peripherals.
     // The reference test fixture's undriven I/O bus reads as FFh.
     // Do not expose the card's PIC/DMA registers in this isolated mode.
@@ -315,6 +322,12 @@ BYTE Main8088Bus::readIo(WORD port) const
 }
 
 void Main8088Bus::writeIo(WORD port,BYTE value)
+{
+    writeIoUnobserved(port,value);
+    if(ioAccessObserver_)ioAccessObserver_(port,true,value);
+}
+
+void Main8088Bus::writeIoUnobserved(WORD port,BYTE value)
 {
     // Do not mutate simulated FM-11 peripheral state in CPU-only tests.
     if(conformanceRam_)return;
