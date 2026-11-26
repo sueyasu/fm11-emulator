@@ -349,7 +349,7 @@ void saveUserMachineConfig(const MachineConfig& config) {
     const int fd=::mkstemp(temporary.data());
     if(fd<0)throw std::runtime_error("cannot create config temp file: "+std::string(std::strerror(errno)));
     const std::string tmp=temporary.data();
-    bool committed=false;
+    bool fdOpen=true;
     try {
         if(::fchmod(fd,0600)!=0)throw std::runtime_error("cannot chmod config");
         std::size_t offset=0;
@@ -360,16 +360,14 @@ void saveUserMachineConfig(const MachineConfig& config) {
             offset+=static_cast<std::size_t>(written);
         }
         if(::fsync(fd)!=0)throw std::runtime_error("config fsync failed");
-        if(::close(fd)!=0)throw std::runtime_error("config close failed");
+        const int closeResult=::close(fd);
+        fdOpen=false;
+        if(closeResult!=0)throw std::runtime_error("config close failed");
         if(::rename(tmp.c_str(),destination.c_str())!=0)
             throw std::runtime_error("config rename failed: "+std::string(std::strerror(errno)));
-        committed=true;
     } catch(...) {
-        // close may have already succeeded; closing a closed fd is harmless
-        // when no other fd has been allocated on this thread meanwhile.
-        ::close(fd);
+        if(fdOpen)::close(fd);
         ::unlink(tmp.c_str());
         throw;
     }
-    (void)committed;
 }
