@@ -63,3 +63,12 @@ struct MachineConfig {
 };
 MachineConfig loadMachineConfig(const std::string& explicitPath="");
 MachineConfig parseMachineConfigFile(const std::string& path);
+
+// Per-user writable location. XDG_CONFIG_HOME (absolute) takes precedence
+// over HOME/.config; /etc is never used for GUI saves.
+std::string userMachineConfigPath();
+// Full INI serialization, using canonical section names.
+std::string serializeMachineConfig(const MachineConfig& config);
+// Atomic replacement in the user's configuration directory (mode 0600).
+// The destination is always userMachineConfigPath().
+void saveUserMachineConfig(const MachineConfig& config);
