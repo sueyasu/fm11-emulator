@@ -163,6 +163,41 @@ int main() {
     if(multi.takeBreak().find("z80 PC=1234")==std::string::npos)return 60;
     if(multi.execute("bc",paused).find("cleared")==std::string::npos)return 61;
 
+    // Watchpoints are registered by target and direction. Real bus
+    // access observers must report the access without a second read.
+    if(multi.execute("cpu main8088",paused).find("Selected")==std::string::npos)return 91;
+    if(multi.execute("w rw 1DC00",paused).find("Watchpoint set")==std::string::npos)return 92;
+    if(multi.execute("wl",paused).find("1DC00")==std::string::npos)return 93;
+    auto* v20=dynamic_cast<Main8088Board*>(&machine.board(1));
+    if(!v20)return 94;
+    v20->bus().writeMemory(0x1dc00,0xc3);
+    if(!multi.breakPending())return 95;
+    const auto writeHit=multi.takeBreak();
+    if(writeHit.find("main8088 write 1DC00 value=C3")==std::string::npos)return 96;
+    if(v20->bus().readMemory(0x1dc00)!=0xc3)return 97;
+    if(!multi.breakPending())return 98;
+    if(multi.takeBreak().find("main8088 read 1DC00 value=C3")==std::string::npos)return 99;
+    if(multi.execute("wc 1DC00",paused).find("cleared")==std::string::npos)return 100;
+    if(multi.execute("wl",paused).find("No watchpoints")==std::string::npos)return 101;
+    v20->bus().writeMemory(0x1dc00,0x00);
+    if(multi.breakPending())return 102;
+    if(multi.execute("cpu z80",paused).find("Selected")==std::string::npos)return 103;
+    if(multi.execute("w w 1234",paused).find("set")==std::string::npos)return 104;
+    auto* z80=dynamic_cast<MainZ80Board*>(&machine.board(2));
+    if(!z80)return 105;
+    z80->writeMemory(0x1234,0x5a);
+    if(multi.takeBreak().find("z80 write 1234 value=5A")==std::string::npos)return 106;
+    if(multi.execute("wc",paused).find("cleared")==std::string::npos)return 107;
+    if(multi.execute("cpu sub",paused).find("Selected")==std::string::npos)return 108;
+    if(multi.execute("w w 2000",paused).find("not yet supported")==std::string::npos)return 109;
+    if(multi.execute("cpu main6809",paused).find("Selected")==std::string::npos)return 110;
+    if(multi.execute("w w 2000",paused).find("set")==std::string::npos)return 111;
+    auto* m6809=dynamic_cast<Main6809Board*>(&machine.board(0));
+    if(!m6809)return 112;
+    m6809->writeCpu(0x2000,0x3c);
+    if(multi.takeBreak().find("main6809 write 2000 value=3C")==std::string::npos)return 113;
+    if(multi.execute("wc",paused).find("cleared")==std::string::npos)return 114;
+
     if(machine.activeCpuType()!=CpuType::MC6809)return 19;
     machine.setDisplayCpu6309Enabled(true);
     if(multi.execute("cpu sub",paused).find("Selected")==std::string::npos)return 20;
