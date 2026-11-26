@@ -129,6 +129,10 @@ public:
     BYTE readPhysical(std::uint32_t address) const;
     BYTE peekPhysical(std::uint32_t address) const;
     void writePhysical(std::uint32_t address, BYTE value);
+    // Optional debugger observer: reports I/O bus transactions after completion.
+    void setIoAccessObserver(std::function<void(WORD,bool,BYTE)> callback) {
+        ioAccessObserver_=std::move(callback);
+    }
 
 private:
     bool timedTypeIIDispatch_=false;
@@ -140,10 +144,6 @@ private:
     bool isMmrRegister(WORD address) const;
     BYTE readMmrRegister(WORD address) const;
     void writeMmrRegister(WORD address, BYTE value);
-    // Optional debugger observer: reports I/O bus transactions after completion.
-    void setIoAccessObserver(std::function<void(WORD,bool,BYTE)> callback) {
-        ioAccessObserver_=std::move(callback);
-    }
     BYTE readIo(WORD address);
     BYTE readPtm(BYTE port);
     void writePtm(BYTE port, BYTE value);
