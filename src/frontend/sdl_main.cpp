@@ -589,6 +589,11 @@ int main(int argc,char** argv) {
 
         // Independent hardware clocks: the PTM and sub-CPU workers are
         // unrelated to SDL rendering and the main CPU instruction pacing.
+        std::atomic<DebugMonitor*> monitorProbe{nullptr};
+        if(monitorEnabled)machine.setDisplayBreakProbe([&](std::uint32_t pc) {
+            auto* mon=monitorProbe.load(std::memory_order_acquire);
+            return !mon || !mon->probe("sub",pc);
+        });
         if(machine.boardCount())machine.startRealtimePtm();
         machine.startDisplayCpu();
 
@@ -621,6 +626,10 @@ int main(int argc,char** argv) {
                     for(;ran<std::min<std::uint64_t>(instructions,512) && pacer.ready();++ran) {
                         const auto* active=machine.activeBoard();
                         if(!active)break;
+                        if(auto* mon=monitorProbe.load(std::memory_order_acquire)) {
+                            if(mon->probe(DebugMonitor::cpuName(*active),active->cpu().pc()))
+                                break;
+                        }
                         const bool ptmIrqSyncedBefore=
                             mainBoard && active==static_cast<CpuBoard*>(mainBoard);
                         if(ptmIrqSyncedBefore) {
@@ -744,6 +753,7 @@ int main(int argc,char** argv) {
             monitor=std::make_unique<DebugMonitor>(machine,[&](bool stop) {
                 paused=stop;applyPauseState();
             });
+            monitorProbe.store(monitor.get(),std::memory_order_release);
             monitorInput=std::make_unique<MonitorInput>();
             monitor->emit("FM-11 Debug Monitor (Stage 3-A). Type help.\n"+monitor->prompt());
         }
@@ -833,6 +843,12 @@ int main(int argc,char** argv) {
                         }
                     }
                 }
+            }
+            if(monitor && monitor->breakPending()) {
+                paused=true;
+                applyPauseState();
+                monitor->emit(monitor->takeBreak());
+                monitor->emit(monitor->prompt());
             }
             applyPauseState();
             if(monitorInput) {
