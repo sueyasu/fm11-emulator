@@ -223,16 +223,16 @@ int main() {
     if(multi.execute("cpu main6809",paused).find("Selected")==std::string::npos)return 128;
     if(multi.execute("wi rw FD70",paused).find("I/O watchpoint set")==std::string::npos)return 129;
     if(multi.execute("wil",paused).find("main6809 r port=FD70")==std::string::npos)return 130;
-    m6809->writeIo(0xfd70,0x42);
+    m6809->writeCpu(0xfd70,0x42);
     if(multi.takeBreak().find("main6809 write port=FD70 value=42")==std::string::npos)return 131;
     const auto readsBefore=m6809->ioReadCount(0x70);
-    const BYTE fd70=m6809->readIo(0xfd70);
+    const BYTE fd70=m6809->readCpu(0xfd70);
     if(m6809->ioReadCount(0x70)!=readsBefore+1)return 154;
     if(multi.takeBreak().find("main6809 read port=FD70 value=")==std::string::npos)return 132;
     (void)fd70;
     if(multi.execute("wic FD70",paused).find("cleared")==std::string::npos)return 133;
     if(multi.execute("wil",paused).find("No I/O watchpoints")==std::string::npos)return 134;
-    m6809->writeIo(0xfd70,0x24);
+    m6809->writeCpu(0xfd70,0x24);
     if(multi.breakPending())return 155;
     // 8088/V20 has 16-bit port addressing, independent of physical RAM.
     if(multi.execute("cpu main8088",paused).find("Selected")==std::string::npos)return 135;
