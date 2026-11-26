@@ -10,9 +10,9 @@ Commands (addresses are **hexadecimal**; step counts and dump lengths are **deci
 - `info cpus`: installed CPUs and current execution owner
 - `cpu main6809|main8088|z80|sub`: change debugger target ONLY
 - `stop` and `cont`: stop/restart all workers
-- `step [COUNT]`: single-step selected CPU while other CPUs remain stopped; prints registers (next-instruction display resumes when unidasm is integrated)
+- `step [COUNT]`: single-step selected CPU while other CPUs remain stopped; prints registers and the next instruction when unidasm is installed
 - `regs`: show target CPU register bank
-- `dis [ADDRESS] [COUNT]` (alias `u`): command syntax retained; temporarily reports that unidasm integration is pending
+- `dis [ADDRESS] [COUNT]` (alias `u`): decode selected CPU memory at ADDRESS, or current PC; default 8 and maximum 64 instructions. Addresses are hexadecimal and COUNT decimal by default
 - `x ADDRESS [LENGTH]`: side-effect-free target CPU memory dump (main8088 also accepts `SEG:OFF`)
 - `xp ADDRESS [LENGTH]`: 1 MiB main physical RAM dump
 - `b HEXADDR`: set an execution breakpoint on the selected CPU; main8088 accepts `SEG:OFF` and stores its 20-bit physical address
@@ -40,18 +40,46 @@ for listing entries; atomic bitmaps allow the execution workers to read them
 safely without blocking. Main8088 breakpoints
 are matched against the 20-bit physical CS:IP address.
 
-Stage 3-B disassembly backend transition (cleanup commit):
+Stage 3-B-1: external MAME `unidasm` integration
 
-- The experimental Capstone/DeZ80 Python frontend, Rust adapter, and their
-  optional smoke test have been removed before adopting MAME `unidasm`.
-- No locally implemented instruction decoder or opcode table remains in the
-  emulator.
-- The `dis`/`u` command and `step` command remain available, but
-  disassembly output is temporarily unavailable and explicitly reports
-  "unidasm integration pending". Stepping, CPU execution, breakpoints,
-  memory dumps, and monitor logging remain unchanged.
-- Stage 3-B-1 will restore disassembly with the system-provided
-  MAME `unidasm`. Stage 3-B-2 will add the V20/8080 mode extension.
+Install the MAME command-line tools on Ubuntu:
+
+```sh
+sudo apt install mame-tools
+command -v unidasm
+```
+
+The monitor keeps its `dis`/`u` interface and invokes
+`tools/disassemble.py` only on demand. The Python adapter sends the
+side-effect-free memory snapshot to MAME `unidasm` using binary stdin.
+There are no emulator-local opcode tables, and the MAME source is not
+vendored into this repository. `FM11_UNIDASM` can override the
+executable path, including a custom MAME build.
+
+CPU mapping (MAME's architecture identifiers):
+
+- MC6809: `m6809`
+- HD6309: `hd6309`
+- Z80: `z80`
+- 8088: `x86_16` (16-bit x86 decoding; instruction legality on an
+  original 8088 is not verified by this general-purpose mode)
+- V20 native mode: `nec`
+
+**V20 8080 emulation mode is not yet supported in Stage 3-B-1.** The
+monitor explicitly reports this condition instead of displaying native
+NEC instructions. Stage 3-B-2 will enable it using a small patch to
+MAME's `unidasm` mode selection (not to the FM-11 CPU core).
+
+The adapter converts the monitor's instruction count into a bounded
+byte-span for `unidasm -count`, because MAME's `-count` argument counts
+PC units rather than decoded instructions. It then limits the output
+to the requested number of instructions. MAME's original mnemonics and
+operand formatting are preserved. Guest memory is not modified.
+
+For automated verification, `unidasm_adapter` uses a mocked external
+process and has no MAME dependency; `debug_monitor` checks the output
+when MAME is installed and the missing-tool error otherwise. Neither
+Python nor MAME is needed for the core emulator's normal execution.
 
 Memory watchpoints and machine register inspection remain Stage 3-C work.
 Input editing uses the terminal's
