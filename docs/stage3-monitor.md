@@ -74,8 +74,13 @@ You can override the Rust adapter path with `FM11_DEZ80_BRIDGE`.
 External errors (missing Python module or unbuilt Rust adapter) are
 reported in the monitor; no silent fallback to the removed decoder occurs.
 
-memory watchpoints and machine register inspection are Stage 3-C.
- Input editing uses the terminal's
+The optional `external_disassembler` CTest checks Capstone and DeZ80 when
+installed and skips absent optional backends. The regular `debug_monitor`
+test also runs without them. Capstone is BSD-licensed; DeZ80 is MIT-licensed.
+Dependencies are installed separately and are not vendored in the emulator.
+
+Memory watchpoints and machine register inspection remain Stage 3-C work.
+Input editing uses the terminal's
 canonical/echo mode initially; history and Tab completion can be
 added independently with libedit. Existing --trace-* output does not
 become part of the monitor session log.
