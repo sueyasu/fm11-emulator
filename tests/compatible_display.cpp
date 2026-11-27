@@ -37,6 +37,12 @@ int main(int argc,char** argv) {
         auto go=[&](BYTE x,BYTE y){out(0x12);out(x);out(y);};
         const auto& d=m.displaySubsystem();
         if(d.crtcRegister(1)!=40||d.crtcRegister(6)!=25)return 3;
+        const auto shape=d.textCursor();
+        if(shape.first!=0 || shape.last!=15 || shape.mode!=2) {
+            std::cerr<<"Incorrect cursor shape: first="<<shape.first
+                     <<" last="<<shape.last<<" mode="<<shape.mode<<"\n";
+            return 14;
+        }
         out('A');out('B');
         if(d.textByte(0)!='A'||d.textByte(2)!='B'||d.textCursor().offset!=4)return 4;
         out(0x1b);out('G');out(0x1a);out('C');

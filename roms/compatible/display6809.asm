@@ -419,6 +419,7 @@ unused
         rti
 crtc_init
         fcb     $35,$28,$2c,$04,$1f,$06,$19,$19,$00,$07
-        fcb     $40,$07,0,0,0,0
+* Full-height blinking cursor (16 rasters per 80x25 character).
+        fcb     $40,$0f,0,0,0,0
         fill    $ff,$fff2-*
         fdb     unused,unused,firq,irq,unused,nmi,reset
