@@ -33,13 +33,17 @@ start:
     mov ds,ax
     mov es,ax
     cld
-    ; Standard firmware enables host text video through main-board FDA0.
-    ; The display sub-CPU may execute and acknowledge every mailbox command
-    ; while the SDL frontend still suppresses ALL characters when FDA0[1:0]
-    ; remains zero after reset. Enable text before transferring to the IPL.
+    ; Keep text hidden until the display sub-CPU is ready and its
+    ; native console has been cleared, including after a warm reset.
     mov dx,0xFDA0
-    mov al,0x03                 ; text display enabled (both text control bits)
+    xor al,al
     out dx,al
+    call init_display
+    jc .display_done             ; leave hidden on timeout; still boot
+    mov dx,0xFDA0
+    mov al,0x03
+    out dx,al
+.display_done:
     mov dx,DIPSW
     in al,dx
     mov bl,al                    ; preserve active-low boot DIP
@@ -69,6 +73,79 @@ boot_failure:
     jmp .halt
 boot_ipl:
     jmp BOOT_SEG:0
+
+; Initialize native text attributes (white), clear screen and home.
+; Same CHARACTER OUT protocol as the FM-11 CP/M console driver.
+init_display:
+    mov ah,0x1B
+    call display_char
+    jc .done
+    mov ah,'G'
+    call display_char
+    jc .done
+    mov ah,7
+    call display_char
+    jc .done
+    mov ah,0x16                 ; clear screen
+    call display_char
+    jc .done
+    mov ah,0x0B                 ; home cursor
+    call display_char
+.done:
+    ret
+
+; AH=native character. CF indicates mailbox timeout.
+display_char:
+    mov dx,0xFD05
+    mov cx,0xFFFF
+.ready:
+    in al,dx
+    test al,0x80
+    jz .halt
+    loop .ready
+    stc
+    ret
+.halt:
+    mov al,0x80
+    out dx,al
+    mov cx,0xFFFF
+.wait_halt:
+    in al,dx
+    test al,0x80
+    jnz .install
+    loop .wait_halt
+    xor al,al
+    out dx,al
+    stc
+    ret
+.install:
+    mov dx,0xFC80
+    xor al,al
+    out dx,al
+    inc dx
+    out dx,al
+    inc dx
+    mov al,0x12                 ; CHARACTER OUT
+    out dx,al
+    inc dx
+    mov al,ah
+    out dx,al
+    inc dx
+    xor al,al
+    out dx,al
+    mov dx,0xFD05
+    out dx,al                   ; release sub-CPU
+    mov cx,0xFFFF
+.complete:
+    in al,dx
+    test al,0x80
+    jz .ok
+    loop .complete
+    stc
+    ret
+.ok:
+    clc
+    ret
 
 ; Common 8237 setup, one sector per command.
 ; IN: DX=DMA address port (10h for 2D,12h for 2HD,14h for HDD)
