@@ -975,8 +975,8 @@ int main(int argc,char** argv) {
                 const auto snapshot=OpenGlRenderer::capture(machine,!ankPath.empty() && !testKanji);
                 int outputW=0,outputH=0;
                 SDL_GL_GetDrawableSize(ui.window,&outputW,&outputH);
-                int menuPixels=MainMenuGui::menuHeight;
 #ifdef FM11_SETTINGS_GUI
+                int menuPixels=MainMenuGui::menuHeight;
                 int windowW=0,windowH=0;
                 SDL_GetWindowSize(ui.window,&windowW,&windowH);
                 menuPixels=windowH>0?MainMenuGui::menuHeight*outputH/windowH:
