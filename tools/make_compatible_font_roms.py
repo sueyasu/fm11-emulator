@@ -162,7 +162,7 @@ def make_ank(an,k,graphics,half):
 
 def level1_slot(ku,ten):
     if 1<=ku<=7:
-        return (ten//32)*0x100 + ku*32 + ten%32
+        return (0,0x200,0x100)[ten//32] + ku*32 + ten%32
     if 16<=ku<=47:
         return 0x400 + ((ku-16)//16)*0x600 + (ten//32)*0x200 + (ku%16)*32 + ten%32
     raise ValueError((ku,ten))
