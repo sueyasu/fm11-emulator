@@ -114,6 +114,19 @@ public:
             if(worker.joinable())worker.join();
         workers_.clear();
     }
+    // Reuse the scheduler after a full machine rebuild. stop() remains
+    // terminal unless this operation is requested explicitly by the
+    // UI/control thread when no worker exists.
+    void resetForRestart() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        if(!stopping_ || !workers_.empty() || active_ || parked_)
+            throw std::logic_error("resetForRestart requires stopped workers");
+        stopping_=false;
+        paused_=false;
+        failure_=nullptr;
+        wakeGeneration_=0;
+    }
+
     void rethrowWorkerFailure() const {
         std::lock_guard<std::mutex> lock(mutex_);
         if(failure_)std::rethrow_exception(failure_);
