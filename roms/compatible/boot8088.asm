@@ -3,7 +3,7 @@
 ;
 ; Linked at physical FF000h-FFFFFh (CS=FF00h). Reset vector FFFF0h.
 ; Boot DIP FD23h: bit 5=0 enables 2D, bit 6=0 enables 2HD,
-;                 bit 7=0 enables MDC HDD. The first successful device wins.
+;                 bit 7=0 enables MDC HDD. Priority: HDD -> 2HD -> 2D.
 ; 2D IPL: T0/H0/S1..S2 (2 x 256 bytes), physical 07C00h.
 ; 2HD IPL: T0/H0/S1..S4 (4 x 128 bytes), physical 07C00h.
 ; HDD IPL: LBA0..1 (2 x 256 bytes), physical 07C00h.
@@ -47,23 +47,23 @@ start:
     mov dx,DIPSW
     in al,dx
     mov bl,al                    ; preserve active-low boot DIP
-    test bl,0x20
-    jnz .no2d
-    push bx                      ; boot2d uses BX as DMA destination
-    call boot2d
-    pop bx                       ; POP does not modify success CF
+    test bl,0x80
+    jnz .nohdd
+    push bx
+    call boothdd
+    pop bx
     jnc boot_ipl
-.no2d:
+.nohdd:
     test bl,0x40
     jnz .no2hd
-    push bx                      ; boot2hd also uses BX as DMA destination
+    push bx
     call boot2hd
     pop bx
     jnc boot_ipl
 .no2hd:
-    test bl,0x80
+    test bl,0x20
     jnz boot_failure
-    call boothdd
+    call boot2d
     jnc boot_ipl
 boot_failure:
     ; All enabled devices absent or failed. Halt instead of running garbage.

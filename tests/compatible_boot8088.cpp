@@ -63,16 +63,17 @@ Bytes makeHdd() {
     return bytes;
 }
 bool boot(const Main8088Bus::Rom& rom,CpuType cpuType,unsigned dipsw,
-          unsigned media,unsigned caseNumber) {
+          unsigned media,unsigned caseNumber,unsigned installed=0) {
     Machine machine;
     auto board=std::make_unique<Main8088Board>(cpuType);
     auto* card=board.get();
     card->bus().loadBootRom(rom);
     machine.addBoard(std::move(board));
     machine.systemBoard().setBootDip(BYTE(dipsw));
-    if(media==0)machine.systemBoard().floppyDevice()->load2d(make2d());
-    if(media==1)machine.systemBoard().floppyDevice()->loadD882hd(make2hdD88());
-    if(media==2)machine.systemBoard().hddDevice()->load(makeHdd());
+    if(!installed)installed=1u<<media;
+    if(installed&1)machine.systemBoard().floppyDevice()->load2d(make2d());
+    if(installed&2)machine.systemBoard().floppyDevice()->loadD882hd(make2hdD88());
+    if(installed&4)machine.systemBoard().hddDevice()->load(makeHdd());
     machine.reset();
     // Simulate the display ROM mailbox endpoint without proprietary ROM bytes.
     const std::array<BYTE,5> expectedChars{{0x1b,'G',7,0x16,0x0b}};
@@ -154,8 +155,12 @@ int main(int argc,char** argv) {
         if(!boot(rom,cpu,0xdf,0,++count))return 10+count; // 2D only
         if(!boot(rom,cpu,0xbf,1,++count))return 10+count; // 2HD only
         if(!boot(rom,cpu,0x7f,2,++count))return 10+count; // HDD only
-        if(!boot(rom,cpu,0x9f,1,++count))return 10+count; // 2D absent -> 2HD
-        if(!boot(rom,cpu,0x1f,2,++count))return 10+count; // both FDDs absent -> HDD
+        if(!boot(rom,cpu,0x1f,2,++count,7))return 10+count; // all present: HDD wins
+        if(!boot(rom,cpu,0x1f,1,++count,3))return 10+count; // HDD absent: 2HD wins
+        if(!boot(rom,cpu,0x1f,0,++count,1))return 10+count; // HDD and 2HD absent
+        if(!boot(rom,cpu,0x9f,1,++count,7))return 10+count; // HDD disabled
+        if(!boot(rom,cpu,0x5f,2,++count,7))return 10+count; // 2HD disabled
+        if(!boot(rom,cpu,0xdf,0,++count,7))return 10+count; // HDD and 2HD disabled
     }
     return 0;
 }
