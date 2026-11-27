@@ -451,6 +451,34 @@ public:
         for(const auto& disk:media2hd_)if(!disk.raw.empty())return true;
         return false;
     }
+    // Stage 4-B: Only exchange media at a quiescent FDC boundary.
+    // Reject a selected drive with an active seek, track write, timed
+    // sector command or outstanding PIO/DMA bytes. The host UI must
+    // also suspend guest CPU, sub-CPU and PTM before calling these.
+    bool canExchangeMedia(unsigned channel,unsigned drive) const {
+        if(channel>1 || drive>3)return false;
+        if(seek_[channel][drive].pending || trackBusy(channel,drive) ||
+           typeIIBusy(channel,drive))return false;
+        if(transferChannel_==channel && transferDrive_==drive &&
+           transferPosition_<transferLength_)return false;
+        return true;
+    }
+    // Fully prepare a replacement in a temporary FloppyDevice, then swap
+    // the media records without allocating or invalidating a failed mount.
+    // The old media remains intact if validation or file opening fails.
+    void exchangeMedia(unsigned channel,unsigned drive,FloppyDevice& replacement) {
+        if(!canExchangeMedia(channel,drive))
+            throw std::runtime_error("FDC drive is busy; retry after disk I/O finishes");
+        if(channel>1 || drive>3)
+            throw std::invalid_argument("FDD channel/drive out of range");
+        using std::swap;
+        swap(medium(channel,drive),replacement.medium(channel,drive));
+        // Reset per-drive head/rotation on media insertion, and discard
+        // deferred force-interrupt state only when this drive was targeted.
+        seek_[channel][drive]=SeekState{};
+        rotationNs_[channel][drive]=0;
+        if(force_[channel].drive==drive)force_[channel]=ForceInterruptState{};
+    }
     void load2d(const std::vector<BYTE>& raw,unsigned drive=0) {
         if(drive>3)throw std::invalid_argument("2D drive must be 0..3");
         if(raw.size()!=40u*2*16*256)
