@@ -288,7 +288,7 @@ struct OpenGlRenderer::Impl {
         gl.Uniform1i(gl.GetUniformLocation(program,key),val);
     }
     void render(const OpenGlRenderer::Snapshot& snapshot,bool high,bool testPattern,
-                bool hasAnk,int outputWidth,int outputHeight,unsigned frameTick,bool scanlines) {
+                bool hasAnk,int outputWidth,int outputHeight,unsigned frameTick,bool scanlines,int topInset) {
         gl.UseProgram(program);
         gl.BindVertexArray(vao);
         const void* memory[]={snapshot.vram.data(),snapshot.text.data(),snapshot.ank.data()};
@@ -326,9 +326,10 @@ struct OpenGlRenderer::Impl {
             cursorVisible=((frameTick/32u)&1u)==0;
         setInt("uCursorVisible",cursorVisible?1:0);
 
-        const int scale=std::max(1,std::min(outputWidth/640,outputHeight/400));
+        const int availableHeight=std::max(0,outputHeight-topInset);
+        const int scale=std::max(1,std::min(outputWidth/640,availableHeight/400));
         const int w=640*scale,h=400*scale;
-        const int x=(outputWidth-w)/2,y=(outputHeight-h)/2;
+        const int x=(outputWidth-w)/2,y=(availableHeight-h)/2;
         gl.Disable(SCISSOR_TEST);
         gl.Viewport(0,0,outputWidth,outputHeight);
         gl.ClearColor(48/255.0f,52/255.0f,56/255.0f,1);
@@ -379,6 +380,6 @@ OpenGlRenderer::Snapshot OpenGlRenderer::capture(const Machine& machine,bool has
     return snapshot;
 }
 void OpenGlRenderer::render(const Snapshot& snapshot,bool high,bool testPattern,
-                            bool hasAnk,int width,int height,unsigned frameTick,bool scanlines) {
-    impl_->render(snapshot,high,testPattern,hasAnk,width,height,frameTick,scanlines);
+                            bool hasAnk,int width,int height,unsigned frameTick,bool scanlines,int topInset) {
+    impl_->render(snapshot,high,testPattern,hasAnk,width,height,frameTick,scanlines,topInset);
 }
