@@ -74,6 +74,10 @@ bool boot(const Main8088Bus::Rom& rom,CpuType cpuType,unsigned dipsw,
     if(media==1)machine.systemBoard().floppyDevice()->loadD882hd(make2hdD88());
     if(media==2)machine.systemBoard().hddDevice()->load(makeHdd());
     machine.reset();
+    if(machine.systemBoard().displayControl()!=0) {
+        std::cerr<<"Unexpected display control after reset\n";
+        return false;
+    }
     auto& core=static_cast<Main8088Board::Core&>(card->cpu());
     // A valid IPL starts with JMP $-2 (EB FE). It must only be reached
     // after BOTH disk sectors have been DMA-transferred.
@@ -90,7 +94,15 @@ bool boot(const Main8088Bus::Rom& rom,CpuType cpuType,unsigned dipsw,
                     payloadOkay=false;break;
                 }
             }
-            if(payloadOkay)return true;
+            if(payloadOkay) {
+                // The actual SDL renderer discards text when FDA0[1:0]
+                // remains zero. Reaching the IPL alone is insufficient.
+                if((machine.systemBoard().displayControl()&0x03)==0) {
+                    std::cerr<<"Boot IPL reached with text display disabled\n";
+                    return false;
+                }
+                return true;
+            }
             break;
         }
     }
