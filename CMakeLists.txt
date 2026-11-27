@@ -141,6 +141,14 @@ if(FM11_BUILD_SDL)
             FM11_DISASM_SCRIPT="${CMAKE_CURRENT_SOURCE_DIR}/tools/disassemble.py")
         if(FM11_BUILD_TESTS)
             add_test(NAME sdl_help COMMAND fm11-sdl --help)
+            if(UNIX)
+                find_package(Python3 COMPONENTS Interpreter REQUIRED)
+                add_test(NAME sdl_no_gui_integration
+                    COMMAND ${Python3_EXECUTABLE}
+                        ${CMAKE_CURRENT_SOURCE_DIR}/tests/sdl_no_gui_integration.py
+                        $<TARGET_FILE:fm11-sdl>)
+                set_tests_properties(sdl_no_gui_integration PROPERTIES TIMEOUT 20)
+            endif()
         endif()
         if(TARGET SDL2::SDL2)
             target_link_libraries(fm11-sdl PRIVATE SDL2::SDL2)
