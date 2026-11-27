@@ -17,6 +17,16 @@ head    equ     $9009
 tail    equ     $900a
 shadow  equ     $900b
 fifo    equ     $9100
+gstart  equ     $900c
+kcount  equ     $900e
+kcode   equ     $9010
+kmap    equ     $9200       * 2000 visible cells, 0/1/2 = ANK/left/right
+kpos    equ     $9012
+kaddr   equ     $9014
+kleft   equ     $9016
+kright  equ     $9017
+krow    equ     $9018
+kcol    equ     $9019
 
 reset
         orcc    #$50
@@ -89,6 +99,8 @@ wait_cmd
         clr     mail+1
         cmpa    #$12
         beq     cmd_out
+        cmpa    #$34
+        lbeq    cmd_kanji
         cmpa    #$2d
         beq     cmd_key
         lda     #$46
@@ -199,6 +211,11 @@ normal
 printable
         pshs    a
         lbsr    cell_address
+        ldd     kcount
+        beq     print_clean
+        lbsr    erase_at_cursor
+        lbsr    cell_address
+print_clean
         puls    a
         ldb     attr
         std     ,x
@@ -330,6 +347,7 @@ scroll
         addd    #160
         anda    #$0f
         std     start
+        lbsr    scroll_kanji
         pshs    a
         lda     col
         pshs    a
@@ -341,6 +359,7 @@ scroll
         bra     update_start
 
 clear_all
+        lbsr    clear_kanji
         clr     row
         clr     col
         ldd     #0
@@ -350,6 +369,19 @@ clear_all
         bsr     blank_cells
         bra     update_start
 erase_line
+        ldd     kcount
+        beq     erase_line_text
+        pshs    a,b
+        lda     row
+        sta     krow
+        lda     col
+        sta     kcol
+        ldb     #80
+        subb    col
+        clra
+        lbsr    erase_range
+        puls    a,b
+erase_line_text
         lbsr    cell_address
         ldb     #80
         subb    col
@@ -357,6 +389,20 @@ erase_line
         tfr     d,y
         bra     blank_cells
 erase_end
+        ldd     kcount
+        beq     erase_end_text
+        lda     row
+        sta     krow
+        lda     col
+        sta     kcol
+        lda     #25
+        suba    row
+        ldb     #80
+        mul
+        subb    col
+        sbca    #0
+        lbsr    erase_range
+erase_end_text
         lbsr    cell_address
         pshs    x
         lda     #25
@@ -378,6 +424,298 @@ blank_loop
 blank_next
         leay    -1,y
         bne     blank_loop
+        rts
+
+
+* K-1: JIS78 KANJI OUT, 640x400 graphics plane.
+* The main CPU owns FDA0 layer gating; never change it here.
+cmd_kanji
+        lda     col
+        cmpa    #79
+        lbhs    done
+        ldd     mail+3
+        lbsr    jis_selector
+        lbcs    done
+        std     kcode
+        lbsr    erase_at_cursor
+        inc     col
+        lbsr    erase_at_cursor
+        dec     col
+        lbsr    cell_address
+        clra
+        clrb
+        std     ,x++
+        cmpx    #$9000
+        blo     kanji_text_next
+        ldx     #$8000
+kanji_text_next
+        std     ,x
+        lda     row
+        sta     krow
+        lda     col
+        sta     kcol
+        lbsr    map_address
+        lda     #1
+        sta     ,x+
+        inca
+        sta     ,x
+        ldd     kcount
+        addd    #1
+        std     kcount
+        ldd     kcode
+        std     $aff4
+        lda     attr
+        anda    #7
+        sta     $afe1
+        lbsr    graphics_address
+        ldy     #16
+kanji_raster
+        ldd     $aff6
+        pshs    d
+        lda     attr
+        bita    #8
+        puls    d
+        beq     kanji_store
+        coma
+        comb
+kanji_store
+        sta     ,x+
+        cmpx    #$8000
+        blo     kanji_right
+        ldx     #0
+kanji_right
+        stb     ,x
+        leax    79,x
+        tfr     x,d
+        anda    #$7f
+        tfr     d,x
+        leay    -1,y
+        bne     kanji_raster
+        lbra    done
+
+* Return selector D, carry set for unsupported JIS codes.
+* Table groups follow the compatible font generator, including A16.
+jis_selector
+        cmpa    #$21
+        blo     jis_bad
+        cmpa    #$73
+        bhi     jis_bad
+        cmpb    #$21
+        blo     jis_bad
+        cmpb    #$7e
+        bhi     jis_bad
+        suba    #$20
+        subb    #$20
+        cmpa    #8
+        blo     jis_symbols
+        cmpa    #16
+        blo     jis_bad
+        cmpa    #48
+        blo     jis_first
+* Second level: group = 3*((ku-48)/16) + ten/32.
+        pshs    d
+        suba    #48
+        lsra
+        lsra
+        lsra
+        lsra
+        ldb     #3
+        mul
+        lda     1,s
+        lsra
+        lsra
+        lsra
+        lsra
+        lsra
+        pshs    b
+        adda    ,s+
+        lsla
+        bita    #$10
+        beq     jis_second_normal
+        lda     #$1d
+        bra     jis_second_base
+jis_second_normal
+        anda    #$0e
+        ora     #$10
+jis_second_base
+        clrb
+        bra     jis_add_offset
+jis_first
+        pshs    d
+        lda     1,s
+        lsra
+        lsra
+        lsra
+        lsra
+        lsra
+        lsla
+        adda    #4
+        ldb     ,s
+        cmpb    #32
+        blo     jis_first_base
+        adda    #6
+jis_first_base
+        clrb
+        bra     jis_add_offset
+jis_symbols
+        pshs    d
+        lda     1,s
+        lsra
+        lsra
+        lsra
+        lsra
+        lsra
+        ldx     #symbol_bases
+        lda     a,x
+        clrb
+jis_add_offset
+        pshs    d
+        lda     2,s
+        anda    #15
+        ldb     #32
+        mul
+        addd    ,s++
+        pshs    d
+        ldb     3,s
+        andb    #31
+        clra
+        addd    ,s++
+        leas    2,s
+        andcc   #$fe
+        rts
+jis_bad
+        orcc    #1
+        rts
+symbol_bases
+        fcb     0,2,1
+
+* Map uses logical screen cells, not physical text offsets. The two
+* hardware rings have different lengths. Only metadata is moved on scroll.
+map_address
+        lda     krow
+        ldb     #80
+        mul
+        addb    kcol
+        adca    #0
+        addd    #kmap
+        tfr     d,x
+        rts
+graphics_address
+        lda     krow
+        ldb     #5
+        mul
+        tfr     b,a
+        clrb
+        addd    gstart
+        addb    kcol
+        adca    #0
+        anda    #$7f
+        tfr     d,x
+        rts
+erase_at_cursor
+        lda     row
+        sta     krow
+        lda     col
+        sta     kcol
+        bra     erase_one
+* Clear both halves of any Kanji touched by a single-cell operation.
+erase_one
+        pshs    d,x,y,u
+        lbsr    map_address
+        lda     ,x
+        beq     erase_one_done
+        cmpa    #2
+        bne     erase_pair
+        dec     kcol
+        leax    -1,x
+erase_pair
+        clr     ,x
+        clr     1,x
+        ldd     kcount
+        subd    #1
+        std     kcount
+        lbsr    graphics_address
+        lda     #7
+        sta     $afe1
+        ldy     #16
+erase_raster
+        clra
+        clrb
+        sta     ,x+
+        cmpx    #$8000
+        blo     erase_right
+        ldx     #0
+erase_right
+        stb     ,x
+        leax    79,x
+        tfr     x,d
+        anda    #$7f
+        tfr     d,x
+        leay    -1,y
+        bne     erase_raster
+* Both text cells were transparent blank cells; no stale glyph remains.
+erase_one_done
+        puls    d,x,y,u,pc
+erase_range
+        tfr     d,u
+range_loop
+        cmpu    #0
+        beq     range_done
+        lda     kcol
+        pshs    a
+        lbsr    erase_one
+        puls    a
+        inca
+        cmpa    #80
+        blo     range_next
+        clra
+        inc     krow
+range_next
+        sta     kcol
+        leau    -1,u
+        bra     range_loop
+range_done
+        rts
+
+scroll_kanji
+        ldd     kcount
+        beq     scroll_gstart
+* Remove old top-row glyphs before moving metadata, while old origin
+* still points to their graphics bytes.
+        clr     krow
+        clr     kcol
+        ldd     #80
+        lbsr    erase_range
+        ldx     #kmap+80
+        ldy     #kmap
+scroll_map
+        ldd     ,x++
+        std     ,y++
+        cmpx    #kmap+2000
+        blo     scroll_map
+        ldd     #0
+scroll_map_blank
+        std     ,y++
+        cmpy    #kmap+2000
+        blo     scroll_map_blank
+scroll_gstart
+        ldd     gstart
+        addd    #1280
+        anda    #$7f
+        std     gstart
+        std     $afea
+        rts
+clear_kanji
+        ldd     kcount
+        beq     clear_gstart
+        clr     krow
+        clr     kcol
+        ldd     #2000
+        lbsr    erase_range
+clear_gstart
+        ldd     #0
+        std     gstart
+        std     $afea
         rts
 
 * FIRQ hardware latch bit 0 is keyboard. Preserve full registers used.

@@ -8,6 +8,15 @@ int main(int argc,char** argv) {
     try {
         Machine m;
         m.loadDisplayRomFile(argv[1]);
+        DisplaySubsystem::KanjiRomImage kanji{}, kanji2{};
+        for(unsigned i=0;i<16;++i) {
+            kanji[0x82*32+i*2]=0x81;
+            kanji[0x82*32+i*2+1]=0x42;
+            kanji2[1*32+i*2]=0x18;
+            kanji2[1*32+i*2+1]=0x24;
+        }
+        m.systemBoard().displaySubsystem().loadKanjiRom(kanji);
+        m.systemBoard().displaySubsystem().loadKanji2Rom(kanji2);
         auto cpu=std::make_unique<Main6809Board>(CpuType::MC6809);
         auto* main=cpu.get();
         cpu->setCpuClockHz(2000000);
@@ -22,14 +31,14 @@ int main(int argc,char** argv) {
             throw std::runtime_error("display READY timeout");
         };
         wait();
-        auto call=[&](BYTE cmd,BYTE arg=0) {
+        auto call=[&](BYTE cmd,BYTE arg=0,BYTE low=0) {
             wait();
             main->writeCpu(0xfd05,0x80);
             main->writeCpu(0xfc80,0);
             main->writeCpu(0xfc81,0);
             main->writeCpu(0xfc82,cmd);
             main->writeCpu(0xfc83,arg);
-            main->writeCpu(0xfc84,0);
+            main->writeCpu(0xfc84,low);
             main->writeCpu(0xfd05,0);
             wait();
         };
@@ -79,6 +88,26 @@ int main(int argc,char** argv) {
         }
         call(0x2d);
         if(m.displaySharedByte(3)!=0x80)return 12;
+        // Layer enable is owned by the main CPU, not the sub-ROM.
+        out(0x1b);out('G');out(7);
+        main->writeCpu(0xfda0,3);
+        go(2,1);call(0x34,0x24,0x22);
+        if(m.mainDisplayControl()!=3 || d.textCursor().offset!=164 ||
+           d.readPhysicalVram(1282)!=0x81 || d.readPhysicalVram(1283)!=0x42)
+            return 15;
+        main->writeCpu(0xfda0,15);
+        go(4,1);call(0x34,0x50,0x21);
+        if(d.readPhysicalVram(1284)!=0x18 || d.readPhysicalVram(1285)!=0x24)
+            return 16;
+        go(3,1);out('X');
+        if(d.readPhysicalVram(1282)!=0 || d.readPhysicalVram(1283)!=0)
+            return 17;
+        go(0,24);out(0x0a);
+        if(d.graphicsDisplayAddress()!=1280 || d.textStartAddress()!=160 ||
+           d.readPhysicalVram(1284)!=0x18)return 18;
+        out(0x1b);out('*');
+        if(d.graphicsDisplayAddress()!=0 || d.readPhysicalVram(1284)!=0)
+            return 19;
         call(0x55);
         if(m.displaySharedByte(0)!=0x46)return 13;
         std::cout<<"PASS: independent display firmware mailbox, text, scroll and keyboard\n";
