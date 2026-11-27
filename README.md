@@ -21,6 +21,11 @@ the entry point required by the CP/M-86 and CP/M-80 8088/V20 IPLs:
 - 2HD: T0/H0/S1-S4 (4 x 128 bytes, channel 1)
 - HDD: LBA0 and LBA1 (2 x 256 bytes, channel 2, MDC binary-LBA mode)
 
+At reset the ROM also enables the **main-board text display** through
+`FDA0=03h`. This is essential even when the display sub-CPU successfully
+processes commands: the SDL renderer otherwise suppresses the ANK text layer.
+The `compatible_boot8088` test checks this initialization explicitly.
+
 No memory test, bubble-memory boot, or Fujitsu firmware calls are included.
 Any enabled boot source that fails is skipped in favor of the next enabled
 source; if none succeeds, the CPU halts. The ROM does not implement a
