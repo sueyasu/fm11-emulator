@@ -51,11 +51,26 @@ int main(int argc,char** argv) {
         if(m.displaySharedByte(3)!=0x80)return 9;
         m.enqueueDisplayKeyCode(0x0041);
         m.enqueueDisplayKeyCode(0x0116);
-        for(int i=0;i<2000;++i)m.executeOne();
+        // Host keys reach AFEC/AFED on the periodic display NMI (60000
+        // sub-CPU cycles), not immediately on enqueue. Allow multiple ticks.
+        for(int i=0;i<100000;++i)m.executeOne();
         call(0x2d);
-        if(m.displaySharedByte(3)!=0||m.displaySharedByte(4)!=0x41)return 10;
+        if(m.displaySharedByte(3)!=0||m.displaySharedByte(4)!=0x41) {
+            std::cerr<<"First key: expected 0041, got "<<std::hex
+                     <<unsigned(m.displaySharedByte(3))<<":"
+                     <<unsigned(m.displaySharedByte(4))
+                     <<" subPC="<<m.displayCpuPc()<<" FIFO head="
+                     <<unsigned(m.displayMemory(0x9009))<<" tail="
+                     <<unsigned(m.displayMemory(0x900a))<<"\n";
+            return 10;
+        }
         call(0x2d);
-        if(m.displaySharedByte(3)!=1||m.displaySharedByte(4)!=0x16)return 11;
+        if(m.displaySharedByte(3)!=1||m.displaySharedByte(4)!=0x16) {
+            std::cerr<<"Second key: expected 0116, got "<<std::hex
+                     <<unsigned(m.displaySharedByte(3))<<":"
+                     <<unsigned(m.displaySharedByte(4))<<"\n";
+            return 11;
+        }
         call(0x2d);
         if(m.displaySharedByte(3)!=0x80)return 12;
         call(0x55);
