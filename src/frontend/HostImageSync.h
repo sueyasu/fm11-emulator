@@ -156,6 +156,17 @@ public:
         images_.clear();
     }
 
+    // After rebuilding the machine, detach images owned only by the sync
+    // service. Images still retained by live host writers or an active
+    // background fdatasync remain tracked until a later pass.
+    void pruneUnreferencedImages() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        images_.erase(std::remove_if(images_.begin(),images_.end(),
+            [](const std::shared_ptr<Image>& image) {
+                return image.use_count()==1 && !image->dirty();
+            }),images_.end());
+    }
+
     // Return false on any pending sync failure. Failed images remain dirty
     // and are retried on the next tick or final shutdown.
     bool syncPending() {
