@@ -1,3 +1,59 @@
+## Redistributable FM-11 8088/V20 compatible boot ROM (initial version)
+
+`roms/compatible/boot8088.asm` implements an independent, 8086-instruction-
+set, **4 KiB** reset ROM for the FM-11 8088 CPU card and NEC V20 in native
+8086 mode. No original Fujitsu ROM binary is embedded. The source is
+assembled with NASM (automatically when NASM is installed):
+
+```sh
+cmake -S . -B build
+cmake --build build --target fm11-compatible-boot8088
+# output: build/roms/compatible/boot8088.bin
+```
+
+The ROM reads FD23 boot-device DIP bits (active-low), attempts the enabled
+devices in priority order **2D FDD0 -> 2HD FDD0 -> MDC HDD0**, and
+transfers the corresponding 512-byte disk IPL to physical `07C00h` using
+the FM-11 controllers and 8237 DMA. It then jumps to `07C0:0000`,
+the entry point required by the CP/M-86 and CP/M-80 8088/V20 IPLs:
+
+- 2D: T0/H0/S1-S2 (2 x 256 bytes, 8237 channel 0)
+- 2HD: T0/H0/S1-S4 (4 x 128 bytes, channel 1)
+- HDD: LBA0 and LBA1 (2 x 256 bytes, channel 2, MDC binary-LBA mode)
+
+No memory test, bubble-memory boot, or Fujitsu firmware calls are included.
+Any enabled boot source that fails is skipped in favor of the next enabled
+source; if none succeeds, the CPU halts. The ROM does not implement a
+full Fujitsu firmware interface, and should be used only with an IPL that
+does not expect such services.
+
+A CLI override can select the ROM without changing the user's config file:
+
+```sh
+./build/fm11-sdl --8088-rom build/roms/compatible/boot8088.bin \
+    --config /path/to/8088-fm11emu.conf
+# or headless:
+./build/fm11-sdl --no-gui --8088-rom build/roms/compatible/boot8088.bin \
+    --config /path/to/8088-fm11emu.conf
+```
+
+Set `[DIPSW] main_cpu = 8088` and install the 8088 main card.
+V20 users may set `[main_8088] cpu = v20`. A display sub-CPU ROM is
+still needed for the normal GUI path; this ROM only replaces the
+**main CPU's reset firmware**.
+
+When NASM is installed, the automated CTest
+`compatible_boot8088` runs the generated ROM as real 8088 and V20
+instructions against synthetic 2D, native FM-11 2HD D88, and MDC HDD
+media; it also tests 2D-absent/2HD-present fallback. The test checks
+the complete 512-byte IPL image and reset-vector far jump. The real
+CP/M-86 and CP/M-80 disk images should additionally be smoke-tested
+manually; booting those OSs is not claimed until confirmed.
+
+```sh
+ctest --test-dir build -R '^compatible_boot8088$' --output-on-failure
+```
+
 ## fm11-sdl --no-gui: full-system headless execution
 
 The normal `fm11-sdl` frontend now accepts `--no-gui`. This uses the
