@@ -26,6 +26,7 @@
         };
         // Trace real shared-RAM bus transactions, not guessed values from
         // periodic snapshots. Limit completed requests to keep logs bounded.
+        auto installInkeyTrace=[&]() {
         if(traceInkey && mainBoard) {
             auto active=std::make_shared<bool>(false);
             auto count=std::make_shared<unsigned>(0);
@@ -48,6 +49,8 @@
                     }
                 });
         }
+        };
+        installInkeyTrace();
         // In the opt-in trap mode, use a separate host queue for INKEY 2.
         // The real sub-ROM keyboard path is left untouched otherwise.
         SDL_StartTextInput();
