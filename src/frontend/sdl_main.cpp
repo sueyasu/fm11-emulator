@@ -886,6 +886,7 @@ int main(int argc,char** argv) {
                         liveFloppies.reset();
                         serial.reset();
                         machine.reset();
+                        imageSync.pruneUnreferencedImages();
                         machine=std::move(oldMachine);
                         liveFloppies=std::move(oldFloppies);
                         serial=std::move(oldSerial);
