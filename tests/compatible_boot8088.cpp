@@ -1,5 +1,6 @@
 #include "Machine.h"
 #include "Main8088Board.h"
+#include <algorithm>
 #include <array>
 #include <cstdint>
 #include <fstream>
