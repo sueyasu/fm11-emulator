@@ -6,6 +6,7 @@
 #include "imgui_impl_sdlrenderer2.h"
 #include "imgui_impl_opengl3.h"
 #include <SDL.h>
+#include <filesystem>
 #include <stdexcept>
 #include <string>
 
@@ -142,19 +143,41 @@ public:
             if(ImGui::Button("Close"))showAbout_=false;
             ImGui::EndPopup();
         }
+        // The File menu owns an ImGuiFileDialog in the *CRT* window,
+        // instead of opening the settings window as an intermediate step.
+        if(pendingChoose_>=0 && activePicker_==-1) {
+            activePicker_=pendingChoose_;
+            pendingChoose_=-1;
+            const unsigned channel=unsigned(activePicker_)/4;
+            const unsigned drive=unsigned(activePicker_)%4;
+            const auto& target=(channel?settings.edited().floppy2hd:
+                settings.edited().floppy2d)[drive];
+            const std::filesystem::path current(target);
+            IGFD::FileDialogConfig config;
+            config.path=current.has_parent_path()?current.parent_path().string():".";
+            if(current.has_filename())config.fileName=current.filename().string();
+            config.countSelectionMax=1;
+            config.flags=ImGuiFileDialogFlags_Modal;
+            chooser_.OpenDialog("FM11MainFilePicker",
+                channel?"Choose 2HD floppy image":"Choose 2D floppy image",
+                "Disk images{.d88,.raw,.img,.nhd},.*",config);
+        }
+        if(activePicker_>=0 && chooser_.Display("FM11MainFilePicker")) {
+            if(chooser_.IsOk()) {
+                settings.stageFddPath(unsigned(activePicker_)/4,
+                                      unsigned(activePicker_)%4,
+                                      chooser_.GetFilePathName());
+            }
+            chooser_.Close();
+            activePicker_=-1;
+        }
         ImGui::Render();
         if(gl_) {
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         } else {
             ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(),renderer_);
         }
-        // Never switch ImGui contexts inside BeginMenu/EndMenu: the settings
-        // dialog has a separate context. Dispatch the action after rendering.
-        if(pendingChoose_>=0) {
-            const unsigned index=static_cast<unsigned>(pendingChoose_);
-            pendingChoose_=-1;
-            settings.chooseFdd(index/4,index%4);
-        }
+        // Eject edits only the saved draft; actual FDD removal is Stage 4-B.
         if(pendingEject_>=0) {
             const unsigned index=static_cast<unsigned>(pendingEject_);
             pendingEject_=-1;
@@ -167,6 +190,7 @@ private:
     SDL_GLContext gl_;
     ImGuiContext* context_=nullptr;
     bool showAbout_=false,showKeys_=false;
-    int pendingChoose_=-1,pendingEject_=-1;
+    ImGuiFileDialog chooser_;
+    int pendingChoose_=-1,pendingEject_=-1,activePicker_=-1;
 };
 #endif
