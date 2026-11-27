@@ -138,9 +138,7 @@ public:
                     paused=!paused;
                 ImGui::Separator();
                 if(ImGui::MenuItem("Reset machine"))
-                    settings.requestReset(false);
-                if(ImGui::MenuItem("Apply settings && Reset"))
-                    settings.requestReset(true);
+                    settings.requestReset();
                 ImGui::EndMenu();
             }
             if(ImGui::BeginMenu("Help")) {
@@ -191,7 +189,7 @@ public:
                                   ImGuiWindowFlags_AlwaysAutoResize)) {
             ImGui::TextUnformatted("FM-11 Emulator");
             ImGui::TextUnformatted("Settings GUI: Dear ImGui + ImGuiFileDialog");
-            ImGui::TextDisabled("FDD hot-swap / Reset / Apply & Reset enabled");
+            ImGui::TextDisabled("FDD hot-swap / Apply / Reset enabled");
             if(ImGui::Button("Close"))showAbout_=false;
             ImGui::EndPopup();
         }
