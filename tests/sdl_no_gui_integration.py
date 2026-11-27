@@ -23,17 +23,17 @@ def main() -> int:
         root = Path(directory)
         main_rom = bytearray(0x1000)
         # F000: BRA F000; reset vector FFFE -> F000.
-        main_rom[0:2] = b"\\x20\\xfe"
-        main_rom[-2:] = b"\\xf0\\x00"
+        main_rom[0:2] = b"\x20\xfe"
+        main_rom[-2:] = b"\xf0\x00"
         display_rom = bytearray(0x5000)
         # C000: BRA C000; display reset vector FFFE -> C000.
-        display_rom[0x1000:0x1002] = b"\\x20\\xfe"
-        display_rom[-2:] = b"\\xc0\\x00"
+        display_rom[0x1000:0x1002] = b"\x20\xfe"
+        display_rom[-2:] = b"\xc0\x00"
         (root / "main.bin").write_bytes(main_rom)
         (root / "display.bin").write_bytes(display_rom)
         (root / "machine.conf").write_text(
-            "[main_6809]\\ninstalled = true\\n"
-            "[serial]\\nserial0 = none\\n",
+            "[main_6809]\ninstalled = true\n"
+            "[serial]\nserial0 = none\n",
             encoding="ascii",
         )
 
