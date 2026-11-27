@@ -71,5 +71,26 @@ int main() {
         workers.resume();
         workers.stop();
     }
+    // Stage 4-C GUI reconfiguration: a stopped CPU worker can start a
+    // completely fresh execution callback after explicit rearming.
+    {
+        WorkerGroup workers;
+        std::atomic<unsigned> oldSteps{0},newSteps{0};
+        workers.start([&]{++oldSteps;});
+        if(!waitUntil([&]{return oldSteps.load()>0;}))return 8;
+        workers.pause();
+        workers.stop();
+        try {workers.start([&]{++newSteps;});return 9;}
+        catch(const std::logic_error&) {}
+        workers.resetForRestart();
+        workers.start([&]{++newSteps;});
+        if(!waitUntil([&]{return newSteps.load()>0;}))return 10;
+        if(oldSteps.load()==0)return 11;
+        workers.pause();
+        const auto held=newSteps.load();
+        std::this_thread::sleep_for(10ms);
+        if(newSteps.load()!=held)return 12;
+        workers.stop();
+    }
     return 0;
 }
