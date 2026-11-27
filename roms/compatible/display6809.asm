@@ -27,6 +27,8 @@ kleft   equ     $9016
 kright  equ     $9017
 krow    equ     $9018
 kcol    equ     $9019
+sjmode  equ     $901a       * FFh enables Shift-JIS interpretation
+sjlead  equ     $901b       * pending lead byte, zero when idle
 
 reset
         orcc    #$50
@@ -98,19 +100,21 @@ wait_cmd
         clr     mail
         clr     mail+1
         cmpa    #$12
-        beq     cmd_out
+        lbeq    cmd_out
         cmpa    #$34
         lbeq    cmd_kanji
+        cmpa    #$37
+        lbeq    cmd_sjis
         cmpa    #$2d
-        beq     cmd_key
+        lbeq    cmd_key
         lda     #$46
         sta     mail
-        bra     done
+        lbra    done
 cmd_out
         lda     mail+3
         lbsr    output
         lbsr    update_cursor
-        bra     done
+        lbra    done
 cmd_key
         orcc    #$40
         lda     head
@@ -138,14 +142,14 @@ done
 * Parser state 0 normal, 1 ESC, 2 attribute, 3 X, 4 Y.
 output
         ldb     state
-        beq     normal
+        lbeq    stream_byte
         clr     state
         cmpb    #1
-        beq     escape
+        lbeq    escape
         cmpb    #2
-        beq     set_attr
+        lbeq    set_attr
         cmpb    #3
-        beq     set_x
+        lbeq    set_x
         cmpa    #25
         lbhs     output_ret
         ldb     tmpx
@@ -178,6 +182,77 @@ esc_t
         cmpa    #'*
         lbeq    clear_all
         rts
+* Only normal stream bytes are candidates for Shift-JIS.
+* Native ESC and position argument states take precedence.
+stream_byte
+        tst     sjmode
+        lbeq    normal
+        ldb     sjlead
+        lbne    sj_trail
+sj_new
+        cmpa    #$81
+        lblo    normal
+        cmpa    #$9f
+        lbls    sj_save
+        cmpa    #$e0
+        lblo    normal
+        cmpa    #$ef
+        lbhi    normal
+sj_save
+        sta     sjlead
+        rts
+sj_trail
+        clr     sjlead
+        cmpa    #$40
+        lblo    sj_new
+        cmpa    #$fc
+        lbhi    sj_new
+        cmpa    #$7f
+        lbeq    sj_new
+* A=trail, B=lead. Convert to JIS row and column.
+        exg     a,b
+        cmpa    #$e0
+        blo     sj_low_lead
+        suba    #$c1
+        bra     sj_row
+sj_low_lead
+        suba    #$81
+sj_row
+        lsla
+        adda    #$21
+        cmpb    #$9f
+        blo     sj_odd_row
+        inca
+        subb    #$7e
+        lbra    sj_draw
+sj_odd_row
+        cmpb    #$7f
+        blo     sj_odd_low
+        decb
+sj_odd_low
+        subb    #$1f
+sj_draw
+        lbsr    jis_selector
+        lbcs    output_ret
+        std     kcode
+* Wrap before drawing when only one column remains.
+        lda     col
+        cmpa    #79
+        blo     sj_fits
+        clr     col
+        lbsr    linefeed
+sj_fits
+        lbsr    draw_kanji
+        lda     col
+        adda    #2
+        cmpa    #80
+        lblo    sj_advance
+        clr     col
+        lbra    linefeed
+sj_advance
+        sta     col
+        rts
+
 normal
         cmpa    #$20
         lbhs     printable
@@ -437,6 +512,11 @@ cmd_kanji
         lbsr    jis_selector
         lbcs    done
         std     kcode
+        lbsr    draw_kanji
+        lbra    done
+
+* Shared glyph renderer: kcode is selector, cursor stays unchanged.
+draw_kanji
         lbsr    erase_at_cursor
         inc     col
         lbsr    erase_at_cursor
@@ -491,6 +571,18 @@ kanji_right
         tfr     d,x
         leay    -1,y
         bne     kanji_raster
+        rts
+
+* Supported $37 mode values used by the stock-ROM kanjitest.
+* Auxiliary arguments are reserved for future compatibility work.
+cmd_sjis
+        clr     sjlead
+        lda     mail+3
+        cmpa    #$ff
+        beq     sj_mode_store
+        clra
+sj_mode_store
+        sta     sjmode
         lbra    done
 
 * Return selector D, carry set for unsupported JIS codes.

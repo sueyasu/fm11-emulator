@@ -14,6 +14,26 @@ int main(int argc,char** argv) {
             kanji[0x82*32+i*2+1]=0x42;
             kanji2[1*32+i*2]=0x18;
             kanji2[1*32+i*2+1]=0x24;
+            kanji[0x681*32+i*2]=0x30;
+            kanji[0x681*32+i*2+1]=0x70;
+            kanji[0x97a*32+i*2]=0x31;
+            kanji[0x97a*32+i*2+1]=0x71;
+            kanji[0xedc*32+i*2]=0x32;
+            kanji[0xedc*32+i*2+1]=0x72;
+            kanji[0xd7c*32+i*2]=0x33;
+            kanji[0xd7c*32+i*2+1]=0x73;
+            kanji[0x90c*32+i*2]=0x34;
+            kanji[0x90c*32+i*2+1]=0x74;
+            kanji[0x401*32+i*2]=0x35;
+            kanji[0x401*32+i*2+1]=0x75;
+            kanji2[0x2*32+i*2]=0x37;
+            kanji2[0x2*32+i*2+1]=0x77;
+            kanji2[0x3*32+i*2]=0x38;
+            kanji2[0x3*32+i*2+1]=0x78;
+            kanji2[0x4*32+i*2]=0x39;
+            kanji2[0x4*32+i*2+1]=0x79;
+            kanji2[0x5*32+i*2]=0x3a;
+            kanji2[0x5*32+i*2+1]=0x7a;
         }
         m.systemBoard().displaySubsystem().loadKanjiRom(kanji);
         m.systemBoard().displaySubsystem().loadKanji2Rom(kanji2);
@@ -31,7 +51,7 @@ int main(int argc,char** argv) {
             throw std::runtime_error("display READY timeout");
         };
         wait();
-        auto call=[&](BYTE cmd,BYTE arg=0,BYTE low=0) {
+        auto call=[&](BYTE cmd,BYTE arg=0,BYTE low=0,BYTE aux=0) {
             wait();
             main->writeCpu(0xfd05,0x80);
             main->writeCpu(0xfc80,0);
@@ -39,6 +59,7 @@ int main(int argc,char** argv) {
             main->writeCpu(0xfc82,cmd);
             main->writeCpu(0xfc83,arg);
             main->writeCpu(0xfc84,low);
+            main->writeCpu(0xfc85,aux);
             main->writeCpu(0xfd05,0);
             wait();
         };
@@ -108,6 +129,57 @@ int main(int argc,char** argv) {
         out(0x1b);out('*');
         if(d.graphicsDisplayAddress()!=0 || d.readPhysicalVram(1284)!=0)
             return 19;
+        // Exact Shift-JIS sample bytes from NitrOS-9 kanjitest.
+        main->writeCpu(0xfda0,0x0d);
+        call(0x37,0xff);
+        if(m.displaySharedByte(0)!=0)return 21;
+        const BYTE samples[][4]={
+            {0x8a,0xbf,0x30,0x70},
+            {0x8e,0x9a,0x31,0x71},
+            {0x93,0xfa,0x32,0x72},
+            {0x96,0x7b,0x33,0x73},
+            {0x8c,0xea,0x34,0x74},
+            {0x88,0x9f,0x35,0x75},
+            {0x98,0x9f,0x18,0x24},
+            {0x98,0xa0,0x37,0x77},
+            {0x98,0xa1,0x38,0x78},
+            {0x98,0xa2,0x39,0x79},
+            {0x98,0xa3,0x3a,0x7a}
+        };
+        unsigned x=0;
+        for(const auto& s:samples) {
+            const auto before=d.kanjiStatistics().selections;
+            out(s[0]);
+            if(d.kanjiStatistics().selections!=before ||
+               d.textCursor().offset!=x*2)return 22;
+            out(s[1]);
+            if(d.kanjiStatistics().selections!=before+1 ||
+               d.readPhysicalVram(x)!=s[2] ||
+               d.readPhysicalVram(x+1)!=s[3] ||
+               d.textCursor().offset!=(x+2)*2) {
+                std::cerr<<"Shift-JIS pair failed at column "<<x<<"\n";
+                return 23;
+            }
+            x+=2;
+        }
+        out('A');out(0xa6);
+        if(d.textByte(x*2)!='A'||d.textByte((x+1)*2)!=0xa6)return 24;
+        go(79,2);out(0x98);out(0x9f);
+        if(d.readPhysicalVram(3*1280)!=0x18 ||
+           d.textCursor().offset!=(3*80+2)*2)return 25;
+        go(78,4);out(0x98);out(0x9f);
+        if(d.readPhysicalVram(4*1280+78)!=0x18 ||
+           d.textCursor().offset!=5*160)return 26;
+        // Invalid trail reprocessed as a native control; no stale lead.
+        out(0x98);out(0x0d);out('B');
+        if(d.textByte(5*160)!='B')return 27;
+        out(0x98);call(0x37,0);
+        out(0x9f);
+        if(d.textByte(5*160+2)!=0x9f)return 28;
+        call(0x37,0xff);call(0x37,1);
+        out(0x98);
+        if(d.textByte(5*160+4)!=0x98)return 29;
+        if(m.mainDisplayControl()!=0x0d)return 30;
         call(0x55);
         if(m.displaySharedByte(0)!=0x46)return 13;
         std::cout<<"PASS: independent display firmware mailbox, text, scroll and keyboard\n";

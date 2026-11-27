@@ -4,7 +4,7 @@ Independent MC6809 firmware, 20 KiB at B000–FFFF. Build with lwasm
 through the normal CMake build. Select build/roms/compatible/display6809.bin
 with the emulator's --rom option. No proprietary ROM or HLE is required.
 
-Scope: fixed 80x25 ANK console, commands 12 (character output) 34 (JIS Kanji at cursor, 400-line only), and 2D
+Scope: fixed 80x25 ANK console, commands 12 (character output), 34 (JIS Kanji at cursor, 400-line only), 37 (Shift-JIS mode), and 2D
 (raw nonblocking keyboard), mailbox BUSY handshake, basic native control
 codes and ESC G/T/Y/*. Other commands return 46.
 
@@ -29,8 +29,20 @@ and intensity for graphics glyphs are not. Invalid ranges and column
 Graphics is deliberately OFF by default in both compatible main ROMs,
 like stock boot firmware. Applications must enable it via FDA0 (0Fh
 for both layers). The sub-ROM does not change main CPU layer gating.
-Use 400-line presentation for K-1; 200-line conversion and character
-stream/Shift-JIS are deferred. The firmware owns the graphics region
+Use 400-line presentation; 200-line conversion remains deferred. The firmware owns the graphics region
 used by console Kanji; arbitrary overlapping graphics are not preserved.
 Text and graphics rings scroll independently; a logical 2000-byte
 cell map tracks glyph halves, avoiding metadata packing overhead.
+
+## K-2 Shift-JIS stream
+
+Command 37h with +3=FFh enables Shift-JIS decoding in command 12h;
++3=00h or 01h disables it. Mode changes discard an incomplete pair.
+The +4/+5 auxiliary modes are not implemented. Native control argument
+states take priority over Shift-JIS detection. Lead ranges are 81–9F
+and E0–EF; valid trails are 40–FC excluding 7F. Half-width Kana remain
+ANK. An invalid trail discards the pending lead and is reprocessed.
+Unsupported JIS rows are ignored. Stream glyphs advance two cells,
+wrapping before drawing at column 79, and scrolling as needed. Direct
+command 34h still does not advance the cursor. Layer enable remains
+main-CPU controlled; NitrOS-9 kanjitest uses FDA0=0Dh.
