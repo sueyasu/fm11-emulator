@@ -64,14 +64,14 @@ boot_ipl:
 ;     BX=destination offset, CX=sector length (128 or 256)
 ;     AL=channel (0,1,2)
 ; OUT: selected channel unmasked, count programmed, terminal latch clear.
-; CLobbers AX,DX,SI,DI. Caller restores FDC port after this routine.
+; Clobbers AX,DX,SI. Caller restores FDC port after this routine.
 dma_read_setup:
     push bp
     mov bp,dx                    ; address port
     mov si,ax                    ; DMA channel number
     mov dx,DMA_MASK
-    mov al,4
-    or al,byte si                ; mask chosen channel
+    mov ax,si
+    or al,4                     ; mask chosen channel
     out dx,al
     mov dx,DMA_FF
     xor al,al
