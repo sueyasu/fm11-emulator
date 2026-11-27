@@ -497,21 +497,21 @@ kanji_right
 * Table groups follow the compatible font generator, including A16.
 jis_selector
         cmpa    #$21
-        blo     jis_bad
+        lblo    jis_bad
         cmpa    #$73
-        bhi     jis_bad
+        lbhi    jis_bad
         cmpb    #$21
-        blo     jis_bad
+        lblo    jis_bad
         cmpb    #$7e
-        bhi     jis_bad
+        lbhi    jis_bad
         suba    #$20
         subb    #$20
         cmpa    #8
-        blo     jis_symbols
+        lblo    jis_symbols
         cmpa    #16
-        blo     jis_bad
+        lblo    jis_bad
         cmpa    #48
-        blo     jis_first
+        lblo    jis_first
 * Second level: group = 3*((ku-48)/16) + ten/32.
         pshs    d
         suba    #48
