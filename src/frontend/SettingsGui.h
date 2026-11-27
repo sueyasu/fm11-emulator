@@ -98,6 +98,25 @@ public:
     void ejectFdd(unsigned channel,unsigned drive) {
         stageFddPath(channel,drive,{});
     }
+    enum class ResetRequest { None, Reset, ApplyAndReset };
+    void requestReset(bool apply) {
+        resetRequest_=apply?ResetRequest::ApplyAndReset:ResetRequest::Reset;
+    }
+    ResetRequest takeResetRequest() {
+        const auto request=resetRequest_;
+        resetRequest_=ResetRequest::None;
+        return request;
+    }
+    void resetResult(const std::string& error,bool applied) {
+        if(!error.empty()) {
+            status_="Reset failed: "+error;
+            std::cerr<<status_<<"\n";
+            return;
+        }
+        if(applied)original_=edited_;
+        status_=applied?"Applied configuration and reset the machine":
+                        "Reset the machine using its current configuration";
+    }
     bool visible() const {return visible_;}
     void toggle() {
         visible_=!visible_;
@@ -158,6 +177,10 @@ public:
         ImGui::Separator();
         ImGui::TextWrapped("Save destination: %s",userMachineConfigPath().c_str());
         ImGui::TextDisabled("Loaded with --config: it still overrides the saved user file on next start.");
+        if(ImGui::Button("Apply && Reset"))requestReset(true);
+        ImGui::SameLine();
+        if(ImGui::Button("Reset only"))requestReset(false);
+        ImGui::Separator();
         if(ImGui::Button("Save user configuration")) {
             try {
                 saveUserMachineConfig(edited_);
@@ -174,7 +197,7 @@ public:
         ImGui::SameLine();
         if(ImGui::Button("Close"))toggle();
         ImGui::TextWrapped("%s",status_.c_str());
-        ImGui::TextDisabled("FDD image swaps take effect immediately; reset/apply: Stage 4-C");
+        ImGui::TextDisabled("Apply && Reset does not save the user configuration file.");
         ImGui::End();
         ImGui::Render();
         SDL_SetRenderDrawColor(renderer_,25,27,32,255);
@@ -308,5 +331,6 @@ private:
     FilePickerGui* filePicker_=nullptr;
     std::optional<FddRequest> pendingFdd_;
     std::optional<std::string> fddError_;
+    ResetRequest resetRequest_=ResetRequest::None;
 };
 #endif
