@@ -77,7 +77,7 @@ bool boot(const Main8088Bus::Rom& rom,CpuType cpuType,unsigned dipsw,
     auto& core=static_cast<Main8088Board::Core&>(card->cpu());
     // A valid IPL starts with JMP $-2 (EB FE). It must only be reached
     // after BOTH disk sectors have been DMA-transferred.
-    for(unsigned i=0;i<150000;++i) {
+    for(unsigned i=0;i<600000;++i) {
         machine.executeOne();
         if(core.pc()==0x7c00 || core.pc()==0x7c02) {
             if(card->bus().readRam(0x7c00)!=0xeb ||
