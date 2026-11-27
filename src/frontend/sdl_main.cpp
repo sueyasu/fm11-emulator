@@ -797,6 +797,11 @@ int main(int argc,char** argv) {
 
                 if(!apply) {
                     machine->reset();
+                    // Machine::reset() internally recreates its PTM/display
+                    // workers. Re-park them before the GUI restores the
+                    // pre-reset pause/running state.
+                    machine->pauseRealtimePtm();
+                    machine->pauseDisplayCpu();
                     executed=0;
                     publishedExecuted.store(0,std::memory_order_release);
                     lastCpuOwner=machine->activeBoard();
