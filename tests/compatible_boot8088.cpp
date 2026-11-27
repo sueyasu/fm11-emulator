@@ -122,6 +122,7 @@ int main(int argc,char** argv) {
         if(!boot(rom,cpu,0xbf,1,++count))return 10+count; // 2HD only
         if(!boot(rom,cpu,0x7f,2,++count))return 10+count; // HDD only
         if(!boot(rom,cpu,0x9f,1,++count))return 10+count; // 2D absent -> 2HD
+        if(!boot(rom,cpu,0x1f,2,++count))return 10+count; // both FDDs absent -> HDD
     }
     return 0;
 }
