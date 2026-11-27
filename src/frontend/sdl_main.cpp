@@ -779,16 +779,16 @@ int main(int argc,char** argv) {
         // Reset without applying keeps the existing hardware and mounted
         // images. Apply+Reset stages a completely new Machine while its
         // predecessor remains available for rollback if configuration fails.
-        auto runGuiReset=[&](SettingsGui::ResetRequest request) {
-            const bool apply=request==SettingsGui::ResetRequest::ApplyAndReset;
+        auto runGuiReset=[&]() {
+            const bool apply=settingsGui->hasPendingApply();
             const bool restorePaused=paused;
             std::string error;
             try {
                 if(apply) {
                     if(testPattern || testKanji)
-                        throw std::runtime_error("Apply & Reset is unavailable in display test mode");
+                        throw std::runtime_error("Applying pending configuration is unavailable in display test mode");
                     // Validate before interrupting the running guest.
-                    (void)serializeMachineConfig(settingsGui->edited());
+                    (void)serializeMachineConfig(settingsGui->applied());
                 }
                 paused=true;
                 applyPauseState();
@@ -861,7 +861,7 @@ int main(int argc,char** argv) {
                     };
 
                     try {
-                        config=settingsGui->edited();
+                        config=settingsGui->applied();
                         romPath=config.displayRom;
                         rom6809=config.main6809Rom;
                         rom8088=config.main8088Rom;
@@ -921,7 +921,7 @@ int main(int argc,char** argv) {
                     if(traceCpm80)traceCpmSnapshot("reset");
                 }
                 std::cerr<<"Stage 4-C "
-                         <<(apply?"applied configuration and reset":"machine reset")
+                         <<(apply?"reset with staged configuration":"machine reset")
                          <<"\n";
             } catch(const std::exception& e) {
                 error=e.what();
@@ -1048,9 +1048,8 @@ int main(int argc,char** argv) {
             }
             applyPauseState();
 #ifdef FM11_SETTINGS_GUI
-            if(const auto resetRequest=settingsGui->takeResetRequest();
-               resetRequest!=SettingsGui::ResetRequest::None)
-                runGuiReset(resetRequest);
+            if(settingsGui->takeResetRequest())
+                runGuiReset();
             if(const auto request=settingsGui->takeFddRequest()) {
                 const bool restorePaused=paused;
                 paused=true;
