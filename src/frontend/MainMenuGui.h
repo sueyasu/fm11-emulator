@@ -23,6 +23,8 @@ public:
         ImGui::StyleColorsLight();
         ImGui::GetStyle().WindowRounding=3.0f;
         if(gl_) {
+            if(SDL_GL_MakeCurrent(window_,gl_)!=0)
+                throw std::runtime_error(SDL_GetError());
             if(!ImGui_ImplSDL2_InitForOpenGL(window_,gl_))
                 throw std::runtime_error("ImGui SDL2 OpenGL menu init failed");
             if(!ImGui_ImplOpenGL3_Init("#version 330"))
@@ -92,9 +94,9 @@ public:
                             const std::string title="Drive "+std::to_string(drive);
                             if(ImGui::BeginMenu(title.c_str())) {
                                 if(ImGui::MenuItem("Choose image..."))
-                                    settings.chooseFdd(channel,drive);
+                                    pendingChoose_=int(channel*4+drive);
                                 if(ImGui::MenuItem("Eject (edit only)"))
-                                    settings.ejectFdd(channel,drive);
+                                    pendingEject_=int(channel*4+drive);
                                 ImGui::EndMenu();
                             }
                             ImGui::PopID();
@@ -146,6 +148,18 @@ public:
         } else {
             ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(),renderer_);
         }
+        // Never switch ImGui contexts inside BeginMenu/EndMenu: the settings
+        // dialog has a separate context. Dispatch the action after rendering.
+        if(pendingChoose_>=0) {
+            const unsigned index=static_cast<unsigned>(pendingChoose_);
+            pendingChoose_=-1;
+            settings.chooseFdd(index/4,index%4);
+        }
+        if(pendingEject_>=0) {
+            const unsigned index=static_cast<unsigned>(pendingEject_);
+            pendingEject_=-1;
+            settings.ejectFdd(index/4,index%4);
+        }
     }
 private:
     SDL_Window* window_;
@@ -153,5 +167,6 @@ private:
     SDL_GLContext gl_;
     ImGuiContext* context_=nullptr;
     bool showAbout_=false,showKeys_=false;
+    int pendingChoose_=-1,pendingEject_=-1;
 };
 #endif
