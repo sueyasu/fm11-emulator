@@ -206,11 +206,10 @@ private:
         editClock("Z80 clock (Hz)",edited_.z80ClockHz);
         ImGui::TextUnformatted("RAM capacity (128 KiB steps):");
         int step=int(edited_.ramKiB/128)-1;
-        if(ImGui::SliderInt("RAM (KiB steps)",&step,0,7,
-                            nullptr,ImGuiSliderFlags_AlwaysClamp))
+        if(ImGui::Combo("RAM (KiB)",&step,
+                        "128 KiB\0" "256 KiB\0" "384 KiB\0" "512 KiB\0"
+                        "640 KiB\0" "768 KiB\0" "896 KiB\0" "1024 KiB\0"))
             edited_.ramKiB=std::size_t(step+1)*128;
-        ImGui::SameLine();
-        ImGui::Text("%zu KiB",edited_.ramKiB);
     }
     void roms() {
         fileEntry("HDD image",edited_.hddImage,"Disk images{.d88,.raw,.img,.nhd},.*");
