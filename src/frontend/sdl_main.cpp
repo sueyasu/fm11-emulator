@@ -775,6 +775,160 @@ int main(int argc,char** argv) {
             paused=startupPaused;
             applyPauseState();
         }
+#ifdef FM11_SETTINGS_GUI
+        // Reset without applying keeps the existing hardware and mounted
+        // images. Apply+Reset stages a completely new Machine while its
+        // predecessor remains available for rollback if configuration fails.
+        auto runGuiReset=[&](SettingsGui::ResetRequest request) {
+            const bool apply=request==SettingsGui::ResetRequest::ApplyAndReset;
+            const bool restorePaused=paused;
+            std::string error;
+            try {
+                if(apply) {
+                    if(testPattern || testKanji)
+                        throw std::runtime_error("Apply & Reset is unavailable in display test mode");
+                    // Validate before interrupting the running guest.
+                    (void)serializeMachineConfig(settingsGui->edited());
+                }
+                paused=true;
+                applyPauseState();
+                if(!imageSync.syncPending())
+                    throw std::runtime_error("host disk image synchronization failed");
+
+                if(!apply) {
+                    machine->reset();
+                    executed=0;
+                    publishedExecuted.store(0,std::memory_order_release);
+                    lastCpuOwner=machine->activeBoard();
+                    romBootSeen.fill(false);
+                    diskIplSeen=false;
+                    cbiosSeen=false;
+                    cpuResumeGeneration.fetch_add(1,std::memory_order_release);
+                    if(traceCpm80)traceCpmSnapshot("reset");
+                } else {
+                    // No guest worker may retain references into old Machine.
+                    cpuWorker.stop();
+                    machine->stopDisplayCpu();
+                    machine->stopRealtimePtm();
+                    monitorProbe.store(nullptr,std::memory_order_release);
+
+                    auto oldMonitor=std::move(monitor);
+                    auto oldMachine=std::move(machine);
+                    auto oldFloppies=std::move(liveFloppies);
+                    auto oldSerial=std::move(serial);
+                    auto oldAudio=std::move(audio);
+                    const auto oldConfig=config;
+                    const auto oldRomPath=romPath,oldRom6809=rom6809,oldRom8088=rom8088;
+                    const auto oldAnk=ankPath,oldKanji=kanjiPath,oldKanji2=kanji2Path;
+                    const auto oldFloppyPath=floppyPath;
+                    const auto oldBootDip=bootDip;
+                    const auto oldMainBoard=mainBoard;
+                    const auto oldZ80=z80Enabled,old8088=main8088Enabled;
+                    const auto oldHigh=high;
+                    auto startNewWorkers=[&](bool originalPause) {
+                        executed=0;
+                        publishedExecuted.store(0,std::memory_order_release);
+                        lastReported=0;
+                        lastCpuOwner=machine->activeBoard();
+                        romBootSeen.fill(false);
+                        diskIplSeen=false;
+                        cbiosSeen=false;
+                        cpuResumeGeneration.fetch_add(1,std::memory_order_release);
+                        cpuWorker.resetForRestart();
+                        startWorkers();
+                        // Install monitor observers only while the new
+                        // workers are parked at an instruction boundary.
+                        wasPaused=false;
+                        paused=true;
+                        applyPauseState();
+                        if(monitorEnabled && !monitor) {
+                            monitor=std::make_unique<DebugMonitor>(*machine,[&](bool stop) {
+                                paused=stop;
+                                applyPauseState();
+                            });
+                            monitorProbe.store(monitor.get(),std::memory_order_release);
+                            monitor->emit("FM-11 Debug Monitor: machine reconfigured.\n"+
+                                          monitor->prompt());
+                        } else if(monitor)
+                            monitorProbe.store(monitor.get(),std::memory_order_release);
+                        paused=originalPause;
+                        applyPauseState();
+                    };
+
+                    try {
+                        config=settingsGui->edited();
+                        romPath=config.displayRom;
+                        rom6809=config.main6809Rom;
+                        rom8088=config.main8088Rom;
+                        ankPath=config.ankRom;
+                        kanjiPath=config.kanjiRom;
+                        kanji2Path=config.kanji2Rom;
+                        bootDip=config.bootDip();
+                        // Explicit CLI startup media was already reflected
+                        // in SettingsGui. Do not reapply its old override.
+                        floppyPath.clear();
+                        machine=std::make_unique<Machine>();
+                        configureMachine();
+                        configureSerial();
+                        ioWrites=0;
+                        if(diagnostics)
+                            machine->setDisplayIoWriteObserver(
+                                [&](DisplaySubsystem::IoWriteTrace){++ioWrites;});
+                        installInkeyTrace();
+                    } catch(...) {
+                        // Keep the old machine and its mounts unchanged.
+                        const auto failure=std::current_exception();
+                        liveFloppies.reset();
+                        serial.reset();
+                        machine.reset();
+                        machine=std::move(oldMachine);
+                        liveFloppies=std::move(oldFloppies);
+                        serial=std::move(oldSerial);
+                        audio=std::move(oldAudio);
+                        monitor=std::move(oldMonitor);
+                        config=oldConfig;
+                        romPath=oldRomPath;rom6809=oldRom6809;rom8088=oldRom8088;
+                        ankPath=oldAnk;kanjiPath=oldKanji;kanji2Path=oldKanji2;
+                        floppyPath=oldFloppyPath;
+                        bootDip=oldBootDip;
+                        mainBoard=oldMainBoard;
+                        z80Enabled=oldZ80;
+                        main8088Enabled=old8088;
+                        high=oldHigh;
+                        startNewWorkers(restorePaused);
+                        std::rethrow_exception(failure);
+                    }
+
+                    // The new configuration is complete and validated:
+                    // the old guest may now be released.
+                    oldMonitor.reset();
+                    oldAudio.reset();
+                    oldSerial.reset();
+                    oldFloppies.reset();
+                    oldMachine.reset();
+                    imageSync.pruneUnreferencedImages();
+                    audio=std::make_unique<SdlBeeper>(
+                        machine->systemBoard().beeperDevice());
+                    high=config.displayHeight==400;
+                    if(high!=oldHigh)ui.setMode(high);
+                    startNewWorkers(restorePaused);
+                    if(traceCpm80)traceCpmSnapshot("reset");
+                }
+                std::cerr<<"Stage 4-C "
+                         <<(apply?"applied configuration and reset":"machine reset")
+                         <<"\n";
+            } catch(const std::exception& e) {
+                error=e.what();
+            }
+            // A simple reset, failed validation or failed host sync leaves
+            // the old worker set parked; restore precisely its prior state.
+            if(paused!=restorePaused) {
+                paused=restorePaused;
+                applyPauseState();
+            }
+            settingsGui->resetResult(error,apply && error.empty());
+        };
+#endif
         while(running) {
             SDL_Event event;
             while(SDL_PollEvent(&event)) {
@@ -888,6 +1042,9 @@ int main(int argc,char** argv) {
             }
             applyPauseState();
 #ifdef FM11_SETTINGS_GUI
+            if(const auto resetRequest=settingsGui->takeResetRequest();
+               resetRequest!=SettingsGui::ResetRequest::None)
+                runGuiReset(resetRequest);
             if(const auto request=settingsGui->takeFddRequest()) {
                 const bool restorePaused=paused;
                 paused=true;
