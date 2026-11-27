@@ -76,6 +76,7 @@ public:
             }
             newImage=sync_.open(path);
         }
+        std::string committedPath(path);
         const auto oldImage=images_[ch][drive];
         if(!sync_.syncImage(oldImage)) {
             // Do not leak the newly registered descriptor on failure.
@@ -86,7 +87,7 @@ public:
         // image and callback slot is safe while guest workers are paused.
         floppy_->exchangeMedia(ch,drive,candidate);
         images_[ch][drive].swap(newImage);
-        paths_[ch][drive].assign(path);
+        paths_[ch][drive].swap(committedPath);
         sync_.unregisterImage(oldImage);
     }
 private:
