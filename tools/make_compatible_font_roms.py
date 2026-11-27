@@ -90,29 +90,23 @@ def stretch(rows, height, top):
     top=max(0,min(top,16-len(work)))
     return [0]*top+work+[0]*(16-top-len(work))
 
-def adjust_an(c, rows):
-    if chr(c).isupper() or chr(c).isdigit():
-        return stretch(rows,13,1)
-    if chr(c).islower():
-        if chr(c) in "gjpqy":
-            return stretch(rows,12,4)
-        if chr(c) in "bdfhkl":
-            return stretch(rows,13,1)
-        if chr(c) in "it":
-            return stretch(rows,12,2)
-        return stretch(rows,10,4)
-    if chr(c) in "()[]{}":
-        return stretch(rows,13,1)
-    return rows
+def slashed_zero(rows):
+    """Add a thin rising diagonal to the native Shinonome zero."""
+    result = list(rows)
+    # Native zero has a 6-column outline and 13 occupied scanlines.
+    # Join the lower-left and upper-right edges without changing metrics.
+    for y, mask in enumerate((0x04,0x04,0x08,0x08,0x10,0x10,0x20,0x20),4):
+        result[y] |= mask
+    return result
 
 def reverse_byte(x):
     return int(f"{x:08b}"[::-1],2)
 
-def make_ank(an,k,graphics,half):
+def make_ank(k,graphics,half):
     g={c:[0]*16 for c in (0,0x20,0xa0,0xff)}
     for c in range(0x21,0x7f):
-        source={0x5c:0xa5,0x7e:0x203e}.get(c,c)
-        g[c]=adjust_an(c,an[source])
+        g[c]=k[c]
+    g[0x30]=slashed_zero(k[0x30])
     for c in range(0xa1,0xe0):
         g[c]=k[c]
     # Two-letter control mnemonics, independently composed from small 3x5 letters.
@@ -194,10 +188,10 @@ def make_kanji(font):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
-    for n in ("terminus","shinonome-ank","shinonome-kanji","unscii","k8x12","output"):
+    for n in ("shinonome-ank","shinonome-kanji","unscii","k8x12","output"):
         p.add_argument("--"+n,type=Path,required=True)
     a=p.parse_args()
-    ank=make_ank(bdf(a.terminus,8,16),bdf(a.shinonome_ank,8,16),
+    ank=make_ank(bdf(a.shinonome_ank,8,16),
                  hex_font(a.unscii),bdf(a.k8x12,8,12))
     kanji,kanji2=make_kanji(bdf(a.shinonome_kanji,16,16))
     a.output.mkdir(parents=True,exist_ok=True)

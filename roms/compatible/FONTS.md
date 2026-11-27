@@ -3,8 +3,6 @@
 Uses Python 3.10+ only. Obtain the original upstream fonts and their
 license texts; no Fujitsu ROM image is used as input.
 
-- Terminus 8x16 regular Unicode BDF (ter-u16n.bdf):
-  https://terminus-font.sourceforge.net/ (OFL 1.1)
 - Shinonome 8x16 JIS X 0201 and 16x16 JIS X 0208 Gothic BDF
   (shnm8x16r.bdf, shnmk16.bdf):
   https://github.com/code4fukui/shinonome-font
@@ -17,7 +15,6 @@ Run from the repository root:
 
 ```sh
 python3 tools/make_compatible_font_roms.py \
-  --terminus /path/to/ter-u16n.bdf \
   --shinonome-ank /path/to/shnm8x16r.bdf \
   --shinonome-kanji /path/to/shnmk16.bdf \
   --unscii /path/to/unscii-16.hex \
@@ -35,6 +32,6 @@ This is an initial generator: verify real font inputs and stock
 display firmware before treating the images as release-ready.
 
 Do not distribute generated ANK data without the original copyright
-and license notices of all input fonts. Name the derived ANK font
-FM11 Compatible ANK, not Terminus, and distribute under OFL 1.1
-subject to the upstream notices. The generator remains MIT.
+and license notices of all input fonts. The AN and K glyphs use native Shinonome 8x16 bitmaps, except for a
+thin diagonal added to digit zero. No Terminus data or OFL dependency
+remains. The generator remains MIT.
