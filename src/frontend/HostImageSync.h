@@ -5,6 +5,7 @@
 // Each image owns its descriptor and a dirty generation. A write arriving
 // during fdatasync is never incorrectly marked clean.
 #include <atomic>
+#include <algorithm>
 #include <chrono>
 #include <condition_variable>
 #include <cstddef>
@@ -119,6 +120,34 @@ public:
         return image;
     }
 
+    // Stage 4-B: sync a specific media before detaching it. The image
+    // remains mounted on failure; the caller must abort the exchange.
+    bool syncImage(const std::shared_ptr<Image>& image) {
+        if(!image)return true;
+        // The sync service may be running concurrently. Image::writeMutex
+        // serializes the final sync against writes to the same descriptor.
+        std::lock_guard<std::mutex> lock(image->writeMutex);
+        const auto target=image->generation.load(std::memory_order_acquire);
+        if(target==image->synced.load(std::memory_order_acquire))return true;
+        int result;
+        do {result=sync_(image->fd);} while(result<0 && errno==EINTR);
+        if(result!=0) {
+            std::cerr<<"host image fdatasync failed ("<<image->name
+                     <<"): "<<std::strerror(errno)<<"\n";
+            return false;
+        }
+        image->synced.store(target,std::memory_order_release);
+        return true;
+    }
+    // Drop the service's reference after a successful final sync.
+    // A concurrent background sync retains its temporary shared_ptr,
+    // so its descriptor remains valid until that sync finishes.
+    void unregisterImage(const std::shared_ptr<Image>& image) {
+        if(!image)return;
+        std::lock_guard<std::mutex> lock(mutex_);
+        images_.erase(std::remove(images_.begin(),images_.end(),image),
+                      images_.end());
+    }
     // Return false on any pending sync failure. Failed images remain dirty
     // and are retried on the next tick or final shutdown.
     bool syncPending() {
