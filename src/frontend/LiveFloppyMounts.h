@@ -15,7 +15,7 @@
 // with the guest CPU, display CPU and PTM paused. The FDC write callbacks
 // may run on the guest CPU worker; they are only accessed by the SDL thread
 // while that worker is stopped.
-class LiveFloppyMounts {
+class LiveFloppyMounts : public std::enable_shared_from_this<LiveFloppyMounts> {
 public:
     LiveFloppyMounts(std::shared_ptr<FloppyDevice> floppy,HostImageSync& sync)
         :floppy_(std::move(floppy)),sync_(sync) {
@@ -24,17 +24,20 @@ public:
     // Install once; unlike the old capture-by-value array, the callback
     // reads the CURRENT mounted image for every guest write.
     void installWriters() {
-        floppy_->setSectorWriter([this](unsigned ch,unsigned drive,
-                                        std::size_t rawOffset,const BYTE* data,
-                                        std::size_t length) {
-            if(ch>1 || drive>3 || !images_[ch][drive])return false;
-            const auto offset=floppy_->hostImageOffset(ch,rawOffset,drive);
-            return images_[ch][drive]->write(offset,data,length);
+        const std::weak_ptr<LiveFloppyMounts> owner=weak_from_this();
+        floppy_->setSectorWriter([owner](unsigned ch,unsigned drive,
+                                         std::size_t rawOffset,const BYTE* data,
+                                         std::size_t length) {
+            const auto self=owner.lock();
+            if(!self || ch>1 || drive>3 || !self->images_[ch][drive])return false;
+            const auto offset=self->floppy_->hostImageOffset(ch,rawOffset,drive);
+            return self->images_[ch][drive]->write(offset,data,length);
         });
-        floppy_->setImageWriter([this](unsigned ch,unsigned drive,
-                                       const std::vector<BYTE>& bytes) {
-            return ch<2 && drive<4 && images_[ch][drive] &&
-                   images_[ch][drive]->replace(bytes);
+        floppy_->setImageWriter([owner](unsigned ch,unsigned drive,
+                                        const std::vector<BYTE>& bytes) {
+            const auto self=owner.lock();
+            return self && ch<2 && drive<4 && self->images_[ch][drive] &&
+                   self->images_[ch][drive]->replace(bytes);
         });
     }
     const std::string& path(unsigned ch,unsigned drive) const {
