@@ -104,11 +104,20 @@ public:
         ImGui::NewFrame();
         int width=0,height=0;
         SDL_GetWindowSize(window_,&width,&height);
-        const ImVec2 minSize(float(std::max(650,width-28)),
-                             float(std::max(480,height-42)));
-        const ImVec2 maxSize{float(width),float(height)};
-        if(picker_.Display("FM11IndependentFilePicker",ImGuiWindowFlags_NoCollapse,
-                           minSize,maxSize)) {
+        // ImGuiFileDialog creates an ordinary ImGui window. Without an
+        // explicit position, ImGui places it with a default inset; size
+        // constraints alone do not account for that offset, clipping the
+        // chooser's bottom/right controls. The SDL window itself supplies
+        // the title bar and resize frame, so fill its client area exactly.
+        const ImVec2 clientSize{float(std::max(1,width)),
+                                float(std::max(1,height))};
+        ImGui::SetNextWindowPos(ImVec2{0.0f,0.0f},ImGuiCond_Always);
+        ImGui::SetNextWindowSize(clientSize,ImGuiCond_Always);
+        constexpr ImGuiWindowFlags flags=ImGuiWindowFlags_NoTitleBar |
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoCollapse;
+        if(picker_.Display("FM11IndependentFilePicker",flags,
+                           clientSize,clientSize)) {
             if(picker_.IsOk() && accept_) {
                 const auto path=picker_.GetFilePathName();
                 auto callback=std::move(accept_);
