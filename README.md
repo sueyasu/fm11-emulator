@@ -291,6 +291,25 @@ switch still selects 200/400 emulated scanout lines, and the aspect
 ratio remains the same in both modes. Use `--renderer gl` and
 `--renderer software` to compare presentation backends.
 
+## Stage 4-C UI: Apply stages settings and closes the editor
+
+The Settings editor's **Apply** button validates and stages the edited
+hardware configuration for the next **Settings > Reset machine**. On
+successful Apply the Settings editor closes immediately; the guest does not
+reset or otherwise change until Reset is requested. An invalid configuration
+keeps the editor open and reports the failure.
+
+Clicking **Close**, the window manager's **X**, or toggling the editor off
+with **Configuration... / Ctrl+F10** discards any changes not yet applied.
+Reopening the editor starts from the last applied configuration, not from
+the abandoned form. **Discard edits** also restores that applied baseline
+without closing the window. A previously staged Apply survives cancelling a
+later editing session and remains pending for Reset.
+
+**Save user configuration** is independent: it writes the edited values
+to the XDG file but does not Apply or Reset them. Live FDD exchanges remain
+immediate and update the matching displayed/staged drive paths.
+
 ## Stage 4-C: GUI reset and apply configuration
 
 The SDL **Settings** menu now has two separate commands:
