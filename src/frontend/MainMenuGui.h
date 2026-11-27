@@ -191,7 +191,7 @@ public:
                                   ImGuiWindowFlags_AlwaysAutoResize)) {
             ImGui::TextUnformatted("FM-11 Emulator");
             ImGui::TextUnformatted("Settings GUI: Dear ImGui + ImGuiFileDialog");
-            ImGui::TextDisabled("FDD hot-swap enabled   Reset: Stage 4-C");
+            ImGui::TextDisabled("FDD hot-swap / Reset / Apply & Reset enabled");
             if(ImGui::Button("Close"))showAbout_=false;
             ImGui::EndPopup();
         }
