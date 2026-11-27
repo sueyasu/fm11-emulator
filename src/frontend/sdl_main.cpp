@@ -16,6 +16,7 @@
 #include "KanjiTestPattern.h"
 #include "RomFiles.h"
 #include "HostImageSync.h"
+#include "LiveFloppyMounts.h"
 #include "SdlBeeper.h"
 #include <SDL.h>
 #include <array>
@@ -261,6 +262,7 @@ int main(int argc,char** argv) {
         // mounted host image descriptors and their sync worker.
         HostImageSync imageSync;
         Machine machine;
+        std::shared_ptr<LiveFloppyMounts> liveFloppies;
         machine.setDisplayCpu6309Enabled(config.displayCpu==CpuType::HD6309);
         machine.systemBoard().hddDevice()->enableTiming(config.hddTimed);
         Main6809Board* mainBoard=nullptr;
@@ -318,56 +320,17 @@ int main(int argc,char** argv) {
                         // Legacy command-line image overrides this 2D slot.
                         paths2d[floppyDrive]=floppyPath;
                     }
-                    std::array<std::array<std::shared_ptr<HostImageSync::Image>,4>,2> opened{};
-                    std::array<std::string,8> allPaths{};
-                    unsigned imageCount=0;
+                    liveFloppies=std::make_shared<LiveFloppyMounts>(floppy,imageSync);
+                    liveFloppies->installWriters();
                     for(unsigned channel=0;channel<2;++channel) {
-                        const auto& paths=channel==0?paths2d:paths2hd;
+                        const auto& paths=channel?paths2hd:paths2d;
                         for(unsigned drive=0;drive<4;++drive) {
-                            const auto& path=paths[drive];
-                            if(path.empty())continue;
-                            // Two virtual drives must not write the same host image.
-                            if(std::find(allPaths.begin(),allPaths.begin()+imageCount,path)
-                               !=allPaths.begin()+imageCount)
-                                throw std::runtime_error("disk image mounted twice: "+path);
-                            allPaths[imageCount++]=path;
-                            const auto bytes=readDiskImage(path);
-                            if(channel==0) {
-                                if(bytes.size()==40u*2*16*256)
-                                    floppy->load2d(bytes,drive);
-                                else
-                                    floppy->loadD88(bytes,drive);
-                            } else {
-                                if(bytes.size()==77u*2*8*1024 || bytes.size()==77u*2*26*256)
-                                    floppy->load2hd(bytes,drive);
-                                else
-                                    floppy->loadD882hd(bytes,drive);
-                            }
-                            opened[channel][drive]=imageSync.open(path);
-                            std::cerr<<"Mounted "<<(channel==0?"2D":"2HD")
-                                     <<" FDD"<<drive<<": "<<path<<"\n";
+                            if(paths[drive].empty())continue;
+                            liveFloppies->exchange(channel,drive,paths[drive]);
+                            std::cerr<<"Mounted "<<(channel?"2HD":"2D")
+                                     <<" FDD"<<drive<<": "<<paths[drive]<<"\n";
                         }
                     }
-                    std::weak_ptr<FloppyDevice> weakFloppy=floppy;
-                    floppy->setSectorWriter([opened,weakFloppy](
-                        unsigned channel,unsigned drive,std::size_t rawOffset,
-                        const BYTE* data,std::size_t length) {
-                        if(channel>=2 || drive>=4 || !opened[channel][drive])
-                            return false;
-                        auto disk=weakFloppy.lock();
-                        if(!disk)return false;
-                        const std::size_t imageOffset=
-                            disk->hostImageOffset(channel,rawOffset,drive);
-                        return opened[channel][drive]->write(imageOffset,data,length);
-                    });
-                    // WRITE TRACK may resize D88: update the full image
-                    // immediately; fdatasync is deferred like sector writes.
-                    floppy->setImageWriter([opened](unsigned channel,unsigned drive,
-                                                     const std::vector<BYTE>& image) {
-                        if(channel>=2 || drive>=4 || !opened[channel][drive])
-                            return false;
-                        return opened[channel][drive]->replace(image);
-                    });
                 }
                 if(!config.hddImage.empty()) {
                     const auto image=readDiskImage(config.hddImage);
