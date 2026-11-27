@@ -147,7 +147,6 @@ public:
             edited_=applied_;
             visible_=true;
             SDL_ShowWindow(window_);
-            SDL_RaiseWindow(window_);
         }
     }
     // True means the event belongs to this window and must not be forwarded
