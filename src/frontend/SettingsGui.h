@@ -7,10 +7,12 @@
 #include "imgui_impl_sdlrenderer2.h"
 #include "FilePickerGui.h"
 #include <filesystem>
+#include <iostream>
 #include <array>
 #include <algorithm>
 #include <cstring>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 
@@ -57,19 +59,38 @@ public:
     SettingsGui& operator=(const SettingsGui&)=delete;
 
     void setFilePicker(FilePickerGui* picker) {filePicker_=picker;}
+    struct FddRequest {
+        unsigned channel=0,drive=0;
+        std::string path;
+    };
     void stageFddPath(unsigned channel,unsigned drive,const std::string& path) {
         if(channel>1 || drive>3)return;
-        (channel?edited_.floppy2hd:edited_.floppy2d)[drive]=path;
-        status_="FDD image path selected (edit only until Stage 4-B): "+path;
+        pendingFdd_=FddRequest{channel,drive,path};
+    }
+    std::optional<FddRequest> takeFddRequest() {
+        auto request=std::move(pendingFdd_);
+        pendingFdd_.reset();
+        return request;
+    }
+    void finishFddRequest(const FddRequest& request,const std::string& error) {
+        if(!error.empty()) {
+            status_="FDD exchange failed: "+error;
+            std::cerr<<status_<<"\n";
+            return;
+        }
+        auto& slot=(request.channel?edited_.floppy2hd:edited_.floppy2d)[request.drive];
+        slot=request.path;
+        (request.channel?original_.floppy2hd:original_.floppy2d)[request.drive]=request.path;
+        status_=std::string(request.path.empty()?"Ejected":"Mounted")+
+            " FDD"+std::to_string(request.drive)+": "+
+            (request.path.empty()?"(empty)":request.path);
     }
     void stageHddPath(const std::string& path) {
         edited_.hddImage=path;
         status_="HDD image path selected (applies after Stage 4-C reset): "+path;
     }
     void ejectFdd(unsigned channel,unsigned drive) {
-        if(channel>1 || drive>3)return;
-        (channel?edited_.floppy2hd:edited_.floppy2d)[drive].clear();
-        status_="FDD image removed from edited configuration (not mounted until Stage 4-B).";
+        stageFddPath(channel,drive,{});
     }
     bool visible() const {return visible_;}
     void toggle() {
@@ -147,7 +168,7 @@ public:
         ImGui::SameLine();
         if(ImGui::Button("Close"))toggle();
         ImGui::TextWrapped("%s",status_.c_str());
-        ImGui::TextDisabled("FDD live swapping: Stage 4-B | Reset/apply: Stage 4-C");
+        ImGui::TextDisabled("FDD image swaps take effect immediately; reset/apply: Stage 4-C");
         ImGui::End();
         ImGui::Render();
         SDL_SetRenderDrawColor(renderer_,25,27,32,255);
@@ -279,5 +300,6 @@ private:
     MachineConfig edited_;
     std::string status_;
     FilePickerGui* filePicker_=nullptr;
+    std::optional<FddRequest> pendingFdd_;
 };
 #endif
