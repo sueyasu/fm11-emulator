@@ -1,6 +1,7 @@
 #pragma once
 #ifdef FM11_SETTINGS_GUI
 #include "MachineConfig.h"
+#include "PendingMachineSettings.h"
 #include <SDL.h>
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
@@ -22,7 +23,7 @@
 class SettingsGui {
 public:
     explicit SettingsGui(const MachineConfig& effective)
-        :original_(effective),edited_(effective),applied_(effective) {
+        :original_(effective),edited_(effective),pending_(effective) {
         window_=SDL_CreateWindow("FM-11 Emulator - Settings",
             SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,780,650,
             SDL_WINDOW_HIDDEN|SDL_WINDOW_RESIZABLE);
@@ -87,7 +88,7 @@ public:
         auto& slot=(request.channel?edited_.floppy2hd:edited_.floppy2d)[request.drive];
         slot=request.path;
         (request.channel?original_.floppy2hd:original_.floppy2d)[request.drive]=request.path;
-        (request.channel?applied_.floppy2hd:applied_.floppy2d)[request.drive]=request.path;
+        pending_.setMountedFdd(request.channel,request.drive,request.path,edited_);
         status_=std::string(request.path.empty()?"Ejected":"Mounted")+
             " FDD"+std::to_string(request.drive)+": "+
             (request.path.empty()?"(empty)":request.path);
@@ -103,9 +104,7 @@ public:
     // and the actually running Machine. Apply never touches guest workers.
     void applySettings() {
         try {
-            (void)serializeMachineConfig(edited_); // reject invalid settings
-            applied_=edited_;
-            pendingApply_=true;
+            pending_.apply(edited_);
             status_="Applied to next Reset; running machine is unchanged.";
             hideEditor(false);
         } catch(const std::exception& e) {
@@ -113,8 +112,8 @@ public:
             resetError_=status_;
         }
     }
-    const MachineConfig& applied() const {return applied_;}
-    bool hasPendingApply() const {return pendingApply_;}
+    const MachineConfig& applied() const {return pending_.applied();}
+    bool hasPendingApply() const {return pending_.hasPendingReset();}
     void requestReset() {resetRequested_=true;}
     bool takeResetRequest() {
         const bool requested=resetRequested_;
@@ -133,7 +132,7 @@ public:
             std::cerr<<status_<<"\\n";
             return;
         }
-        if(applied)pendingApply_=false;
+        pending_.resetSucceeded(applied);
         status_=applied?"Reset completed with the applied settings":
                         "Reset completed with the current hardware settings";
     }
@@ -144,7 +143,7 @@ public:
         } else {
             // Reopen from the last successfully applied configuration.
             // Edits from a previous cancelled session must not reappear.
-            edited_=applied_;
+            pending_.discardEdits(edited_);
             visible_=true;
             SDL_ShowWindow(window_);
         }
@@ -204,7 +203,7 @@ public:
         ImGui::TextDisabled("Loaded with --config: it still overrides the saved user file on next start.");
         if(ImGui::Button("Apply"))applySettings();
         ImGui::SameLine();
-        ImGui::TextDisabled("%s",pendingApply_?
+        ImGui::TextDisabled("%s",pending_.hasPendingReset()?
             "Applied configuration pending Reset":"No configuration awaiting Reset");
         ImGui::Separator();
         if(ImGui::Button("Save user configuration")) {
@@ -218,7 +217,7 @@ public:
         }
         ImGui::SameLine();
         if(ImGui::Button("Discard edits")) {
-            edited_=applied_;
+            pending_.discardEdits(edited_);
             status_="Discarded unapplied changes";
         }
         ImGui::SameLine();
@@ -235,7 +234,7 @@ public:
     const MachineConfig& edited() const {return edited_;}
 private:
     void hideEditor(bool discard) {
-        if(discard)edited_=applied_;
+        if(discard)pending_.discardEdits(edited_);
         visible_=false;
         SDL_HideWindow(window_);
     }
@@ -359,13 +358,12 @@ private:
     bool visible_=false;
     MachineConfig original_;
     MachineConfig edited_;
-    MachineConfig applied_;
+    PendingMachineSettings pending_;
     std::string status_;
     FilePickerGui* filePicker_=nullptr;
     std::optional<FddRequest> pendingFdd_;
     std::optional<std::string> fddError_;
     bool resetRequested_=false;
-    bool pendingApply_=false;
     std::optional<std::string> resetError_;
 };
 #endif
