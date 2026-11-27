@@ -595,6 +595,29 @@ int main(int argc,char** argv) {
         };
         std::array<bool,romBootOffsets.size()> romBootSeen{};
         bool diskIplSeen=false, cbiosSeen=false;
+        // Diagnose the hand-off to the display firmware independently of
+        // the main 8088 boot trace. Never infer sub-CPU readiness from IPL PC.
+        std::atomic<unsigned> bootSubWrites{0},bootFd05Writes{0};
+        if(traceBoot) {
+            machine->systemBoard().displaySubsystem().setIoWriteObserver(
+                [&](DisplaySubsystem::IoWriteTrace event) {
+                    if(event.address!=0xafe0)return;
+                    const auto n=bootSubWrites.fetch_add(1,std::memory_order_relaxed);
+                    if(n>=32)return;
+                    std::cerr<<"SUB boot AFE0 write="<<std::hex
+                             <<unsigned(event.value)<<" subPC="<<event.pc
+                             <<" FD05="<<unsigned(machine->systemBoard().subCpuStatus())
+                             <<std::dec<<"\n";
+                });
+            machine->systemBoard().setFd05WriteObserver([&](BYTE value) {
+                const auto n=bootFd05Writes.fetch_add(1,std::memory_order_relaxed);
+                if(n>=32)return;
+                std::cerr<<"SUB boot FD05 write="<<std::hex
+                         <<unsigned(value)<<" status="
+                         <<unsigned(machine->systemBoard().subCpuStatus())
+                         <<std::dec<<"\n";
+            });
+        }
         auto traceCpmSnapshot=[&](const char* event) {
             if(!traceCpm80 || !mainBoard)return;
             const auto* owner=machine->activeBoard();
@@ -724,6 +747,18 @@ int main(int argc,char** argv) {
                                              <<" SS="<<std::setw(4)<<cpu.segment(2)
                                              <<" FLAGS="<<std::setw(4)<<cpu.flags()
                                              <<std::dec<<std::setfill(' ')<<"\n";
+                                    if(handoff || (executed && executed%200000==0)) {
+                                        auto lock=machine->systemBoard().lockDisplay();
+                                        auto& sub=machine->systemBoard().displayCpu();
+                                        auto& display=machine->systemBoard().displaySubsystem();
+                                        std::cerr<<"SUB boot snapshot step="<<executed
+                                                 <<" PC="<<std::hex<<sub.pc()
+                                                 <<" FD05="<<unsigned(display.fd05Status())
+                                                 <<" AFE0="<<unsigned(display.readSubControl())
+                                                 <<" HALT="<<display.haltRequested()
+                                                 <<" subIRQ="<<display.subIrqPending()
+                                                 <<std::dec<<"\n";
+                                    }
                                 }
                             }
                         }
