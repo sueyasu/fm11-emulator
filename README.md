@@ -291,6 +291,49 @@ switch still selects 200/400 emulated scanout lines, and the aspect
 ratio remains the same in both modes. Use `--renderer gl` and
 `--renderer software` to compare presentation backends.
 
+## Stage 4-C: GUI reset and apply configuration
+
+The SDL **Settings** menu now has two separate commands:
+
+- **Reset machine**: reset the current emulator hardware, keeping its
+  current CPU cards, RAM, ROM selections and live-mounted disk images.
+  Pending edits are **not applied**.
+- **Apply settings & Reset**: use all currently edited fields from the
+  Settings dialog to construct a new Machine (CPU cards, 6809/6309/V20,
+  memory, display CPU and clocks, boot ROMs, DIP switches, serial/PTM
+  timing, HDD and FDD image paths). The existing SDL CRT, renderer,
+  menus and independent settings/file-picker windows are retained.
+
+The Settings editor provides matching **Reset only** and
+**Apply & Reset** buttons. The running CPU worker, display CPU and
+real-time PTM are parked before a normal reset, and fully stopped before
+machine reconstruction. Previously paused emulation remains paused;
+previously running emulation resumes. Serial and audio backends are
+rebound to the newly configured machine.
+
+Apply is deliberately **separate from Save user configuration**: the
+user's XDG INI file is not modified until Save is explicitly selected.
+The currently running image paths are also preserved on a plain Reset,
+including FDDs hot-swapped via Stage 4-B. A new Apply & Reset mounts
+the image paths from the edited GUI state.
+
+Before reconstructing, the frontend synchronizes outstanding host disk
+writes. If validation or new-machine setup fails, it restores the
+previous machine, configuration, mounted images and worker execution
+state rather than discarding the running guest. An error dialog
+explains the failure. CPU debugger hooks are reattached to a new
+Machine; CPU debug breakpoints are not automatically migrated to the
+new machine after an Apply & Reset.
+
+The `worker_group` regression additionally checks explicit stop,
+rearm and restart, including parking the new worker. Run all CTest
+tests and smoke-test both `--renderer gl` and
+`--renderer software` with NitrOS-9, CP/M-80 and CP/M-86 boot disks.
+Suggested manual check: first use Reset machine with a mounted FDD,
+then change RAM and main CPU type (with an appropriate ROM and installed
+card), Apply & Reset, check the rebooted guest and serial endpoint,
+and confirm the saved user configuration is unchanged until Save.
+
 ## Stage 4-B: live FDD media exchange
 
 The SDL File menu's **2D floppy** and **2HD floppy** drive submenus now
