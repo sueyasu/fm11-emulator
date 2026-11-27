@@ -22,7 +22,7 @@
 class SettingsGui {
 public:
     explicit SettingsGui(const MachineConfig& effective)
-        :original_(effective),edited_(effective) {
+        :original_(effective),edited_(effective),applied_(effective) {
         window_=SDL_CreateWindow("FM-11 Emulator - Settings",
             SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,780,650,
             SDL_WINDOW_HIDDEN|SDL_WINDOW_RESIZABLE);
@@ -87,6 +87,7 @@ public:
         auto& slot=(request.channel?edited_.floppy2hd:edited_.floppy2d)[request.drive];
         slot=request.path;
         (request.channel?original_.floppy2hd:original_.floppy2d)[request.drive]=request.path;
+        (request.channel?applied_.floppy2hd:applied_.floppy2d)[request.drive]=request.path;
         status_=std::string(request.path.empty()?"Ejected":"Mounted")+
             " FDD"+std::to_string(request.drive)+": "+
             (request.path.empty()?"(empty)":request.path);
@@ -98,14 +99,26 @@ public:
     void ejectFdd(unsigned channel,unsigned drive) {
         stageFddPath(channel,drive,{});
     }
-    enum class ResetRequest { None, Reset, ApplyAndReset };
-    void requestReset(bool apply) {
-        resetRequest_=apply?ResetRequest::ApplyAndReset:ResetRequest::Reset;
+    // Three independent states: edited (form), applied (next Reset),
+    // and the actually running Machine. Apply never touches guest workers.
+    void applySettings() {
+        try {
+            (void)serializeMachineConfig(edited_); // reject invalid settings
+            applied_=edited_;
+            pendingApply_=true;
+            status_="Applied to next Reset; running machine is unchanged.";
+        } catch(const std::exception& e) {
+            status_=std::string("Apply failed: ")+e.what();
+            resetError_=status_;
+        }
     }
-    ResetRequest takeResetRequest() {
-        const auto request=resetRequest_;
-        resetRequest_=ResetRequest::None;
-        return request;
+    const MachineConfig& applied() const {return applied_;}
+    bool hasPendingApply() const {return pendingApply_;}
+    void requestReset() {resetRequested_=true;}
+    bool takeResetRequest() {
+        const bool requested=resetRequested_;
+        resetRequested_=false;
+        return requested;
     }
     std::optional<std::string> takeResetError() {
         auto result=std::move(resetError_);
@@ -116,12 +129,12 @@ public:
         if(!error.empty()) {
             status_="Reset failed: "+error;
             resetError_=status_;
-            std::cerr<<status_<<"\n";
+            std::cerr<<status_<<"\\n";
             return;
         }
-        if(applied)original_=edited_;
-        status_=applied?"Applied configuration and reset the machine":
-                        "Reset the machine using its current configuration";
+        if(applied)pendingApply_=false;
+        status_=applied?"Reset completed with the applied settings":
+                        "Reset completed with the current hardware settings";
     }
     bool visible() const {return visible_;}
     void toggle() {
@@ -169,9 +182,9 @@ public:
             ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoCollapse|
             ImGuiWindowFlags_NoTitleBar);
         ImGui::TextUnformatted("FM-11 Emulator settings");
-        ImGui::TextWrapped("Edit the pending hardware settings below. "
-            "Use Apply && Reset to boot with them, or Save user configuration "
-            "to write them to disk. These are independent operations.");
+        ImGui::TextWrapped("Apply stages edited settings for the next Reset; "
+            "the running machine stays unchanged. Save writes the edited "
+            "settings to the user configuration file independently.");
         ImGui::Separator();
         if(ImGui::BeginTabBar("configuration")) {
             if(ImGui::BeginTabItem("CPU / RAM")) {cpus();ImGui::EndTabItem();}
@@ -184,9 +197,10 @@ public:
         ImGui::Separator();
         ImGui::TextWrapped("Save destination: %s",userMachineConfigPath().c_str());
         ImGui::TextDisabled("Loaded with --config: it still overrides the saved user file on next start.");
-        if(ImGui::Button("Apply && Reset"))requestReset(true);
+        if(ImGui::Button("Apply"))applySettings();
         ImGui::SameLine();
-        if(ImGui::Button("Reset only"))requestReset(false);
+        ImGui::TextDisabled("%s",pendingApply_?
+            "Applied configuration pending Reset":"No configuration awaiting Reset");
         ImGui::Separator();
         if(ImGui::Button("Save user configuration")) {
             try {
@@ -205,7 +219,7 @@ public:
         ImGui::SameLine();
         if(ImGui::Button("Close"))toggle();
         ImGui::TextWrapped("%s",status_.c_str());
-        ImGui::TextDisabled("Apply && Reset does not save the user configuration file.");
+        ImGui::TextDisabled("Apply is not Save. Reset is available from the main Settings menu.");
         ImGui::End();
         ImGui::Render();
         SDL_SetRenderDrawColor(renderer_,25,27,32,255);
@@ -335,11 +349,13 @@ private:
     bool visible_=false;
     MachineConfig original_;
     MachineConfig edited_;
+    MachineConfig applied_;
     std::string status_;
     FilePickerGui* filePicker_=nullptr;
     std::optional<FddRequest> pendingFdd_;
     std::optional<std::string> fddError_;
-    ResetRequest resetRequest_=ResetRequest::None;
+    bool resetRequested_=false;
+    bool pendingApply_=false;
     std::optional<std::string> resetError_;
 };
 #endif
