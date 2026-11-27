@@ -38,12 +38,16 @@ start:
     mov bl,al                    ; preserve active-low boot DIP
     test bl,0x20
     jnz .no2d
+    push bx                      ; boot2d uses BX as DMA destination
     call boot2d
+    pop bx                       ; POP does not modify success CF
     jnc boot_ipl
 .no2d:
     test bl,0x40
     jnz .no2hd
+    push bx                      ; boot2hd also uses BX as DMA destination
     call boot2hd
+    pop bx
     jnc boot_ipl
 .no2hd:
     test bl,0x80
