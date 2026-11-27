@@ -74,6 +74,11 @@ bool boot(const Main8088Bus::Rom& rom,CpuType cpuType,unsigned dipsw,
     if(media==1)machine.systemBoard().floppyDevice()->loadD882hd(make2hdD88());
     if(media==2)machine.systemBoard().hddDevice()->load(makeHdd());
     machine.reset();
+    // Simulate the display ROM mailbox endpoint without proprietary ROM bytes.
+    const std::array<BYTE,5> expectedChars{{0x1b,'G',7,0x16,0x0b}};
+    unsigned chars=0;
+    bool wasHalted=false;
+    machine.writeDisplayMemory(0xafe0,1);
     if(machine.systemBoard().displayControl()!=0) {
         std::cerr<<"Unexpected display control after reset\n";
         return false;
@@ -83,6 +88,22 @@ bool boot(const Main8088Bus::Rom& rom,CpuType cpuType,unsigned dipsw,
     // after BOTH disk sectors have been DMA-transferred.
     for(unsigned i=0;i<600000;++i) {
         machine.executeOne();
+        const bool halted=machine.displayHalted();
+        if(wasHalted && !halted) {
+            if(chars>=expectedChars.size() ||
+               machine.displaySharedByte(2)!=0x12 ||
+               machine.displaySharedByte(3)!=expectedChars[chars]) {
+                std::cerr<<"Unexpected display initialization command\n";
+                return false;
+            }
+            ++chars;
+            machine.writeDisplayMemory(0xafe0,1);
+        }
+        wasHalted=halted;
+        if(chars<expectedChars.size() && machine.systemBoard().displayControl()!=0) {
+            std::cerr<<"Display enabled before initialization completed\n";
+            return false;
+        }
         if(core.pc()==0x7c00 || core.pc()==0x7c02) {
             if(card->bus().readRam(0x7c00)!=0xeb ||
                card->bus().readRam(0x7c01)!=0xfe)break;
@@ -97,7 +118,7 @@ bool boot(const Main8088Bus::Rom& rom,CpuType cpuType,unsigned dipsw,
             if(payloadOkay) {
                 // The actual SDL renderer discards text when FDA0[1:0]
                 // remains zero. Reaching the IPL alone is insufficient.
-                if((machine.systemBoard().displayControl()&0x03)==0) {
+                if(chars!=expectedChars.size() || (machine.systemBoard().displayControl()&0x03)!=0x03) {
                     std::cerr<<"Boot IPL reached with text display disabled\n";
                     return false;
                 }
