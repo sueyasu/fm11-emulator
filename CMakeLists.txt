@@ -101,6 +101,33 @@ else()
     message(STATUS "NASM not found: compatible 8088/V20 boot ROM build disabled")
 endif()
 
+# Optional independent 6809/6309 boot ROM.
+find_program(FM11_LWASM_EXECUTABLE lwasm)
+if(FM11_LWASM_EXECUTABLE)
+    set(FM11_COMPAT_BOOT6809 ${CMAKE_CURRENT_BINARY_DIR}/roms/compatible/boot6809.bin)
+    add_custom_command(
+        OUTPUT ${FM11_COMPAT_BOOT6809}
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                ${CMAKE_CURRENT_BINARY_DIR}/roms/compatible
+        COMMAND ${FM11_LWASM_EXECUTABLE} --6809 --format=raw
+                --output=${FM11_COMPAT_BOOT6809}
+                ${CMAKE_CURRENT_SOURCE_DIR}/roms/compatible/boot6809.asm
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/roms/compatible/boot6809.asm
+        COMMENT "Assembling redistributable 6809/6309 compatible boot ROM"
+        VERBATIM)
+    add_custom_target(fm11-compatible-boot6809 ALL DEPENDS ${FM11_COMPAT_BOOT6809})
+    if(FM11_BUILD_TESTS)
+        add_executable(compatible_boot6809 tests/compatible_boot6809.cpp)
+        target_link_libraries(compatible_boot6809 PRIVATE fm11_core)
+        add_dependencies(compatible_boot6809 fm11-compatible-boot6809)
+        add_test(NAME compatible_boot6809
+                 COMMAND compatible_boot6809 ${FM11_COMPAT_BOOT6809})
+        set_tests_properties(compatible_boot6809 PROPERTIES TIMEOUT 30)
+    endif()
+else()
+    message(STATUS "lwasm not found: compatible 6809/6309 boot ROM build disabled")
+endif()
+
 # SDL2 is optional. Headless targets and existing regression tests remain
 # buildable on systems without the development package.
 option(FM11_BUILD_SDL "Build SDL2 window frontend when SDL2 is available" ON)
