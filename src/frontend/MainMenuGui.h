@@ -6,6 +6,7 @@
 #include "imgui_impl_sdlrenderer2.h"
 #include "imgui_impl_opengl3.h"
 #include <SDL.h>
+#include <filesystem>
 
 #include <stdexcept>
 #include <string>
@@ -69,6 +70,8 @@ public:
            event.motion.windowID!=SDL_GetWindowID(window_))return false;
         if(event.type==SDL_MOUSEWHEEL &&
            event.wheel.windowID!=SDL_GetWindowID(window_))return false;
+        if(event.type==SDL_WINDOWEVENT &&
+           event.window.windowID!=SDL_GetWindowID(window_))return false;
         ImGui::SetCurrentContext(context_);
         const bool capturing=ImGui::GetIO().WantCaptureKeyboard ||
                              ImGui::GetIO().WantTextInput;
@@ -98,9 +101,12 @@ public:
                     if(ImGui::BeginMenu(channel?"2HD floppy":"2D floppy")) {
                         for(unsigned drive=0;drive<4;++drive) {
                             ImGui::PushID(int(channel*4+drive));
-                            const std::string title="Drive "+std::to_string(drive);
                             const auto& selected=(channel?settings.edited().floppy2hd:
                                 settings.edited().floppy2d)[drive];
+                            const std::string basename=selected.empty()?"(empty)":
+                                std::filesystem::path(selected).filename().string();
+                            const std::string title="Drive "+std::to_string(drive)+
+                                ": "+basename;
                             if(ImGui::BeginMenu(title.c_str())) {
                                 ImGui::TextDisabled("Selected:");
                                 ImGui::TextWrapped("%s",selected.empty()?"(no disk)":selected.c_str());
