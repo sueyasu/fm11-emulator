@@ -9,6 +9,7 @@
 #include "MachineConfig.h"
 #ifdef FM11_SETTINGS_GUI
 #include "SettingsGui.h"
+#include "MainMenuGui.h"
 #endif
 #include "SerialBackend.h"
 #include "DisplayBitmap.h"
@@ -132,7 +133,7 @@ void usage() {
     std::cout<<"usage: fm11-sdl [--beep-test] [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--test-kanji] [--main-rom FILE] [--trace-boot] [--trace-fdc] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--kanji-rom FILE] [--kanji2-rom FILE] [--test-kanji-level 1|2] [--trace-kanji] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software] [--scanlines] [--monitor]\n"
              <<"  ROM defaults to [display_cpu].rom (external/roms/display6809.bin); CPU ROM paths may be set in the config file\n"
              <<"  Initial window height: [display].height=200|400 (default 400); --high forces 400\n"
-             <<"  F2 pause/resume; F1 switch 200/400-line view; Ctrl+F10 settings; Ctrl+F12 quit\n"
+             <<"  File / Settings / Help in CRT menu; Ctrl+F10 settings; F2 pause; Ctrl+F12 quit\n"
              <<"  --beep-test: audible 205ms pulse, pause, continuous tone, then stop.\n"
              <<"  --test-kanji: ROM glyph gallery, PgUp/PgDn change page (40x25 glyphs).\n"
              <<"                Uses --kanji-rom FILE or external/roms/kanji.bin.\n"
@@ -477,6 +478,7 @@ int main(int argc,char** argv) {
             effectiveConfig.bootHdd=(bootDip&0x80)==0;
         }
         auto settingsGui=std::make_unique<SettingsGui>(effectiveConfig);
+        auto mainMenuGui=std::make_unique<MainMenuGui>(ui.window,ui.renderer,ui.glContext);
 #endif
         std::cerr<<"FM-11 renderer: "<<(ui.glRenderer?"OpenGL 3.3":"software")<<"\n";
         if(testKanji) {
@@ -794,6 +796,7 @@ int main(int argc,char** argv) {
             while(SDL_PollEvent(&event)) {
 #ifdef FM11_SETTINGS_GUI
                 if(settingsGui && settingsGui->processEvent(event))continue;
+                if(mainMenuGui && mainMenuGui->processEvent(event))continue;
                 if(event.type==SDL_KEYDOWN && !event.key.repeat &&
                    event.key.keysym.sym==SDLK_F10 &&
                    (event.key.keysym.mod&KMOD_CTRL)) {
@@ -972,8 +975,24 @@ int main(int argc,char** argv) {
                 const auto snapshot=OpenGlRenderer::capture(machine,!ankPath.empty() && !testKanji);
                 int outputW=0,outputH=0;
                 SDL_GL_GetDrawableSize(ui.window,&outputW,&outputH);
+                int menuPixels=MainMenuGui::menuHeight;
+#ifdef FM11_SETTINGS_GUI
+                int windowW=0,windowH=0;
+                SDL_GetWindowSize(ui.window,&windowW,&windowH);
+                menuPixels=windowH>0?MainMenuGui::menuHeight*outputH/windowH:
+                    MainMenuGui::menuHeight;
+#endif
                 ui.glRenderer->render(snapshot,high,testPattern,!ankPath.empty() && !testKanji,
-                                       outputW,outputH,cursorTick,scanlines);
+                                       outputW,outputH,cursorTick,scanlines,
+#ifdef FM11_SETTINGS_GUI
+                                       menuPixels
+#else
+                                       0
+#endif
+                                       );
+#ifdef FM11_SETTINGS_GUI
+                mainMenuGui->render(*settingsGui,paused,running);
+#endif
                 SDL_GL_SwapWindow(ui.window);
             } else {
                 DisplayBitmap::Frame frame{};
@@ -1045,10 +1064,16 @@ int main(int argc,char** argv) {
                 if(SDL_GetRendererOutputSize(ui.renderer,&outputW,&outputH)!=0)
                     throw std::runtime_error(SDL_GetError());
                 const int nativeW=static_cast<int>(frame.width);
-                const int scale=std::max(1,std::min(outputW/nativeW,outputH/400));
+#ifdef FM11_SETTINGS_GUI
+                const int menuPixels=MainMenuGui::menuHeight;
+#else
+                const int menuPixels=0;
+#endif
+                const int availableHeight=std::max(0,outputH-menuPixels);
+                const int scale=std::max(1,std::min(outputW/nativeW,availableHeight/400));
                 const SDL_Rect destination{
                     (outputW-nativeW*scale)/2,
-                    (outputH-400*scale)/2,
+                    menuPixels+(availableHeight-400*scale)/2,
                     nativeW*scale,400*scale
                 };
                 // The emulator image stays untouched. Paint the letterbox
@@ -1080,6 +1105,9 @@ int main(int argc,char** argv) {
                     throw std::runtime_error(SDL_GetError());
                 if(SDL_RenderDrawRect(ui.renderer,&border)!=0)
                     throw std::runtime_error(SDL_GetError());
+#ifdef FM11_SETTINGS_GUI
+                mainMenuGui->render(*settingsGui,paused,running);
+#endif
                 SDL_RenderPresent(ui.renderer);
                 }
             }
