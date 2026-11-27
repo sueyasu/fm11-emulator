@@ -5,7 +5,7 @@
 #include "imgui.h"
 #include "imgui_impl_sdl2.h"
 #include "imgui_impl_sdlrenderer2.h"
-#include "ImGuiFileDialog.h"
+#include "FilePickerGui.h"
 #include <filesystem>
 #include <array>
 #include <algorithm>
@@ -31,8 +31,13 @@ public:
         IMGUI_CHECKVERSION();
         context_=ImGui::CreateContext();
         ImGui::SetCurrentContext(context_);
-        ImGui::StyleColorsDark();
-        ImGui::GetIO().IniFilename=nullptr;
+        ImGui::StyleColorsLight();
+        auto& io=ImGui::GetIO();
+        io.IniFilename=nullptr;
+        ImFontConfig font{};
+        font.SizePixels=19.0f;
+        io.Fonts->AddFontDefault(&font);
+        ImGui::GetStyle().ScaleAllSizes(1.2f);
         if(!ImGui_ImplSDL2_InitForSDLRenderer(window_,renderer_))
             throw std::runtime_error("ImGui SDL2 init failed");
         if(!ImGui_ImplSDLRenderer2_Init(renderer_))
@@ -51,13 +56,7 @@ public:
     SettingsGui(const SettingsGui&)=delete;
     SettingsGui& operator=(const SettingsGui&)=delete;
 
-    // File pickers are rendered by ImGui and never block the SDL event loop.
-    void chooseFdd(unsigned channel,unsigned drive) {
-        if(channel>1 || drive>3)return;
-        std::string& target=channel?edited_.floppy2hd[drive]:edited_.floppy2d[drive];
-        chooseFile(&target,channel?"Choose 2HD floppy image":"Choose 2D floppy image",
-                   "Disk images{.d88,.raw,.img,.nhd},.*");
-    }
+    void setFilePicker(FilePickerGui* picker) {filePicker_=picker;}
     void stageFddPath(unsigned channel,unsigned drive,const std::string& path) {
         if(channel>1 || drive>3)return;
         (channel?edited_.floppy2hd:edited_.floppy2d)[drive]=path;
@@ -118,7 +117,6 @@ public:
             "The running machine is not changed until a future reset.");
         ImGui::Separator();
         if(ImGui::BeginTabBar("configuration")) {
-            if(ImGui::BeginTabItem("Disks")) {disks();ImGui::EndTabItem();}
             if(ImGui::BeginTabItem("CPU / RAM")) {cpus();ImGui::EndTabItem();}
             if(ImGui::BeginTabItem("ROM / Display")) {roms();ImGui::EndTabItem();}
             if(ImGui::BeginTabItem("Serial")) {serial();ImGui::EndTabItem();}
@@ -147,16 +145,6 @@ public:
         ImGui::TextWrapped("%s",status_.c_str());
         ImGui::TextDisabled("FDD live swapping: Stage 4-B | Reset/apply: Stage 4-C");
         ImGui::End();
-        // Display once each SDL frame, including after the settings window
-        // has been opened from the main CRT menu.
-        if(fileTarget_ && ImGuiFileDialog::Instance()->Display("FM11ChooseFile")) {
-            if(ImGuiFileDialog::Instance()->IsOk()) {
-                *fileTarget_=ImGuiFileDialog::Instance()->GetFilePathName();
-                status_="Selected "+*fileTarget_+" (saved only when Save is clicked)";
-            }
-            ImGuiFileDialog::Instance()->Close();
-            fileTarget_=nullptr;
-        }
         ImGui::Render();
         SDL_SetRenderDrawColor(renderer_,25,27,32,255);
         SDL_RenderClear(renderer_);
@@ -166,17 +154,12 @@ public:
     const MachineConfig& edited() const {return edited_;}
 private:
     void chooseFile(std::string* target,const char* title,const char* filters) {
-        if(!visible_)toggle();
-        if(fileTarget_)return;
-        fileTarget_=target;
-        ImGui::SetCurrentContext(context_);
-        IGFD::FileDialogConfig config;
-        const std::filesystem::path current(*target);
-        config.path=current.has_parent_path()?current.parent_path().string():".";
-        if(current.has_filename())config.fileName=current.filename().string();
-        config.countSelectionMax=1;
-        config.flags=ImGuiFileDialogFlags_Modal;
-        ImGuiFileDialog::Instance()->OpenDialog("FM11ChooseFile",title,filters,config);
+        if(!filePicker_ || !target)return;
+        filePicker_->open(title,*target,
+            [this,target](const std::string& path) {
+                *target=path;
+                status_="Selected "+path+" (save to persist)";
+            },filters);
     }
     void fileEntry(const char* label,std::string& value,const char* filter) {
         editText(label,value);
@@ -200,54 +183,50 @@ private:
         int temp=static_cast<int>(v);
         if(ImGui::SliderInt(label,&temp,int(low),int(high)))v=unsigned(temp);
     }
-    void disks() {
-        ImGui::TextUnformatted("FDD image paths (saved only in 4-A; live mount in 4-B)");
-        for(unsigned i=0;i<4;++i) {
-            const std::string label="2D FDD "+std::to_string(i);
-            fileEntry(label.c_str(),edited_.floppy2d[i],
-                      "Disk images{.d88,.raw,.img,.nhd},.*");
-        }
-        ImGui::Separator();
-        for(unsigned i=0;i<4;++i) {
-            const std::string label="2HD FDD "+std::to_string(i);
-            fileEntry(label.c_str(),edited_.floppy2hd[i],
-                      "Disk images{.d88,.raw,.img,.nhd},.*");
-        }
-        ImGui::Separator();
-        fileEntry("HDD image",edited_.hddImage,
-                  "Disk images{.d88,.raw,.img,.nhd},.*");
-    }
     void cpus() {
         ImGui::Checkbox("6809 card installed",&edited_.main6809Installed);
-        int cpu=edited_.main6809Cpu==CpuType::HD6309?1:0;
-        if(ImGui::Combo("6809 card CPU",&cpu,"MC6809\0HD6309\0"))
-            edited_.main6809Cpu=cpu?CpuType::HD6309:CpuType::MC6809;
+        ImGui::TextUnformatted("6809 card CPU:");
+        if(ImGui::RadioButton("MC6809",edited_.main6809Cpu==CpuType::MC6809))
+            edited_.main6809Cpu=CpuType::MC6809;
+        ImGui::SameLine();
+        if(ImGui::RadioButton("HD6309",edited_.main6809Cpu==CpuType::HD6309))
+            edited_.main6809Cpu=CpuType::HD6309;
         editClock("6809 clock (Hz)",edited_.main6809ClockHz);
         ImGui::Separator();
         ImGui::Checkbox("8088 card installed",&edited_.main8088Installed);
-        cpu=edited_.main8088Cpu==CpuType::NECV20?1:0;
-        if(ImGui::Combo("8088 card CPU",&cpu,"8088\0NEC V20\0"))
-            edited_.main8088Cpu=cpu?CpuType::NECV20:CpuType::I8088;
+        ImGui::TextUnformatted("8088 card CPU:");
+        if(ImGui::RadioButton("8088",edited_.main8088Cpu==CpuType::I8088))
+            edited_.main8088Cpu=CpuType::I8088;
+        ImGui::SameLine();
+        if(ImGui::RadioButton("NEC V20",edited_.main8088Cpu==CpuType::NECV20))
+            edited_.main8088Cpu=CpuType::NECV20;
         editClock("8088 clock (Hz)",edited_.main8088ClockHz);
         ImGui::Separator();
         ImGui::Checkbox("Z80 installed",&edited_.z80Installed);
         editClock("Z80 clock (Hz)",edited_.z80ClockHz);
-        int ram=int(edited_.ramKiB);
-        if(ImGui::SliderInt("RAM (KiB)",&ram,128,1024,"%d",ImGuiSliderFlags_AlwaysClamp)) {
-            edited_.ramKiB=std::size_t(((ram+64)/128)*128);
-            edited_.ramKiB=std::min<std::size_t>(1024,edited_.ramKiB);
-        }
+        ImGui::TextUnformatted("RAM capacity (128 KiB steps):");
+        int step=int(edited_.ramKiB/128)-1;
+        if(ImGui::SliderInt("RAM (KiB steps)",&step,0,7,
+                            nullptr,ImGuiSliderFlags_AlwaysClamp))
+            edited_.ramKiB=std::size_t(step+1)*128;
+        ImGui::SameLine();
+        ImGui::Text("%zu KiB",edited_.ramKiB);
     }
     void roms() {
+        fileEntry("HDD image",edited_.hddImage,"Disk images{.d88,.raw,.img,.nhd},.*");
+        ImGui::Separator();
         fileEntry("6809 boot ROM",edited_.main6809Rom,"ROM files{.bin,.rom},.*");
         fileEntry("8088 boot ROM",edited_.main8088Rom,"ROM files{.bin,.rom},.*");
         fileEntry("Display CPU ROM",edited_.displayRom,"ROM files{.bin,.rom},.*");
         fileEntry("ANK ROM",edited_.ankRom,"ROM files{.bin,.rom},.*");
         fileEntry("Kanji ROM",edited_.kanjiRom,"ROM files{.bin,.rom},.*");
         fileEntry("Kanji level 2 ROM",edited_.kanji2Rom,"ROM files{.bin,.rom},.*");
-        int cpu=edited_.displayCpu==CpuType::HD6309?1:0;
-        if(ImGui::Combo("Display CPU",&cpu,"MC6809\0HD6309\0"))
-            edited_.displayCpu=cpu?CpuType::HD6309:CpuType::MC6809;
+        ImGui::TextUnformatted("Display CPU:");
+        if(ImGui::RadioButton("MC6809##display",edited_.displayCpu==CpuType::MC6809))
+            edited_.displayCpu=CpuType::MC6809;
+        ImGui::SameLine();
+        if(ImGui::RadioButton("HD6309##display",edited_.displayCpu==CpuType::HD6309))
+            edited_.displayCpu=CpuType::HD6309;
         editClock("Display CPU clock (Hz)",edited_.displayClockHz);
         int height=int(edited_.displayHeight);
         if(ImGui::RadioButton("200-line initial view",height==200))edited_.displayHeight=200;
@@ -296,6 +275,6 @@ private:
     MachineConfig original_;
     MachineConfig edited_;
     std::string status_;
-    std::string* fileTarget_=nullptr;
+    FilePickerGui* filePicker_=nullptr;
 };
 #endif
