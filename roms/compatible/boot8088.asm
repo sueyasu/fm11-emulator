@@ -112,6 +112,8 @@ fdc_restore:
     mov cx,0xFFFF
 .wait:
     in al,dx
+    cmp al,0xFF                  ; floating bus: no controller/media
+    je .error
     test al,1
     jz .done
     loop .wait
