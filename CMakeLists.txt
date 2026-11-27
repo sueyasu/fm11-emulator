@@ -128,6 +128,26 @@ else()
     message(STATUS "lwasm not found: compatible 6809/6309 boot ROM build disabled")
 endif()
 
+# Independent minimal Display Sub System ROM.
+if(FM11_LWASM_EXECUTABLE)
+    set(FM11_COMPAT_DISPLAY ${CMAKE_CURRENT_BINARY_DIR}/roms/compatible/display6809.bin)
+    add_custom_command(OUTPUT ${FM11_COMPAT_DISPLAY}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/roms/compatible
+        COMMAND ${FM11_LWASM_EXECUTABLE} --6809 --format=raw
+                --output=${FM11_COMPAT_DISPLAY}
+                ${CMAKE_CURRENT_SOURCE_DIR}/roms/compatible/display6809.asm
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/roms/compatible/display6809.asm
+        VERBATIM)
+    add_custom_target(fm11-compatible-display ALL DEPENDS ${FM11_COMPAT_DISPLAY})
+    if(FM11_BUILD_TESTS)
+        add_executable(compatible_display tests/compatible_display.cpp)
+        target_link_libraries(compatible_display PRIVATE fm11_core)
+        add_dependencies(compatible_display fm11-compatible-display)
+        add_test(NAME compatible_display COMMAND compatible_display ${FM11_COMPAT_DISPLAY})
+        set_tests_properties(compatible_display PROPERTIES TIMEOUT 30)
+    endif()
+endif()
+
 # SDL2 is optional. Headless targets and existing regression tests remain
 # buildable on systems without the development package.
 option(FM11_BUILD_SDL "Build SDL2 window frontend when SDL2 is available" ON)
