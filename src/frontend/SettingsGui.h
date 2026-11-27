@@ -168,9 +168,10 @@ public:
         ImGui::Begin("Settings",nullptr,ImGuiWindowFlags_NoResize|
             ImGuiWindowFlags_NoMove|ImGuiWindowFlags_NoCollapse|
             ImGuiWindowFlags_NoTitleBar);
-        ImGui::TextUnformatted("FM-11 Emulator settings (Stage 4-A)");
-        ImGui::TextWrapped("Changes are saved to the user config file. "
-            "The running machine is not changed until a future reset.");
+        ImGui::TextUnformatted("FM-11 Emulator settings");
+        ImGui::TextWrapped("Edit the pending hardware settings below. "
+            "Use Apply && Reset to boot with them, or Save user configuration "
+            "to write them to disk. These are independent operations.");
         ImGui::Separator();
         if(ImGui::BeginTabBar("configuration")) {
             if(ImGui::BeginTabItem("CPU / RAM")) {cpus();ImGui::EndTabItem();}
@@ -190,6 +191,7 @@ public:
         if(ImGui::Button("Save user configuration")) {
             try {
                 saveUserMachineConfig(edited_);
+                original_=edited_;
                 status_="Saved to "+userMachineConfigPath();
             } catch(const std::exception& e) {
                 status_=std::string("Save failed: ")+e.what();
