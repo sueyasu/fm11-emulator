@@ -67,6 +67,11 @@ public:
         if(channel>1 || drive>3)return;
         pendingFdd_=FddRequest{channel,drive,path};
     }
+    std::optional<std::string> takeFddError() {
+        auto error=std::move(fddError_);
+        fddError_.reset();
+        return error;
+    }
     std::optional<FddRequest> takeFddRequest() {
         auto request=std::move(pendingFdd_);
         pendingFdd_.reset();
@@ -75,6 +80,7 @@ public:
     void finishFddRequest(const FddRequest& request,const std::string& error) {
         if(!error.empty()) {
             status_="FDD exchange failed: "+error;
+            fddError_=status_;
             std::cerr<<status_<<"\n";
             return;
         }
@@ -301,5 +307,6 @@ private:
     std::string status_;
     FilePickerGui* filePicker_=nullptr;
     std::optional<FddRequest> pendingFdd_;
+    std::optional<std::string> fddError_;
 };
 #endif
