@@ -262,7 +262,7 @@ int main(int argc,char** argv) {
         // Declare before Machine: CPU callbacks must be destroyed before
         // mounted host image descriptors and their sync worker.
         HostImageSync imageSync;
-        Machine machine;
+        auto machine=std::make_unique<Machine>();
         std::shared_ptr<LiveFloppyMounts> liveFloppies;
         Main6809Board* mainBoard=nullptr;
         bool z80Enabled=false;
@@ -272,13 +272,13 @@ int main(int argc,char** argv) {
             z80Enabled=false;
             main8088Enabled=false;
             liveFloppies.reset();
-        machine.setDisplayCpu6309Enabled(config.displayCpu==CpuType::HD6309);
-        machine.systemBoard().hddDevice()->enableTiming(config.hddTimed);
+        machine->setDisplayCpu6309Enabled(config.displayCpu==CpuType::HD6309);
+        machine->systemBoard().hddDevice()->enableTiming(config.hddTimed);
         if(!testPattern && !testKanji) {
-            machine.loadDisplayRomFile(romPath);
-            if(!ankPath.empty())machine.loadAnkRomFile(ankPath);
-            if(!kanjiPath.empty())machine.loadKanjiRomFile(kanjiPath);
-            if(!kanji2Path.empty())machine.loadKanji2RomFile(kanji2Path);
+            machine->loadDisplayRomFile(romPath);
+            if(!ankPath.empty())machine->loadAnkRomFile(ankPath);
+            if(!kanjiPath.empty())machine->loadKanjiRomFile(kanjiPath);
+            if(!kanji2Path.empty())machine->loadKanji2RomFile(kanji2Path);
             if(!rom6809.empty() || !rom8088.empty()) {
                 std::size_t cpu6809Index=0,cpu8088Index=0,z80Index=0;
                 if(config.main6809Installed) {
@@ -288,36 +288,36 @@ int main(int argc,char** argv) {
                         throw std::invalid_argument("selected 6809 card requires [main_6809].rom or --main-rom/--6809-rom");
                     mainBoard=mainCpu.get();
                     mainCpu->setCpuClockHz(config.main6809ClockHz);
-                    cpu6809Index=machine.addBoard(std::move(mainCpu));
+                    cpu6809Index=machine->addBoard(std::move(mainCpu));
                 }
-                machine.setRamKiB(config.ramKiB);
+                machine->setRamKiB(config.ramKiB);
                 if(config.main8088Installed) {
                     auto mainCpu=std::make_unique<Main8088Board>(config.main8088Cpu);
                     if(!rom8088.empty())mainCpu->bus().loadBootRomFile(rom8088);
                     else if(config.mainSelected==MachineConfig::MainSelection::Cpu8088)
                         throw std::invalid_argument("selected 8088 card requires [main_8088].rom or --main-rom/--8088-rom");
-                    cpu8088Index=machine.addBoard(std::move(mainCpu));
-                    machine.set8088ClockHz(config.main8088ClockHz);
+                    cpu8088Index=machine->addBoard(std::move(mainCpu));
+                    machine->set8088ClockHz(config.main8088ClockHz);
                     main8088Enabled=true;
                 }
                 const auto selectedIndex=config.mainSelected==MachineConfig::MainSelection::Cpu6809
                     ?cpu6809Index:cpu8088Index;
                 // DIP selects the active main card even if both are fitted.
                 // Only the optional Z80 is under FD05 arbitration.
-                machine.setActiveBoard(selectedIndex);
+                machine->setActiveBoard(selectedIndex);
                 if(config.z80Installed) {
                     auto z80=std::make_unique<MainZ80Board>();
-                    z80Index=machine.addBoard(std::move(z80));
-                    machine.setZ80ClockHz(config.z80ClockHz);
-                    machine.configureFd05Boards(selectedIndex,z80Index);
-                    machine.enableFd05Selection(true);
+                    z80Index=machine->addBoard(std::move(z80));
+                    machine->setZ80ClockHz(config.z80ClockHz);
+                    machine->configureFd05Boards(selectedIndex,z80Index);
+                    machine->enableFd05Selection(true);
                     z80Enabled=true;
                 }
                 // addBoard() attaches the CPU to the machine's shared
                 // FloppyDevice. Mount only afterwards: mounting on the
                 // CPU's initial private device would lose the image.
                 {
-                    auto floppy=machine.systemBoard().floppyDevice();
+                    auto floppy=machine->systemBoard().floppyDevice();
                     if(traceFdc)floppy->setTimingTrace([](const std::string& message) {
                         std::cerr<<"FDC-TIME "<<message<<"\n";
                     });
@@ -340,7 +340,7 @@ int main(int argc,char** argv) {
                 }
                 if(!config.hddImage.empty()) {
                     const auto image=readDiskImage(config.hddImage);
-                    auto hdd=machine.systemBoard().hddDevice();
+                    auto hdd=machine->systemBoard().hddDevice();
                     hdd->load(image);
                     auto ownedImage=imageSync.open(config.hddImage);
                     hdd->setHostWriter([ownedImage](std::size_t offset,
@@ -353,16 +353,16 @@ int main(int argc,char** argv) {
         }
         // FD23 boot-device DIP is on the shared system board. An FM-11 BS
         // has no 6809 main CPU card, but its 8088 boot ROM still reads FD23.
-        machine.systemBoard().setBootDip(static_cast<BYTE>(bootDip));
+        machine->systemBoard().setBootDip(static_cast<BYTE>(bootDip));
         if(mainBoard)mainBoard->setBootDip(static_cast<BYTE>(bootDip));
 
-        machine.setDisplayCpuClockHz((testPattern || testKanji)?0:config.displayClockHz);
-        machine.setDisplayCpuSpeedMultiplier(speed);
-        machine.reset();
+        machine->setDisplayCpuClockHz((testPattern || testKanji)?0:config.displayClockHz);
+        machine->setDisplayCpuSpeedMultiplier(speed);
+        machine->reset();
         if(testKanji) {
-            machine.loadKanjiRomFile(kanjiPath);
-            if(!kanji2Path.empty())machine.loadKanji2RomFile(kanji2Path);
-            KanjiTestPattern::paint(machine.systemBoard().displaySubsystem(),
+            machine->loadKanjiRomFile(kanjiPath);
+            if(!kanji2Path.empty())machine->loadKanji2RomFile(kanji2Path);
+            KanjiTestPattern::paint(machine->systemBoard().displaySubsystem(),
                                     kanjiPage,kanjiLevel);
             std::cout<<"Kanji ROM gallery: "<<kanjiPath
                      <<(kanji2Path.empty()?"":" + "+kanji2Path)
@@ -372,9 +372,9 @@ int main(int argc,char** argv) {
                      <<"PageUp/PageDown: change ROM range; F3: switch ROM level; Ctrl+F12: quit\n"
                      <<std::flush;
         }
-        machine.systemBoard().usartDevice()->requireCarrierAndDsr(
+        machine->systemBoard().usartDevice()->requireCarrierAndDsr(
             config.dipSerialCd==MachineConfig::SerialCd::CdAndDsr);
-        machine.systemBoard().floppyDevice()->enableSeekTiming(config.floppyTimed);
+        machine->systemBoard().floppyDevice()->enableSeekTiming(config.floppyTimed);
         if(config.serialClocked) {
             if(config.serial0!="pty" && config.serial0!="none")
                 throw std::invalid_argument(
@@ -386,7 +386,7 @@ int main(int argc,char** argv) {
                 config.dipSerialBaudSwitches);
             if(!clock)throw std::invalid_argument(
                 "serial.timing=clocked requires a defined DIP baud rate");
-            machine.systemBoard().usartDevice()->setExternalClockHz(clock);
+            machine->systemBoard().usartDevice()->setExternalClockHz(clock);
         }
         };
         configureMachine();
@@ -463,12 +463,12 @@ int main(int argc,char** argv) {
         }
         // Audio device owns an SDL callback but never touches guest CPU
         // state. A missing host audio device must not block OS boot.
-        auto audio=std::make_unique<SdlBeeper>(machine.systemBoard().beeperDevice());
+        auto audio=std::make_unique<SdlBeeper>(machine->systemBoard().beeperDevice());
         if(beepTest) {
             if(!audio->available())
                 throw std::runtime_error("--beep-test requires an SDL audio output device");
             std::cout<<"Beeper self-test: pulse, pause, continuous tone\n"<<std::flush;
-            auto& bus=machine.systemBoard();
+            auto& bus=machine->systemBoard();
             bus.writeIo(0xfd03,0x41);
             SDL_Delay(270);
             bus.writeIo(0xfd03,0);
@@ -500,15 +500,15 @@ int main(int argc,char** argv) {
         std::mutex cpuMutex;
         auto serviceSerial=[&]() {
             if(!serial)return;
-            serial->synchronize(*machine.systemBoard().usartDevice());
+            serial->synchronize(*machine->systemBoard().usartDevice());
             if(mainBoard)mainBoard->syncSerialIrq();
             serial->service(
                 [&](unsigned char& ch) {
                     BYTE value=0;
-                    if(!machine.systemBoard().takeSerialOutput(value))return false;
+                    if(!machine->systemBoard().takeSerialOutput(value))return false;
                     ch=value;return true;
                 },
-                [&](unsigned char ch){machine.systemBoard().queueSerialInput(ch);});
+                [&](unsigned char ch){machine->systemBoard().queueSerialInput(ch);});
         };
         // Trace real shared-RAM bus transactions, not guessed values from
         // periodic snapshots. Limit completed requests to keep logs bounded.
@@ -516,7 +516,7 @@ int main(int argc,char** argv) {
         if(traceInkey && mainBoard) {
             auto active=std::make_shared<bool>(false);
             auto count=std::make_shared<unsigned>(0);
-            machine.setDisplaySharedTraceObserver(
+            machine->setDisplaySharedTraceObserver(
                 [active,count](DisplaySubsystem::SharedTrace e) {
                     if(e.mainCpu && e.write && e.offset==2 && e.value==0x2d) {
                         if(*count>=64)return;
@@ -546,7 +546,7 @@ int main(int argc,char** argv) {
         std::uint64_t lastReported=0;
         std::uint64_t ioWrites=0;
         if(diagnostics)
-            machine.setDisplayIoWriteObserver([&](DisplaySubsystem::IoWriteTrace){++ioWrites;});
+            machine->setDisplayIoWriteObserver([&](DisplaySubsystem::IoWriteTrace){++ioWrites;});
         auto lastLog=std::chrono::steady_clock::now();
         auto lastKanjiLog=std::chrono::steady_clock::now();
         // Match the original emulator's approximately 32 ms paint cadence.
@@ -556,7 +556,7 @@ int main(int argc,char** argv) {
         std::atomic<unsigned> cpuResumeGeneration{0};
         auto lastSpeedReport=std::chrono::steady_clock::now();
         bool wasPaused=false;
-        CpuBoard* lastCpuOwner=machine.activeBoard();
+        CpuBoard* lastCpuOwner=machine->activeBoard();
         // ROM milestones from the original FM-11 8088 boot ROM.
         // Emit only the first visit to each stage, plus bounded early
         // instructions and occasional progress checkpoints.
@@ -568,14 +568,14 @@ int main(int argc,char** argv) {
         bool diskIplSeen=false, cbiosSeen=false;
         auto traceCpmSnapshot=[&](const char* event) {
             if(!traceCpm80 || !mainBoard)return;
-            const auto* owner=machine.activeBoard();
+            const auto* owner=machine->activeBoard();
             // No CPU-visible I/O reads: several FDxx reads acknowledge IRQs.
             std::cerr<<"CPM80 "<<event
                      <<" step="<<executed
                      <<" owner="<<(owner && owner->cpu().type()==CpuType::Z80?"Z80":"6809")
                      <<" pc=$"<<std::hex<<(owner?owner->cpu().pc():0)
                      <<" pc6809=$"<<mainBoard->cpu().pc()
-                     <<" FD05write=$"<<unsigned(machine.mainSubCpuControl())
+                     <<" FD05write=$"<<unsigned(machine->mainSubCpuControl())
                      <<" FDCtrk=$"<<unsigned(mainBoard->fdcTrack())
                      <<" FDCsec=$"<<unsigned(mainBoard->fdcSector())
                      <<" FDCstatus=$"<<unsigned(mainBoard->fdcStatus())
@@ -596,15 +596,15 @@ int main(int argc,char** argv) {
         // unrelated to SDL rendering and the main CPU instruction pacing.
         std::atomic<DebugMonitor*> monitorProbe{nullptr};
         auto startWorkers=[&]() {
-        if(monitorEnabled)machine.setDisplayBreakProbe([&](std::uint32_t pc) {
+        if(monitorEnabled)machine->setDisplayBreakProbe([&](std::uint32_t pc) {
             auto* mon=monitorProbe.load(std::memory_order_acquire);
             return !mon || !mon->needsProbe() ||
                    !mon->probe(DebugMonitor::Target::Sub,pc);
         });
-        if(machine.boardCount())machine.startRealtimePtm();
-        machine.startDisplayCpu();
+        if(machine->boardCount())machine->startRealtimePtm();
+        machine->startDisplayCpu();
 
-        if(machine.boardCount())cpuWorker.start(
+        if(machine->boardCount())cpuWorker.start(
             [&,pacer=SdlCpuPacer(speed),
                lastTick=std::chrono::steady_clock::now(),
                generation=0u]() mutable {
@@ -631,7 +631,7 @@ int main(int argc,char** argv) {
                     // SDL only reads CPU state in explicit diagnostic modes.
                     if(diagnostics || cpuSpeed)cpuLock.lock();
                     for(;ran<std::min<std::uint64_t>(instructions,512) && pacer.ready();++ran) {
-                        const auto* active=machine.activeBoard();
+                        const auto* active=machine->activeBoard();
                         if(!active)break;
                         if(auto* mon=monitorProbe.load(std::memory_order_acquire)) {
                             if(mon->needsProbe() &&
@@ -655,15 +655,15 @@ int main(int argc,char** argv) {
                                 }
                             }
                         }
-                        const auto activeType=machine.activeCpuType();
+                        const auto activeType=machine->activeCpuType();
                         const auto hz=activeType==CpuType::Z80
-                            ?machine.clockZ80Hz()
+                            ?machine->clockZ80Hz()
                             :(activeType==CpuType::I8088 || activeType==CpuType::NECV20)
-                                ?machine.clock8088Hz()
+                                ?machine->clock8088Hz()
                                 :mainBoard?mainBoard->cpuClockHz():config.main6809ClockHz;
                         if(traceBoot &&
                            (activeType==CpuType::I8088 || activeType==CpuType::NECV20)) {
-                            auto* board8088=dynamic_cast<Main8088Board*>(machine.activeBoard());
+                            auto* board8088=dynamic_cast<Main8088Board*>(machine->activeBoard());
                             if(board8088) {
                                 const auto& cpu=static_cast<const Main8088Board::Core&>(board8088->cpu());
                                 const auto cs=cpu.cs(), ip=cpu.ip();
@@ -704,11 +704,11 @@ int main(int argc,char** argv) {
                                      <<std::setw(4)<<std::setfill('0')
                                      <<mainBoard->cpu().pc()
                                      <<" subCtrl=$"<<std::setw(2)
-                                     <<unsigned(machine.mainSubCpuControl())
+                                     <<unsigned(machine->mainSubCpuControl())
                                      <<std::dec<<std::setfill(' ')<<"\n";
                         }
-                        machine.executeOne(ptmIrqSyncedBefore);
-                        const auto guestCycles=machine.lastExecutionCycles();
+                        machine->executeOne(ptmIrqSyncedBefore);
+                        const auto guestCycles=machine->lastExecutionCycles();
                         pacer.consume(guestCycles,hz);
                         if(cpuSpeed) {
                             const auto card=activeType==CpuType::Z80
@@ -720,7 +720,7 @@ int main(int argc,char** argv) {
                         }
                         const auto step=++executed;
                         if(traceCpm80) {
-                            CpuBoard* owner=machine.activeBoard();
+                            CpuBoard* owner=machine->activeBoard();
                             if(owner!=lastCpuOwner) {
                                 traceCpmSnapshot("handoff");
                                 lastCpuOwner=owner;
@@ -744,11 +744,11 @@ int main(int argc,char** argv) {
             if(paused==wasPaused)return;
             if(paused) {
                 cpuWorker.pause();
-                machine.pauseRealtimePtm();
-                machine.pauseDisplayCpu();
+                machine->pauseRealtimePtm();
+                machine->pauseDisplayCpu();
             } else {
-                machine.resumeDisplayCpu();
-                machine.resumeRealtimePtm();
+                machine->resumeDisplayCpu();
+                machine->resumeRealtimePtm();
                 cpuResumeGeneration.fetch_add(1,std::memory_order_release);
                 cpuWorker.resume();
             }
@@ -766,7 +766,7 @@ int main(int argc,char** argv) {
             const bool startupPaused=paused;
             paused=true;
             applyPauseState();
-            monitor=std::make_unique<DebugMonitor>(machine,[&](bool stop) {
+            monitor=std::make_unique<DebugMonitor>(*machine,[&](bool stop) {
                 paused=stop;applyPauseState();
             });
             monitorProbe.store(monitor.get(),std::memory_order_release);
@@ -803,7 +803,7 @@ int main(int argc,char** argv) {
                         // The original keyboard queue carries 8-bit codes;
                         // UTF-8 multibyte input needs a separate keymap.
                         if(*p>=0x20 && *p<0x7f) {
-                            machine.enqueueDisplayKeyCode(*p);
+                            machine->enqueueDisplayKeyCode(*p);
                         }
                     }
                 }
@@ -811,11 +811,11 @@ int main(int argc,char** argv) {
                     const auto sym=event.key.keysym.sym;
                     const auto mod=event.key.keysym.mod;
                     if(testKanji && sym==SDLK_F3) {
-                        if(machine.displaySubsystem().kanji2Installed()) {
+                        if(machine->displaySubsystem().kanji2Installed()) {
                             kanjiLevel=3-kanjiLevel;
                             kanjiPage=0;
                             KanjiTestPattern::paint(
-                                machine.systemBoard().displaySubsystem(),kanjiPage,kanjiLevel);
+                                machine->systemBoard().displaySubsystem(),kanjiPage,kanjiLevel);
                             const std::string title="FM-11 Kanji level "+
                                 std::to_string(kanjiLevel)+" page 1/"+
                                 std::to_string(KanjiTestPattern::pages);
@@ -828,7 +828,7 @@ int main(int argc,char** argv) {
                         if(next!=kanjiPage) {
                             kanjiPage=next;
                             KanjiTestPattern::paint(
-                                machine.systemBoard().displaySubsystem(),kanjiPage,kanjiLevel);
+                                machine->systemBoard().displaySubsystem(),kanjiPage,kanjiLevel);
                             const unsigned first=kanjiPage*KanjiTestPattern::glyphsPerPage;
                             const unsigned last=std::min(
                                 first+KanjiTestPattern::glyphsPerPage,
@@ -875,7 +875,7 @@ int main(int argc,char** argv) {
                         else if((mod&KMOD_CTRL) && sym==SDLK_BACKSLASH)code=0x001c;
                         else if((mod&KMOD_CTRL) && sym==SDLK_RIGHTBRACKET)code=0x001d;
                         if(code) {
-                            machine.enqueueDisplayKeyCode(code);
+                            machine->enqueueDisplayKeyCode(code);
                         }
                     }
                 }
@@ -919,10 +919,10 @@ int main(int argc,char** argv) {
             }
             // CPU, PTM and display execution are independently scheduled.
             // The SDL thread only services host events and paints frames.
-            if(!paused && !testPattern && !testKanji && !machine.boardCount())
+            if(!paused && !testPattern && !testKanji && !machine->boardCount())
                 SDL_Delay(1);
             cpuWorker.rethrowWorkerFailure();
-            if(cpuSpeed && !paused && machine.boardCount()) {
+            if(cpuSpeed && !paused && machine->boardCount()) {
                 const auto reportNow=std::chrono::steady_clock::now();
                 const auto reportElapsed=reportNow-lastSpeedReport;
                 if(reportElapsed>=std::chrono::seconds(1)) {
@@ -930,8 +930,8 @@ int main(int argc,char** argv) {
                     {std::lock_guard<std::mutex> cpuLock(cpuMutex);
                      sample=cpuMeter.take(reportElapsed);}
                     const auto hz6809=mainBoard?mainBoard->cpuClockHz():0;
-                    const auto hzZ80=z80Enabled?machine.clockZ80Hz():0;
-                    const auto hz8088=main8088Enabled?machine.clock8088Hz():0;
+                    const auto hzZ80=z80Enabled?machine->clockZ80Hz():0;
+                    const auto hz8088=main8088Enabled?machine->clock8088Hz():0;
                     std::cerr<<std::fixed<<std::setprecision(3)
                              <<"CPU speed wall="<<sample.wallSeconds<<"s"
                              <<" 6809="<<sample.main6809.cycles<<" T"
@@ -979,7 +979,7 @@ int main(int argc,char** argv) {
                     throw std::runtime_error(SDL_GL_GetCurrentContext()?
                         "cannot restore guest OpenGL context":SDL_GetError());
 #endif
-                const auto snapshot=OpenGlRenderer::capture(machine,!ankPath.empty() && !testKanji);
+                const auto snapshot=OpenGlRenderer::capture(*machine,!ankPath.empty() && !testKanji);
                 int outputW=0,outputH=0;
                 SDL_GL_GetDrawableSize(ui.window,&outputW,&outputH);
 #ifdef FM11_SETTINGS_GUI
@@ -1004,12 +1004,12 @@ int main(int argc,char** argv) {
             } else {
                 DisplayBitmap::Frame frame{};
                 {
-                auto displayGuard=machine.lockDisplay();
-                frame=machine.captureDisplayFrame(high);
+                auto displayGuard=machine->lockDisplay();
+                frame=machine->captureDisplayFrame(high);
                 // Original SubCpu::OnDraw derives both layers from FD A0.
                 // In particular, loading a font does NOT enable text by itself.
-                if(machine.boardCount()) {
-                    const BYTE control=machine.mainDisplayControl();
+                if(machine->boardCount()) {
+                    const BYTE control=machine->mainDisplayControl();
                     if((control&0x0c)==0) {
                         std::fill(frame.argb.begin(),frame.argb.end(),0xff000000u);
                     } else {
@@ -1020,17 +1020,17 @@ int main(int argc,char** argv) {
                             if(pixel&0x0000ff00u)index|=2;
                             if(pixel&0x000000ffu)index|=4;
                             pixel=DisplayBitmap::referenceColor(
-                                machine.mainDisplayPalette(index));
+                                machine->mainDisplayPalette(index));
                         }
                     }
                     if((control&0x03)!=0 && !ankPath.empty())
-                        DisplayBitmap::compositeText(frame,machine.displaySubsystem());
+                        DisplayBitmap::compositeText(frame,machine->displaySubsystem());
                 } else if(!ankPath.empty() && !testKanji) {
-                    DisplayBitmap::compositeText(frame,machine.displaySubsystem());
+                    DisplayBitmap::compositeText(frame,machine->displaySubsystem());
                 }
                 if(!testPattern && !testKanji && !ankPath.empty() &&
-                   (!machine.boardCount() || (machine.mainDisplayControl()&0x03)!=0))
-                    DisplayBitmap::compositeCursor(frame,machine.displaySubsystem(),cursorTick);
+                   (!machine->boardCount() || (machine->mainDisplayControl()&0x03)!=0))
+                    DisplayBitmap::compositeCursor(frame,machine->displaySubsystem(),cursorTick);
                 if(testPattern) {
                     for(std::size_t y=0;y<frame.height;++y)
                         for(std::size_t x=0;x<frame.width;++x)
@@ -1039,22 +1039,22 @@ int main(int argc,char** argv) {
                 }
                 const auto now=std::chrono::steady_clock::now();
                 if(diagnostics && now-lastLog>=std::chrono::seconds(2)) {
-                    std::cerr<<"display PC="<<std::hex<<machine.displayCpuPc()
+                    std::cerr<<"display PC="<<std::hex<<machine->displayCpuPc()
                              <<std::dec<<" steps="<<publishedExecuted.load()
                              <<" delta="<<(publishedExecuted.load()-lastReported)
                              <<" ioWrites="<<ioWrites
-                             <<" VRAM_nonzero="<<machine.displayNonzeroVramBytes()
-                             <<" page="<<machine.displayPage()
-                             <<" revision="<<machine.displayRevision()
+                             <<" VRAM_nonzero="<<machine->displayNonzeroVramBytes()
+                             <<" page="<<machine->displayPage()
+                             <<" revision="<<machine->displayRevision()
                              <<" mainPC="<<sampledMainPc
-                             <<" FDA0="<<unsigned(machine.mainDisplayControl())
-                             <<" FD05="<<unsigned(machine.mainSubCpuControl())
-                             <<" FD04_latch="<<unsigned(machine.mainEventStatus())
-                             <<" BUSY="<<unsigned(machine.displayBusyStatus())
-                             <<" sharedWrites="<<machine.displaySharedWriteRevision()
-                             <<" shared0="<<unsigned(machine.displaySharedByte(0))
-                             <<" halted="<<machine.displayHalted()
-                             <<(machine.boardCount()?" main6809":" display-only")
+                             <<" FDA0="<<unsigned(machine->mainDisplayControl())
+                             <<" FD05="<<unsigned(machine->mainSubCpuControl())
+                             <<" FD04_latch="<<unsigned(machine->mainEventStatus())
+                             <<" BUSY="<<unsigned(machine->displayBusyStatus())
+                             <<" sharedWrites="<<machine->displaySharedWriteRevision()
+                             <<" shared0="<<unsigned(machine->displaySharedByte(0))
+                             <<" halted="<<machine->displayHalted()
+                             <<(machine->boardCount()?" main6809":" display-only")
                              <<(testPattern?" test-pattern":"")<<"\n";
                     lastReported=publishedExecuted.load();
                     lastLog=now;
@@ -1123,11 +1123,11 @@ int main(int argc,char** argv) {
             if(traceKanji) {
                 const auto current=std::chrono::steady_clock::now();
                 if(current-lastKanjiLog>=std::chrono::seconds(2)) {
-                    const auto state=machine.displaySubsystem().kanjiStatistics();
+                    const auto state=machine->displaySubsystem().kanjiStatistics();
                     std::cerr<<"KANJI selections="<<state.selections
                              <<" left="<<state.leftReads
                              <<" right="<<state.rightReads
-                             <<" videoRevision="<<machine.displayRevision()
+                             <<" videoRevision="<<machine->displayRevision()
                              <<"\n";
                     lastKanjiLog=current;
                 }
@@ -1143,8 +1143,8 @@ int main(int argc,char** argv) {
         // The worker probes retain a non-owning monitor pointer. Stop
         // every worker before destroying the monitor to avoid use-after-free.
         cpuWorker.stop();
-        machine.stopDisplayCpu();
-        machine.stopRealtimePtm();
+        machine->stopDisplayCpu();
+        machine->stopRealtimePtm();
         monitorProbe.store(nullptr,std::memory_order_release);
         monitorInput.reset();
         monitor.reset();
