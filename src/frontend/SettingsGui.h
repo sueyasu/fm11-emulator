@@ -107,6 +107,7 @@ public:
             applied_=edited_;
             pendingApply_=true;
             status_="Applied to next Reset; running machine is unchanged.";
+            hideEditor(false);
         } catch(const std::exception& e) {
             status_=std::string("Apply failed: ")+e.what();
             resetError_=status_;
@@ -138,11 +139,16 @@ public:
     }
     bool visible() const {return visible_;}
     void toggle() {
-        visible_=!visible_;
         if(visible_) {
+            hideEditor(true);
+        } else {
+            // Reopen from the last successfully applied configuration.
+            // Edits from a previous cancelled session must not reappear.
+            edited_=applied_;
+            visible_=true;
             SDL_ShowWindow(window_);
             SDL_RaiseWindow(window_);
-        } else SDL_HideWindow(window_);
+        }
     }
     // True means the event belongs to this window and must not be forwarded
     // to the emulated keyboard or guest input queue.
@@ -161,7 +167,7 @@ public:
         if(id!=SDL_GetWindowID(window_))return false;
         if(event.type==SDL_WINDOWEVENT &&
            event.window.event==SDL_WINDOWEVENT_CLOSE) {
-            toggle();
+            hideEditor(true);
             return true;
         }
         ImGui::SetCurrentContext(context_);
@@ -213,13 +219,13 @@ public:
         }
         ImGui::SameLine();
         if(ImGui::Button("Discard edits")) {
-            edited_=original_;
-            status_="Discarded changes";
+            edited_=applied_;
+            status_="Discarded unapplied changes";
         }
         ImGui::SameLine();
-        if(ImGui::Button("Close"))toggle();
+        if(ImGui::Button("Close"))hideEditor(true);
         ImGui::TextWrapped("%s",status_.c_str());
-        ImGui::TextDisabled("Apply is not Save. Reset is available from the main Settings menu.");
+        ImGui::TextDisabled("Apply closes the editor. Close discards unapplied edits; Reset is in the main menu.");
         ImGui::End();
         ImGui::Render();
         SDL_SetRenderDrawColor(renderer_,25,27,32,255);
@@ -229,6 +235,11 @@ public:
     }
     const MachineConfig& edited() const {return edited_;}
 private:
+    void hideEditor(bool discard) {
+        if(discard)edited_=applied_;
+        visible_=false;
+        SDL_HideWindow(window_);
+    }
     void chooseFile(std::string* target,const char* title,const char* filters) {
         if(!filePicker_ || !target)return;
         filePicker_->open(title,*target,
