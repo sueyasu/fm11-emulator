@@ -121,7 +121,7 @@ key_done
         andcc   #$bf
 done
         clr     mail+2
-        bra     ready
+        lbra     ready
 
 * Parser state 0 normal, 1 ESC, 2 attribute, 3 X, 4 Y.
 output
@@ -135,10 +135,10 @@ output
         cmpb    #3
         beq     set_x
         cmpa    #25
-        bhs     output_ret
+        lbhs     output_ret
         ldb     tmpx
         cmpb    #80
-        bhs     output_ret
+        lbhs     output_ret
         sta     row
         stb     col
         rts
@@ -168,33 +168,33 @@ esc_t
         rts
 normal
         cmpa    #$20
-        bhs     printable
+        lbhs     printable
         cmpa    #$08
-        beq     left
+        lbeq     left
         cmpa    #$09
-        beq     tab
+        lbeq     tab
         cmpa    #$0a
         lbeq    linefeed
         cmpa    #$0b
-        beq     home
+        lbeq     home
         cmpa    #$0c
         lbeq    clear_all
         cmpa    #$0d
-        beq     carriage
+        lbeq     carriage
         cmpa    #$12
-        beq     position
+        lbeq     position
         cmpa    #$16
         lbeq    clear_all
         cmpa    #$1b
-        beq     begin_esc
+        lbeq     begin_esc
         cmpa    #$1c
-        beq     right
+        lbeq     right
         cmpa    #$1d
-        beq     left
+        lbeq     left
         cmpa    #$1e
-        beq     up
+        lbeq     up
         cmpa    #$1f
-        beq     down
+        lbeq     down
         rts
 printable
         pshs    a
@@ -205,7 +205,7 @@ printable
         inc     col
         lda     col
         cmpa    #80
-        blo     output_ret
+        lblo     output_ret
         clr     col
         lbra    linefeed
 position
