@@ -123,6 +123,11 @@ public:
                     }
                 }
                 ImGui::Separator();
+                const auto& hdd=settings.edited().hddImage;
+                const auto hddLabel=std::string("HDD: ")+
+                    (hdd.empty()?"(empty)":std::filesystem::path(hdd).filename().string());
+                if(ImGui::MenuItem(hddLabel.c_str()))pendingHdd_=true;
+                ImGui::Separator();
                 if(ImGui::MenuItem("Exit","Ctrl+F12"))running=false;
                 ImGui::EndMenu();
             }
@@ -178,6 +183,12 @@ public:
                     settings.stageFddPath(channel,drive,path);
                 });
         }
+        if(pendingHdd_) {
+            pendingHdd_=false;
+            if(filePicker_)filePicker_->open("Choose HDD image",
+                settings.edited().hddImage,
+                [&settings](const std::string& path) {settings.stageHddPath(path);});
+        }
         // Eject edits only the saved draft; actual FDD removal is Stage 4-B.
         if(pendingEject_>=0) {
             const unsigned index=static_cast<unsigned>(pendingEject_);
@@ -193,5 +204,6 @@ private:
     bool showAbout_=false,showKeys_=false;
     FilePickerGui* filePicker_=nullptr;
     int pendingChoose_=-1,pendingEject_=-1;
+    bool pendingHdd_=false;
 };
 #endif
