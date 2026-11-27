@@ -869,6 +869,28 @@ int main(int argc,char** argv) {
                 monitor->emit(monitor->prompt());
             }
             applyPauseState();
+#ifdef FM11_SETTINGS_GUI
+            if(const auto request=settingsGui->takeFddRequest()) {
+                const bool restorePaused=paused;
+                paused=true;
+                applyPauseState(); // CPU, display CPU and PTM are quiescent.
+                std::string error;
+                try {
+                    if(!liveFloppies)
+                        throw std::runtime_error("no FDD controller has been initialized");
+                    liveFloppies->exchange(request->channel,request->drive,request->path);
+                    std::cerr<<"Stage 4-B "
+                             <<(request->path.empty()?"Ejected ":"Mounted ")
+                             <<(request->channel?"2HD":"2D")<<" FDD"
+                             <<request->drive<<": "<<request->path<<"\n";
+                } catch(const std::exception& e) {
+                    error=e.what();
+                }
+                settingsGui->finishFddRequest(*request,error);
+                paused=restorePaused;
+                applyPauseState();
+            }
+#endif
             if(monitorInput) {
                 std::string line;
                 while(monitorInput->pop(line)) {
