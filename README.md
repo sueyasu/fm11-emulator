@@ -291,6 +291,48 @@ switch still selects 200/400 emulated scanout lines, and the aspect
 ratio remains the same in both modes. Use `--renderer gl` and
 `--renderer software` to compare presentation backends.
 
+## Stage 4-A addendum: CRT menus and nonblocking file picker
+
+The main SDL CRT window now draws **File / Settings / Help** in a reserved
+28-pixel top menu strip (the emulated 640x400 display is never overwritten).
+This is rendered using the matching Dear ImGui SDL2/OpenGL3 or
+SDL2/SDL_Renderer backend; the guest renderer still selects GL or software
+with `--renderer`.
+
+- **File**: 2D and 2HD physical drives 0..3, with **Choose image...**
+  and **Eject (edit only)**. These actions edit the pending configuration,
+  not the mounted disk. Live media changes are Stage 4-B.
+- **Settings**: **Configuration...** opens the separate settings window,
+  **Pause/Resume** immediately uses the existing worker pause mechanism.
+  **Reset** is visibly disabled pending Stage 4-C.
+- **Help**: keyboard shortcuts and About popups.
+
+`Browse` buttons on all eight FDD slots, the HDD image, and all ROM paths
+use **ImGuiFileDialog v0.6.8 (MIT)**. File dialogs run inside ImGui frames
+and do not nest a blocking native file-dialog event loop: the guest CPU,
+PTM, serial service and SDL painting continue while files are selected.
+The chosen path is stored in the pending editor configuration and is
+persisted only when **Save user configuration** is clicked. A selection
+alone never swaps live FDDs or reinitializes the current machine.
+
+When the settings GUI is enabled, CMake FetchContent fetches ImGuiFileDialog
+v0.6.8 along with pinned Dear ImGui. With
+`-DFM11_SETTINGS_GUI=OFF` neither library is required, preserving the
+existing SDL frontend and its original menu-free guest display.
+
+Manual smoke check on both `--renderer gl` and `--renderer software`:
+
+1. Confirm File/Settings/Help menus appear in the CRT window without
+   changing the guest's 640x400 display content or proportions.
+2. Choose a 2D FDD image through File > 2D floppy > Drive 0 > Choose image;
+   verify the picker can be cancelled or used while the guest continues.
+3. In Settings > Configuration, use Browse on a ROM and HDD path; save
+   the configuration; inspect `~/.config/fm11emu/fm11emu.conf` (or the XDG
+   destination); reopen and verify the edited paths.
+4. Pause and resume with Settings > Pause / Resume and F2, check the guest
+   keyboard, and repeat on the other renderer.
+5. Verify `-DFM11_SETTINGS_GUI=OFF` still builds.
+
 ## Stage 4-A: SDL settings editor
 
 The SDL frontend has a separate Dear ImGui settings window, toggled with
