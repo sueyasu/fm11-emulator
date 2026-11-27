@@ -478,7 +478,10 @@ int main(int argc,char** argv) {
             effectiveConfig.bootHdd=(bootDip&0x80)==0;
         }
         auto settingsGui=std::make_unique<SettingsGui>(effectiveConfig);
+        auto filePickerGui=std::make_unique<FilePickerGui>();
+        settingsGui->setFilePicker(filePickerGui.get());
         auto mainMenuGui=std::make_unique<MainMenuGui>(ui.window,ui.renderer,ui.glContext);
+        mainMenuGui->setFilePicker(filePickerGui.get());
 #endif
         std::cerr<<"FM-11 renderer: "<<(ui.glRenderer?"OpenGL 3.3":"software")<<"\n";
         if(testKanji) {
@@ -795,6 +798,7 @@ int main(int argc,char** argv) {
             SDL_Event event;
             while(SDL_PollEvent(&event)) {
 #ifdef FM11_SETTINGS_GUI
+                if(filePickerGui && filePickerGui->processEvent(event))continue;
                 if(settingsGui && settingsGui->processEvent(event))continue;
                 if(mainMenuGui && mainMenuGui->processEvent(event))continue;
                 if(event.type==SDL_KEYDOWN && !event.key.repeat &&
@@ -1129,6 +1133,7 @@ int main(int argc,char** argv) {
             // host time to the three emulation workers between UI polls.
 #ifdef FM11_SETTINGS_GUI
             if(settingsGui)settingsGui->render();
+            if(filePickerGui)filePickerGui->render();
 #endif
             SDL_Delay(1);
         }
