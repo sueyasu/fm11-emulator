@@ -148,14 +148,6 @@ public:
         images_.erase(std::remove(images_.begin(),images_.end(),image),
                       images_.end());
     }
-    // Discard references from the finished machine after syncPending()
-    // succeeds and all guest workers have stopped. Background fsyncs
-    // safely retain their own shared_ptr until completion.
-    void releaseAllImages() {
-        std::lock_guard<std::mutex> lock(mutex_);
-        images_.clear();
-    }
-
     // After rebuilding the machine, detach images owned only by the sync
     // service. Images still retained by live host writers or an active
     // background fdatasync remain tracked until a later pass.
