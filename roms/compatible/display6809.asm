@@ -453,7 +453,7 @@ cell_address
         ifdef   NATIVE6309
         clre
         ldf     col
-        lslw
+        addr    w,d
         addr    w,d
         else
         addb    col
