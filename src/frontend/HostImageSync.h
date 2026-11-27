@@ -148,6 +148,14 @@ public:
         images_.erase(std::remove(images_.begin(),images_.end(),image),
                       images_.end());
     }
+    // Discard references from the finished machine after syncPending()
+    // succeeds and all guest workers have stopped. Background fsyncs
+    // safely retain their own shared_ptr until completion.
+    void releaseAllImages() {
+        std::lock_guard<std::mutex> lock(mutex_);
+        images_.clear();
+    }
+
     // Return false on any pending sync failure. Failed images remain dirty
     // and are retried on the next tick or final shutdown.
     bool syncPending() {
