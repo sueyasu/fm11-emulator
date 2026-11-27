@@ -308,7 +308,9 @@ with `--renderer`.
 - **Help**: keyboard shortcuts and About popups.
 
 `Browse` buttons on all eight FDD slots, the HDD image, and all ROM paths
-use **ImGuiFileDialog v0.6.8 (MIT)**. File dialogs run inside ImGui frames
+use **ImGuiFileDialog v0.6.8 (MIT)**. The File menu opens its picker
+inside the CRT window; settings Browse buttons open a picker inside the
+separate settings window. File dialogs run inside ImGui frames
 and do not nest a blocking native file-dialog event loop: the guest CPU,
 PTM, serial service and SDL painting continue while files are selected.
 The chosen path is stored in the pending editor configuration and is
