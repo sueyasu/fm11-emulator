@@ -72,6 +72,35 @@ if(UNIX)
     target_link_libraries(fm11-romboot PRIVATE fm11_core)
 endif()
 
+# Optional redistributable 8088/V20 compatible boot firmware.
+# NASM is only required when building the firmware; existing users without
+# NASM can continue to build and test the emulator unchanged.
+find_program(FM11_NASM_EXECUTABLE nasm)
+if(FM11_NASM_EXECUTABLE)
+    set(FM11_COMPAT_BOOT8088 ${CMAKE_CURRENT_BINARY_DIR}/roms/compatible/boot8088.bin)
+    add_custom_command(
+        OUTPUT ${FM11_COMPAT_BOOT8088}
+        COMMAND ${CMAKE_COMMAND} -E make_directory
+                ${CMAKE_CURRENT_BINARY_DIR}/roms/compatible
+        COMMAND ${FM11_NASM_EXECUTABLE} -f bin
+                ${CMAKE_CURRENT_SOURCE_DIR}/roms/compatible/boot8088.asm
+                -o ${FM11_COMPAT_BOOT8088}
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/roms/compatible/boot8088.asm
+        COMMENT "Assembling redistributable 8088/V20 compatible boot ROM"
+        VERBATIM)
+    add_custom_target(fm11-compatible-boot8088 ALL DEPENDS ${FM11_COMPAT_BOOT8088})
+    if(FM11_BUILD_TESTS)
+        add_executable(compatible_boot8088 tests/compatible_boot8088.cpp)
+        target_link_libraries(compatible_boot8088 PRIVATE fm11_core)
+        add_dependencies(compatible_boot8088 fm11-compatible-boot8088)
+        add_test(NAME compatible_boot8088
+                 COMMAND compatible_boot8088 ${FM11_COMPAT_BOOT8088})
+        set_tests_properties(compatible_boot8088 PROPERTIES TIMEOUT 30)
+    endif()
+else()
+    message(STATUS "NASM not found: compatible 8088/V20 boot ROM build disabled")
+endif()
+
 # SDL2 is optional. Headless targets and existing regression tests remain
 # buildable on systems without the development package.
 option(FM11_BUILD_SDL "Build SDL2 window frontend when SDL2 is available" ON)
