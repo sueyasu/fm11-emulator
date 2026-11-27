@@ -1,3 +1,56 @@
+## fm11-sdl --no-gui: full-system headless execution
+
+The normal `fm11-sdl` frontend now accepts `--no-gui`. This uses the
+**same** hardware initialization, CPU execution worker, display-sub-CPU
+worker, real-time PTM, serial backend, FDD/HDD images, host image
+write-through and final sync as the graphical mode. It skips all SDL
+initialization, SDL input/event polling, GL/software rendering, Dear ImGui,
+file picker and audio output. The FM-11 display CPU still executes, even
+though its framebuffer is not shown.
+
+Example:
+
+```sh
+./build/fm11-sdl --no-gui --config fm11emu.conf --speed 1
+./build/fm11-sdl --no-gui --monitor --config fm11emu.conf
+```
+
+Serial endpoints remain configured through `[serial] serial0 = pty`,
+`none` or `/dev/ttyUSB0`. The selected PTY name appears on stdout.
+When `--monitor` is enabled, its existing Stage 3 monitor uses stdin;
+the guest serial console is independent. With no monitor, stdin is not
+consumed. Ctrl+C (SIGINT) and SIGTERM stop workers and invoke the same
+host-image final sync used by GUI shutdown. No desktop session,
+DISPLAY/WAYLAND_DISPLAY, or sound device is required.
+
+`--run-for-ms N` is a headless-only finite-run option intended primarily
+for integration testing. Without it, the emulator continues until a
+termination signal or the monitor requests a stop. Graphical tests
+(`--test-pattern`, `--test-kanji` and `--beep-test`) cannot run under
+`--no-gui` and are rejected explicitly.
+
+The old `fm11-headless` remains a separate diagnostic runner and is
+unchanged. The new `fm11-sdl --no-gui` is the fully configured FM-11
+runtime. The binary is still linked against SDL2, but **does not
+initialize SDL** in this mode; SDL2 build/runtime libraries are still
+required. A completely SDL-free executable can be built later if needed.
+
+Run the new automated integration test (synthetic main/display ROMs,
+unavailable SDL video driver, timed shutdown, monitor, SIGTERM) and all
+existing tests:
+
+```sh
+cmake --build build -j$(nproc)
+ctest --test-dir build -R '^sdl_no_gui_integration$' --output-on-failure
+ctest --test-dir build --output-on-failure
+```
+
+For manual boot tests, use the same proven NitrOS-9 L1/L2, CP/M-86 and
+CP/M-80 config+disk images as the GUI mode; connect the guest serial PTY
+with a terminal application. Perform a file write and clean shutdown to
+verify persistence. Headless mode intentionally does not emulate a host
+viewer for the guest's local CRT or a keyboard input source.
+
 ## Configurable main RAM (128 KiB to 1 MiB)
 
 The SDL frontend accepts an optional `[memory]` section in
