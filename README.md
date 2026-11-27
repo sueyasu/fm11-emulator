@@ -291,6 +291,49 @@ switch still selects 200/400 emulated scanout lines, and the aspect
 ratio remains the same in both modes. Use `--renderer gl` and
 `--renderer software` to compare presentation backends.
 
+## Stage 4-B: live FDD media exchange
+
+The SDL File menu's **2D floppy** and **2HD floppy** drive submenus now
+mount/replace/eject their selected images immediately, across all four
+physical drives on each controller. File selection itself is asynchronous;
+only the short media swap uses the existing CPU, sub-CPU and PTM pause
+mechanism. The emulator resumes its original running/paused state.
+
+The FDC refuses an exchange during a selected-drive seek, timed read/write,
+WRITE TRACK, or unfinished shared PIO/DMA transfer. A rejected exchange
+shows a GUI error and leaves the current image and its displayed path
+unchanged. Retry after the drive finishes I/O. A malformed image, a
+read-only/unwritable host image or a duplicate mounted filename is likewise
+rejected before the live media is touched. Aliases to the same canonical
+file are detected.
+
+All floppy sector and WRITE TRACK host writes now follow the *current*
+per-drive image, instead of the startup image captured in the callback.
+The old image is explicitly fdatasync'ed before detach; a failed sync
+blocks the exchange. The 100-ms background host sync continues. Eject
+disconnects the selected medium without changing other drives or the HDD.
+
+**Important:** Host synchronization does not flush the *guest OS's* own
+disk cache. Before exchanging a disk that the guest has written, close
+open files or invoke the guest's normal flush/unmount procedure. The GUI
+does not automatically save these changes to a configuration file;
+**Save user configuration** remains a separate explicit action. The
+HDD image path still changes only after Stage 4-C reset/apply support.
+
+Regression test:
+```sh
+cmake --build build -j$(nproc)
+ctest --test-dir build -R 'live_floppy_mounts|host_image_sync|floppy' --output-on-failure
+ctest --test-dir build --output-on-failure
+```
+
+Manual check: boot from a 2D disk, use File > 2D floppy > Drive 1 to
+mount another image, verify the guest can read it, then eject it and
+verify not-ready behavior. Repeat for 2HD. Verify writes after
+replacement reach the new host image and not the old one, including
+after closing and restarting the emulator. Busy-drive exchanges should
+be rejected and may be retried after disk activity ends.
+
 ## Stage 4-A usability update: larger controls and standalone chooser
 
 The CRT File/Settings/Help menu and Settings editor now use larger fonts
