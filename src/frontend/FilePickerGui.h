@@ -55,7 +55,7 @@ public:
     bool open(const std::string& title,const std::string& selected,
               SelectionFn accept,const char* filters="Disk images{.d88,.raw,.img,.nhd},.*") {
         if(active_) {
-            SDL_RaiseWindow(window_);
+            // A second file request must not steal focus or signal attention.
             return false;
         }
         accept_=std::move(accept);
@@ -71,7 +71,6 @@ public:
         SDL_SetWindowTitle(window_,title.c_str());
         SDL_SetWindowSize(window_,1024,740);
         SDL_ShowWindow(window_);
-        SDL_RaiseWindow(window_);
         return true;
     }
     bool processEvent(const SDL_Event& event) {
