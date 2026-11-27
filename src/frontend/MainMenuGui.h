@@ -150,6 +150,20 @@ public:
             }
             ImGui::EndMainMenuBar();
         }
+        if(const auto error=settings.takeResetError()) {
+            resetError_=*error;
+            openResetError_=true;
+        }
+        if(openResetError_) {
+            ImGui::OpenPopup("Machine reset failed");
+            openResetError_=false;
+        }
+        if(ImGui::BeginPopupModal("Machine reset failed",nullptr,
+                                  ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextWrapped("%s",resetError_.c_str());
+            if(ImGui::Button("OK"))ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
         if(const auto error=settings.takeFddError()) {
             diskError_=*error;
             openDiskError_=true;
@@ -222,6 +236,8 @@ private:
     int pendingChoose_=-1,pendingEject_=-1;
     bool pendingHdd_=false;
     bool openDiskError_=false;
+    bool openResetError_=false;
+    std::string resetError_;
     std::string diskError_;
 };
 #endif
