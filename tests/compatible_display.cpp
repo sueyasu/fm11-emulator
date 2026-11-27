@@ -209,6 +209,30 @@ int main(int argc,char** argv) {
         for(unsigned i=0;i<16;++i)
             if(d.readPhysicalVram(i*80+2)!=0x7e ||
                d.readPhysicalVram(i*80+3)!=0xbd)return 36;
+        // Stock 6809 boot ROM hands off to IPL after HALT/release
+        // without a command, leaving FC80=80. READY must reassert.
+        out(0x1b);out('*');
+        wait();
+        main->writeCpu(0xfd05,0x80);
+        main->writeCpu(0xfc80,0x80);
+        main->writeCpu(0xfc82,0);
+        for(unsigned i=3;i<0x33;++i)main->writeCpu(0xfc80+i,0);
+        main->writeCpu(0xfd05,0);
+        wait();
+        if(m.displaySharedByte(0)!=0x80)return 37;
+        // Command 03 is count-prefixed, not NUL-terminated.
+        main->writeCpu(0xfd05,0x80);
+        main->writeCpu(0xfc80,0x80);
+        main->writeCpu(0xfc81,0);
+        main->writeCpu(0xfc82,3);
+        main->writeCpu(0xfc83,5);
+        const BYTE msg[]={ 'R','O','M',0x0d,'!' };
+        for(unsigned i=0;i<5;++i)main->writeCpu(0xfc84+i,msg[i]);
+        main->writeCpu(0xfd05,0);
+        wait();
+        if(m.displaySharedByte(0)!=0 || d.textByte(0)!='!' ||
+           d.textByte(2)!='O' || d.textByte(4)!='M' ||
+           d.textCursor().offset!=2)return 38;
         call(0x55);
         if(m.displaySharedByte(0)!=0x46)return 13;
         std::cout<<"PASS: independent display firmware mailbox, text, scroll and keyboard\n";

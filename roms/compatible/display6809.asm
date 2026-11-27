@@ -100,14 +100,23 @@ ready
         sta     shadow
         sta     ctl
 wait_cmd
+* AFE0 bit 0 reflects the main-side FD05 latch, including a HALT
+* without a command (stock 6809 IPL handoff). Reassert READY in that case.
+        lda     ctl
+        lsra
         lda     mail+2
-        beq     wait_cmd
+        bne     dispatch_cmd
+        bcc     ready
+        bra     wait_cmd
+dispatch_cmd
         ldb     shadow
         andb    #$fe
         stb     shadow
         stb     ctl
         clr     mail
         clr     mail+1
+        cmpa    #$03
+        lbeq    cmd_string
         cmpa    #$12
         lbeq    cmd_out
         cmpa    #$34
@@ -122,6 +131,26 @@ wait_cmd
 cmd_out
         lda     mail+3
         lbsr    output
+        lbsr    update_cursor
+        lbra    done
+* Stock boot ROM string output: count at +3, bytes at +4.
+* Bound the count to the 128-byte shared mailbox. Output may clobber X/U.
+cmd_string
+        ldb     mail+3
+        beq     string_done
+        cmpb    #124
+        bls     string_count_ok
+        ldb     #124
+string_count_ok
+        ldx     #mail+4
+string_loop
+        lda     ,x+
+        pshs    b,x
+        lbsr    output
+        puls    b,x
+        decb
+        bne     string_loop
+string_done
         lbsr    update_cursor
         lbra    done
 cmd_key

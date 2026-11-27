@@ -4,7 +4,7 @@ Independent MC6809 firmware, 20 KiB at B000–FFFF. Build with lwasm
 through the normal CMake build. Select build/roms/compatible/display6809.bin
 with the emulator's --rom option. No proprietary ROM or HLE is required.
 
-Scope: fixed 80x25 ANK console, commands 12 (character output), 34 (JIS Kanji at cursor, 400-line only), 37 (Shift-JIS mode), and 2D
+Scope: fixed 80x25 ANK console, commands 03 (counted string output), 12 (character output), 34 (JIS Kanji at cursor, 400-line only), 37 (Shift-JIS mode), and 2D
 (raw nonblocking keyboard), mailbox BUSY handshake, basic native control
 codes and ESC G/T/Y/*. Other commands return 46.
 
@@ -58,3 +58,14 @@ four ways; normal and reverse glyph loops test attributes only once.
 Private state uses DP=90h with explicit SETDP. External ABI and main
 CPU layer gating are unchanged. Regression coverage includes 52 scrolls,
 glyph retirement, overwriting after ring wrap, and reverse glyph rasters.
+
+## Stock boot ROM interoperability
+
+The 6809 stock ROM at 57D8–57F1 releases HALT without installing a
+command before jumping to IPL at 0400. Poll AFE0 bit 0 and reassert
+READY for an empty mailbox, preserving its other bytes. Both stock
+boot ROMs use command 03h: count at +3 and bytes at +4. The independent
+implementation feeds the existing character parser and bounds the
+count to the mailbox capacity (124 bytes). Stock-ROM-only escape
+sequences are not all implemented. Boot with actual stock ROMs still
+requires integration verification.
