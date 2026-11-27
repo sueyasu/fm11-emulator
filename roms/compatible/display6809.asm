@@ -37,14 +37,27 @@ curshape equ    $901f       * pending ESC . start raster/mode
 reset
         orcc    #$50
         lds     #$9f60
+        ifdef   NATIVE6309
+        ldmd    #$01       * native mode, short FIRQ frame
+        endc
         lda     #$90
         tfr     a,dp
         ldx     #$9000
+        ifdef   NATIVE6309
+        ldq     #0
+reset_ram
+        stq     ,x
+        stq     4,x
+        leax    8,x
+        cmpx    #$9f80
+        blo     reset_ram
+        else
         ldd     #0
 reset_ram
         std     ,x++
         cmpx    #$9f80
         blo     reset_ram
+        endc
         std     mail
         clr     mail+2
         lda     #7
@@ -63,6 +76,17 @@ reset_ram
         sta     ctl
 * Clear all three graphics planes with one write per address.
         ldx     #0
+        ifdef   NATIVE6309
+        ldq     #0
+reset_gfx
+        stq     ,x
+        stq     4,x
+        stq     8,x
+        stq     12,x
+        leax    16,x
+        cmpx    #$8000
+        blo     reset_gfx
+        else
         ldd     #0
 reset_gfx
         std     ,x++
@@ -71,6 +95,7 @@ reset_gfx
         std     ,x++
         cmpx    #$8000
         blo     reset_gfx
+        endc
         ldx     #crtc_init
         clra
 reset_crtc
@@ -425,10 +450,17 @@ cell_address
         ldx     #text_rows
         ldd     b,x
         addd    start
+        ifdef   NATIVE6309
+        clre
+        ldf     col
+        lslw
+        addr    w,d
+        else
         addb    col
         adca    #0
         addb    col
         adca    #0
+        endc
         anda    #$0f
         ora     #$80
         tfr     d,x
@@ -562,6 +594,35 @@ erase_end_text
 blank_cells
         clra
         ldb     attr
+        ifdef   NATIVE6309
+* Pair identical character/attribute words in Q. Use 4-byte stores
+* only when both cells are inside the text ring; handle odd tail.
+        tfr     d,w
+blank_pair
+        cmpy    #2
+        blo     blank_single
+        cmpx    #$8ffe
+        bhs     blank_single
+        stq     ,x
+        leax    4,x
+        leay    -2,y
+        cmpx    #$9000
+        blo     blank_pair_next
+        ldx     #$8000
+blank_pair_next
+        cmpy    #0
+        bne     blank_pair
+        rts
+blank_single
+        std     ,x++
+        cmpx    #$9000
+        blo     blank_single_next
+        ldx     #$8000
+blank_single_next
+        leay    -1,y
+        bne     blank_pair
+        rts
+        else
 blank_loop
         std     ,x++
         cmpx    #$9000
@@ -571,6 +632,7 @@ blank_next
         leay    -1,y
         bne     blank_loop
         rts
+        endc
 
 
 * K-1: JIS78 KANJI OUT, 640x400 graphics plane.
@@ -622,10 +684,25 @@ kanji_text_next
         ldy     #16
         lda     attr
         bita    #8
-        bne     kanji_reverse
+        lbne    kanji_reverse
 * Separate loops avoid an attribute test and stack traffic per raster.
 kanji_raster
         ldd     $aff6
+        ifdef   NATIVE6309
+        cmpx    #$7fff
+        beq     kanji_raster_split
+        std     ,x
+        bra     kanji_raster_step
+kanji_raster_split
+        sta     ,x
+        stb     >0
+kanji_raster_step
+        leax    80,x
+        cmpx    #$8000
+        blo     kanji_raster_next
+        leax    -32768,x
+kanji_raster_next
+        else
         sta     ,x+
         cmpx    #$8000
         blo     kanji_raster_right
@@ -636,13 +713,33 @@ kanji_raster_right
         tfr     x,d
         anda    #$7f
         tfr     d,x
+        endc
         leay    -1,y
         bne     kanji_raster
         rts
 kanji_reverse
         ldd     $aff6
+        ifdef   NATIVE6309
+        comd
+        else
         coma
         comb
+        endc
+        ifdef   NATIVE6309
+        cmpx    #$7fff
+        beq     kanji_reverse_split
+        std     ,x
+        bra     kanji_reverse_step
+kanji_reverse_split
+        sta     ,x
+        stb     >0
+kanji_reverse_step
+        leax    80,x
+        cmpx    #$8000
+        blo     kanji_reverse_next
+        leax    -32768,x
+kanji_reverse_next
+        else
         sta     ,x+
         cmpx    #$8000
         blo     kanji_reverse_right
@@ -653,6 +750,7 @@ kanji_reverse_right
         tfr     x,d
         anda    #$7f
         tfr     d,x
+        endc
         leay    -1,y
         bne     kanji_reverse
         rts
@@ -804,7 +902,7 @@ erase_one
         pshs    d,x,y,u
         lbsr    map_address
         lda     ,x
-        beq     erase_one_done
+        lbeq    erase_one_done
         cmpa    #2
         bne     erase_pair
         dec     kcol
@@ -819,6 +917,25 @@ erase_pair
         lda     #7
         sta     $afe1
         ldy     #16
+        ifdef   NATIVE6309
+        clrd
+erase_raster
+        cmpx    #$7fff
+        beq     erase_split
+        std     ,x
+        bra     erase_step
+erase_split
+        sta     ,x
+        stb     >0
+erase_step
+        leax    80,x
+        cmpx    #$8000
+        blo     erase_next
+        leax    -32768,x
+erase_next
+        leay    -1,y
+        bne     erase_raster
+        else
 erase_raster
         clra
         clrb
@@ -834,6 +951,7 @@ erase_right
         tfr     d,x
         leay    -1,y
         bne     erase_raster
+        endc
 * Both text cells were transparent blank cells; no stale glyph remains.
 erase_one_done
         puls    d,x,y,u,pc
@@ -943,5 +1061,6 @@ crtc_init
         fcb     $35,$28,$2c,$04,$1f,$06,$19,$19,$00,$07
 * Full-height blinking cursor (16 rasters per 80x25 character).
         fcb     $40,$0f,0,0,0,0
-        fill    $ff,$fff2-*
+        fill    $ff,$fff0-*
+        fdb     unused     * 6309 illegal-instruction/divide trap
         fdb     unused,unused,firq,irq,unused,nmi,reset

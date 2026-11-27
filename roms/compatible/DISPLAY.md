@@ -73,3 +73,18 @@ requires integration verification.
 ESC . consumes two raw bytes for cursor shape: CRTC R10 = first & 7Fh,
 R11 = second & 1Fh. The stock 6809 Loading message uses 40h,13h;
 the default 40h,0Fh remains unchanged until an explicit shape command.
+
+## OPT-2 native HD6309 variant
+
+CMake builds display6809.bin and display6309.bin from the same source.
+The second uses --6309 --define=NATIVE6309=1 and LDMD #1 at reset.
+Set [display_cpu] cpu = 6309 and select display6309.bin as rom (or use
+--rom with that configuration). Never run the native ROM on MC6809.
+The main CPU type is independent. Both ROMs have the same mailbox ABI.
+Native paths use Q stores for RAM/graphics initialization and paired
+text cells, W for column arithmetic, COMD for reverse glyphs, and word
+stores for graphics raster pairs except at the 32 KiB boundary.
+FIRQ remains short and preserves D/X; it does not modify W. Native
+IRQ/NMI full frames are handled by hardware/RTI. TFM is unnecessary
+because OPT-1 removed metadata copying. Both CTests run the same cases;
+the native test also checks MD bit 0. Speedup remains to be measured.

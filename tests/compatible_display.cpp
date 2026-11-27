@@ -3,11 +3,15 @@
 #include <iostream>
 #include <memory>
 #include <stdexcept>
+#include <string>
 int main(int argc,char** argv) {
-    if(argc!=2)return 2;
+    if(argc!=2 && argc!=3)return 2;
+    const bool native=argc==3 && std::string(argv[2])=="6309";
+    if(argc==3 && !native)return 2;
     try {
         Machine m;
         m.loadDisplayRomFile(argv[1]);
+        m.setDisplayCpu6309Enabled(native);
         DisplaySubsystem::KanjiRomImage kanji{}, kanji2{};
         for(unsigned i=0;i<16;++i) {
             kanji[0x82*32+i*2]=0x81;
@@ -51,6 +55,7 @@ int main(int argc,char** argv) {
             throw std::runtime_error("display READY timeout");
         };
         wait();
+        if(native && !(m.systemBoard().displayCpu().regs.MD&1))return 40;
         auto call=[&](BYTE cmd,BYTE arg=0,BYTE low=0,BYTE aux=0) {
             wait();
             main->writeCpu(0xfd05,0x80);

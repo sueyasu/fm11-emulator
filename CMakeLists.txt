@@ -138,13 +138,22 @@ if(FM11_LWASM_EXECUTABLE)
                 ${CMAKE_CURRENT_SOURCE_DIR}/roms/compatible/display6809.asm
         DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/roms/compatible/display6809.asm
         VERBATIM)
-    add_custom_target(fm11-compatible-display ALL DEPENDS ${FM11_COMPAT_DISPLAY})
+    set(FM11_COMPAT_DISPLAY6309 ${CMAKE_CURRENT_BINARY_DIR}/roms/compatible/display6309.bin)
+    add_custom_command(OUTPUT ${FM11_COMPAT_DISPLAY6309}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${CMAKE_CURRENT_BINARY_DIR}/roms/compatible
+        COMMAND ${FM11_LWASM_EXECUTABLE} --6309 --format=raw --define=NATIVE6309=1
+                --output=${FM11_COMPAT_DISPLAY6309}
+                ${CMAKE_CURRENT_SOURCE_DIR}/roms/compatible/display6809.asm
+        DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/roms/compatible/display6809.asm
+        VERBATIM)
+    add_custom_target(fm11-compatible-display ALL DEPENDS ${FM11_COMPAT_DISPLAY} ${FM11_COMPAT_DISPLAY6309})
     if(FM11_BUILD_TESTS)
         add_executable(compatible_display tests/compatible_display.cpp)
         target_link_libraries(compatible_display PRIVATE fm11_core)
         add_dependencies(compatible_display fm11-compatible-display)
         add_test(NAME compatible_display COMMAND compatible_display ${FM11_COMPAT_DISPLAY})
-        set_tests_properties(compatible_display PROPERTIES TIMEOUT 30)
+        add_test(NAME compatible_display6309 COMMAND compatible_display ${FM11_COMPAT_DISPLAY6309} 6309)
+        set_tests_properties(compatible_display compatible_display6309 PROPERTIES TIMEOUT 60)
     endif()
 endif()
 
