@@ -139,6 +139,9 @@ void usage() {
              <<"  ROM defaults to [display_cpu].rom (external/roms/display6809.bin); CPU ROM paths may be set in the config file\n"
              <<"  Initial window height: [display].height=200|400 (default 400); --high forces 400\n"
              <<"  File / Settings / Help in CRT menu; Ctrl+F10 settings; F2 pause; Ctrl+F12 quit\n"
+             <<"  --no-gui: run CPU, display CPU, PTM, disks and serial without initializing SDL.\n"
+             <<"            Use --monitor to control the guest through stdin. Ctrl+C/SIGTERM exits cleanly.\n"
+             <<"  --run-for-ms N: exit headless mode after N milliseconds (integration testing).\n"
              <<"  --beep-test: audible 205ms pulse, pause, continuous tone, then stop.\n"
              <<"  --test-kanji: ROM glyph gallery, PgUp/PgDn change page (40x25 glyphs).\n"
              <<"                Uses --kanji-rom FILE or external/roms/kanji.bin.\n"
@@ -1093,7 +1096,8 @@ int main(int argc,char** argv) {
 #ifdef FM11_SETTINGS_GUI
             if(settingsGui && settingsGui->takeResetRequest())
                 runGuiReset();
-            if(settingsGui)if(const auto request=settingsGui->takeFddRequest()) {
+            if(settingsGui) {
+            if(const auto request=settingsGui->takeFddRequest()) {
                 const bool restorePaused=paused;
                 paused=true;
                 applyPauseState(); // CPU, display CPU and PTM are quiescent.
@@ -1113,6 +1117,7 @@ int main(int argc,char** argv) {
                 paused=restorePaused;
                 applyPauseState();
             }
+            }
 #endif
             if(monitorInput) {
                 std::string line;
@@ -1124,8 +1129,10 @@ int main(int argc,char** argv) {
             }
             // CPU, PTM and display execution are independently scheduled.
             // The SDL thread only services host events and paints frames.
-            if(!paused && !testPattern && !testKanji && !machine->boardCount())
-                SDL_Delay(1);
+            if(!paused && !testPattern && !testKanji && !machine->boardCount()) {
+                if(noGui)std::this_thread::sleep_for(std::chrono::milliseconds(1));
+                else SDL_Delay(1);
+            }
             cpuWorker.rethrowWorkerFailure();
             if(cpuSpeed && !paused && machine->boardCount()) {
                 const auto reportNow=std::chrono::steady_clock::now();
