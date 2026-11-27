@@ -73,6 +73,13 @@ int main(int argc,char** argv) {
                      <<" last="<<shape.last<<" mode="<<shape.mode<<"\n";
             return 14;
         }
+        // Stock 6809 ROM's Loading suffix: ESC G 07 ESC . 40 13 13.
+        // Both shape arguments must be consumed, not printed as ASCII.
+        for(BYTE c:{0x1b,0x47,0x07,0x1b,0x2e,0x40,0x13,0x13})out(c);
+        if(d.textCursor().offset!=0 || d.textByte(0)!=0 ||
+           d.crtcRegister(10)!=0x40 || d.crtcRegister(11)!=0x13)return 39;
+        // Restore default full-height cursor for remaining tests.
+        for(BYTE c:{0x1b,0x2e,0x40,0x0f})out(c);
         out('A');out('B');
         if(d.textByte(0)!='A'||d.textByte(2)!='B'||d.textCursor().offset!=4)return 4;
         out(0x1b);out('G');out(0x1a);out('C');

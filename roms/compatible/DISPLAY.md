@@ -69,3 +69,7 @@ implementation feeds the existing character parser and bounds the
 count to the mailbox capacity (124 bytes). Stock-ROM-only escape
 sequences are not all implemented. Boot with actual stock ROMs still
 requires integration verification.
+
+ESC . consumes two raw bytes for cursor shape: CRTC R10 = first & 7Fh,
+R11 = second & 1Fh. The stock 6809 Loading message uses 40h,13h;
+the default 40h,0Fh remains unchanged until an explicit shape command.

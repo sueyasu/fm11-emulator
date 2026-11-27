@@ -31,6 +31,7 @@ sjmode  equ     $901a       * FFh enables Shift-JIS interpretation
 sjlead  equ     $901b       * pending lead byte, zero when idle
 maprow  equ     $901c       * physical metadata row at logical row zero
 oldcur  equ     $901d       * last programmed text VRAM address
+curshape equ    $901f       * pending ESC . start raster/mode
         setdp   $90
 
 reset
@@ -178,6 +179,7 @@ done
         lbra     ready
 
 * Parser state 0 normal, 1 ESC, 2 attribute, 3 X, 4 Y.
+* States 5 and 6 consume the two ESC . cursor shape arguments.
 output
         ldb     state
         lbeq    stream_byte
@@ -188,6 +190,10 @@ output
         lbeq    set_attr
         cmpb    #3
         lbeq    set_x
+        cmpb    #5
+        lbeq    shape_first
+        cmpb    #6
+        lbeq    shape_last
         cmpa    #25
         lbhs     output_ret
         ldb     tmpx
@@ -213,12 +219,35 @@ escape
         sta     state
         rts
 esc_t
+        cmpa    #$2e
+        beq     shape_begin
         cmpa    #'T
         lbeq    erase_line
         cmpa    #'Y
         lbeq    erase_end
         cmpa    #'*
         lbeq    clear_all
+        rts
+shape_begin
+        lda     #5
+        sta     state
+        rts
+shape_first
+        anda    #$7f
+        sta     curshape
+        lda     #6
+        sta     state
+        rts
+shape_last
+        anda    #$1f
+        tfr     a,b
+        pshs    b
+        lda     #10
+        ldb     curshape
+        std     crtc
+        puls    b
+        lda     #11
+        std     crtc
         rts
 * Only normal stream bytes are candidates for Shift-JIS.
 * Native ESC and position argument states take precedence.
