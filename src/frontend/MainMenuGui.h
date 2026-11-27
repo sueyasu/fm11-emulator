@@ -6,7 +6,7 @@
 #include "imgui_impl_sdlrenderer2.h"
 #include "imgui_impl_opengl3.h"
 #include <SDL.h>
-#include <filesystem>
+
 #include <stdexcept>
 #include <string>
 
@@ -14,13 +14,18 @@
 // Its ImGui context is independent from the settings window's context.
 class MainMenuGui {
 public:
-    static constexpr int menuHeight=28;
+    static constexpr int menuHeight=40;
     MainMenuGui(SDL_Window* window,SDL_Renderer* renderer,SDL_GLContext gl)
         :window_(window),renderer_(renderer),gl_(gl) {
         IMGUI_CHECKVERSION();
         context_=ImGui::CreateContext();
         ImGui::SetCurrentContext(context_);
-        ImGui::GetIO().IniFilename=nullptr;
+        auto& io=ImGui::GetIO();
+        io.IniFilename=nullptr;
+        ImFontConfig font{};
+        font.SizePixels=19.0f;
+        io.Fonts->AddFontDefault(&font);
+        ImGui::GetStyle().ScaleAllSizes(1.2f);
         ImGui::StyleColorsLight();
         ImGui::GetStyle().WindowRounding=3.0f;
         if(gl_) {
@@ -48,6 +53,7 @@ public:
             ImGui::DestroyContext(context_);
         }
     }
+    void setFilePicker(FilePickerGui* picker) {filePicker_=picker;}
     MainMenuGui(const MainMenuGui&)=delete;
     MainMenuGui& operator=(const MainMenuGui&)=delete;
 
@@ -93,7 +99,12 @@ public:
                         for(unsigned drive=0;drive<4;++drive) {
                             ImGui::PushID(int(channel*4+drive));
                             const std::string title="Drive "+std::to_string(drive);
+                            const auto& selected=(channel?settings.edited().floppy2hd:
+                                settings.edited().floppy2d)[drive];
                             if(ImGui::BeginMenu(title.c_str())) {
+                                ImGui::TextDisabled("Selected:");
+                                ImGui::TextWrapped("%s",selected.empty()?"(no disk)":selected.c_str());
+                                ImGui::Separator();
                                 if(ImGui::MenuItem("Choose image..."))
                                     pendingChoose_=int(channel*4+drive);
                                 if(ImGui::MenuItem("Eject (edit only)"))
@@ -143,39 +154,23 @@ public:
             if(ImGui::Button("Close"))showAbout_=false;
             ImGui::EndPopup();
         }
-        // The File menu owns an ImGuiFileDialog in the *CRT* window,
-        // instead of opening the settings window as an intermediate step.
-        if(pendingChoose_>=0 && activePicker_==-1) {
-            activePicker_=pendingChoose_;
-            pendingChoose_=-1;
-            const unsigned channel=unsigned(activePicker_)/4;
-            const unsigned drive=unsigned(activePicker_)%4;
-            const auto& target=(channel?settings.edited().floppy2hd:
-                settings.edited().floppy2d)[drive];
-            const std::filesystem::path current(target);
-            IGFD::FileDialogConfig config;
-            config.path=current.has_parent_path()?current.parent_path().string():".";
-            if(current.has_filename())config.fileName=current.filename().string();
-            config.countSelectionMax=1;
-            config.flags=ImGuiFileDialogFlags_Modal;
-            chooser_.OpenDialog("FM11MainFilePicker",
-                channel?"Choose 2HD floppy image":"Choose 2D floppy image",
-                "Disk images{.d88,.raw,.img,.nhd},.*",config);
-        }
-        if(activePicker_>=0 && chooser_.Display("FM11MainFilePicker")) {
-            if(chooser_.IsOk()) {
-                settings.stageFddPath(unsigned(activePicker_)/4,
-                                      unsigned(activePicker_)%4,
-                                      chooser_.GetFilePathName());
-            }
-            chooser_.Close();
-            activePicker_=-1;
-        }
         ImGui::Render();
         if(gl_) {
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
         } else {
             ImGui_ImplSDLRenderer2_RenderDrawData(ImGui::GetDrawData(),renderer_);
+        }
+        if(pendingChoose_>=0) {
+            const unsigned index=static_cast<unsigned>(pendingChoose_);
+            pendingChoose_=-1;
+            const unsigned channel=index/4,drive=index%4;
+            const auto& current=(channel?settings.edited().floppy2hd:
+                settings.edited().floppy2d)[drive];
+            if(filePicker_)filePicker_->open(
+                channel?"Choose 2HD floppy image":"Choose 2D floppy image",
+                current,[&settings,channel,drive](const std::string& path) {
+                    settings.stageFddPath(channel,drive,path);
+                });
         }
         // Eject edits only the saved draft; actual FDD removal is Stage 4-B.
         if(pendingEject_>=0) {
@@ -190,7 +185,7 @@ private:
     SDL_GLContext gl_;
     ImGuiContext* context_=nullptr;
     bool showAbout_=false,showKeys_=false;
-    ImGuiFileDialog chooser_;
-    int pendingChoose_=-1,pendingEject_=-1,activePicker_=-1;
+    FilePickerGui* filePicker_=nullptr;
+    int pendingChoose_=-1,pendingEject_=-1;
 };
 #endif
