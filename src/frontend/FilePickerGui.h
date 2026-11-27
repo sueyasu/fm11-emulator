@@ -106,7 +106,7 @@ public:
         SDL_GetWindowSize(window_,&width,&height);
         const ImVec2 minSize(float(std::max(650,width-28)),
                              float(std::max(480,height-42)));
-        const ImVec2 maxSize(float(width),float(height));
+        const ImVec2 maxSize{float(width),float(height)};
         if(picker_.Display("FM11IndependentFilePicker",ImGuiWindowFlags_NoCollapse,
                            minSize,maxSize)) {
             if(picker_.IsOk() && accept_) {
