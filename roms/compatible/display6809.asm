@@ -568,6 +568,16 @@ kanji_text_next
 * Separate loops avoid an attribute test and stack traffic per raster.
 kanji_raster
         ldd     $aff6
+        sta     ,x+
+        cmpx    #$8000
+        blo     kanji_raster_right
+        ldx     #0
+kanji_raster_right
+        stb     ,x
+        leax    79,x
+        tfr     x,d
+        anda    #$7f
+        tfr     d,x
         leay    -1,y
         bne     kanji_raster
         rts
@@ -575,14 +585,20 @@ kanji_reverse
         ldd     $aff6
         coma
         comb
+        sta     ,x+
+        cmpx    #$8000
+        blo     kanji_reverse_right
+        ldx     #0
+kanji_reverse_right
+        stb     ,x
+        leax    79,x
+        tfr     x,d
+        anda    #$7f
+        tfr     d,x
         leay    -1,y
-        bne     kanji_raster
+        bne     kanji_reverse
         rts
-kanji_reverse
-        ldd     $aff6
-        coma
-        comb
-        bsr     
+
 * Supported $37 mode values used by the stock-ROM kanjitest.
 * Auxiliary arguments are reserved for future compatibility work.
 cmd_sjis
