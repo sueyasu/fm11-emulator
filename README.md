@@ -291,6 +291,40 @@ switch still selects 200/400 emulated scanout lines, and the aspect
 ratio remains the same in both modes. Use `--renderer gl` and
 `--renderer software` to compare presentation backends.
 
+## Stage 4-A usability update: larger controls and standalone chooser
+
+The CRT File/Settings/Help menu and Settings editor now use larger fonts
+(19-pixel ImGui default fonts) and more generous widget spacing. The
+menu strip height is 40 pixels, outside the unmodified FM-11 640x400
+image. It works with both OpenGL and software SDL renderer backends.
+
+ImGuiFileDialog now runs inside a **third, separately managed SDL window**
+rather than as a popup embedded in either the CRT or Settings window.
+The chooser initially measures 1024x740 with a minimum of 850x620,
+and its ImGui dialog is sized to fill the window. File-selection events
+are polled in the existing SDL event loop, so displaying it never
+requires a blocking GTK/NFD dialog or pauses emulated CPU workers.
+
+The Settings editor's former Disks tab is removed. The File menu lists
+2D/2HD FDD 0..3 and shows the currently *staged* image basename directly
+beside each drive, with the full path shown inside the drive submenu.
+The File menu also shows the HDD image. Until Stage 4-B, choosing/ejecting
+a disk changes only the staged configuration; the mounted medium is
+unchanged. The HDD selection is still also editable under ROM / Display,
+and will apply after reset support is added in Stage 4-C.
+
+The three CPU model choices (MC6809/HD6309 main, 8088/V20 main,
+MC6809/HD6309 display) use radio buttons instead of drop-downs.
+RAM capacity is an exact eight-choice control: 128, 256, 384, 512,
+640, 768, 896, 1024 KiB.
+
+Manual regression check after rebuilding: open both the File-menu and
+Settings Browse choosers (confirm separate OS windows and readable initial
+size), resize them, cancel and select paths, reopen the Settings editor,
+verify selected filenames in the menu, then repeat with
+`--renderer gl` and `--renderer software`. The regular CTest suite
+continues to cover emulator behavior.
+
 ## Stage 4-A addendum: CRT menus and nonblocking file picker
 
 The main SDL CRT window now draws **File / Settings / Help** in a reserved
