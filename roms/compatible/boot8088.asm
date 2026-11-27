@@ -33,6 +33,13 @@ start:
     mov ds,ax
     mov es,ax
     cld
+    ; Standard firmware enables host text video through main-board FDA0.
+    ; The display sub-CPU may execute and acknowledge every mailbox command
+    ; while the SDL frontend still suppresses ALL characters when FDA0[1:0]
+    ; remains zero after reset. Enable text before transferring to the IPL.
+    mov dx,0xFDA0
+    mov al,0x03                 ; text display enabled (both text control bits)
+    out dx,al
     mov dx,DIPSW
     in al,dx
     mov bl,al                    ; preserve active-low boot DIP
