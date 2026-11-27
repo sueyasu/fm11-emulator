@@ -62,6 +62,10 @@ public:
         (channel?edited_.floppy2hd:edited_.floppy2d)[drive]=path;
         status_="FDD image path selected (edit only until Stage 4-B): "+path;
     }
+    void stageHddPath(const std::string& path) {
+        edited_.hddImage=path;
+        status_="HDD image path selected (applies after Stage 4-C reset): "+path;
+    }
     void ejectFdd(unsigned channel,unsigned drive) {
         if(channel>1 || drive>3)return;
         (channel?edited_.floppy2hd:edited_.floppy2d)[drive].clear();
