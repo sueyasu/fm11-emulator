@@ -180,6 +180,35 @@ int main(int argc,char** argv) {
         out(0x98);
         if(d.textByte(5*160+4)!=0x98)return 29;
         if(m.mainDisplayControl()!=0x0d)return 30;
+        // Exercise metadata origin wrap and independent VRAM rings.
+        out(0x1b);out('*');
+        for(unsigned i=0;i<52;++i) {
+            go(6,24);call(0x34,0x24,0x22);
+            const auto addr=(d.graphicsDisplayAddress()+24*1280+6)&0x7fff;
+            if(d.readPhysicalVram(addr)!=0x81 ||
+               d.readPhysicalVram((addr+1)&0x7fff)!=0x42)return 31;
+            go(0,24);out(0x0a);
+            if(d.readPhysicalVram(addr)!=0x81)return 32;
+            go(7,23);out('X');
+            if(d.readPhysicalVram(addr)!=0 ||
+               d.readPhysicalVram((addr+1)&0x7fff)!=0)return 33;
+        }
+        // Keep glyphs alive until they scroll off the top, across ring wrap.
+        go(10,24);call(0x34,0x24,0x22);
+        const auto old=(d.graphicsDisplayAddress()+24*1280+10)&0x7fff;
+        for(unsigned i=0;i<24;++i) {
+            go(0,24);out(0x0a);
+            if(d.readPhysicalVram(old)!=0x81)return 34;
+        }
+        go(0,24);out(0x0a);
+        if(d.readPhysicalVram(old)!=0 ||
+           d.readPhysicalVram((old+1)&0x7fff)!=0)return 35;
+        // Reverse rendering uses a distinct loop and must retain all rasters.
+        out(0x1b);out('*');out(0x1b);out('G');out(0x0f);
+        go(2,0);call(0x34,0x24,0x22);
+        for(unsigned i=0;i<16;++i)
+            if(d.readPhysicalVram(i*80+2)!=0x7e ||
+               d.readPhysicalVram(i*80+3)!=0xbd)return 36;
         call(0x55);
         if(m.displaySharedByte(0)!=0x46)return 13;
         std::cout<<"PASS: independent display firmware mailbox, text, scroll and keyboard\n";

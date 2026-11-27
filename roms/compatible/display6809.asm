@@ -20,7 +20,7 @@ fifo    equ     $9100
 gstart  equ     $900c
 kcount  equ     $900e
 kcode   equ     $9010
-kmap    equ     $9200       * 2000 visible cells, 0/1/2 = ANK/left/right
+kmap    equ     $9200       * 25 physical rows of 80 metadata bytes
 kpos    equ     $9012
 kaddr   equ     $9014
 kleft   equ     $9016
@@ -29,6 +29,9 @@ krow    equ     $9018
 kcol    equ     $9019
 sjmode  equ     $901a       * FFh enables Shift-JIS interpretation
 sjlead  equ     $901b       * pending lead byte, zero when idle
+maprow  equ     $901c       * physical metadata row at logical row zero
+oldcur  equ     $901d       * last programmed text VRAM address
+        setdp   $90
 
 reset
         orcc    #$50
@@ -62,6 +65,9 @@ reset_ram
         ldd     #0
 reset_gfx
         std     ,x++
+        std     ,x++
+        std     ,x++
+        std     ,x++
         cmpx    #$8000
         blo     reset_gfx
         ldx     #crtc_init
@@ -74,6 +80,9 @@ reset_crtc
         cmpa    #16
         blo     reset_crtc
         lbsr    clear_all
+        ldd     #$ffff
+        std     oldcur
+        lbsr    update_cursor
 * The initial keyboard self-test produces a P event on this hardware.
 * Consume only the startup event before READY, not subsequent user keys.
         lda     firqreg
@@ -285,12 +294,11 @@ normal
         rts
 printable
         pshs    a
-        lbsr    cell_address
         ldd     kcount
         beq     print_clean
         lbsr    erase_at_cursor
-        lbsr    cell_address
 print_clean
+        lbsr    cell_address
         puls    a
         ldb     attr
         std     ,x
@@ -354,9 +362,10 @@ tab_store
 * CRTC addresses are TWO text cells per unit, not one.
 * start is a byte offset into the 4 KiB text ring.
 cell_address
-        lda     row
-        ldb     #160
-        mul
+        ldb     row
+        lslb
+        ldx     #text_rows
+        ldd     b,x
         addd    start
         addb    col
         adca    #0
@@ -367,7 +376,10 @@ cell_address
         tfr     d,x
         rts
 update_cursor
-        bsr     cell_address
+        lbsr    cell_address
+        cmpx    oldcur
+        beq     cursor_unchanged
+        stx     oldcur
         tfr     x,d
         anda    #$0f
         bitb    #2
@@ -396,6 +408,7 @@ cursor_bit
         puls    b
         lda     #15
         std     crtc
+cursor_unchanged
         rts
 update_start
         ldd     start
@@ -431,7 +444,7 @@ scroll
         puls    a
         sta     col
         puls    a
-        bra     update_start
+        lbra    update_start
 
 clear_all
         lbsr    clear_kanji
@@ -441,8 +454,8 @@ clear_all
         std     start
         ldx     #$8000
         ldy     #2048
-        bsr     blank_cells
-        bra     update_start
+        lbsr    blank_cells
+        lbra    update_start
 erase_line
         ldd     kcount
         beq     erase_line_text
@@ -462,7 +475,7 @@ erase_line_text
         subb    col
         clra
         tfr     d,y
-        bra     blank_cells
+        lbra    blank_cells
 erase_end
         ldd     kcount
         beq     erase_end_text
@@ -549,30 +562,27 @@ kanji_text_next
         sta     $afe1
         lbsr    graphics_address
         ldy     #16
-kanji_raster
-        ldd     $aff6
-        pshs    d
         lda     attr
         bita    #8
-        puls    d
-        beq     kanji_store
-        coma
-        comb
-kanji_store
-        sta     ,x+
-        cmpx    #$8000
-        blo     kanji_right
-        ldx     #0
-kanji_right
-        stb     ,x
-        leax    79,x
-        tfr     x,d
-        anda    #$7f
-        tfr     d,x
+        bne     kanji_reverse
+* Separate loops avoid an attribute test and stack traffic per raster.
+kanji_raster
+        ldd     $aff6
         leay    -1,y
         bne     kanji_raster
         rts
-
+kanji_reverse
+        ldd     $aff6
+        coma
+        comb
+        leay    -1,y
+        bne     kanji_raster
+        rts
+kanji_reverse
+        ldd     $aff6
+        coma
+        comb
+        bsr     
 * Supported $37 mode values used by the stock-ROM kanjitest.
 * Auxiliary arguments are reserved for future compatibility work.
 cmd_sjis
@@ -681,10 +691,15 @@ jis_bad
 symbol_bases
         fcb     0,2,1
 
-* Map uses logical screen cells, not physical text offsets. The two
-* hardware rings have different lengths. Only metadata is moved on scroll.
+* Metadata has its own 25-row ring. Its origin is independent of
+* both hardware rings, so no metadata copy is needed on scroll.
 map_address
         lda     krow
+        adda    maprow
+        cmpa    #25
+        blo     map_row_ok
+        suba    #25
+map_row_ok
         ldb     #80
         mul
         addb    kcol
@@ -753,6 +768,8 @@ erase_range
 range_loop
         cmpu    #0
         beq     range_done
+        ldd     kcount
+        beq     range_done
         lda     kcol
         pshs    a
         lbsr    erase_one
@@ -771,25 +788,19 @@ range_done
 
 scroll_kanji
         ldd     kcount
-        beq     scroll_gstart
-* Remove old top-row glyphs before moving metadata, while old origin
-* still points to their graphics bytes.
+        beq     scroll_map_origin
+* Retire the old top row before advancing either graphics or map origin.
+* Its cleared metadata becomes the new bottom row.
         clr     krow
         clr     kcol
         ldd     #80
         lbsr    erase_range
-        ldx     #kmap+80
-        ldy     #kmap
-scroll_map
-        ldd     ,x++
-        std     ,y++
-        cmpx    #kmap+2000
-        blo     scroll_map
-        ldd     #0
-scroll_map_blank
-        std     ,y++
-        cmpy    #kmap+2000
-        blo     scroll_map_blank
+scroll_map_origin
+        inc     maprow
+        lda     maprow
+        cmpa    #25
+        blo     scroll_gstart
+        clr     maprow
 scroll_gstart
         ldd     gstart
         addd    #1280
@@ -805,6 +816,7 @@ clear_kanji
         ldd     #2000
         lbsr    erase_range
 clear_gstart
+        clr     maprow
         ldd     #0
         std     gstart
         std     $afea
@@ -847,6 +859,12 @@ nmi
         rti
 unused
         rti
+text_rows
+        fdb     0,160,320,480,640
+        fdb     800,960,1120,1280,1440
+        fdb     1600,1760,1920,2080,2240
+        fdb     2400,2560,2720,2880,3040
+        fdb     3200,3360,3520,3680,3840
 crtc_init
         fcb     $35,$28,$2c,$04,$1f,$06,$19,$19,$00,$07
 * Full-height blinking cursor (16 rasters per 80x25 character).

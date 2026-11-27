@@ -31,7 +31,7 @@ like stock boot firmware. Applications must enable it via FDA0 (0Fh
 for both layers). The sub-ROM does not change main CPU layer gating.
 Use 400-line presentation; 200-line conversion remains deferred. The firmware owns the graphics region
 used by console Kanji; arbitrary overlapping graphics are not preserved.
-Text and graphics rings scroll independently; a logical 2000-byte
+Text and graphics rings scroll independently; a circular 2000-byte
 cell map tracks glyph halves, avoiding metadata packing overhead.
 
 ## K-2 Shift-JIS stream
@@ -46,3 +46,15 @@ Unsupported JIS rows are ignored. Stream glyphs advance two cells,
 wrapping before drawing at column 79, and scrolling as needed. Direct
 command 34h still does not advance the cursor. Layer enable remains
 main-CPU controlled; NitrOS-9 kanjitest uses FDA0=0Dh.
+
+## OPT-1 common 6809 optimizations
+
+The 25-row metadata ring advances its row origin on scroll; retiring
+old top-row glyphs clears their entries before reuse. No 1920-byte
+metadata copy is necessary. A ROM row-offset table replaces MUL for
+text cell addresses. The last programmed CRTC cursor address is cached,
+so non-moving commands skip redundant I/O. Graphics reset is unrolled
+four ways; normal and reverse glyph loops test attributes only once.
+Private state uses DP=90h with explicit SETDP. External ABI and main
+CPU layer gating are unchanged. Regression coverage includes 52 scrolls,
+glyph retirement, overwriting after ring wrap, and reverse glyph rasters.
