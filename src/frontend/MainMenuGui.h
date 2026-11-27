@@ -113,7 +113,7 @@ public:
                                 ImGui::Separator();
                                 if(ImGui::MenuItem("Choose image..."))
                                     pendingChoose_=int(channel*4+drive);
-                                if(ImGui::MenuItem("Eject (edit only)"))
+                                if(ImGui::MenuItem("Eject now"))
                                     pendingEject_=int(channel*4+drive);
                                 ImGui::EndMenu();
                             }
@@ -148,6 +148,20 @@ public:
             }
             ImGui::EndMainMenuBar();
         }
+        if(const auto error=settings.takeFddError()) {
+            diskError_=*error;
+            openDiskError_=true;
+        }
+        if(openDiskError_) {
+            ImGui::OpenPopup("Floppy image exchange failed");
+            openDiskError_=false;
+        }
+        if(ImGui::BeginPopupModal("Floppy image exchange failed",nullptr,
+                                  ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::TextWrapped("%s",diskError_.c_str());
+            if(ImGui::Button("OK"))ImGui::CloseCurrentPopup();
+            ImGui::EndPopup();
+        }
         if(showKeys_)ImGui::OpenPopup("Keyboard shortcuts");
         if(ImGui::BeginPopupModal("Keyboard shortcuts",&showKeys_,
                                   ImGuiWindowFlags_AlwaysAutoResize)) {
@@ -161,7 +175,7 @@ public:
                                   ImGuiWindowFlags_AlwaysAutoResize)) {
             ImGui::TextUnformatted("FM-11 Emulator");
             ImGui::TextUnformatted("Settings GUI: Dear ImGui + ImGuiFileDialog");
-            ImGui::TextDisabled("FDD hot-swap: Stage 4-B   Reset: Stage 4-C");
+            ImGui::TextDisabled("FDD hot-swap enabled   Reset: Stage 4-C");
             if(ImGui::Button("Close"))showAbout_=false;
             ImGui::EndPopup();
         }
@@ -189,7 +203,7 @@ public:
                 settings.edited().hddImage,
                 [&settings](const std::string& path) {settings.stageHddPath(path);});
         }
-        // Eject edits only the saved draft; actual FDD removal is Stage 4-B.
+        // Eject is queued and performed under a guest-worker pause.
         if(pendingEject_>=0) {
             const unsigned index=static_cast<unsigned>(pendingEject_);
             pendingEject_=-1;
@@ -205,5 +219,7 @@ private:
     FilePickerGui* filePicker_=nullptr;
     int pendingChoose_=-1,pendingEject_=-1;
     bool pendingHdd_=false;
+    bool openDiskError_=false;
+    std::string diskError_;
 };
 #endif
