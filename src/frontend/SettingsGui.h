@@ -107,9 +107,15 @@ public:
         resetRequest_=ResetRequest::None;
         return request;
     }
+    std::optional<std::string> takeResetError() {
+        auto result=std::move(resetError_);
+        resetError_.reset();
+        return result;
+    }
     void resetResult(const std::string& error,bool applied) {
         if(!error.empty()) {
             status_="Reset failed: "+error;
+            resetError_=status_;
             std::cerr<<status_<<"\n";
             return;
         }
@@ -332,5 +338,6 @@ private:
     std::optional<FddRequest> pendingFdd_;
     std::optional<std::string> fddError_;
     ResetRequest resetRequest_=ResetRequest::None;
+    std::optional<std::string> resetError_;
 };
 #endif
