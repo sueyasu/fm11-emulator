@@ -94,6 +94,14 @@ if(FM11_BUILD_SDL)
                 GIT_REPOSITORY https://github.com/ocornut/imgui.git
                 GIT_TAG v1.91.9b
                 GIT_SHALLOW TRUE)
+            FetchContent_Declare(fm11_file_dialog
+                GIT_REPOSITORY https://github.com/aiekick/ImGuiFileDialog.git
+                GIT_TAG v0.6.8
+                GIT_SHALLOW TRUE)
+            FetchContent_GetProperties(fm11_file_dialog)
+            if(NOT fm11_file_dialog_POPULATED)
+                FetchContent_Populate(fm11_file_dialog)
+            endif()
             FetchContent_GetProperties(fm11_imgui)
             if(NOT fm11_imgui_POPULATED)
                 FetchContent_Populate(fm11_imgui)
@@ -104,9 +112,12 @@ if(FM11_BUILD_SDL)
                 ${fm11_imgui_SOURCE_DIR}/imgui_tables.cpp
                 ${fm11_imgui_SOURCE_DIR}/imgui_widgets.cpp
                 ${fm11_imgui_SOURCE_DIR}/backends/imgui_impl_sdl2.cpp
-                ${fm11_imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer2.cpp)
+                ${fm11_imgui_SOURCE_DIR}/backends/imgui_impl_sdlrenderer2.cpp
+                ${fm11_imgui_SOURCE_DIR}/backends/imgui_impl_opengl3.cpp
+                ${fm11_file_dialog_SOURCE_DIR}/ImGuiFileDialog.cpp)
             target_include_directories(fm11_imgui_lib PUBLIC
-                ${fm11_imgui_SOURCE_DIR} ${fm11_imgui_SOURCE_DIR}/backends)
+                ${fm11_imgui_SOURCE_DIR} ${fm11_imgui_SOURCE_DIR}/backends
+                ${fm11_file_dialog_SOURCE_DIR})
             if(TARGET SDL2::SDL2)
                 target_link_libraries(fm11_imgui_lib PUBLIC SDL2::SDL2)
             else()
