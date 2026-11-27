@@ -136,9 +136,11 @@ public:
                     settings.toggle();
                 if(ImGui::MenuItem(paused?"Resume":"Pause","F2"))
                     paused=!paused;
-                ImGui::BeginDisabled();
-                ImGui::MenuItem("Reset (Stage 4-C)");
-                ImGui::EndDisabled();
+                ImGui::Separator();
+                if(ImGui::MenuItem("Reset machine"))
+                    settings.requestReset(false);
+                if(ImGui::MenuItem("Apply settings && Reset"))
+                    settings.requestReset(true);
                 ImGui::EndMenu();
             }
             if(ImGui::BeginMenu("Help")) {
