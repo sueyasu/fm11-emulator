@@ -106,6 +106,7 @@ restore_wait
         bita    #1
         beq     restore_done
         leau    -1,u
+        cmpu    #0
         bne     restore_wait
         bra     restore_fail
 restore_done
@@ -148,13 +149,24 @@ wait_2d
         bita    #$9C
         bne     fail_2d
         leau    -1,u
+        cmpu    #0
         bne     wait_2d
         bra     fail_2d
 done_2d
-        clr     >$FD50
+* DMA TC precedes FDC command completion in rotational timing mode.
+        ldu     #$FFFF
+finish_2d
         lda     ,y
         bita    #$9C
         bne     fail_2d
+        bita    #1
+        beq     complete_2d
+        leau    -1,u
+        cmpu    #0
+        bne     finish_2d
+        bra     fail_2d
+complete_2d
+        clr     >$FD50
         leax    256,x
         cmpx    #$0600
         beq     ok_2d
@@ -203,13 +215,24 @@ wait_2hd
         bita    #$9C
         bne     fail_2hd
         leau    -1,u
+        cmpu    #0
         bne     wait_2hd
         bra     fail_2hd
 done_2hd
-        clr     >$FD51
+* DMA TC precedes FDC command completion in rotational timing mode.
+        ldu     #$FFFF
+finish_2hd
         lda     ,y
         bita    #$9C
         bne     fail_2hd
+        bita    #1
+        beq     complete_2hd
+        leau    -1,u
+        cmpu    #0
+        bne     finish_2hd
+        bra     fail_2hd
+complete_2hd
+        clr     >$FD51
         leax    128,x
         cmpx    #$0600
         beq     ok_2hd
@@ -281,6 +304,7 @@ hdd_wait
         bita    #$40
         bne     hdd_ready
         leau    -1,u
+        cmpu    #0
         bne     hdd_wait
         orcc    #1
         rts

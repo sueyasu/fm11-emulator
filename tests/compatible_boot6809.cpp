@@ -63,7 +63,7 @@ Bytes makeHdd() {
     return bytes;
 }
 bool boot(const Main6809Board::BootRomImage& rom,CpuType cpuType,unsigned dipsw,
-          unsigned media,unsigned caseNumber,unsigned installed=0) {
+          unsigned media,unsigned caseNumber,unsigned installed=0,bool timed=false) {
     Machine machine;
     auto board=std::make_unique<Main6809Board>(cpuType);
     auto* card=board.get();
@@ -76,6 +76,8 @@ bool boot(const Main6809Board::BootRomImage& rom,CpuType cpuType,unsigned dipsw,
     if(installed&2)machine.systemBoard().floppyDevice()->loadD882hd(make2hdD88());
     if(installed&4)machine.systemBoard().hddDevice()->load(makeHdd());
     machine.reset();
+    card->setCpuClockHz(2000000);
+    machine.systemBoard().floppyDevice()->enableSeekTiming(timed);
     // Simulate the display ROM mailbox endpoint without proprietary ROM bytes.
     const std::array<BYTE,5> expectedChars{{0x1b,'G',7,0x16,0x0b}};
     unsigned chars=0;
@@ -88,7 +90,7 @@ bool boot(const Main6809Board::BootRomImage& rom,CpuType cpuType,unsigned dipsw,
     auto& core=card->cpu();
     // A valid IPL starts with BRA $-2 (20 FE). It must only be reached
     // after all IPL sectors have been DMA-transferred.
-    for(unsigned i=0;i<600000;++i) {
+    for(unsigned i=0;i<1500000;++i) {
         machine.executeOne();
         const bool halted=machine.displayHalted();
         if(wasHalted && !halted) {
@@ -131,7 +133,7 @@ bool boot(const Main6809Board::BootRomImage& rom,CpuType cpuType,unsigned dipsw,
     }
     std::cerr<<"compatible boot ROM failed case "<<caseNumber
              <<" CPU="<<int(cpuType)<<" media="<<media
-             <<" DIP="<<std::hex<<dipsw
+             <<" timed="<<timed<<" DIP="<<std::hex<<dipsw
              <<" PC="<<core.pc()<<std::dec<<"\n";
     return false;
 }
@@ -162,6 +164,9 @@ int main(int argc,char** argv) {
         if(!boot(rom,cpu,0x9f,1,++count,7))return 10+count; // HDD disabled
         if(!boot(rom,cpu,0x5f,2,++count,7))return 10+count; // 2HD disabled
         if(!boot(rom,cpu,0xdf,0,++count,7))return 10+count; // HDD and 2HD disabled
+        if(!boot(rom,cpu,0xdf,0,++count,1,true))return 10+count; // timed 2D
+        if(!boot(rom,cpu,0xbf,1,++count,2,true))return 10+count; // timed 2HD
+        if(!boot(rom,cpu,0x1f,1,++count,3,true))return 10+count; // timed priority
     }
     return 0;
 }
