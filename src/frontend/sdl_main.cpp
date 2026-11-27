@@ -22,6 +22,7 @@
 #include <array>
 #include <algorithm>
 #include <chrono>
+#include <csignal>
 #include <iomanip>
 #include <memory>
 #include <new>
@@ -48,6 +49,8 @@
 #include <deque>
 
 namespace {
+volatile std::sig_atomic_t headlessStopRequested=0;
+void requestHeadlessStop(int) {headlessStopRequested=1;}
 // Poll stdin without blocking SDL shutdown while no line is entered.
 class MonitorInput {
 public:
@@ -132,7 +135,7 @@ std::uint64_t parseCount(const std::string& text) {
     return value;
 }
 void usage() {
-    std::cout<<"usage: fm11-sdl [--beep-test] [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--test-kanji] [--main-rom FILE] [--trace-boot] [--trace-fdc] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--kanji-rom FILE] [--kanji2-rom FILE] [--test-kanji-level 1|2] [--trace-kanji] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software] [--scanlines] [--monitor]\n"
+    std::cout<<"usage: fm11-sdl [--no-gui] [--run-for-ms N] [--beep-test] [--rom FILE] [--6809-rom FILE] [--high] [--cycles N] [--test-pattern] [--test-kanji] [--main-rom FILE] [--trace-boot] [--trace-fdc] [--trace-inkey] [--diagnostics] [--ank-rom FILE] [--kanji-rom FILE] [--kanji2-rom FILE] [--test-kanji-level 1|2] [--trace-kanji] [--floppy2d FILE | --floppy-d88 FILE] [--floppy-drive 0..3] [--boot-dip VALUE] [--config FILE] [--8088-rom FILE] [--trace-cpm80] [--cpu-speed] [--speed 0..100] [--renderer auto|gl|software] [--scanlines] [--monitor]\n"
              <<"  ROM defaults to [display_cpu].rom (external/roms/display6809.bin); CPU ROM paths may be set in the config file\n"
              <<"  Initial window height: [display].height=200|400 (default 400); --high forces 400\n"
              <<"  File / Settings / Help in CRT menu; Ctrl+F10 settings; F2 pause; Ctrl+F12 quit\n"
@@ -158,6 +161,8 @@ int main(int argc,char** argv) {
         unsigned speed=10;
         std::string rendererMode="auto";
         bool scanlines=false;
+        bool noGui=false;
+        std::uint64_t runForMs=0;
         bool beepTest=false;
         bool traceKanji=false;
         bool testKanji=false;
@@ -171,6 +176,7 @@ int main(int argc,char** argv) {
         for(int i=1;i<argc;++i) {
             const std::string arg=argv[i];
             if(arg=="--help"){usage();return 0;}
+            if(arg=="--no-gui"){noGui=true;continue;}
             if(arg=="--high"){high=true;highOverridden=true;continue;}
             if(arg=="--scanlines"){scanlines=true;continue;}
             if(arg=="--beep-test"){beepTest=true;continue;}
@@ -184,8 +190,9 @@ int main(int argc,char** argv) {
             if(arg=="--trace-fdc"){traceFdc=true;continue;}
             if(arg=="--trace-inkey"){traceInkey=true;continue;}
             if(arg=="--diagnostics"){diagnostics=true;continue;}
-            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--6809-rom" || arg=="--ank-rom" || arg=="--kanji-rom" || arg=="--kanji2-rom" || arg=="--test-kanji-level" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive" || arg=="--boot-dip" || arg=="--config" || arg=="--8088-rom" || arg=="--speed" || arg=="--renderer") && i+1<argc) {
-                if(arg=="--rom")displayRomOverride=argv[++i];
+            if((arg=="--rom" || arg=="--cycles" || arg=="--main-rom" || arg=="--6809-rom" || arg=="--ank-rom" || arg=="--kanji-rom" || arg=="--kanji2-rom" || arg=="--test-kanji-level" || arg=="--floppy2d" || arg=="--floppy-d88" || arg=="--floppy-drive" || arg=="--boot-dip" || arg=="--config" || arg=="--8088-rom" || arg=="--speed" || arg=="--renderer" || arg=="--run-for-ms") && i+1<argc) {
+                if(arg=="--run-for-ms")runForMs=parseCount(argv[++i]);
+                else if(arg=="--rom")displayRomOverride=argv[++i];
                 else if(arg=="--config")configPath=argv[++i];
                 else if(arg=="--8088-rom")main8088RomOverride=argv[++i];
                 else if(arg=="--6809-rom")main6809RomOverride=argv[++i];
@@ -389,15 +396,21 @@ int main(int argc,char** argv) {
             machine->systemBoard().usartDevice()->setExternalClockHz(clock);
         }
         };
+        if(!noGui && runForMs)
+            throw std::invalid_argument("--run-for-ms requires --no-gui");
+        if(noGui && (beepTest || testPattern || testKanji))
+            throw std::invalid_argument("--beep-test/--test-pattern/--test-kanji require a GUI");
         configureMachine();
-        Sdl sdl;
+        // Headless mode does not initialize SDL video, events or audio.
+        std::unique_ptr<Sdl> sdl;
+        if(!noGui)sdl=std::make_unique<Sdl>();
         Window ui;
         auto createWindow=[&](Uint32 flags) {
             return SDL_CreateWindow("FM-11 display subsystem",
                  SDL_WINDOWPOS_CENTERED,SDL_WINDOWPOS_CENTERED,960,
                  600,flags|SDL_WINDOW_RESIZABLE);
         };
-        if(rendererMode!="software") {
+        if(!noGui && rendererMode!="software") {
             SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION,3);
             SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION,3);
             SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK,SDL_GL_CONTEXT_PROFILE_CORE);
@@ -421,7 +434,7 @@ int main(int argc,char** argv) {
                 if(ui.window) {SDL_DestroyWindow(ui.window);ui.window=nullptr;}
             }
         }
-        if(!ui.glRenderer) {
+        if(!noGui && !ui.glRenderer) {
             ui.window=createWindow(0);
             if(!ui.window)throw std::runtime_error(SDL_GetError());
             ui.renderer=SDL_CreateRenderer(ui.window,-1,SDL_RENDERER_ACCELERATED);
@@ -429,8 +442,10 @@ int main(int argc,char** argv) {
                 ui.renderer=SDL_CreateRenderer(ui.window,-1,SDL_RENDERER_SOFTWARE);
             if(!ui.renderer)throw std::runtime_error(SDL_GetError());
         }
-        SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"0");
-        ui.setMode(high);
+        if(!noGui) {
+            SDL_SetHint(SDL_HINT_RENDER_SCALE_QUALITY,"0");
+            ui.setMode(high);
+        }
 #ifdef FM11_SETTINGS_GUI
         // Separate SDL2 renderer: the emulated CRT's GL/software backend and
         // guest framebuffer are unaffected by the editor window.
@@ -448,13 +463,22 @@ int main(int argc,char** argv) {
             effectiveConfig.boot2hdFdd=(bootDip&0x40)==0;
             effectiveConfig.bootHdd=(bootDip&0x80)==0;
         }
-        auto settingsGui=std::make_unique<SettingsGui>(effectiveConfig);
-        auto filePickerGui=std::make_unique<FilePickerGui>();
-        settingsGui->setFilePicker(filePickerGui.get());
-        auto mainMenuGui=std::make_unique<MainMenuGui>(ui.window,ui.renderer,ui.glContext);
-        mainMenuGui->setFilePicker(filePickerGui.get());
+        std::unique_ptr<SettingsGui> settingsGui;
+        std::unique_ptr<FilePickerGui> filePickerGui;
+        std::unique_ptr<MainMenuGui> mainMenuGui;
+        if(!noGui) {
+            settingsGui=std::make_unique<SettingsGui>(effectiveConfig);
+            filePickerGui=std::make_unique<FilePickerGui>();
+            settingsGui->setFilePicker(filePickerGui.get());
+            mainMenuGui=std::make_unique<MainMenuGui>(
+                ui.window,ui.renderer,ui.glContext);
+            mainMenuGui->setFilePicker(filePickerGui.get());
+        }
 #endif
-        std::cerr<<"FM-11 renderer: "<<(ui.glRenderer?"OpenGL 3.3":"software")<<"\n";
+        if(noGui)
+            std::cerr<<"FM-11 execution: headless (no SDL initialization)\n";
+        else
+            std::cerr<<"FM-11 renderer: "<<(ui.glRenderer?"OpenGL 3.3":"software")<<"\n";
         if(testKanji) {
             const std::string title="FM-11 Kanji level "+
                 std::to_string(kanjiLevel)+" page 1/"+
@@ -463,7 +487,9 @@ int main(int argc,char** argv) {
         }
         // Audio device owns an SDL callback but never touches guest CPU
         // state. A missing host audio device must not block OS boot.
-        auto audio=std::make_unique<SdlBeeper>(machine->systemBoard().beeperDevice());
+        std::unique_ptr<SdlBeeper> audio;
+        if(!noGui)
+            audio=std::make_unique<SdlBeeper>(machine->systemBoard().beeperDevice());
         if(beepTest) {
             if(!audio->available())
                 throw std::runtime_error("--beep-test requires an SDL audio output device");
@@ -539,7 +565,7 @@ int main(int argc,char** argv) {
         installInkeyTrace();
         // In the opt-in trap mode, use a separate host queue for INKEY 2.
         // The real sub-ROM keyboard path is left untouched otherwise.
-        SDL_StartTextInput();
+        if(!noGui)SDL_StartTextInput();
         bool running=true,paused=false;
         std::uint64_t executed=0; // owned by the CPU worker
         std::atomic<std::uint64_t> publishedExecuted{0}; // SDL diagnostics
@@ -935,7 +961,23 @@ int main(int argc,char** argv) {
             settingsGui->resetResult(error,apply && error.empty());
         };
 #endif
+        if(noGui) {
+            headlessStopRequested=0;
+            std::signal(SIGINT,requestHeadlessStop);
+            std::signal(SIGTERM,requestHeadlessStop);
+            std::cout<<"FM-11 headless mode active";
+            if(monitorEnabled)std::cout<<" (monitor on stdin)";
+            std::cout<<"\n"<<std::flush;
+        }
+        const auto headlessStart=std::chrono::steady_clock::now();
         while(running) {
+            if(noGui) {
+                if(headlessStopRequested)running=false;
+                if(runForMs && std::chrono::steady_clock::now()-headlessStart>=
+                     std::chrono::milliseconds(runForMs))running=false;
+                if(!running)break;
+            }
+            if(!noGui) {
             SDL_Event event;
             while(SDL_PollEvent(&event)) {
 #ifdef FM11_SETTINGS_GUI
@@ -1040,6 +1082,7 @@ int main(int argc,char** argv) {
                     }
                 }
             }
+            } // No SDL event polling in --no-gui mode.
             if(monitor && monitor->breakPending()) {
                 paused=true;
                 applyPauseState();
@@ -1048,9 +1091,9 @@ int main(int argc,char** argv) {
             }
             applyPauseState();
 #ifdef FM11_SETTINGS_GUI
-            if(settingsGui->takeResetRequest())
+            if(settingsGui && settingsGui->takeResetRequest())
                 runGuiReset();
-            if(const auto request=settingsGui->takeFddRequest()) {
+            if(settingsGui)if(const auto request=settingsGui->takeFddRequest()) {
                 const bool restorePaused=paused;
                 paused=true;
                 applyPauseState(); // CPU, display CPU and PTM are quiescent.
@@ -1118,7 +1161,7 @@ int main(int argc,char** argv) {
                 }
             }
             const auto frameTime=std::chrono::steady_clock::now();
-            if(frameTime-lastFrame>=std::chrono::milliseconds(32)) {
+            if(!noGui && frameTime-lastFrame>=std::chrono::milliseconds(32)) {
                 lastFrame=frameTime;
                 const unsigned cursorTick=static_cast<unsigned>(
                     std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -1300,7 +1343,8 @@ int main(int argc,char** argv) {
             if(settingsGui)settingsGui->render();
             if(filePickerGui)filePickerGui->render();
 #endif
-            SDL_Delay(1);
+            if(noGui)std::this_thread::sleep_for(std::chrono::milliseconds(1));
+            else SDL_Delay(1);
         }
         // The worker probes retain a non-owning monitor pointer. Stop
         // every worker before destroying the monitor to avoid use-after-free.
