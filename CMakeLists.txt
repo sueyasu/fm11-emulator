@@ -223,6 +223,12 @@ if(FM11_BUILD_TESTS)
     add_executable(machine_config_save tests/machine_config_save.cpp)
     target_link_libraries(machine_config_save PRIVATE fm11_core)
     add_test(NAME machine_config_save COMMAND machine_config_save)
+    # Stage 4-D: exercise the same staging model used by SettingsGui,
+    # without requiring an SDL window or desktop environment.
+    add_executable(settings_apply_state tests/settings_apply_state.cpp)
+    target_include_directories(settings_apply_state PRIVATE src/frontend)
+    target_link_libraries(settings_apply_state PRIVATE fm11_core)
+    add_test(NAME settings_apply_state COMMAND settings_apply_state)
 
     add_executable(realtime_ptm tests/realtime_ptm.cpp)
     target_link_libraries(realtime_ptm PRIVATE fm11_core)
