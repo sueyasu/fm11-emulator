@@ -106,6 +106,7 @@
         // Independent hardware clocks: the PTM and sub-CPU workers are
         // unrelated to SDL rendering and the main CPU instruction pacing.
         std::atomic<DebugMonitor*> monitorProbe{nullptr};
+        auto startWorkers=[&]() {
         if(monitorEnabled)machine.setDisplayBreakProbe([&](std::uint32_t pc) {
             auto* mon=monitorProbe.load(std::memory_order_acquire);
             return !mon || !mon->needsProbe() ||
@@ -246,6 +247,9 @@
                 if(ran==0 || !pacer.ready())
                     std::this_thread::sleep_for(std::chrono::milliseconds(1));
             });
+
+        };
+        startWorkers();
 
         // Command execution is serialized on the SDL/UI thread.
         auto applyPauseState=[&]() {
