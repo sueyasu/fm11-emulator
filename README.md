@@ -291,6 +291,22 @@ switch still selects 200/400 emulated scanout lines, and the aspect
 ratio remains the same in both modes. Use `--renderer gl` and
 `--renderer software` to compare presentation backends.
 
+## SDL auxiliary windows and desktop attention
+
+The independent Settings and file-selection SDL windows use
+`SDL_ShowWindow()` but do not call `SDL_RaiseWindow()`. Some Linux
+window managers (including GNOME/Mutter) treat explicit focus-stealing
+requests as demands for attention and show a desktop notification when
+the request cannot be granted. The UI must not request attention merely
+because a dialog was opened. This change does not use D-Bus or a system
+notification service; focus and stacking are left to the window manager.
+
+Manual test on GNOME/X11 and GNOME/Wayland, where available: open and
+close Settings repeatedly, open the independent file picker from both
+Settings and the CRT File menu, then check that no "window is ready"
+or attention notification appears. Check that both windows remain
+clickable and can be brought forward normally using the window manager.
+
 ## Stage 4-C UI: Apply stages settings and closes the editor
 
 The Settings editor's **Apply** button validates and stages the edited
