@@ -58,6 +58,11 @@ public:
         chooseFile(&target,channel?"Choose 2HD floppy image":"Choose 2D floppy image",
                    "Disk images{.d88,.raw,.img,.nhd},.*");
     }
+    void stageFddPath(unsigned channel,unsigned drive,const std::string& path) {
+        if(channel>1 || drive>3)return;
+        (channel?edited_.floppy2hd:edited_.floppy2d)[drive]=path;
+        status_="FDD image path selected (edit only until Stage 4-B): "+path;
+    }
     void ejectFdd(unsigned channel,unsigned drive) {
         if(channel>1 || drive>3)return;
         (channel?edited_.floppy2hd:edited_.floppy2d)[drive].clear();
